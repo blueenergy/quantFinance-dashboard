@@ -165,8 +165,25 @@ export default {
           throw new Error(`HTTP错误! 状态: ${response.status}`)
         }
         
-        const data = await response.json()
-        console.log('响应数据:', data)
+        const contentType = response.headers.get('content-type')
+        let data = null
+        
+        if (contentType && contentType.includes('application/json')) {
+          const text = await response.text()
+          if (text.trim()) {
+            try {
+              data = JSON.parse(text)
+              console.log('响应数据:', data)
+            } catch (e) {
+              console.error('JSON解析错误:', e)
+              throw new Error('服务器响应格式错误')
+            }
+          } else {
+            throw new Error('服务器返回空响应')
+          }
+        } else {
+          throw new Error('服务器返回非JSON格式响应')
+        }
         
         // 确保providers是数组
         availableProviders.value = Array.isArray(data.providers) ? data.providers : []
@@ -204,12 +221,25 @@ export default {
           })
         })
 
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.detail || '分析请求失败')
+        let result = null
+        const contentType = response.headers.get('content-type')
+        
+        if (contentType && contentType.includes('application/json')) {
+          const text = await response.text()
+          if (text.trim()) {
+            try {
+              result = JSON.parse(text)
+            } catch (e) {
+              console.error('JSON解析错误:', e)
+              throw new Error('服务器响应格式错误')
+            }
+          }
         }
 
-        const result = await response.json()
+        if (!response.ok) {
+          const errorMessage = result?.detail || `分析请求失败 (${response.status})`
+          throw new Error(errorMessage)
+        }
         
         // 确保结果对象的完整性
         if (result && typeof result === 'object') {
