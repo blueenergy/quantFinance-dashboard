@@ -18,6 +18,9 @@
       </header>
       
       <div class="main-content">
+        <!-- AI公告栏 -->
+        <MarketAnalysisBulletin />
+        
         <div class="search-section">
           <WatchList @select="selectStock" />
           <div class="search-controls">
@@ -90,9 +93,37 @@ import WatchList from './components/WatchList.vue'
 import StockChart from './components/StockChart.vue'
 import StockAnalysis from './components/StockAnalysis.vue'
 import AnalysisHistory from './components/AnalysisHistory.vue'
+import MarketAnalysisBulletin from './components/MarketAnalysisBulletin.vue'
 import { ref, onMounted } from 'vue'
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
+
+// 设置axios请求拦截器，自动添加认证头
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('access_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// 设置axios响应拦截器，处理认证失败
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // 认证失败，清除本地认证信息
+      authService.clearAuth()
+      console.log('认证已过期，请重新登录')
+    }
+    return Promise.reject(error)
+  }
+)
 
 const { user, isAuthenticated, validateToken, logout } = useAuth()
 
