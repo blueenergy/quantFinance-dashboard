@@ -11,7 +11,7 @@
         数据量: {{ records?.length || 0 }} 条
       </span>
     </div>
-    <div ref="chart" style="width: 100%; height: 400px; border: 1px solid #ddd;"></div>
+    <div ref="chart" style="width: 100%; height: 600px; border: 1px solid #ddd;"></div>
     <div v-if="error" style="color: red; margin-top: 10px;">
       错误: {{ error }}
     </div>
@@ -96,30 +96,98 @@ function drawChart() {
       tooltip: { 
         trigger: 'axis',
         formatter: function(params) {
-          const data = params[0]
+          const data = params.find(p => p.seriesName === 'K线')
+          const volumeData = params.find(p => p.seriesName === '成交量')
           if (data && data.data) {
             const [open, close, low, high] = data.data
-            return `${data.name}<br/>开盘: ${open}<br/>收盘: ${close}<br/>最低: ${low}<br/>最高: ${high}`
+            let tooltip = `${data.name}<br/>开盘: ${open}<br/>收盘: ${close}<br/>最低: ${low}<br/>最高: ${high}`
+            if (volumeData) {
+              tooltip += `<br/>成交量: ${volumeData.data.toLocaleString()}`
+            }
+            return tooltip
           }
           return ''
         }
       },
-      xAxis: { 
-        type: 'category', 
-        data: dates,
-        axisLabel: {
-          rotate: 45
+      xAxis: [
+        { 
+          type: 'category', 
+          data: dates,
+          axisLabel: {
+            rotate: 45
+          },
+          gridIndex: 0
+        },
+        { 
+          type: 'category', 
+          data: dates,
+          axisLabel: {
+            show: false
+          },
+          gridIndex: 1
         }
-      },
-      yAxis: { type: 'value', name: '价格' },
-      series: [{
-        type: 'candlestick',
-        name: 'K线',
-        data: kline.map(r => [r.open, r.close, r.low, r.high])
-      }],
-      grid: {
-        bottom: 80
-      }
+      ],
+      yAxis: [
+        { 
+          type: 'value', 
+          name: '价格',
+          gridIndex: 0
+        },
+        {
+          type: 'value',
+          name: '成交量',
+          gridIndex: 1,
+          axisLabel: {
+            formatter: function(value) {
+              if (value >= 10000) {
+                return (value / 10000).toFixed(1) + '万'
+              }
+              return value
+            }
+          }
+        }
+      ],
+      grid: [
+        {
+          left: '10%',
+          right: '10%',
+          top: '10%',
+          height: '60%'
+        },
+        {
+          left: '10%',
+          right: '10%',
+          top: '75%',
+          height: '20%'
+        }
+      ],
+      series: [
+        {
+          type: 'candlestick',
+          name: 'K线',
+          data: kline.map(r => [r.open, r.close, r.low, r.high]),
+          xAxisIndex: 0,
+          yAxisIndex: 0
+        },
+        {
+          type: 'bar',
+          name: '成交量',
+          data: kline.map(r => r.volume),
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          itemStyle: {
+            color: function(params) {
+              const index = params.dataIndex
+              if (index > 0) {
+                const current = kline[index]
+                const previous = kline[index - 1]
+                return current.close >= previous.close ? '#ef5350' : '#26a69a'
+              }
+              return '#ef5350'
+            }
+          }
+        }
+      ]
     }
     
     chartInstance.setOption(option)
