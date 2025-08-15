@@ -161,10 +161,24 @@ export default {
           body: JSON.stringify(payload)
         })
 
-        const data = await response.json()
+        let data = null
+        const contentType = response.headers.get('content-type')
+        
+        if (contentType && contentType.includes('application/json')) {
+          const text = await response.text()
+          if (text.trim()) {
+            try {
+              data = JSON.parse(text)
+            } catch (e) {
+              console.error('JSON解析错误:', e)
+              throw new Error('服务器响应格式错误')
+            }
+          }
+        }
 
         if (!response.ok) {
-          throw new Error(data.detail || '操作失败')
+          const errorMessage = data?.detail || `请求失败 (${response.status})`
+          throw new Error(errorMessage)
         }
 
         if (isLogin.value) {

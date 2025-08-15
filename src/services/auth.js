@@ -84,14 +84,17 @@ class AuthService {
       })
 
       if (response.ok) {
-        const userData = await response.json()
-        this.user.value = userData
-        localStorage.setItem('user_info', JSON.stringify(userData))
-        return true
-      } else {
-        this.clearAuth()
-        return false
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          const userData = await response.json()
+          this.user.value = userData
+          localStorage.setItem('user_info', JSON.stringify(userData))
+          return true
+        }
       }
+      
+      this.clearAuth()
+      return false
     } catch (error) {
       console.error('Token验证失败:', error)
       this.clearAuth()
@@ -112,10 +115,19 @@ class AuthService {
         body: JSON.stringify(credentials)
       })
 
-      const data = await response.json()
+      let data = null
+      const contentType = response.headers.get('content-type')
+      
+      if (contentType && contentType.includes('application/json')) {
+        const text = await response.text()
+        if (text.trim()) {
+          data = JSON.parse(text)
+        }
+      }
 
       if (!response.ok) {
-        throw new Error(data.detail || '登录失败')
+        const errorMessage = data?.detail || `登录失败 (${response.status})`
+        throw new Error(errorMessage)
       }
 
       this.setAuth(data)
@@ -141,10 +153,19 @@ class AuthService {
         body: JSON.stringify(userData)
       })
 
-      const data = await response.json()
+      let data = null
+      const contentType = response.headers.get('content-type')
+      
+      if (contentType && contentType.includes('application/json')) {
+        const text = await response.text()
+        if (text.trim()) {
+          data = JSON.parse(text)
+        }
+      }
 
       if (!response.ok) {
-        throw new Error(data.detail || '注册失败')
+        const errorMessage = data?.detail || `注册失败 (${response.status})`
+        throw new Error(errorMessage)
       }
 
       return { success: true, data }
