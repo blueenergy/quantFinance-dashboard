@@ -18,19 +18,36 @@
       </header>
       
       <div class="main-content">
-        <!-- AI公告栏 -->
-        <MarketAnalysisBulletin />
-        
-        <div class="search-section">
-          <div class="search-controls">
-            <input v-model="symbol" placeholder="输入股票代码 (如 600519)" />
-            <button @click="fetchData">查询</button>
+        <!-- 普通用户显示：AI公告栏和搜索功能 -->
+        <template v-if="!user?.is_admin">
+          <!-- AI公告栏 -->
+          <MarketAnalysisBulletin />
+          
+          <div class="search-section">
+            <div class="search-controls">
+              <input v-model="symbol" placeholder="输入股票代码 (如 600519)" />
+              <button @click="fetchData">查询</button>
+            </div>
+          </div>
+        </template>
+
+        <!-- 管理员显示：极简管理仪表板说明 -->
+        <div v-if="user?.is_admin" class="admin-welcome">
+          <div class="welcome-card">
+            <h2>系统管理控制台</h2>
+            <p>悟空量化金融智能助手管理后台</p>
+            <div class="admin-features">
+              <span class="feature-tag">用户管理</span>
+              <span class="feature-tag">系统监控</span>
+              <span class="feature-tag">操作日志</span>
+              <span class="feature-tag">安全审计</span>
+            </div>
           </div>
         </div>
 
         <div class="tabs">
           <button 
-            v-for="tab in tabs" 
+            v-for="tab in adminTabs" 
             :key="tab.id" 
             :class="['tab-button', { active: activeTab === tab.id }]"
             @click="activeTab = tab.id"
@@ -83,6 +100,10 @@
           <div v-if="activeTab === 'history'" class="history-view">
             <AnalysisHistory />
           </div>
+
+          <div v-if="activeTab === 'admin'" class="admin-view">
+            <AdminDashboard :current-user="user" />
+          </div>
         </div>
       </div>
     </div>
@@ -97,7 +118,8 @@ import StockChart from './components/StockChart.vue'
 import StockAnalysis from './components/StockAnalysis.vue'
 import AnalysisHistory from './components/AnalysisHistory.vue'
 import MarketAnalysisBulletin from './components/MarketAnalysisBulletin.vue'
-import { ref, onMounted } from 'vue'
+import AdminDashboard from './components/AdminDashboard.vue'
+import { ref, onMounted, computed } from 'vue'
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
@@ -136,13 +158,25 @@ const chartRecords = ref([])
 const chartSymbol = ref('')
 const activeTab = ref('watchlist')
 
-const tabs = [
+const tabs = ref([
   { id: 'watchlist', name: '自选股' },
   { id: 'data', name: '数据查询' },
   { id: 'chart', name: 'K线图表' },
   { id: 'analysis', name: 'AI分析' },
   { id: 'history', name: '历史分析' }
-]
+])
+
+// 动态标签 - 管理员只显示管理功能，普通用户显示业务功能
+const adminTabs = computed(() => {
+  if (user.value?.is_admin) {
+    // 管理员只显示管理相关标签
+    return [
+      { id: 'admin', name: '系统管理' }
+    ]
+  }
+  // 普通用户显示业务功能标签
+  return tabs.value
+})
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
@@ -183,8 +217,16 @@ function handleLoginSuccess(authData) {
   console.log('登录成功:', authData.user.username)
   // 使用认证服务设置状态，这会触发响应式更新
   authService.setAuth(authData)
-  // 登录成功后立即加载数据
-  fetchData()
+  
+  // 根据用户角色设置默认标签页
+  if (authData.user.is_admin) {
+    activeTab.value = 'admin'
+    console.log('管理员登录，跳转到系统管理页面')
+  } else {
+    activeTab.value = 'watchlist'
+    // 普通用户登录后立即加载数据
+    fetchData()
+  }
 }
 
 function handleLogout() {
@@ -198,12 +240,17 @@ onMounted(async () => {
     const isValid = await validateToken()
     if (!isValid) {
       console.log('Token已失效，请重新登录')
+    } else {
+      // Token有效，根据用户角色设置默认界面
+      if (user.value?.is_admin) {
+        activeTab.value = 'admin'
+        console.log('管理员自动跳转到系统管理页面')
+      } else {
+        activeTab.value = 'watchlist'
+        // 普通用户加载初始数据
+        fetchData()
+      }
     }
-  }
-  
-  // 如果已登录，加载初始数据
-  if (isAuthenticated.value) {
-    fetchData()
   }
 })
 </script>
@@ -317,6 +364,64 @@ onMounted(async () => {
   background: linear-gradient(135deg, #9370db 0%, #ba55d3 100%);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(138, 43, 226, 0.5);
+}
+
+/* 管理员欢迎区域样式 - 蓝白专业设计 */
+.admin-welcome {
+  margin-bottom: 40px;
+}
+
+.welcome-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 40px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.welcome-card h2 {
+  color: #0f172a;
+  margin: 0 0 16px 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.welcome-card p {
+  color: #64748b;
+  margin: 0 0 32px 0;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.admin-features {
+  display: flex;
+  justify-content: center;
+  gap: 1px;
+  flex-wrap: wrap;
+  background: #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.feature-tag {
+  background: #f1f5f9;
+  color: #64748b;
+  padding: 12px 20px;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  min-width: 100px;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.feature-tag:hover {
+  background: #e2e8f0;
+  color: #475569;
 }
 
 .tabs {
