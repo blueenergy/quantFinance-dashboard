@@ -22,7 +22,6 @@
         <MarketAnalysisBulletin />
         
         <div class="search-section">
-          <WatchList @select="selectStock" />
           <div class="search-controls">
             <input v-model="symbol" placeholder="输入股票代码 (如 600519)" />
             <button @click="fetchData">查询</button>
@@ -41,6 +40,10 @@
         </div>
 
         <div class="tab-content">
+          <div v-if="activeTab === 'watchlist'" class="watchlist-view">
+            <WatchListData @select-chart="selectStockForChart" />
+          </div>
+
           <div v-if="activeTab === 'data'" class="data-view">
             <table v-if="records.length" class="data-table">
               <thead>
@@ -70,7 +73,7 @@
           </div>
 
           <div v-if="activeTab === 'chart'" class="chart-view">
-            <StockChart :records="records" />
+            <StockChart :records="chartRecords" :symbol="chartSymbol" />
           </div>
 
           <div v-if="activeTab === 'analysis'" class="analysis-view">
@@ -89,7 +92,7 @@
 <script setup>
 import LoginForm from './components/LoginForm.vue'
 import UserInfo from './components/UserInfo.vue'
-import WatchList from './components/WatchList.vue'
+import WatchListData from './components/WatchListData.vue'
 import StockChart from './components/StockChart.vue'
 import StockAnalysis from './components/StockAnalysis.vue'
 import AnalysisHistory from './components/AnalysisHistory.vue'
@@ -129,10 +132,13 @@ const { user, isAuthenticated, validateToken, logout } = useAuth()
 
 const symbol = ref('')
 const records = ref([])
-const activeTab = ref('data')
+const chartRecords = ref([])
+const chartSymbol = ref('')
+const activeTab = ref('watchlist')
 
 const tabs = [
-  { id: 'data', name: '数据表格' },
+  { id: 'watchlist', name: '自选股' },
+  { id: 'data', name: '数据查询' },
   { id: 'chart', name: 'K线图表' },
   { id: 'analysis', name: 'AI分析' },
   { id: 'history', name: '历史分析' }
@@ -158,6 +164,19 @@ async function fetchData() {
 function selectStock(stockSymbol) {
   symbol.value = stockSymbol
   fetchData()
+}
+
+async function selectStockForChart(stockSymbol) {
+  try {
+    chartSymbol.value = stockSymbol
+    activeTab.value = 'chart'
+    const url = `/records/?limit=2000&sort=-trade_date&symbol=${stockSymbol}`
+    const res = await axios.get(url)
+    chartRecords.value = res.data
+  } catch (e) {
+    console.error('获取K线数据失败:', e)
+    chartRecords.value = []
+  }
 }
 
 function handleLoginSuccess(authData) {
