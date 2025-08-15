@@ -10,7 +10,7 @@
     <div v-else class="container">
       <header class="header">
         <div class="header-left">
-          <h1>📊 量价数据可视化 Dashboard</h1>
+          <h1>� 悟空量化金融智能助手</h1>
         </div>
         <div class="header-right">
           <UserInfo :user="user" @logout="handleLogout" />
@@ -211,15 +211,16 @@ onMounted(async () => {
 <style scoped>
 #app {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #2d1b69 100%);
 }
 
 .container {
   max-width: 1400px;
   margin: 0 auto;
-  background: #fff;
+  background: linear-gradient(135deg, #1e1e3f 0%, #2a2a5e 100%);
   min-height: 100vh;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 40px rgba(138, 43, 226, 0.3);
+  border: 1px solid rgba(138, 43, 226, 0.2);
 }
 
 .header {
@@ -227,15 +228,32 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 20px 30px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #8a2be2 0%, #9370db 50%, #6a5acd 100%);
   color: white;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(138, 43, 226, 0.4);
+  position: relative;
+}
+
+.header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+  pointer-events: none;
 }
 
 .header-left h1 {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  background: linear-gradient(45deg, #ffffff, #e6e6fa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .header-right {
@@ -244,6 +262,7 @@ onMounted(async () => {
 
 .main-content {
   padding: 30px;
+  background: linear-gradient(135deg, #1e1e3f 0%, #2a2a5e 100%);
 }
 
 .search-section {
@@ -261,84 +280,51 @@ onMounted(async () => {
 
 .search-controls input {
   padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: 2px solid rgba(138, 43, 226, 0.3);
+  border-radius: 8px;
   font-size: 16px;
   min-width: 250px;
+  background: rgba(30, 30, 63, 0.8);
+  color: #e6e6fa;
+  transition: all 0.3s;
+}
+
+.search-controls input:focus {
+  outline: none;
+  border-color: #8a2be2;
+  box-shadow: 0 0 15px rgba(138, 43, 226, 0.5);
+  background: rgba(30, 30, 63, 1);
+}
+
+.search-controls input::placeholder {
+  color: rgba(230, 230, 250, 0.6);
 }
 
 .search-controls button {
   padding: 12px 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
-  transition: opacity 0.3s;
+  transition: all 0.3s;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 15px rgba(138, 43, 226, 0.3);
 }
 
 .search-controls button:hover {
-  opacity: 0.9;
-}
-.container {
-  max-width: 1400px;
-  margin: 20px auto;
-  background: #fff;
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 2px solid #e0e0e0;
-}
-
-.header h1 {
-  margin: 0;
-  color: #007bff;
-  font-size: 28px;
-}
-
-.search-section {
-  margin-bottom: 30px;
-  display: flex;
-  gap: 10px;
-  max-width: 400px;
-}
-
-.search-section input {
-  flex: 1;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 16px;
-}
-
-.search-section button {
-  padding: 12px 24px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: background-color 0.2s;
-}
-
-.search-section button:hover {
-  background-color: #0056b3;
+  background: linear-gradient(135deg, #9370db 0%, #ba55d3 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(138, 43, 226, 0.5);
 }
 
 .tabs {
   display: flex;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid rgba(138, 43, 226, 0.3);
   margin-bottom: 30px;
+  background: rgba(30, 30, 63, 0.5);
+  border-radius: 8px 8px 0 0;
 }
 
 .tab-button {
@@ -348,64 +334,98 @@ onMounted(async () => {
   cursor: pointer;
   font-size: 16px;
   font-weight: 500;
-  color: #666;
+  color: #b19cd9;
   border-bottom: 2px solid transparent;
-  transition: all 0.2s;
+  transition: all 0.3s;
+  position: relative;
 }
 
 .tab-button:hover {
-  color: #007bff;
+  color: #e6e6fa;
+  background: rgba(138, 43, 226, 0.1);
 }
 
 .tab-button.active {
-  color: #007bff;
-  border-bottom-color: #007bff;
+  color: #ffffff;
+  border-bottom-color: #8a2be2;
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.2) 0%, rgba(147, 112, 219, 0.2) 100%);
 }
 
 .tab-content {
   min-height: 400px;
+  background: rgba(30, 30, 63, 0.3);
+  border-radius: 8px;
+  padding: 20px;
 }
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(138, 43, 226, 0.2);
+  border-radius: 12px;
   overflow: hidden;
+  background: rgba(30, 30, 63, 0.8);
 }
 
 .data-table th,
 .data-table td {
-  border: 1px solid #ddd;
+  border: 1px solid rgba(138, 43, 226, 0.2);
   padding: 12px;
   text-align: left;
+  color: #e6e6fa;
 }
 
 .data-table th {
-  background: #007bff;
+  background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);
   color: #fff;
   font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .data-table tr:nth-child(even) {
-  background: #f8f9fa;
+  background: rgba(42, 42, 94, 0.5);
 }
 
 .data-table tr:hover {
-  background: #e3f2fd;
+  background: rgba(138, 43, 226, 0.1);
+  transform: scale(1.01);
+  transition: all 0.2s;
 }
 
 .empty {
-  color: #888;
+  color: #b19cd9;
   margin-top: 30px;
   text-align: center;
   font-size: 18px;
   padding: 60px;
+  background: rgba(30, 30, 63, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(138, 43, 226, 0.2);
 }
 
 .chart-view,
 .analysis-view {
   padding: 20px 0;
+  background: rgba(30, 30, 63, 0.3);
+  border-radius: 8px;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(30, 30, 63, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #8a2be2, #9370db);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #9370db, #ba55d3);
 }
 </style>
