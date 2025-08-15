@@ -1,123 +1,100 @@
 <template>
   <div class="analysis-history">
-    <div class="controls">
-      <input 
-        v-model="searchSymbol" 
-        placeholder="输入股票代码查询历史分析"
-        class="symbol-input"
-        @keyup.enter="fetchHistory"
-      >
-      <button @click="fetchHistory" class="search-btn">查询历史</button>
+    <div class="history-header">
+      <h3>分析历史记录</h3>
+      <button @click="loadHistory" :disabled="loading" class="refresh-btn">
+        {{ loading ? '加载中...' : '刷新' }}
+      </button>
     </div>
 
     <div v-if="loading" class="loading">
-      正在加载历史分析记录...
+      <div class="spinner"></div>
+      <p>正在加载历史记录...</p>
     </div>
 
     <div v-if="error" class="error">
-      {{ error }}
+      <p>{{ error }}</p>
+      <button @click="clearError">清除错误</button>
     </div>
 
-    <div v-if="history.length > 0" class="history-list">
-      <h3>{{ searchSymbol }} 的历史分析记录</h3>
-      
-      <div class="comparison-controls">
-        <div>
-          <label>选择分析1：</label>
-          <select v-model="selectedAnalysis1">
-            <option value="">请选择...</option>
-            <option v-for="item in history" :key="item._id" :value="item._id">
-              {{ formatDate(item.timestamp) }} - {{ item.provider }}:{{ item.model }}
-            </option>
-          </select>
-        </div>
-        
-        <div>
-          <label>选择分析2：</label>
-          <select v-model="selectedAnalysis2">
-            <option value="">请选择...</option>
-            <option v-for="item in history" :key="item._id" :value="item._id">
-              {{ formatDate(item.timestamp) }} - {{ item.provider }}:{{ item.model }}
-            </option>
-          </select>
-        </div>
-        
-        <button 
-          @click="compareAnalyses" 
-          :disabled="!selectedAnalysis1 || !selectedAnalysis2"
-          class="compare-btn"
-        >
-          比较分析
-        </button>
-      </div>
+    <div v-if="!loading && historyList.length === 0" class="empty">
+      <p>暂无分析历史记录</p>
+      <p>去进行一次股票分析吧！</p>
+    </div>
 
-      <div class="history-items">
-        <div 
-          v-for="item in history" 
-          :key="item._id"
-          class="history-item"
-          :class="{ 'success': item.success, 'error': !item.success }"
-        >
-          <div class="item-header">
-            <span class="timestamp">{{ formatDate(item.timestamp) }}</span>
-            <span class="provider-model">{{ item.provider }}:{{ item.model }}</span>
-            <span class="status" :class="item.success ? 'success' : 'error'">
-              {{ item.success ? '成功' : '失败' }}
+    <div v-if="historyList.length > 0" class="history-list">
+      <div 
+        v-for="item in historyList" 
+        :key="item.id"
+        class="history-item"
+        @click="viewDetails(item)"
+      >
+        <div class="item-header">
+          <div class="stock-info">
+            <span class="stock-code">{{ item.stock_code }}</span>
+            <span class="provider">{{ getProviderName(item.provider) }}</span>
+          </div>
+          <div class="analysis-time">
+            {{ formatTime(item.created_at) }}
+          </div>
+        </div>
+        
+        <div class="item-summary">
+          <div class="advice-info">
+            <span class="advice-label">投资建议:</span>
+            <span :class="['advice-value', item.analysis?.investment_advice]">
+              {{ getAdviceLabel(item.analysis?.investment_advice) }}
             </span>
           </div>
-          
-          <div v-if="item.success && item.analysis_result" class="analysis-content">
-            <!-- 显示分析结果的关键信息 -->
-            <div v-if="item.analysis_result.analysis" class="analysis-summary">
-              <h4>分析摘要:</h4>
-              <p>{{ truncateText(item.analysis_result.analysis, 200) }}</p>
-            </div>
-            
-            <div v-if="item.analysis_result.recommendation" class="recommendation">
-              <strong>投资建议: {{ item.analysis_result.recommendation }}</strong>
-            </div>
-            
-            <div v-if="item.analysis_result.risk_level" class="risk-level">
-              <span class="risk-badge" :class="getRiskClass(item.analysis_result.risk_level)">
-                风险等级: {{ item.analysis_result.risk_level }}
-              </span>
-            </div>
+          <div class="risk-info">
+            <span class="risk-label">风险等级:</span>
+            <span :class="['risk-value', item.analysis?.risk_level]">
+              {{ getRiskLabel(item.analysis?.risk_level) }}
+            </span>
           </div>
-          
-          <div v-if="!item.success" class="error-info">
-            <p>分析失败: {{ item.error_message || '未知错误' }}</p>
-          </div>
+        </div>
+        
+        <div v-if="item.analysis?.technical_analysis" class="item-preview">
+          {{ item.analysis.technical_analysis.substring(0, 100) }}...
         </div>
       </div>
     </div>
 
-    <!-- 比较结果模态框 -->
-    <div v-if="comparisonResult" class="comparison-modal" @click="closeComparison">
-      <div class="comparison-content" @click.stop>
+    <!-- 详情对话框 -->
+    <div v-if="selectedItem" class="detail-modal" @click="closeDetails">
+      <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3>分析比较结果</h3>
-          <button @click="closeComparison" class="close-btn">&times;</button>
+          <h4>{{ selectedItem.stock_code }} 分析详情</h4>
+          <button @click="closeDetails" class="close-btn">&times;</button>
         </div>
-        
-        <div class="comparison-body">
-          <div class="comparison-side">
-            <h4>分析1 ({{ formatDate(comparisonResult.analysis1.timestamp) }})</h4>
-            <div class="analysis-details">
-              <p><strong>提供商:</strong> {{ comparisonResult.analysis1.provider }}</p>
-              <p><strong>模型:</strong> {{ comparisonResult.analysis1.model }}</p>
-              <p><strong>建议:</strong> {{ comparisonResult.analysis1.analysis_result?.recommendation || 'N/A' }}</p>
-              <p><strong>风险等级:</strong> {{ comparisonResult.analysis1.analysis_result?.risk_level || 'N/A' }}</p>
+        <div class="modal-body">
+          <div class="detail-grid">
+            <div class="detail-item">
+              <strong>技术分析:</strong>
+              <p>{{ selectedItem.analysis?.technical_analysis || '暂无' }}</p>
+            </div>
+            <div class="detail-item">
+              <strong>短期预测:</strong>
+              <p>{{ selectedItem.analysis?.short_term_forecast || '暂无' }}</p>
+            </div>
+            <div class="detail-item">
+              <strong>关键价位:</strong>
+              <p>支撑位: {{ selectedItem.analysis?.support_level || '暂无' }}</p>
+              <p>阻力位: {{ selectedItem.analysis?.resistance_level || '暂无' }}</p>
+            </div>
+            <div class="detail-item">
+              <strong>置信度:</strong>
+              <p>{{ selectedItem.analysis?.confidence_score || 0 }}%</p>
             </div>
           </div>
           
-          <div class="comparison-side">
-            <h4>分析2 ({{ formatDate(comparisonResult.analysis2.timestamp) }})</h4>
-            <div class="analysis-details">
-              <p><strong>提供商:</strong> {{ comparisonResult.analysis2.provider }}</p>
-              <p><strong>模型:</strong> {{ comparisonResult.analysis2.model }}</p>
-              <p><strong>建议:</strong> {{ comparisonResult.analysis2.analysis_result?.recommendation || 'N/A' }}</p>
-              <p><strong>风险等级:</strong> {{ comparisonResult.analysis2.analysis_result?.risk_level || 'N/A' }}</p>
-            </div>
+          <div v-if="selectedItem.analysis?.key_points?.length" class="key-points">
+            <strong>关键要点:</strong>
+            <ul>
+              <li v-for="(point, index) in selectedItem.analysis.key_points" :key="index">
+                {{ point }}
+              </li>
+            </ul>
           </div>
         </div>
       </div>
@@ -125,272 +102,356 @@
   </div>
 </template>
 
-<script setup>
-import { ref, reactive } from 'vue'
+<script>
+import { ref, onMounted } from 'vue'
+import { useAuth } from '../services/auth.js'
 
-const searchSymbol = ref('')
-const history = ref([])
-const loading = ref(false)
-const error = ref('')
-const selectedAnalysis1 = ref('')
-const selectedAnalysis2 = ref('')
-const comparisonResult = ref(null)
-
-// 获取历史分析记录
-const fetchHistory = async () => {
-  if (!searchSymbol.value.trim()) {
-    error.value = '请输入股票代码'
-    return
-  }
-
-  loading.value = true
-  error.value = ''
-  
-  try {
-    const response = await fetch(`http://localhost:3001/api/analysis/history?symbol=${searchSymbol.value}&limit=20`)
-    const data = await response.json()
+export default {
+  name: 'AnalysisHistory',
+  setup() {
+    const { authenticatedRequest } = useAuth()
     
-    if (data.error) {
-      error.value = data.error
-      history.value = []
-    } else {
-      history.value = data.history || []
+    const loading = ref(false)
+    const error = ref('')
+    const historyList = ref([])
+    const selectedItem = ref(null)
+
+    const providerNames = {
+      'openai': 'OpenAI',
+      'deepseek': 'DeepSeek',
+      'custom': '自定义API'
     }
-  } catch (err) {
-    error.value = `获取历史记录失败: ${err.message}`
-    history.value = []
-  } finally {
-    loading.value = false
-  }
-}
 
-// 比较两个分析结果
-const compareAnalyses = async () => {
-  if (!selectedAnalysis1.value || !selectedAnalysis2.value) {
-    return
-  }
-
-  try {
-    const response = await fetch(
-      `http://localhost:3001/api/analysis/compare?symbol=${searchSymbol.value}&analysis_id1=${selectedAnalysis1.value}&analysis_id2=${selectedAnalysis2.value}`
-    )
-    const data = await response.json()
-    
-    if (data.error) {
-      error.value = data.error
-    } else {
-      comparisonResult.value = data
+    const adviceLabels = {
+      'buy': '买入',
+      'hold': '持有',
+      'sell': '卖出'
     }
-  } catch (err) {
-    error.value = `比较分析失败: ${err.message}`
+
+    const riskLabels = {
+      'low': '低风险',
+      'medium': '中风险',
+      'high': '高风险'
+    }
+
+    const loadHistory = async () => {
+      loading.value = true
+      error.value = ''
+      
+      try {
+        // 这里应该调用真实的历史记录API
+        // 目前模拟一些数据
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        // 模拟历史数据
+        historyList.value = [
+          {
+            id: '1',
+            stock_code: '000001',
+            provider: 'openai',
+            model: 'gpt-3.5-turbo',
+            created_at: new Date(Date.now() - 86400000).toISOString(), // 1天前
+            analysis: {
+              technical_analysis: '从技术面看，该股票呈现上升趋势，MACD指标显示买入信号...',
+              short_term_forecast: '短期内预计股价将继续上涨，建议关注成交量变化...',
+              investment_advice: 'buy',
+              risk_level: 'medium',
+              support_level: 12.50,
+              resistance_level: 15.80,
+              confidence_score: 75,
+              key_points: ['技术指标良好', '成交量放大', '行业前景看好']
+            }
+          },
+          {
+            id: '2',
+            stock_code: '000002',
+            provider: 'deepseek',
+            model: 'deepseek-chat',
+            created_at: new Date(Date.now() - 172800000).toISOString(), // 2天前
+            analysis: {
+              technical_analysis: '该股票近期横盘整理，缺乏明确方向...',
+              short_term_forecast: '预计将继续震荡，等待方向选择...',
+              investment_advice: 'hold',
+              risk_level: 'low',
+              support_level: 8.20,
+              resistance_level: 9.50,
+              confidence_score: 60,
+              key_points: ['横盘整理', '成交量萎缩', '等待突破']
+            }
+          }
+        ]
+      } catch (err) {
+        error.value = err.message || '加载历史记录失败'
+        console.error('加载历史记录失败:', err)
+      } finally {
+        loading.value = false
+      }
+    }
+
+    const getProviderName = (provider) => {
+      return providerNames[provider] || provider
+    }
+
+    const getAdviceLabel = (advice) => {
+      return adviceLabels[advice] || advice
+    }
+
+    const getRiskLabel = (risk) => {
+      return riskLabels[risk] || risk
+    }
+
+    const formatTime = (timeStr) => {
+      if (!timeStr) return ''
+      const date = new Date(timeStr)
+      return date.toLocaleString('zh-CN')
+    }
+
+    const viewDetails = (item) => {
+      selectedItem.value = item
+    }
+
+    const closeDetails = () => {
+      selectedItem.value = null
+    }
+
+    const clearError = () => {
+      error.value = ''
+    }
+
+    onMounted(() => {
+      loadHistory()
+    })
+
+    return {
+      loading,
+      error,
+      historyList,
+      selectedItem,
+      loadHistory,
+      getProviderName,
+      getAdviceLabel,
+      getRiskLabel,
+      formatTime,
+      viewDetails,
+      closeDetails,
+      clearError
+    }
   }
-}
-
-// 关闭比较模态框
-const closeComparison = () => {
-  comparisonResult.value = null
-}
-
-// 格式化日期
-const formatDate = (timestamp) => {
-  return new Date(timestamp).toLocaleString('zh-CN')
-}
-
-// 截断文本
-const truncateText = (text, maxLength) => {
-  if (!text) return ''
-  return text.length > maxLength ? text.substring(0, maxLength) + '...' : text
-}
-
-// 获取风险等级CSS类
-const getRiskClass = (riskLevel) => {
-  if (!riskLevel) return 'risk-unknown'
-  const level = riskLevel.toLowerCase()
-  if (level.includes('低') || level.includes('low')) return 'risk-low'
-  if (level.includes('中') || level.includes('medium')) return 'risk-medium'
-  if (level.includes('高') || level.includes('high')) return 'risk-high'
-  return 'risk-unknown'
 }
 </script>
 
 <style scoped>
 .analysis-history {
-  padding: 20px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background: #fff;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin: 20px 0;
 }
 
-.controls {
+.history-header {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  justify-content: space-between;
   align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e9ecef;
 }
 
-.symbol-input {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  min-width: 200px;
+.history-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 24px;
+  font-weight: 600;
 }
 
-.search-btn, .compare-btn {
+.refresh-btn {
   padding: 8px 16px;
-  background: #409EFF;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
+  font-size: 14px;
+  transition: opacity 0.3s;
 }
 
-.search-btn:hover, .compare-btn:hover {
-  background: #337ecc;
-}
-
-.compare-btn:disabled {
-  background: #ccc;
+.refresh-btn:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  opacity: 0.9;
 }
 
 .loading {
   text-align: center;
-  padding: 20px;
-  color: #666;
+  padding: 40px;
+  color: #6c757d;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .error {
-  color: #f56c6c;
-  padding: 10px;
-  background: #fef0f0;
-  border: 1px solid #fbc4c4;
-  border-radius: 4px;
+  background: #f8d7da;
+  color: #721c24;
+  padding: 16px;
+  border-radius: 8px;
   margin-bottom: 20px;
+  border: 1px solid #f5c6cb;
+  text-align: center;
 }
 
-.comparison-controls {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  margin-bottom: 20px;
-  padding: 15px;
-  background: #f8f9fa;
+.error button {
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: #dc3545;
+  color: white;
+  border: none;
   border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
 }
 
-.comparison-controls label {
-  font-weight: bold;
-  margin-right: 8px;
+.empty {
+  text-align: center;
+  padding: 40px;
+  color: #6c757d;
 }
 
-.comparison-controls select {
-  padding: 5px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  min-width: 200px;
+.empty p {
+  margin: 8px 0;
 }
 
-.history-items {
+.history-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 16px;
 }
 
 .history-item {
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
-  padding: 15px;
-  background: #fafafa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: #fff;
 }
 
-.history-item.success {
-  border-left: 4px solid #67c23a;
-}
-
-.history-item.error {
-  border-left: 4px solid #f56c6c;
+.history-item:hover {
+  border-color: #667eea;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  transform: translateY(-2px);
 }
 
 .item-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
-  font-weight: bold;
+  margin-bottom: 12px;
 }
 
-.timestamp {
-  color: #333;
+.stock-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.provider-model {
-  color: #666;
+.stock-code {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.provider {
+  padding: 4px 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #495057;
+}
+
+.analysis-time {
   font-size: 14px;
+  color: #6c757d;
 }
 
-.status.success {
-  color: #67c23a;
+.item-summary {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 12px;
 }
 
-.status.error {
-  color: #f56c6c;
+.advice-info, .risk-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.analysis-content {
-  border-top: 1px solid #e4e7ed;
-  padding-top: 10px;
+.advice-label, .risk-label {
+  font-size: 14px;
+  color: #495057;
 }
 
-.analysis-summary h4 {
-  margin: 0 0 8px 0;
-  color: #333;
-}
-
-.recommendation {
-  margin: 10px 0;
-  padding: 8px;
-  background: #e8f4fd;
+.advice-value, .risk-value {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 2px 8px;
   border-radius: 4px;
 }
 
-.risk-level {
-  margin-top: 10px;
+.advice-value.buy {
+  background: #d4edda;
+  color: #155724;
 }
 
-.risk-badge {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: bold;
+.advice-value.hold {
+  background: #fff3cd;
+  color: #856404;
 }
 
-.risk-low {
-  background: #f0f9ff;
-  color: #67c23a;
+.advice-value.sell {
+  background: #f8d7da;
+  color: #721c24;
 }
 
-.risk-medium {
-  background: #fdf6ec;
-  color: #e6a23c;
+.risk-value.low {
+  background: #d4edda;
+  color: #155724;
 }
 
-.risk-high {
-  background: #fef0f0;
-  color: #f56c6c;
+.risk-value.medium {
+  background: #fff3cd;
+  color: #856404;
 }
 
-.risk-unknown {
-  background: #f4f4f5;
-  color: #909399;
+.risk-value.high {
+  background: #f8d7da;
+  color: #721c24;
 }
 
-.error-info {
-  color: #f56c6c;
-  font-style: italic;
+.item-preview {
+  font-size: 14px;
+  color: #6c757d;
+  line-height: 1.5;
 }
 
-/* 比较模态框样式 */
-.comparison-modal {
+/* 模态框样式 */
+.detail-modal {
   position: fixed;
   top: 0;
   left: 0;
@@ -403,53 +464,103 @@ const getRiskClass = (riskLevel) => {
   z-index: 1000;
 }
 
-.comparison-content {
+.modal-content {
   background: white;
-  border-radius: 8px;
+  border-radius: 12px;
   max-width: 800px;
-  width: 90%;
-  max-height: 80%;
+  max-height: 80vh;
   overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #e4e7ed;
+  padding: 20px 24px;
+  border-bottom: 1px solid #dee2e6;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px 12px 0 0;
+}
+
+.modal-header h4 {
+  margin: 0;
+  font-size: 20px;
 }
 
 .close-btn {
   background: none;
   border: none;
+  color: white;
   font-size: 24px;
   cursor: pointer;
-  color: #909399;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.3s;
 }
 
-.comparison-body {
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.detail-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 20px;
+  margin-bottom: 24px;
+}
+
+.detail-item {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.detail-item strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #2c3e50;
+  font-size: 16px;
+}
+
+.detail-item p {
+  margin: 4px 0;
+  line-height: 1.6;
+  color: #495057;
+}
+
+.key-points {
+  background: #e9ecef;
   padding: 20px;
+  border-radius: 8px;
 }
 
-.comparison-side {
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
-  padding: 15px;
+.key-points strong {
+  display: block;
+  margin-bottom: 12px;
+  color: #2c3e50;
+  font-size: 16px;
 }
 
-.comparison-side h4 {
-  margin: 0 0 15px 0;
-  color: #333;
-  border-bottom: 1px solid #e4e7ed;
-  padding-bottom: 8px;
+.key-points ul {
+  margin: 0;
+  padding-left: 20px;
 }
 
-.analysis-details p {
-  margin: 8px 0;
-  line-height: 1.5;
+.key-points li {
+  margin-bottom: 8px;
+  line-height: 1.6;
+  color: #495057;
 }
 </style>
