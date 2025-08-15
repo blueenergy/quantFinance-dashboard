@@ -8,7 +8,7 @@
         <option value="month">月线</option>
       </select>
       <span style="margin-left: 20px; color: #666; font-size: 12px;">
-        数据量: {{ records?.length || 0 }} 条
+        {{ symbol ? `股票代码: ${symbol} | ` : '' }}数据量: {{ records?.length || 0 }} 条
       </span>
     </div>
     <div ref="chart" style="width: 100%; height: 600px; border: 1px solid #ddd;"></div>
@@ -23,7 +23,8 @@ import { ref, onMounted, watch } from 'vue'
 import * as echarts from 'echarts'
 
 const props = defineProps({
-  records: Array
+  records: Array,
+  symbol: String
 })
 
 const chart = ref(null)
@@ -92,7 +93,10 @@ function drawChart() {
     const { dates, kline } = getKlineData()
     
     const option = {
-      title: { text: `${kType.value === 'day' ? '日线' : kType.value === 'week' ? '周线' : '月线'}K线图` },
+      title: { 
+        text: `${props.symbol || ''} ${kType.value === 'day' ? '日线' : kType.value === 'week' ? '周线' : '月线'}K线图`,
+        left: 'center'
+      },
       tooltip: { 
         trigger: 'axis',
         formatter: function(params) {
