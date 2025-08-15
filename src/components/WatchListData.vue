@@ -3,6 +3,21 @@
     <!-- 自选股管理区域 -->
     <div class="watchlist-header">
       <h3>⭐ 自选股管理</h3>
+      
+      <!-- 用户状态提示 -->
+      <div class="user-status" v-if="!isAuthenticated">
+        <span class="warning-tip">💡 未登录状态下的自选股仅保存在本地浏览器中</span>
+      </div>
+      
+      <div class="user-status" v-if="isAuthenticated">
+        <span class="success-tip">✅ 已登录，自选股已同步到服务器</span>
+      </div>
+      
+      <!-- 迁移提示 -->
+      <div class="migration-tip" v-if="migrationComplete">
+        <span class="success-tip">🎉 本地自选股已成功迁移到服务器！</span>
+      </div>
+      
       <div class="add-stock">
         <input 
           v-model="inputSymbol" 
@@ -140,21 +155,23 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import { useAuth } from '../services/auth.js'
+import { watchlistService } from '../services/watchlist.js'
 
 const emit = defineEmits(['select-chart'])
-const { isAuthenticated } = useAuth()
+const { isAuthenticated, currentUser } = useAuth()
 
 const inputSymbol = ref('')
-const watchList = ref(JSON.parse(localStorage.getItem('watchList') || '[]'))
+const watchList = ref([])
 const stocksData = ref([])
 const loading = ref(false)
 const analyzingStock = ref('')
 const analysisResults = ref({})
 const showAnalysisModal = ref(false)
 const currentAnalysis = ref({ symbol: '', data: null, timestamp: null })
+const migrationComplete = ref(false)
 
 // 计算没有数据的股票
 const stocksWithoutData = computed(() => {
@@ -162,36 +179,203 @@ const stocksWithoutData = computed(() => {
   return watchList.value.filter(symbol => !dataSymbols.includes(symbol))
 })
 
+// 监听登录状态变化
+watch(isAuthenticated, async (newValue, oldValue) => {
+  if (newValue && !oldValue) {
+    // 用户刚登录，尝试迁移本地数据并加载服务器数据
+    await handleUserLogin()
+  } else if (!newValue && oldValue) {
+    // 用户登出，切换到本地模式
+    await handleUserLogout()
+  }
+}, { immediate: true })
+
+// 处理用户登录
+async function handleUserLogin() {
+  try {
+    loading.value = true
+    
+    // 尝试迁移本地自选股到服务器
+    const migrated = await watchlistService.migrateFromLocalStorage()
+    if (migrated) {
+      migrationComplete.value = true
+      setTimeout(() => {
+        migrationComplete.value = false
+      }, 3000)
+    }
+    
+    // 加载服务器端自选股
+    await loadUserWatchlist()
+    
+  } catch (error) {
+    console.error('处理用户登录失败:', error)
+    // 登录失败时回退到本地模式
+    loadLocalWatchlist()
+  } finally {
+    loading.value = false
+  }
+}
+
+// 处理用户登出
+async function handleUserLogout() {
+  // 清空服务器数据，切换到本地模式
+  watchList.value = []
+  stocksData.value = []
+  loadLocalWatchlist()
+}
+
+// 加载用户自选股（服务器端）
+async function loadUserWatchlist() {
+  try {
+    if (!isAuthenticated?.value) {
+      loadLocalWatchlist()
+      return
+    }
+    
+    const symbols = await watchlistService.getUserWatchlist()
+    watchList.value = symbols
+    
+    if (symbols.length > 0) {
+      await refreshAll()
+    }
+  } catch (error) {
+    console.error('加载用户自选股失败:', error)
+    // 失败时回退到本地模式
+    loadLocalWatchlist()
+  }
+}
+
+// 加载本地自选股
+function loadLocalWatchlist() {
+  watchList.value = watchlistService.getLocalWatchlist()
+  if (watchList.value.length > 0) {
+    refreshAll()
+  }
+}
+
 // 添加股票到自选
-function addStock() {
+async function addStock() {
   const symbol = inputSymbol.value.trim().toUpperCase()
-  if (symbol && !watchList.value.includes(symbol)) {
-    watchList.value.push(symbol)
-    localStorage.setItem('watchList', JSON.stringify(watchList.value))
+  if (!symbol) return
+  
+  if (watchList.value.includes(symbol)) {
+    alert('股票已在自选列表中')
+    return
+  }
+  
+  try {
+    loading.value = true
+    
+    if (isAuthenticated?.value) {
+      // 用户已登录，添加到服务器
+      await watchlistService.addToWatchlist(symbol)
+      watchList.value.push(symbol)
+    } else {
+      // 未登录，添加到本地
+      watchList.value.push(symbol)
+      watchlistService.setLocalWatchlist(watchList.value)
+    }
+    
     inputSymbol.value = ''
     // 立即获取新添加股票的数据
-    fetchStockData(symbol)
+    await fetchStockData(symbol)
+    
+  } catch (error) {
+    console.error('添加股票失败:', error)
+    alert(error.message || '添加股票失败')
+  } finally {
+    loading.value = false
   }
 }
 
 // 添加示例股票
-function addSampleStock() {
+async function addSampleStock() {
   const sampleSymbol = '000001'
-  if (!watchList.value.includes(sampleSymbol)) {
-    watchList.value.push(sampleSymbol)
-    localStorage.setItem('watchList', JSON.stringify(watchList.value))
-    // 立即获取示例股票的数据
-    fetchStockData(sampleSymbol)
-  } else {
+  if (watchList.value.includes(sampleSymbol)) {
     alert('示例股票已在自选列表中')
+    return
+  }
+  
+  try {
+    loading.value = true
+    
+    if (isAuthenticated?.value) {
+      // 用户已登录，添加到服务器
+      await watchlistService.addToWatchlist(sampleSymbol)
+      watchList.value.push(sampleSymbol)
+    } else {
+      // 未登录，添加到本地
+      watchList.value.push(sampleSymbol)
+      watchlistService.setLocalWatchlist(watchList.value)
+    }
+    
+    // 立即获取示例股票的数据
+    await fetchStockData(sampleSymbol)
+    
+  } catch (error) {
+    console.error('添加示例股票失败:', error)
+    alert(error.message || '添加示例股票失败')
+  } finally {
+    loading.value = false
   }
 }
 
 // 移除股票
-function removeStock(symbol) {
-  watchList.value = watchList.value.filter(s => s !== symbol)
-  stocksData.value = stocksData.value.filter(s => s.symbol !== symbol)
-  localStorage.setItem('watchList', JSON.stringify(watchList.value))
+// 移除股票
+async function removeStock(symbol) {
+  console.log('准备移除股票:', symbol)
+  
+  // 安全检查：确保isAuthenticated存在
+  const isAuthenticatedValue = isAuthenticated?.value || false
+  const currentUserValue = currentUser?.value || null
+  
+  console.log('当前认证状态:', isAuthenticatedValue)
+  console.log('当前用户:', currentUserValue)
+  
+  // 检查token
+  const token = localStorage.getItem('access_token')
+  console.log('存储的token:', token ? '存在' : '不存在')
+  
+  try {
+    if (isAuthenticatedValue) {
+      // 用户已登录，从服务器移除
+      console.log('从服务器移除股票:', symbol)
+      
+      // 检查watchlistService的认证头
+      const authHeaders = watchlistService.getAuthHeaders()
+      console.log('认证头:', authHeaders)
+      
+      const result = await watchlistService.removeFromWatchlist(symbol)
+      console.log('服务器移除结果:', result)
+    } else {
+      // 未登录，从本地移除
+      console.log('从本地移除股票:', symbol)
+      const newList = watchList.value.filter(s => s !== symbol)
+      watchlistService.setLocalWatchlist(newList)
+    }
+    
+    // 更新本地状态
+    watchList.value = watchList.value.filter(s => s !== symbol)
+    stocksData.value = stocksData.value.filter(s => s.symbol !== symbol)
+    
+    console.log('股票移除成功:', symbol)
+    
+  } catch (error) {
+    console.error('移除股票失败:', error)
+    console.error('错误详情:', {
+      message: error.message,
+      code: error.code,
+      response: error.response?.data
+    })
+    
+    // 如果是认证错误，可能需要重新登录
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      console.log('认证失败，可能需要重新登录')
+      alert('认证失败，请重新登录')
+    } else {
+      alert(error.message || '移除股票失败，请重试')
+    }
+  }
 }
 
 // 选择股票查看K线图
@@ -203,7 +387,7 @@ function selectChart(symbol) {
 async function analyzeStock(symbol) {
   try {
     // 检查是否已登录
-    if (!isAuthenticated.value) {
+    if (!isAuthenticated?.value) {
       alert('请先登录后再进行AI分析')
       return
     }
@@ -399,12 +583,10 @@ async function refreshAll() {
   stocksData.value = []
   
   try {
-    // 使用批量API获取自选股数据
-    const symbolsStr = watchList.value.join(',')
-    const response = await axios.get(`/api/watchlist-stocks?symbols=${symbolsStr}`)
-    
-    if (response.data && response.data.success) {
-      stocksData.value = response.data.data.map(stock => ({
+    if (isAuthenticated?.value) {
+      // 用户已登录，使用用户专属API
+      const response = await watchlistService.getUserWatchlistStocks()
+      stocksData.value = response.map(stock => ({
         symbol: stock.symbol,
         name: stock.name,
         close: stock.close,
@@ -414,10 +596,26 @@ async function refreshAll() {
         date: stock.trade_date
       }))
     } else {
-      console.error('获取自选股数据失败:', response.data?.message)
-      // Fallback to individual requests
-      const promises = watchList.value.map(symbol => fetchStockData(symbol))
-      await Promise.all(promises)
+      // 未登录，使用传统批量API
+      const symbolsStr = watchList.value.join(',')
+      const response = await axios.get(`/api/watchlist-stocks?symbols=${symbolsStr}`)
+      
+      if (response.data && response.data.success) {
+        stocksData.value = response.data.data.map(stock => ({
+          symbol: stock.symbol,
+          name: stock.name,
+          close: stock.close,
+          change: stock.change,
+          changePercent: stock.change_percent,
+          volume: stock.volume,
+          date: stock.trade_date
+        }))
+      } else {
+        console.error('获取自选股数据失败:', response.data?.message)
+        // Fallback to individual requests
+        const promises = watchList.value.map(symbol => fetchStockData(symbol))
+        await Promise.all(promises)
+      }
     }
   } catch (error) {
     console.error('刷新自选股数据失败:', error)
@@ -464,10 +662,13 @@ function getPriceChangeClass(value) {
   return value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral'
 }
 
-// 组件挂载时加载数据
-onMounted(() => {
-  if (watchList.value.length > 0) {
-    refreshAll()
+// 组件挂载时初始化
+onMounted(async () => {
+  // 初始化时检查登录状态并加载相应的自选股
+  if (isAuthenticated?.value) {
+    await handleUserLogin()
+  } else {
+    loadLocalWatchlist()
   }
 })
 </script>
@@ -484,6 +685,44 @@ onMounted(() => {
 .watchlist-header h3 {
   margin: 0 0 15px 0;
   color: #2d3748;
+}
+
+/* 用户状态提示样式 */
+.user-status {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.warning-tip {
+  color: #d97706;
+  background-color: #fef3c7;
+  border: 1px solid #f9ca24;
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.success-tip {
+  color: #059669;
+  background-color: #d1fae5;
+  border: 1px solid #6ee7b7;
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.migration-tip {
+  margin-bottom: 10px;
+  animation: fadeInOut 3s ease-in-out;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(-10px); }
+  20% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-10px); }
 }
 
 .add-stock {
