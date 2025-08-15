@@ -5,16 +5,18 @@
       <div class="provider-selector">
         <label>选择AI服务商:</label>
         <select v-model="selectedProvider" @change="onProviderChange">
-          <option v-for="provider in availableProviders" :key="provider" :value="provider">
+          <option v-for="provider in safeAvailableProviders" :key="provider" :value="provider">
             {{ providerNames[provider] || provider }}
           </option>
         </select>
+        <!-- 刷新按钮 -->
+        <button @click="fetchAvailableProviders" class="refresh-btn" title="刷新服务商列表">
+          🔄
+        </button>
         <!-- 调试信息 -->
-        <div v-if="availableProviders.length === 0" style="color: red; font-size: 12px;">
-          调试: 服务商列表为空 ({{ availableProviders.length }})
-        </div>
-        <div v-else style="color: green; font-size: 12px;">
-          调试: 找到 {{ availableProviders.length }} 个服务商
+        <div style="font-size: 12px; margin-top: 5px;">
+          <div>可用服务商数量: {{ safeAvailableProviders.length }}</div>
+          <div>当前选择: {{ selectedProvider }}</div>
         </div>
       </div>
     </div>
@@ -44,12 +46,12 @@
       <button @click="clearError">清除错误</button>
     </div>
 
-    <div v-if="analysisResult && !loading" class="analysis-result">
+    <div v-if="analysisResult && !loading && analysisResult.stock_code" class="analysis-result">
       <div class="result-header">
         <h4>{{ analysisResult.stock_code }} 分析结果</h4>
         <div class="analysis-meta">
-          <span class="provider-badge">{{ providerNames[analysisResult.provider] || analysisResult.provider }}</span>
-          <span class="model-badge">{{ analysisResult.model }}</span>
+          <span v-if="analysisResult.provider" class="provider-badge">{{ providerNames[analysisResult.provider] || analysisResult.provider }}</span>
+          <span v-if="analysisResult.model" class="model-badge">{{ analysisResult.model }}</span>
         </div>
       </div>
 
@@ -57,12 +59,12 @@
         <div class="analysis-grid">
           <div class="analysis-card">
             <h5>技术面分析</h5>
-            <p>{{ analysis.technical_analysis }}</p>
+            <p>{{ analysis.technical_analysis || '暂无分析数据' }}</p>
           </div>
 
           <div class="analysis-card">
             <h5>短期走势</h5>
-            <p>{{ analysis.short_term_forecast }}</p>
+            <p>{{ analysis.short_term_forecast || '暂无预测数据' }}</p>
           </div>
 
           <div class="analysis-card">
@@ -85,34 +87,37 @@
           </div>
         </div>
 
-        <div v-if="analysis.key_points && analysis.key_points.length" class="key-points">
+        <div v-if="analysis.key_points && Array.isArray(analysis.key_points) && analysis.key_points.length > 0" class="key-points">
           <h5>关键要点</h5>
           <ul>
-            <li v-for="(point, index) in analysis.key_points" :key="index">{{ point }}</li>
+            <li v-for="(point, index) in analysis.key_points" :key="`point-${index}`">{{ point }}</li>
           </ul>
         </div>
       </div>
 
-      <div v-else class="analysis-error">
+      <div v-else-if="analysisResult && !analysisResult.success" class="analysis-error">
         <h5>分析失败</h5>
-        <p>{{ analysisResult.error }}</p>
+        <p>{{ analysisResult.error || '未知错误' }}</p>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
+import { useAuth } from '../services/auth.js'
 
 export default {
   name: 'StockAnalysis',
   setup() {
+    const { authenticatedRequest } = useAuth()
+    
     const stockSymbol = ref('')
     const loading = ref(false)
     const error = ref('')
     const analysisResult = ref(null)
     const selectedProvider = ref('openai')
-    const availableProviders = ref([])
+    const availableProviders = ref(['openai']) // 设置默认值
 
     const providerNames = {
       'openai': 'OpenAI',
@@ -143,22 +148,39 @@ export default {
       key_points: []
     })
 
+    // 安全的服务商列表计算属性
+    const safeAvailableProviders = computed(() => {
+      return Array.isArray(availableProviders.value) && availableProviders.value.length > 0 
+        ? availableProviders.value 
+        : ['openai']
+    })
+
     const fetchAvailableProviders = async () => {
       try {
         console.log('正在获取LLM服务商列表...')
         const response = await fetch('/api/llm-providers')
         console.log('响应状态:', response.status)
+        
+        if (!response.ok) {
+          throw new Error(`HTTP错误! 状态: ${response.status}`)
+        }
+        
         const data = await response.json()
         console.log('响应数据:', data)
-        availableProviders.value = data.providers || []
+        
+        // 确保providers是数组
+        availableProviders.value = Array.isArray(data.providers) ? data.providers : []
         console.log('可用服务商:', availableProviders.value)
-        if (data.default) {
+        
+        if (data.default && availableProviders.value.includes(data.default)) {
           selectedProvider.value = data.default
           console.log('默认服务商:', data.default)
         }
       } catch (err) {
         console.error('获取服务商列表失败:', err)
+        // 设置默认的服务商列表
         availableProviders.value = ['openai']
+        selectedProvider.value = 'openai'
       }
     }
 
@@ -173,11 +195,8 @@ export default {
       analysisResult.value = null
 
       try {
-        const response = await fetch('/api/analyze', {
+        const response = await authenticatedRequest('/api/analyze-stock', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
           body: JSON.stringify({
             symbol: stockSymbol.value.trim(),
             provider: selectedProvider.value,
@@ -191,23 +210,51 @@ export default {
         }
 
         const result = await response.json()
-        analysisResult.value = result
+        
+        // 确保结果对象的完整性
+        if (result && typeof result === 'object') {
+          analysisResult.value = {
+            success: result.success || false,
+            stock_code: result.stock_code || stockSymbol.value,
+            provider: result.provider || selectedProvider.value,
+            model: result.model || 'unknown',
+            analysis: result.analysis || {},
+            error: result.error || null
+          }
 
-        if (result.success && result.analysis) {
-          Object.assign(analysis, result.analysis)
+          if (result.success && result.analysis && typeof result.analysis === 'object') {
+            // 安全地更新分析数据
+            Object.assign(analysis, {
+              technical_analysis: result.analysis.technical_analysis || '',
+              short_term_forecast: result.analysis.short_term_forecast || '',
+              risk_level: result.analysis.risk_level || 'medium',
+              investment_advice: result.analysis.investment_advice || 'hold',
+              support_level: result.analysis.support_level || 0,
+              resistance_level: result.analysis.resistance_level || 0,
+              confidence_score: result.analysis.confidence_score || 0,
+              key_points: Array.isArray(result.analysis.key_points) ? result.analysis.key_points : []
+            })
+          }
+        } else {
+          throw new Error('服务器返回了无效的响应格式')
         }
 
       } catch (err) {
         error.value = err.message || '分析失败，请重试'
+        console.error('分析错误:', err)
       } finally {
         loading.value = false
       }
     }
 
     const onProviderChange = () => {
-      // 清除之前的结果
-      analysisResult.value = null
-      error.value = ''
+      // 清除之前的结果，但保持安全的状态
+      if (analysisResult.value) {
+        analysisResult.value = null
+      }
+      if (error.value) {
+        error.value = ''
+      }
     }
 
     const clearError = () => {
@@ -225,13 +272,15 @@ export default {
       analysisResult,
       selectedProvider,
       availableProviders,
+      safeAvailableProviders,
       providerNames,
       adviceLabels,
       riskLabels,
       analysis,
       analyzeStock,
       onProviderChange,
-      clearError
+      clearError,
+      fetchAvailableProviders
     }
   }
 }
@@ -239,94 +288,129 @@ export default {
 
 <style scoped>
 .stock-analysis {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
+  background: #fff;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin: 20px 0;
 }
 
 .analysis-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e9ecef;
 }
 
 .analysis-header h3 {
-  margin: 0;
-  color: #333;
+  margin: 0 0 16px 0;
+  color: #2c3e50;
+  font-size: 24px;
+  font-weight: 600;
 }
 
 .provider-selector {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .provider-selector label {
   font-weight: 500;
-  color: #666;
+  color: #495057;
 }
 
 .provider-selector select {
   padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background-color: white;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  min-width: 150px;
+}
+
+.provider-selector select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.refresh-btn {
+  padding: 8px;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+}
+
+.refresh-btn:hover {
+  background: #5a6268;
 }
 
 .analysis-input {
-  margin-bottom: 30px;
+  margin-bottom: 24px;
 }
 
 .stock-input {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   max-width: 400px;
 }
 
 .stock-input input {
   flex: 1;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 12px 16px;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
   font-size: 16px;
+  transition: border-color 0.3s;
+}
+
+.stock-input input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .stock-input button {
   padding: 12px 24px;
-  background-color: #007bff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  border-radius: 8px;
   font-size: 16px;
-  transition: background-color 0.2s;
-}
-
-.stock-input button:hover:not(:disabled) {
-  background-color: #0056b3;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.3s;
+  min-width: 80px;
 }
 
 .stock-input button:disabled {
-  background-color: #ccc;
+  opacity: 0.6;
   cursor: not-allowed;
+}
+
+.stock-input button:hover:not(:disabled) {
+  opacity: 0.9;
 }
 
 .loading {
   text-align: center;
   padding: 40px;
+  color: #6c757d;
 }
 
 .spinner {
   width: 40px;
   height: 40px;
   border: 4px solid #f3f3f3;
-  border-top: 4px solid #007bff;
+  border-top: 4px solid #667eea;
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
+  margin: 0 auto 16px;
 }
 
 @keyframes spin {
@@ -335,154 +419,155 @@ export default {
 }
 
 .error {
-  background-color: #f8d7da;
+  background: #f8d7da;
   color: #721c24;
-  padding: 20px;
-  border-radius: 4px;
+  padding: 16px;
+  border-radius: 8px;
   margin-bottom: 20px;
+  border: 1px solid #f5c6cb;
 }
 
 .error h4 {
-  margin: 0 0 10px 0;
+  margin: 0 0 8px 0;
+  font-size: 16px;
 }
 
 .error button {
-  background-color: #dc3545;
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: #dc3545;
   color: white;
   border: none;
-  padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
-  margin-top: 10px;
+  font-size: 14px;
 }
 
 .analysis-result {
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  padding: 20px;
+  border: 1px solid #dee2e6;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .result-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
 }
 
 .result-header h4 {
   margin: 0;
-  color: #333;
+  font-size: 20px;
 }
 
 .analysis-meta {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .provider-badge, .model-badge {
   padding: 4px 8px;
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
 }
 
-.provider-badge {
-  background-color: #e3f2fd;
-  color: #1976d2;
-}
-
-.model-badge {
-  background-color: #f3e5f5;
-  color: #7b1fa2;
+.analysis-content {
+  padding: 24px;
 }
 
 .analysis-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .analysis-card {
-  background-color: white;
+  background: #f8f9fa;
   padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border-left: 4px solid #667eea;
 }
 
 .analysis-card h5 {
-  margin: 0 0 15px 0;
-  color: #333;
+  margin: 0 0 12px 0;
+  color: #2c3e50;
   font-size: 16px;
   font-weight: 600;
+}
+
+.analysis-card p {
+  margin: 0;
+  line-height: 1.6;
+  color: #495057;
 }
 
 .investment-advice {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .advice-badge {
   padding: 6px 12px;
-  border-radius: 16px;
+  border-radius: 20px;
+  font-size: 14px;
   font-weight: 600;
   text-align: center;
-  max-width: 80px;
+  max-width: fit-content;
 }
 
 .advice-badge.buy {
-  background-color: #d4edda;
+  background: #d4edda;
   color: #155724;
 }
 
 .advice-badge.hold {
-  background-color: #fff3cd;
+  background: #fff3cd;
   color: #856404;
 }
 
 .advice-badge.sell {
-  background-color: #f8d7da;
+  background: #f8d7da;
   color: #721c24;
 }
 
 .risk-badge {
-  padding: 2px 8px;
-  border-radius: 8px;
-  font-weight: 500;
-  font-size: 12px;
+  font-weight: 600;
 }
 
 .risk-badge.low {
-  background-color: #d4edda;
-  color: #155724;
+  color: #28a745;
 }
 
 .risk-badge.medium {
-  background-color: #fff3cd;
-  color: #856404;
+  color: #ffc107;
 }
 
 .risk-badge.high {
-  background-color: #f8d7da;
-  color: #721c24;
+  color: #dc3545;
 }
 
 .price-levels p {
   margin: 8px 0;
-  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
 }
 
 .key-points {
-  background-color: white;
+  background: #e9ecef;
   padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .key-points h5 {
-  margin: 0 0 15px 0;
-  color: #333;
+  margin: 0 0 16px 0;
+  color: #2c3e50;
   font-size: 16px;
   font-weight: 600;
 }
@@ -493,166 +578,19 @@ export default {
 }
 
 .key-points li {
-  margin: 8px 0;
-  line-height: 1.5;
+  margin-bottom: 8px;
+  line-height: 1.6;
+  color: #495057;
 }
 
 .analysis-error {
-  background-color: #f8d7da;
+  padding: 24px;
+  text-align: center;
   color: #721c24;
-  padding: 20px;
-  border-radius: 8px;
-  text-align: center;
-}
-</style>
-
-<script setup>
-import { ref, watch } from 'vue';
-import axios from 'axios';
-
-const props = defineProps({
-  symbol: String,
-  records: Array
-});
-
-const currentSymbol = ref(props.symbol);
-const analyzing = ref(false);
-const analysis = ref('');
-const error = ref('');
-const analysisTime = ref('');
-
-watch(() => props.symbol, (newSymbol) => {
-  currentSymbol.value = newSymbol;
-  analysis.value = '';
-  error.value = '';
-});
-
-function formatAnalysis(text) {
-  // 简单的文本格式化，将换行转为HTML
-  return text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 }
 
-function generateStockSummary() {
-  if (!props.records || props.records.length === 0) {
-    return '暂无股票数据';
-  }
-  
-  const latest = props.records[0];
-  const oldest = props.records[props.records.length - 1];
-  const priceChange = ((latest.close - oldest.close) / oldest.close * 100).toFixed(2);
-  
-  return `股票代码: ${currentSymbol.value}
-最新收盘价: ${latest.close}元
-最高价: ${Math.max(...props.records.map(r => r.high))}元
-最低价: ${Math.min(...props.records.map(r => r.low))}元
-期间涨跌幅: ${priceChange}%
-数据期间: ${oldest.trade_date?.substring(0, 10)} 至 ${latest.trade_date?.substring(0, 10)}`;
-}
-
-async function analyzeStock() {
-  if (!currentSymbol.value) return;
-  
-  analyzing.value = true;
-  error.value = '';
-  analysis.value = '';
-  
-  try {
-    const stockSummary = generateStockSummary();
-    
-    const response = await axios.post('/api/analyze-stock', {
-      symbol: currentSymbol.value,
-      data: stockSummary,
-      records: props.records?.slice(0, 50) // 只发送最近50条记录
-    });
-    
-    analysis.value = response.data.analysis;
-    analysisTime.value = new Date().toLocaleString();
-    
-  } catch (err) {
-    console.error('分析失败:', err);
-    error.value = err.response?.data?.error || '网络错误，请重试';
-  } finally {
-    analyzing.value = false;
-  }
-}
-</script>
-
-<style scoped>
-.stock-analysis {
-  background: #f8f9fa;
-  padding: 20px;
-  border-radius: 8px;
-  margin-top: 20px;
-}
-
-.analysis-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-.analysis-header button {
-  padding: 8px 16px;
-  background: #28a745;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.analysis-header button:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
-}
-
-.loading {
-  text-align: center;
-  padding: 20px;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #007bff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 10px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.analysis-result {
-  background: white;
-  padding: 15px;
-  border-radius: 5px;
-  border-left: 4px solid #007bff;
-}
-
-.analysis-content {
-  line-height: 1.6;
-  margin-bottom: 10px;
-}
-
-.analysis-meta {
-  color: #666;
-  font-size: 12px;
-}
-
-.error {
-  background: #f8d7da;
-  color: #721c24;
-  padding: 10px;
-  border-radius: 4px;
-}
-
-.no-stock {
-  text-align: center;
-  color: #666;
-  padding: 20px;
+.analysis-error h5 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
 }
 </style>
