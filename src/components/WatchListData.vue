@@ -227,19 +227,29 @@ async function handleUserLogout() {
 // 加载用户自选股（服务器端）
 async function loadUserWatchlist() {
   try {
+    console.log('🔍 loadUserWatchlist开始执行，认证状态:', isAuthenticated?.value)
+    
     if (!isAuthenticated?.value) {
+      console.log('❌ 用户未认证，加载本地自选股')
       loadLocalWatchlist()
       return
     }
     
+    console.log('✅ 用户已认证，开始获取服务器端自选股')
     const symbols = await watchlistService.getUserWatchlist()
+    console.log('📊 获取到的symbols:', symbols, '数量:', symbols?.length)
+    
     watchList.value = symbols
+    console.log('💾 已设置watchList.value:', watchList.value)
     
     if (symbols.length > 0) {
+      console.log('🔄 symbols数量>0，开始refreshAll')
       await refreshAll()
+    } else {
+      console.log('⚠️ symbols数组为空，跳过refreshAll')
     }
   } catch (error) {
-    console.error('加载用户自选股失败:', error)
+    console.error('❌ 加载用户自选股失败:', error)
     // 失败时回退到本地模式
     loadLocalWatchlist()
   }

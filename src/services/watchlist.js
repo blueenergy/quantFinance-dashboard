@@ -5,7 +5,7 @@
 
 import axios from 'axios'
 
-const API_BASE_URL = 'http://localhost:3001'
+const API_BASE_URL = ''  // 使用空字符串，让请求通过vite代理
 
 class WatchlistService {
   // 获取认证头部
@@ -19,17 +19,26 @@ class WatchlistService {
   // 获取用户自选股列表
   async getUserWatchlist() {
     try {
+      console.log('🌐 开始请求自选股API:', `${API_BASE_URL}/api/user/watchlist`)
+      const headers = this.getAuthHeaders()
+      console.log('🔑 请求头部:', headers)
+      
       const response = await axios.get(`${API_BASE_URL}/api/user/watchlist`, {
-        headers: this.getAuthHeaders()
+        headers: headers
       })
       
+      console.log('📡 API响应状态:', response.status)
+      console.log('📡 API响应数据:', response.data)
+      
       if (response.data.success) {
-        return response.data.data.symbols || []
+        const symbols = response.data.data.symbols || []
+        console.log('✅ 成功解析symbols:', symbols, '数量:', symbols.length)
+        return symbols
       } else {
         throw new Error(response.data.message || '获取自选股失败')
       }
     } catch (error) {
-      console.error('获取自选股失败:', error)
+      console.error('❌ 获取自选股失败:', error)
       throw error
     }
   }
