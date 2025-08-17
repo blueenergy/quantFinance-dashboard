@@ -76,6 +76,7 @@
                 <button @click="analyzeStock(stock.symbol)" class="analyze-btn" :disabled="analyzingStock === stock.symbol">
                   {{ analyzingStock === stock.symbol ? '分析中...' : '🤖 AI分析' }}
                 </button>
+                <button @click="openHistoryModal(stock.symbol)" class="history-btn">🕑 历史分析</button>
                 <button @click="removeStock(stock.symbol)" class="remove-btn">移除</button>
               </td>
             </tr>
@@ -94,6 +95,7 @@
                 <button @click="analyzeStock(symbol)" class="analyze-btn" :disabled="analyzingStock === symbol">
                   {{ analyzingStock === symbol ? '分析中...' : '🤖 AI分析' }}
                 </button>
+                <button @click="openHistoryModal(symbol)" class="history-btn">🕑 历史分析</button>
                 <button @click="removeStock(symbol)" class="remove-btn">移除</button>
               </td>
             </tr>
@@ -151,6 +153,22 @@
         </div>
       </div>
     </div>
+
+    <!-- 历史分析弹窗 -->
+    <div v-if="showHistoryModal" class="modal-overlay" @click="closeHistoryModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>🕑 {{ historySymbol }} 历史AI分析</h3>
+          <button @click="closeHistoryModal" class="close-btn">×</button>
+        </div>
+        <div class="modal-body">
+          <HistoryAnalysis :history="analysisHistory[historySymbol]" :defaultModel="defaultModel" />
+        </div>
+      </div>
+    </div>
+
+    <!-- 历史分析区域（子组件） -->
+    <HistoryAnalysis :history="analysisHistory[currentAnalysis.symbol]?.slice(1)" :defaultModel="defaultModel" />
   </div>
 </template>
 
@@ -159,9 +177,15 @@ import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import { useAuth } from '../services/auth.js'
 import { watchlistService } from '../services/watchlist.js'
+import { useAnalysisHistory } from '../composables/useAnalysisHistory'
+import HistoryAnalysis from './HistoryAnalysis.vue'
+
+const defaultProvider = import.meta.env.VITE_DEFAULT_PROVIDER || 'openai'
+const defaultModel = import.meta.env.VITE_DEFAULT_MODEL || 'qwen3-30b'
 
 const emit = defineEmits(['select-chart'])
 const { isAuthenticated, currentUser } = useAuth()
+const { analysisHistory, loadHistory, addHistory } = useAnalysisHistory()
 
 const inputSymbol = ref('')
 const watchList = ref([])
@@ -172,6 +196,8 @@ const analysisResults = ref({})
 const showAnalysisModal = ref(false)
 const currentAnalysis = ref({ symbol: '', data: null, timestamp: null })
 const migrationComplete = ref(false)
+const showHistoryModal = ref(false)
+const historySymbol = ref('')
 
 // 计算没有数据的股票
 const stocksWithoutData = computed(() => {
@@ -416,8 +442,8 @@ async function analyzeStock(symbol) {
     
     const response = await axios.post('/api/analyze-stock', {
       symbol: symbol,
-      provider: 'openai',
-      model: 'qwen3-30b'
+      provider: defaultProvider,
+      model: defaultModel
     }, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -480,18 +506,32 @@ async function analyzeStock(symbol) {
 
 // 显示分析结果
 function showAnalysisResult(symbol, result) {
-  currentAnalysis.value = {
-    symbol: symbol,
+  const entry = {
+    symbol,
     data: result,
     timestamp: new Date().toISOString()
   }
+  currentAnalysis.value = entry
   showAnalysisModal.value = true
+  addHistory(symbol, result)
 }
 
 // 关闭分析结果模态框
 function closeAnalysisModal() {
   showAnalysisModal.value = false
   currentAnalysis.value = { symbol: '', data: null, timestamp: null }
+}
+
+// 打开历史分析模态框
+function openHistoryModal(symbol) {
+  historySymbol.value = symbol
+  showHistoryModal.value = true
+}
+
+// 关闭历史分析模态框
+function closeHistoryModal() {
+  showHistoryModal.value = false
+  historySymbol.value = ''
 }
 
 // 格式化日期时间
@@ -674,6 +714,7 @@ function getPriceChangeClass(value) {
 
 // 组件挂载时初始化
 onMounted(async () => {
+  loadHistory()
   // 初始化时检查登录状态并加载相应的自选股
   if (isAuthenticated?.value) {
     await handleUserLogin()
@@ -1113,5 +1154,24 @@ onMounted(async () => {
 
 .modal-content::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(135deg, #9370db, #ba55d3);
+}
+
+.history-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-right: 5px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.history-btn:hover {
+  background: linear-gradient(135deg, #818cf8 0%, #a5b4fc 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
 }
 </style>
