@@ -169,6 +169,22 @@
 
     <!-- 历史分析区域（子组件） -->
     <HistoryAnalysis :history="analysisHistory[currentAnalysis.symbol]?.slice(1)" :defaultModel="defaultModel" />
+
+    <!-- 历史分析弹窗 -->
+    <div v-if="showHistoryModal" class="modal-overlay" @click="closeHistoryModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>🕑 {{ historySymbol }} 历史AI分析</h3>
+          <button @click="closeHistoryModal" class="close-btn">×</button>
+        </div>
+        <div class="modal-body">
+          <HistoryAnalysis :history="analysisHistory[historySymbol]" :defaultModel="defaultModel" />
+        </div>
+      </div>
+    </div>
+
+    <!-- 历史分析区域（子组件） -->
+    <HistoryAnalysis :history="analysisHistory[currentAnalysis.symbol]?.slice(1)" :defaultModel="defaultModel" />
   </div>
 </template>
 
@@ -198,6 +214,7 @@ const currentAnalysis = ref({ symbol: '', data: null, timestamp: null })
 const migrationComplete = ref(false)
 const showHistoryModal = ref(false)
 const historySymbol = ref('')
+
 
 // 计算没有数据的股票
 const stocksWithoutData = computed(() => {
@@ -241,7 +258,6 @@ async function handleUserLogin() {
     loading.value = false
   }
 }
-
 // 处理用户登出
 async function handleUserLogout() {
   // 清空服务器数据，切换到本地模式
@@ -249,7 +265,6 @@ async function handleUserLogout() {
   stocksData.value = []
   loadLocalWatchlist()
 }
-
 // 加载用户自选股（服务器端）
 async function loadUserWatchlist() {
   try {
@@ -507,13 +522,32 @@ async function analyzeStock(symbol) {
 // 显示分析结果
 function showAnalysisResult(symbol, result) {
   const entry = {
-    symbol,
+    symbol: symbol,
     data: result,
     timestamp: new Date().toISOString()
   }
   currentAnalysis.value = entry
   showAnalysisModal.value = true
-  addHistory(symbol, result)
+  // 分析成功后自动存入后端数据库
+  if (isAuthenticated?.value) {
+    const token = localStorage.getItem('access_token')
+    console.log('分析历史存储请求:', {
+      symbol,
+      analysis_result: result,
+      provider: defaultProvider,
+      model: defaultModel,
+      timestamp: entry.timestamp
+    })
+    axios.post('/api/analysis-history', {
+      symbol,
+      analysis_result: result,
+      provider: defaultProvider,
+      model: defaultModel,
+      timestamp: entry.timestamp
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).catch(e => { console.warn('存储分析历史失败', e) })
+  }
 }
 
 // 关闭分析结果模态框
@@ -524,7 +558,12 @@ function closeAnalysisModal() {
 
 // 打开历史分析模态框
 function openHistoryModal(symbol) {
+  if (!symbol || symbol === 'undefined') {
+    console.warn('历史分析弹窗打开时 symbol 无效:', symbol)
+    return
+  }
   historySymbol.value = symbol
+  loadHistory(symbol)
   showHistoryModal.value = true
 }
 
@@ -1154,6 +1193,25 @@ onMounted(async () => {
 
 .modal-content::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(135deg, #9370db, #ba55d3);
+}
+
+.history-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-right: 5px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.history-btn:hover {
+  background: linear-gradient(135deg, #818cf8 0%, #a5b4fc 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
 }
 
 .history-btn {
