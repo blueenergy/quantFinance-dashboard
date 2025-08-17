@@ -1,13 +1,44 @@
 <template>
   <div v-if="history && history.length > 0" class="history-section">
     <h4 style="margin-top:24px;">🕑 历史AI分析</h4>
-    <ul>
-      <li v-for="(item, idx) in history" :key="item.timestamp">
-        <span>{{ formatDateTime(item.timestamp) }}</span>
-        <span style="margin-left:8px;">模型: {{ item.data.model || defaultModel }}</span>
-        <span style="margin-left:8px;">摘要: {{ item.data.analysis?.technical_analysis || item.data.technical_analysis || '无' }}</span>
-      </li>
-    </ul>
+    <div v-for="(item, idx) in history" :key="item.timestamp" class="history-card">
+      <div class="history-header">
+        <span class="stock-code">
+          {{ item.stock_code }}<span v-if="item.stock_name"> - {{ item.stock_name }}</span>
+        </span>
+        <span class="history-date">{{ formatDateTime(item.timestamp) }}</span>
+        <span class="history-model">🧠 模型: <b>{{ item.model || defaultModel }}</b></span>
+      </div>
+      <div class="history-body">
+        <div><span class="label">📊 技术面分析:</span> {{ item.analysis_result.analysis.technical_analysis || '无' }}</div>
+        <div><span class="label">⏳ 短期走势预测:</span> {{ item.analysis_result.analysis.short_term_forecast || '无' }}</div>
+        <div>
+          <span class="label">📋 摘要:</span>
+          <ul v-if="Array.isArray(item.analysis_result.analysis.key_points)">
+            <li v-for="(point, i) in item.analysis_result.analysis.key_points" :key="i">{{ point }}</li>
+          </ul>
+          <span v-else>{{ item.analysis_result.analysis.key_points || '无' }}</span>
+        </div>
+        <div>
+          <span class="label">💡 投资建议:</span>
+          <span :class="['advice', item.analysis_result.analysis.investment_advice]">
+            {{ item.analysis_result.analysis.investment_advice || '无' }}
+          </span>
+        </div>
+        <div class="risk-row">
+          <span class="label">⚠️ 风险等级:</span>
+          <span :class="['risk', item.analysis_result.analysis.risk_level]">
+            {{ item.analysis_result.analysis.risk_level || '未知' }}
+          </span>
+          <span class="label" style="margin-left:12px;">支撑位:</span>
+          <span>{{ item.analysis_result.analysis.support_level ?? '无' }}</span>
+          <span class="label" style="margin-left:12px;">阻力位:</span>
+          <span>{{ item.analysis_result.analysis.resistance_level ?? '无' }}</span>
+          <span class="label" style="margin-left:12px;">信心分数:</span>
+          <span>{{ item.analysis_result.analysis.confidence_score ?? '无' }}</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
