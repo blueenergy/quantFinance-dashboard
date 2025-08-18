@@ -93,8 +93,10 @@ async function refreshAnalysis() {
     }
     
     // 发送API请求（axios拦截器会自动添加认证头）
+    // 用户点击刷新时强制后端不使用缓存
     const response = await axios.post('/api/analyze-market', {
-      type: 'daily_overview'
+      type: 'daily_overview',
+      force_refresh: true
     })
     
     if (response.data.success) {
