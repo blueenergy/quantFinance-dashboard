@@ -50,6 +50,11 @@
               <th>涨跌额</th>
               <th>涨跌幅</th>
               <th>成交量</th>
+              <th>成交金额</th>
+              <th>动态市盈率</th>
+              <th>换手率</th>
+              <th>总市值</th>
+              <th>流通市值</th>
               <th>最新日期</th>
               <th>操作</th>
             </tr>
@@ -66,10 +71,15 @@
               <td :class="getPriceChangeClass(stock.change)">
                 {{ formatChange(stock.change) }}
               </td>
-              <td :class="getPriceChangeClass(stock.changePercent)">
-                {{ formatPercent(stock.changePercent) }}
+              <td :class="getPriceChangeClass(stock.change_percent)">
+                {{ formatPercent(stock.change_percent) }}
               </td>
               <td>{{ formatVolume(stock.volume) }}</td>
+              <td>{{ formatTurnover(stock.turnover) }}</td>
+              <td>{{ formatPE(stock.pe) }}</td>
+              <td>{{ formatPercent(stock.turnover_rate) }}</td>
+              <td>{{ formatMarketCap(stock.market_cap) }}</td>
+              <td>{{ formatMarketCap(stock.circ_market_cap) }}</td>
               <td>{{ formatDate(stock.date) }}</td>
               <td>
                 <button @click="selectChart(stock.symbol)" class="chart-btn">📈 K线</button>
@@ -648,6 +658,7 @@ async function fetchStockData(symbol) {
         change: change,
         changePercent: changePercent,
         volume: latest.volume,
+        turnover: latest.turnover,
         date: latest.trade_date
       }
       
@@ -680,8 +691,13 @@ async function refreshAll() {
         name: stock.name,
         close: stock.close,
         change: stock.change,
-        changePercent: stock.change_percent,
+        change_percent: stock.change_percent,
         volume: stock.volume,
+        turnover: stock.turnover,
+        turnover_rate: stock.turnover_rate,
+        pe: stock.pe,
+        market_cap: stock.market_cap,
+        circ_market_cap: stock.circ_market_cap,
         date: stock.trade_date
       }))
     } else {
@@ -695,8 +711,12 @@ async function refreshAll() {
           name: stock.name,
           close: stock.close,
           change: stock.change,
-          changePercent: stock.change_percent,
+          change_percent: stock.change_percent,
           volume: stock.volume,
+          turnover: stock.turnover,
+          pe: stock.pe,
+          market_cap: stock.market_cap,
+          circ_market_cap: stock.circ_market_cap,
           date: stock.trade_date
         }))
       } else {
@@ -731,9 +751,21 @@ function formatChange(change) {
   return change >= 0 ? `+${change.toFixed(2)}` : change.toFixed(2)
 }
 
-function formatPercent(percent) {
-  if (percent === undefined || percent === null) return '-'
-  return percent >= 0 ? `+${percent.toFixed(2)}%` : `${percent.toFixed(2)}%`
+function formatPE(val) {
+  if (val === undefined || val === null) return '-';
+  return Number(val).toFixed(2);
+}
+
+function formatMarketCap(val) {
+  if (!val) return '-';
+  if (val >= 1e8) return (val / 1e8).toFixed(2) + '亿';
+  if (val >= 1e4) return (val / 1e4).toFixed(2) + '万';
+  return val.toLocaleString();
+}
+
+function formatPercent(val) {
+  if (val === undefined || val === null) return '-';
+  return Number(val).toFixed(2) + '%';
 }
 
 function formatVolume(volume) {
@@ -744,6 +776,13 @@ function formatVolume(volume) {
     return (volume / 10000).toFixed(2) + '万'
   }
   return volume.toString()
+}
+
+function formatTurnover(val) {
+  if (!val) return '-';
+  if (val >= 1e8) return (val / 1e8).toFixed(2) + '亿';
+  if (val >= 1e4) return (val / 1e4).toFixed(2) + '万';
+  return val.toLocaleString();
 }
 
 function getPriceChangeClass(value) {
