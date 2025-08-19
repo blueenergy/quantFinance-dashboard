@@ -8,7 +8,7 @@
         </span>
       </h3>
       <div class="header-actions">
-        <button @click="refreshAnalysis" :disabled="loading" class="refresh-btn">
+        <button @click="refreshAnalysis(true)" :disabled="loading" class="refresh-btn">
           <span v-if="loading">分析中...</span>
           <span v-else>🔄 刷新分析</span>
         </button>
@@ -23,7 +23,7 @@
       
       <div v-else-if="error" class="error">
         <p>❌ {{ error }}</p>
-        <button @click="refreshAnalysis" class="retry-btn">重试</button>
+        <button @click="refreshAnalysis(true)" class="retry-btn">重试</button>
       </div>
       
       <div v-else-if="analysis" class="analysis-content">
@@ -82,7 +82,7 @@ const error = ref('')
 const analysis = ref(null)
 
 // 获取大盘分析
-async function refreshAnalysis() {
+async function refreshAnalysis(isManual = false) {
   loading.value = true
   error.value = ''
   
@@ -92,11 +92,10 @@ async function refreshAnalysis() {
       throw new Error('请先登录后再获取分析')
     }
     
-    // 发送API请求（axios拦截器会自动添加认证头）
-    // 用户点击刷新时强制后端不使用缓存
+    // 发送API请求，只有手动刷新时才加force_refresh
     const response = await axios.post('/api/analyze-market', {
       type: 'daily_overview',
-      force_refresh: true
+      ...(isManual ? { force_refresh: true } : {})
     })
     
     if (response.data.success) {
@@ -208,11 +207,9 @@ function getCacheIcon(fromCache) {
   return fromCache ? '💾' : '🔄'
 }
 
-// 组件挂载时获取分析（只在已登录时）
+// 自动加载时调用（不加force_refresh）
 onMounted(() => {
-  if (isAuthenticated.value) {
-    refreshAnalysis()
-  }
+  refreshAnalysis(false)
 })
 </script>
 
