@@ -82,12 +82,15 @@
               <td>{{ formatMarketCap(stock.circ_market_cap) }}</td>
               <td>{{ formatDate(stock.date) }}</td>
               <td>
-                <button @click="selectChart(stock.symbol)" class="chart-btn">📈 K线</button>
-                <button @click="analyzeStock(stock.symbol)" class="analyze-btn" :disabled="analyzingStock === stock.symbol">
-                  {{ analyzingStock === stock.symbol ? '分析中...' : '🤖 AI分析' }}
-                </button>
-                <button @click="openHistoryModal(stock.symbol)" class="history-btn">🕑 历史分析</button>
-                <button @click="removeStock(stock.symbol)" class="remove-btn">移除</button>
+                  <div class="action-btn-group">
+                    <button @click="selectChart(stock.symbol)" class="chart-btn">📈 K线</button>
+                    <button @click="analyzeStock(stock.symbol)" class="analyze-btn" :disabled="analyzingStock === stock.symbol">
+                      {{ analyzingStock === stock.symbol ? '分析中...' : '🤖 AI分析' }}
+                    </button>
+                    <button @click="deepAnalyzeStock(stock.symbol)" class="deep-analyze-btn">🔬 深度分析</button>
+                    <button @click="openHistoryModal(stock.symbol)" class="history-btn">🕑 历史分析</button>
+                    <button @click="removeStock(stock.symbol)" class="remove-btn">移除</button>
+                  </div>
               </td>
             </tr>
             
@@ -529,6 +532,12 @@ async function analyzeStock(symbol) {
   }
 }
 
+// 深度分析股票
+function deepAnalyzeStock(symbol) {
+  alert(`深度分析功能开发中：${symbol}`)
+  // TODO: 调用后端深度分析API，弹窗展示结果
+}
+
 // 显示分析结果
 function showAnalysisResult(symbol, result) {
   const entry = {
@@ -754,7 +763,8 @@ function formatChange(change) {
 function formatPE(val) {
   if (val === undefined || val === null) return '-';
   return Number(val).toFixed(2);
-}
+/* 操作按钮自适应分组样式 */
+  }
 
 function formatMarketCap(val) {
   if (!val) return '-';
@@ -808,6 +818,19 @@ onMounted(async () => {
   background: rgba(30, 30, 63, 0.5);
   border-radius: 12px;
   border: 1px solid rgba(138, 43, 226, 0.2);
+}
+
+.action-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-start;
+  align-items: center;
+  max-width: 260px;
+}
+.action-btn-group button {
+  margin-right: 0;
+  margin-bottom: 4px;
 }
 
 .watchlist-header {
@@ -1253,8 +1276,8 @@ onMounted(async () => {
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
 }
 
-.history-btn {
-  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+.deep-analyze-btn {
+  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
   color: white;
   border: none;
   padding: 6px 12px;
@@ -1263,12 +1286,11 @@ onMounted(async () => {
   cursor: pointer;
   margin-right: 5px;
   transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
 }
-
-.history-btn:hover {
-  background: linear-gradient(135deg, #818cf8 0%, #a5b4fc 100%);
+.deep-analyze-btn:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.5);
 }
 </style>
