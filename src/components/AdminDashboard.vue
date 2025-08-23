@@ -250,6 +250,115 @@
       </div>
     </div>
 
+    <!-- AI分析日志 -->
+    <div v-if="activeTab === 'ai-logs'" class="ai-logs-section">
+      <div class="section-header">
+        <h3>🧠 AI 分析日志</h3>
+      </div>
+
+      <div class="logs-table" v-if="aiAnalysisLogs.length > 0">
+        <table>
+          <thead>
+            <tr>
+              <th>任务ID</th>
+              <th>状态</th>
+              <th>创建时间</th>
+              <th>完成时间</th>
+              <th>耗时 (秒)</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="log in aiAnalysisLogs" :key="log.task_id">
+              <td>{{ log.task_id }}</td>
+              <td>
+                <span :class="['status', log.status === '成功' ? 'success' : 'failed']">
+                  {{ log.status }}
+                </span>
+              </td>
+              <td>{{ formatDate(log.created_at) }}</td>
+              <td>{{ formatDate(log.completed_at) || '-' }}</td>
+              <td>{{ log.duration || '-' }}</td>
+              <td>
+                <button @click="viewAILogDetail(log)" class="action-btn view">
+                  详情
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 分页 -->
+      <div class="pagination" v-if="aiLogsPagination">
+        <button 
+          @click="loadAIAnalysisLogs(aiLogsPagination.page - 1)"
+          :disabled="aiLogsPagination.page <= 1"
+          class="page-btn"
+        >
+          上一页
+        </button>
+        <span class="page-info">
+          第 {{ aiLogsPagination.page }} 页，共 {{ aiLogsPagination.total_pages }} 页
+        </span>
+        <button 
+          @click="loadAIAnalysisLogs(aiLogsPagination.page + 1)"
+          :disabled="aiLogsPagination.page >= aiLogsPagination.total_pages"
+          class="page-btn"
+        >
+          下一页
+        </button>
+      </div>
+    </div>
+
+    <!-- AI分析统计 -->
+    <div v-if="activeTab === 'ai-logs'" class="ai-logs-section">
+      <div class="section-header">
+        <h3>🤖 用户AI分析统计</h3>
+      </div>
+      <div class="ai-logs-table" v-if="aiAnalysisLogs.length > 0">
+        <table>
+          <thead>
+            <tr>
+              <th>用户名</th>
+              <th>用户ID</th>
+              <th>股票代码</th>
+              <th>服务商</th>
+              <th>模型</th>
+              <th>分析时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="log in aiAnalysisLogs" :key="log._id">
+              <td>{{ log.username || '-' }}</td>
+              <td>{{ log.user_id }}</td>
+              <td>{{ log.symbol }}</td>
+              <td>{{ log.provider }}</td>
+              <td>{{ log.model }}</td>
+              <td>{{ formatDate(log.timestamp) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="empty-msg">暂无分析记录</div>
+      <!-- 分页 -->
+      <div class="pagination" v-if="aiLogsPagination">
+        <button 
+          @click="loadAIAnalysisLogs(aiLogsPagination.page - 1)"
+          :disabled="aiLogsPagination.page <= 1"
+          class="page-btn"
+        >上一页</button>
+        <span class="page-info">
+          第 {{ aiLogsPagination.page }} 页，共 {{ aiLogsPagination.total_pages }} 页
+        </span>
+        <button 
+          @click="loadAIAnalysisLogs(aiLogsPagination.page + 1)"
+          :disabled="aiLogsPagination.page >= aiLogsPagination.total_pages"
+          class="page-btn"
+        >下一页</button>
+      </div>
+    </div>
+
     <!-- 用户详情模态框 -->
     <div v-if="selectedUser" class="modal-overlay" @click="closeUserDetail">
       <div class="modal-content" @click.stop>
@@ -313,7 +422,8 @@ export default {
         { id: 'overview', name: '概览', icon: '📊' },
         { id: 'users', name: '用户管理', icon: '👥' },
         { id: 'logs', name: '登录日志', icon: '📋' },
-        { id: 'admin-logs', name: '管理员日志', icon: '⚙️' }
+        { id: 'admin-logs', name: '管理员日志', icon: '⚙️' },
+        { id: 'ai-logs', name: 'AI分析日志', icon: '🧠' }
       ],
       
       // 统计数据
@@ -333,7 +443,11 @@ export default {
       
       // 管理员日志
       adminLogs: [],
-      adminLogsPagination: null
+      adminLogsPagination: null,
+      
+      // AI分析日志
+      aiAnalysisLogs: [],
+      aiLogsPagination: null
     }
   },
   computed: {
@@ -345,6 +459,7 @@ export default {
   async mounted() {
     await this.loadStatistics()
     await this.loadUsers()
+    await this.loadAIAnalysisLogs()
   },
   methods: {
     // 加载统计数据
@@ -486,12 +601,38 @@ export default {
       }
     },
     
+    // 加载AI分析日志
+    async loadAIAnalysisLogs(page = 1) {
+      try {
+        this.loading = true
+        const params = { page, page_size: 50 }
+        const response = await axios.get('/api/admin/analysis-logs', { params })
+        if (response.data.success) {
+          this.aiAnalysisLogs = response.data.data.logs
+          const pag = response.data.data.pagination
+          this.aiLogsPagination = {
+            page: pag.page,
+            page_size: pag.page_size,
+            total: pag.total,
+            total_pages: Math.ceil(pag.total / pag.page_size)
+          }
+        }
+      } catch (error) {
+        console.error('加载AI分析日志失败:', error)
+        alert('加载AI分析日志失败')
+      } finally {
+        this.loading = false
+      }
+    },
+    
     // 监听标签切换
     async tabChanged() {
       if (this.activeTab === 'logs' && this.loginLogs.length === 0) {
         await this.loadLoginLogs()
       } else if (this.activeTab === 'admin-logs' && this.adminLogs.length === 0) {
         await this.loadAdminLogs()
+      } else if (this.activeTab === 'ai-logs' && this.aiAnalysisLogs.length === 0) {
+        await this.loadAIAnalysisLogs()
       }
     },
     
