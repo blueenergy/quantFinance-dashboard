@@ -74,6 +74,14 @@
               <p>{{ selectedItem.analysis?.technical_analysis || '暂无' }}</p>
             </div>
             <div class="detail-item">
+              <strong>长期预测:</strong>
+              <p>{{ selectedItem.analysis?.long_term_forecast || '暂无' }}</p>
+            </div>
+            <div class="detail-item">
+              <strong>中期预测:</strong>
+              <p>{{ selectedItem.analysis?.mid_term_forecast || '暂无' }}</p>
+            </div>
+            <div class="detail-item">
               <strong>短期预测:</strong>
               <p>{{ selectedItem.analysis?.short_term_forecast || '暂无' }}</p>
             </div>

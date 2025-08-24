@@ -61,7 +61,14 @@
             <h5>技术面分析</h5>
             <p>{{ analysis.technical_analysis || '暂无分析数据' }}</p>
           </div>
-
+          <div class="analysis-card">
+            <h5>长期走势</h5>
+            <p>{{ analysis.long_term_forecast || '暂无预测数据' }}</p>
+          </div>
+          <div class="analysis-card">
+            <h5>中期走势</h5>
+            <p>{{ analysis.mid_term_forecast || '暂无预测数据' }}</p>
+          </div>
           <div class="analysis-card">
             <h5>短期走势</h5>
             <p>{{ analysis.short_term_forecast || '暂无预测数据' }}</p>
@@ -256,6 +263,8 @@ export default {
             // 安全地更新分析数据
             Object.assign(analysis, {
               technical_analysis: result.analysis.technical_analysis || '',
+              long_term_forecast: result.analysis.long_term_forecast || '',
+              mid_term_forecast: result.analysis.mid_term_forecast || '',
               short_term_forecast: result.analysis.short_term_forecast || '',
               risk_level: result.analysis.risk_level || 'medium',
               investment_advice: result.analysis.investment_advice || 'hold',
