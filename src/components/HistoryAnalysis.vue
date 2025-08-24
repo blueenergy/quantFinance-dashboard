@@ -11,6 +11,8 @@
       </div>
       <div class="history-body">
         <div><span class="label">📊 技术面分析:</span> {{ item.analysis_result.analysis.technical_analysis || '无' }}</div>
+        <div><span class="label">⏳ 长期走势预测:</span> {{ item.analysis_result.analysis.long_term_forecast || '无' }}</div>
+        <div><span class="label">⏳ 中期走势预测:</span> {{ item.analysis_result.analysis.mid_term_forecast || '无' }}</div>
         <div><span class="label">⏳ 短期走势预测:</span> {{ item.analysis_result.analysis.short_term_forecast || '无' }}</div>
         <div>
           <span class="label">📋 摘要:</span>

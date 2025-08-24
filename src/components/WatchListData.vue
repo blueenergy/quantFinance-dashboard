@@ -209,8 +209,8 @@ import { watchlistService } from '../services/watchlist.js'
 import { useAnalysisHistory } from '../composables/useAnalysisHistory'
 import HistoryAnalysis from './HistoryAnalysis.vue'
 
-const defaultProvider = import.meta.env.VITE_DEFAULT_PROVIDER || 'openai'
-const defaultModel = import.meta.env.VITE_DEFAULT_MODEL || 'qwen3-30b'
+const defaultProvider = import.meta.env.VITE_DEFAULT_PROVIDER || 'custom'
+const defaultModel = import.meta.env.VITE_DEFAULT_MODEL || 'qwen-plus'
 
 const emit = defineEmits(['select-chart'])
 const { isAuthenticated, currentUser } = useAuth()
