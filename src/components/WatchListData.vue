@@ -51,11 +51,6 @@
               <th>涨跌幅</th>
               <th>成交量</th>
               <th>成交金额</th>
-              <th>动态市盈率</th>
-              <th>换手率</th>
-              <th>总市值</th>
-              <th>流通市值</th>
-              <th>最新日期</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -76,11 +71,6 @@
               </td>
               <td>{{ formatVolume(stock.volume) }}</td>
               <td>{{ formatTurnover(stock.turnover) }}</td>
-              <td>{{ formatPE(stock.pe) }}</td>
-              <td>{{ formatPercent(stock.turnover_rate) }}</td>
-              <td>{{ formatMarketCap(stock.market_cap) }}</td>
-              <td>{{ formatMarketCap(stock.circ_market_cap) }}</td>
-              <td>{{ formatDate(stock.date) }}</td>
               <td>
                   <div class="action-btn-group">
                     <button @click="selectChart(stock.symbol)" class="chart-btn">📈 K线</button>
@@ -646,7 +636,7 @@ function getStockName(symbol) {
 // 获取单个股票的最新数据
 async function fetchStockData(symbol) {
   try {
-    const response = await axios.get(`/records/?symbol=${symbol}&limit=2&sort=-trade_date`)
+    const response = await axios.get(`/api/records/?symbol=${symbol}&limit=2&sort=-trade_date`)
     const records = response.data
     
     if (records.length > 0) {
