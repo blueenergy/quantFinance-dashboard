@@ -143,7 +143,7 @@ export default {
       error.value = ''
 
       try {
-        const endpoint = isLogin.value ? '/api/login' : '/api/register'
+        const endpoint = isLogin.value ? '/api/user/login' : '/api/user/register'
         const payload = isLogin.value 
           ? { username: formData.username, password: formData.password }
           : { 

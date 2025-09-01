@@ -184,7 +184,7 @@ function formatDate(dateStr) {
 }
 
 async function fetchData() {
-  let url = '/records/?limit=2000&sort=-trade_date'
+  let url = '/api/records/?limit=2000&sort=-trade_date'
   if (symbol.value) url += `&symbol=${symbol.value}`
   try {
     const res = await axios.get(url)
@@ -204,7 +204,7 @@ async function selectStockForChart(stockSymbol) {
   try {
     chartSymbol.value = stockSymbol
     activeTab.value = 'chart'
-    const url = `/records/?limit=2000&sort=-trade_date&symbol=${stockSymbol}`
+    const url = `/api/records/?limit=2000&sort=-trade_date&symbol=${stockSymbol}`
     const res = await axios.get(url)
     chartRecords.value = res.data
   } catch (e) {

@@ -185,7 +185,7 @@
             <tr v-for="log in loginLogs" :key="log._id">
               <td>{{ log.username }}</td>
               <td>{{ log.ip_address }}</td>
-              <td class="user-agent">{{ formatUserAgent(log.user_agent) }}</td>
+              <td class="user-agent">{{ formatUserAgent(String(log.user_agent || '')) }}</td>
               <td>{{ formatDate(log.login_time) }}</td>
               <td>
                 <span :class="['status', log.success ? 'success' : 'failed']">

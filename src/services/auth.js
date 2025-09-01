@@ -79,7 +79,7 @@ class AuthService {
     }
 
     try {
-      const response = await fetch('/api/profile', {
+      const response = await fetch('/api/user/profile', {
         headers: this.getAuthHeaders()
       })
 
