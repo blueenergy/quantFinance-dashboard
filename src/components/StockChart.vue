@@ -8,7 +8,7 @@
         <option value="month">月线</option>
       </select>
       <span style="margin-left: 20px; color: #666; font-size: 12px;">
-        {{ symbol ? `股票代码: ${symbol} | ` : '' }}数据量: {{ records?.length || 0 }} 条
+        {{ props.symbol ? `股票代码: ${props.symbol} | ` : '' }}数据量: {{ records?.length || 0 }} 条
       </span>
     </div>
     <div style="margin-bottom: 10px;">
@@ -21,6 +21,14 @@
     <div v-if="error" style="color: red; margin-top: 10px;">
       错误: {{ error }}
     </div>
+    <div style="margin-bottom: 10px;">
+      <button @click="props.prevStock" :disabled="!props.hasPrev">上一个</button>
+      <button @click="props.nextStock" :disabled="!props.hasNext" style="margin-left:10px;">下一个</button>
+      <span style="margin-left: 20px;">当前股票: {{ props.symbol }}</span>
+    </div>
+    <div style="color: white; font-size: 12px; margin-bottom: 5px;">
+      DEBUG: watchlist长度: {{ props.watchlist?.length }} | currentIndex: {{ props.currentIndex }}
+    </div>
   </div>
 </template>
 
@@ -31,7 +39,13 @@ import * as echarts from 'echarts'
 const props = defineProps({
   records: Array,
   symbol: String,
-  moneyFlowRecords: Array // 新增
+  moneyFlowRecords: Array, // 新增
+  prevStock: Function,
+  nextStock: Function,
+  hasPrev: Boolean,
+  hasNext: Boolean,
+  watchlist: Array,   
+  currentIndex: Number
 })
 
 const chart = ref(null)
@@ -81,17 +95,17 @@ function getKlineData() {
   const kline = groupKline(filtered, kType.value)
   // money_flow 数据按日期映射
   const moneyFlowMap = {}
-  if (moneyFlowRecords.value) {
-    moneyFlowRecords.value.forEach(mf => {
+  if (props.moneyFlowRecords) {
+    props.moneyFlowRecords.forEach(mf => {
       moneyFlowMap[normalizeDate(mf.trade_date)] = mf
     })
   }
-  console.log('moneyFlowRecords:', moneyFlowRecords.value)
-  console.log('moneyFlowRecords sample:', moneyFlowRecords.value && moneyFlowRecords.value.length > 0 ? moneyFlowRecords.value[0] : '无数据')
-  console.log('kline sample:', props.records && props.records.length > 0 ? props.records[0] : '无数据')
-  console.log('moneyFlowMap keys:', Object.keys(moneyFlowMap))
-  console.log('moneyFlowMap:', moneyFlowMap)
-  console.log('kline dates:', kline.map(r => normalizeDate(r.trade_date)))
+  // console.log('moneyFlowRecords:', props.moneyFlowRecords)
+  // console.log('moneyFlowRecords sample:', props.moneyFlowRecords && props.moneyFlowRecords.length > 0 ? props.moneyFlowRecords[0] : '无数据')
+  // console.log('kline sample:', props.records && props.records.length > 0 ? props.records[0] : '无数据')
+  // console.log('moneyFlowMap keys:', Object.keys(moneyFlowMap))
+  // console.log('moneyFlowMap:', moneyFlowMap)
+  // console.log('kline dates:', kline.map(r => normalizeDate(r.trade_date)))
   // 计算大资金净买入金额
   const bigMoneyBars = kline.map(r => {
     const mf = moneyFlowMap[normalizeDate(r.trade_date)]
@@ -110,23 +124,20 @@ function getKlineData() {
   }
 }
 
-onMounted(() => {
-  if (props.records && props.records.length > 0) {
-    const dates = props.records.map(r => r.trade_date).sort()
-    startDate.value = dates[0]
-    endDate.value = dates[dates.length - 1]
-  }
-  drawChart()
-})
-
 watch(() => [props.records, kType.value], () => {
   drawChart()
 })
 
 function drawChart() {
   error.value = ''
+  
   if (!chartInstance) {
     error.value = '图表容器未找到'
+    return
+  }
+  
+  if (!props.symbol) {
+    error.value = '股票代码未指定'
     return
   }
   
@@ -136,7 +147,7 @@ function drawChart() {
   }
   
   try {
-    chartInstance = echarts.init(chart.value)
+    //chartInstance = echarts.init(chart.value)
     const { dates, kline, bigMoneyBars } = getKlineData()
     const maxAbsBigMoney = Math.max(...bigMoneyBars.map(v => Math.abs(v)), 1)
     const option = {
@@ -271,55 +282,37 @@ function drawChart() {
   }
 }
 
-// 新增：获取资金流向数据
-/**
- * Fetches money flow records for a given stock symbol from the API.
- * @param {string} symbol - The stock symbol to fetch money flow records for.
- * @returns {Promise<Array>} A promise that resolves to an array of money flow records.
- */
-async function fetchMoneyFlowRecords(symbol) {
-  try {
-    const token = localStorage.getItem('access_token')
-    const res = await fetch(`/api/money-flow-records?symbol=${symbol}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-    const moneyFlowRecords = (await res.json()).data
-    //console.log('Debug moneyFlowRecords:', moneyFlowRecords)
-    
-    return moneyFlowRecords
-  } catch (err) {
-    console.error('获取资金流向数据时出错:', err)
-    error.value = `获取资金流向数据失败: ${err.message}`
-    return []
-  }
-}
 
-// 新增：组件挂载后获取资金流向数据
-const moneyFlowRecords = ref([])
 onMounted(async () => {
-  // 获取资金流向数据
-  moneyFlowRecords.value = await fetchMoneyFlowRecords(props.symbol)
-  console.log('moneyFlowRecords:', moneyFlowRecords.value[0])
+  // 安全访问 moneyFlowRecords
+  if (props.moneyFlowRecords && props.moneyFlowRecords.length > 0) {
+    console.log('moneyFlowRecords第一条:', props.moneyFlowRecords[0])
+  } else {
+    console.log('moneyFlowRecords: 无数据或为空')
+  }
 
-  // 默认显示最近3个月
+  // 初始化图表实例
+  chartInstance = echarts.init(chart.value)
+
+  // 设置默认日期范围（只有当有记录时）
   if (props.records && props.records.length > 0) {
     const dates = props.records.map(r => normalizeDate(r.trade_date)).sort()
     const today = new Date()
     const threeMonthsAgo = new Date(today)
     threeMonthsAgo.setMonth(today.getMonth() - 3)
+
     const startIdx = dates.findIndex(d => {
-      const dObj = d.includes('-') ? new Date(d) : new Date(d.slice(0,4)+'-'+d.slice(6,8)+'-'+d.slice(6,8))
+      const dObj = d.includes('-') ? new Date(d) : new Date(d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8))
       return dObj >= threeMonthsAgo
     })
     startDate.value = startIdx >= 0 ? dates[startIdx] : dates[0]
     endDate.value = dates[dates.length - 1]
   }
 
-  // 只在这里初始化一次
-  chartInstance = echarts.init(chart.value)
-  drawChart()
+  // 只有当 symbol 存在时才绘制
+  if (props.symbol) {
+    drawChart()
+  }
 })
 
 // 新增：日期格式化函数
@@ -341,4 +334,11 @@ function normalizeDate(d) {
   }
   return d
 }
+
+// 监听 symbol 变化，当 symbol 有值时重新绘制
+watch(() => props.symbol, (newSymbol) => {
+  if (newSymbol && chartInstance) {
+    drawChart()
+  }
+}, { immediate: true })
 </script>
