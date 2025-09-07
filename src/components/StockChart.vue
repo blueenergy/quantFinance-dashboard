@@ -86,15 +86,19 @@ function groupKline(data, type) {
 }
 
 function getKlineData() {
-  const sorted = [...props.records].sort((a, b) => new Date(a.trade_date) - new Date(b.trade_date))
-  // 按日期范围筛选
+  const sorted = [...props.records].sort((a, b) => new Date(normalizeDate(a.trade_date)) - new Date(normalizeDate(b.trade_date)))
+  
+  // ✅ 核心修复：使用 normalizeDate 进行日期比较
   let filtered = sorted
   if (startDate.value) {
-    filtered = filtered.filter(r => new Date(r.trade_date) >= new Date(startDate.value))
+    filtered = filtered.filter(r => normalizeDate(r.trade_date) >= startDate.value)
   }
   if (endDate.value) {
-    filtered = filtered.filter(r => new Date(r.trade_date) <= new Date(endDate.value))
+    filtered = filtered.filter(r => normalizeDate(r.trade_date) <= endDate.value)
   }
+  
+  console.log(`筛选后的数据量: ${filtered.length}`)
+  
   const kline = groupKline(filtered, kType.value)
   // money_flow 数据按日期映射
   const moneyFlowMap = {}
@@ -120,7 +124,7 @@ function getKlineData() {
     return 0
   })
   return {
-    dates: kline.map(r => r.trade_date),
+    dates: kline.map(r => normalizeDate(r.trade_date)), // ✅ 确保日期格式一致
     prices: kline.map(r => r.close),
     kline,
     bigMoneyBars
@@ -344,19 +348,28 @@ onMounted(async () => {
   // 初始化图表实例
   chartInstance = echarts.init(chart.value)
 
-  // 设置默认日期范围（只有当有记录时）
+  // ✅ 修复：设置默认日期范围为最近3个月
   if (props.records && props.records.length > 0) {
     const dates = props.records.map(r => normalizeDate(r.trade_date)).sort()
+    
+    // 计算3个月前的日期字符串
     const today = new Date()
     const threeMonthsAgo = new Date(today)
     threeMonthsAgo.setMonth(today.getMonth() - 3)
-
-    const startIdx = dates.findIndex(d => {
-      const dObj = d.includes('-') ? new Date(d) : new Date(d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8))
-      return dObj >= threeMonthsAgo
-    })
+    const threeMonthsAgoStr = threeMonthsAgo.toISOString().split('T')[0] // 格式: 'YYYY-MM-DD'
+    
+    console.log('今天:', today.toISOString().split('T')[0])
+    console.log('3个月前:', threeMonthsAgoStr)
+    console.log('数据日期范围:', dates[0], '到', dates[dates.length - 1])
+    
+    // 找到第一个大于等于3个月前的日期
+    const startIdx = dates.findIndex(d => d >= threeMonthsAgoStr)
+    
     startDate.value = startIdx >= 0 ? dates[startIdx] : dates[0]
     endDate.value = dates[dates.length - 1]
+    
+    console.log('设置的日期范围:', startDate.value, '到', endDate.value)
+    console.log('筛选后数据量:', dates.filter(d => d >= startDate.value && d <= endDate.value).length)
   }
 
   // 只有当 symbol 存在时才绘制
