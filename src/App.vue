@@ -90,7 +90,17 @@
           </div>
 
           <div v-if="activeTab === 'chart'" class="chart-view">
-            <StockChart :records="chartRecords" :symbol="chartSymbol" />
+            <StockChart
+              :symbol="chartSymbol"
+              :records="chartRecords"
+              :moneyFlowRecords="moneyFlowRecords"
+              :prevStock="prevStock"
+              :nextStock="nextStock"
+              :hasPrev="hasPrev"
+              :hasNext="hasNext"
+              :watchlist="watchlist"
+              :currentIndex="currentIndex"
+            />
           </div>
 
           <div v-if="activeTab === 'analysis'" class="analysis-view">
@@ -119,7 +129,7 @@ import StockAnalysis from './components/StockAnalysis.vue'
 import AnalysisHistory from './components/AnalysisHistory.vue'
 import MarketAnalysisBulletin from './components/MarketAnalysisBulletin.vue'
 import AdminDashboard from './components/AdminDashboard.vue'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed,watch } from 'vue'
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
@@ -154,17 +164,15 @@ const { user, isAuthenticated, validateToken, logout } = useAuth()
 
 const symbol = ref('')
 const records = ref([])
+const currentIndex = ref(0)
+const watchlist = ref(['300347', '000002', '600516'])
 const chartRecords = ref([])
-const chartSymbol = ref('')
+const moneyFlowRecords = ref([])
 const activeTab = ref('watchlist')
 
-const tabs = ref([
-  { id: 'watchlist', name: '自选股' },
-  { id: 'data', name: '数据查询' },
-  { id: 'chart', name: 'K线图表' },
-  { id: 'analysis', name: 'AI分析' },
-  { id: 'history', name: '历史分析' }
-])
+const chartSymbol = computed(() => 
+  watchlist.value.length > 0 ? watchlist.value[currentIndex.value] : ''
+)
 
 // 动态标签 - 管理员只显示管理功能，普通用户显示业务功能
 const adminTabs = computed(() => {
@@ -177,6 +185,14 @@ const adminTabs = computed(() => {
   // 普通用户显示业务功能标签
   return tabs.value
 })
+
+const tabs = ref([
+  { id: 'watchlist', name: '自选股' },
+  { id: 'data', name: '数据查询' },
+  { id: 'chart', name: 'K线图表' },
+  { id: 'analysis', name: 'AI分析' },
+  { id: 'history', name: '历史分析' }
+])
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
@@ -200,17 +216,84 @@ function selectStock(stockSymbol) {
   fetchData()
 }
 
-async function selectStockForChart(stockSymbol) {
+/**
+ * Fetches money flow records for a given stock symbol from the API.
+ * @param {string} symbol - The stock symbol to fetch money flow records for.
+ * @returns {Promise<Array>} A promise that resolves to an array of money flow records.
+ */
+async function fetchMoneyFlowRecords(symbol) {
   try {
-    chartSymbol.value = stockSymbol
-    activeTab.value = 'chart'
-    const url = `/api/records/?limit=2000&sort=-trade_date&symbol=${stockSymbol}`
-    const res = await axios.get(url)
-    chartRecords.value = res.data
-  } catch (e) {
-    console.error('获取K线数据失败:', e)
-    chartRecords.value = []
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`/api/money-flow-records?symbol=${symbol}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    const moneyFlowRecords = (await res.json()).data
+    //console.log('Debug moneyFlowRecords:', moneyFlowRecords)
+    
+    return moneyFlowRecords
+  } catch (err) {
+    console.error('获取资金流向数据时出错:', err)
+    return []
   }
+}
+
+// 获取股票数据的通用方法
+async function loadStockData(symbol) {
+  if (!symbol) return
+  
+  try {
+    console.log(`开始加载股票 ${symbol} 的数据...`)
+    
+    // 获取K线数据
+    const klineUrl = `/api/records/?limit=2000&sort=-trade_date&symbol=${symbol}`
+    const klineRes = await axios.get(klineUrl)
+    chartRecords.value = klineRes.data
+
+    // 获取资金流数据
+    moneyFlowRecords.value = await fetchMoneyFlowRecords(symbol)
+    
+    console.log(`股票 ${symbol} 数据加载完成: K线${chartRecords.value.length}条, 资金流${moneyFlowRecords.value.length}条`)
+  } catch (error) {
+    console.error(`获取股票${symbol}数据失败:`, error)
+    chartRecords.value = []
+    moneyFlowRecords.value = []
+  }
+}
+
+// 按钮方法
+function prevStock() {
+  if (hasPrev.value) {
+    currentIndex.value--
+  }
+}
+
+function nextStock() {
+  if (hasNext.value) {
+    currentIndex.value++
+  }
+}
+
+// 监听 chartSymbol 变化，自动加载数据
+watch(chartSymbol, (newSymbol) => {
+  if (newSymbol) {
+    loadStockData(newSymbol)
+  }
+}, { immediate: true })
+
+// 原有的 selectStockForChart 方法也可以简化
+async function selectStockForChart(stockSymbol) {
+  // 找到该股票在 watchlist 中的索引
+  const index = watchlist.value.indexOf(stockSymbol)
+  if (index !== -1) {
+    currentIndex.value = index
+  } else {
+    // 如果不在自选股中，添加到列表
+    watchlist.value.push(stockSymbol)
+    currentIndex.value = watchlist.value.length - 1
+  }
+  activeTab.value = 'chart'
 }
 
 function handleLoginSuccess(authData) {
@@ -239,7 +322,7 @@ onMounted(async () => {
   if (isAuthenticated.value) {
     const isValid = await validateToken()
     if (!isValid) {
-      console.log('Token已失效，请重新登录')
+      console.log('Token已失效,请重新登录')
     } else {
       // Token有效，根据用户角色设置默认界面
       if (user.value?.is_admin) {
@@ -250,9 +333,39 @@ onMounted(async () => {
         // 普通用户加载初始数据
         fetchData()
       }
+      // 仅在认证通过后获取自选股
+      const token = localStorage.getItem('access_token')
+      try {
+        console.log('开始获取自选股数据...')
+        const res = await axios.get('/api/user/watchlist-stocks', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        console.log('自选股接口响应:', res)
+        console.log('响应数据:', res.data)
+        console.log('响应状态:', res.status)
+        // 兼容后端返回结构，若无 stocks 字段则回退为 []
+        if (res.data && res.data.success && Array.isArray(res.data.data)) {
+          watchlist.value = res.data.data.map(stock => stock.symbol)
+          console.log('成功获取自选股:', watchlist.value)
+        } else {
+          // 如果接口失败，使用默认值
+          console.log('接口返回数据格式不符合预期，使用默认值')
+          watchlist.value = ['000001', '000002', '000003']
+        }
+      } catch (e) {
+        console.error('获取自选股失败:', e)
+        watchlist.value = ['000001', '000002', '000003']
+      }
     }
   }
 })
+
+// 新增代码：图表视图的股票选择逻辑
+
+const hasPrev = computed(() => currentIndex.value > 0)
+const hasNext = computed(() => currentIndex.value < watchlist.value.length - 1)
 </script>
 
 <style scoped>
