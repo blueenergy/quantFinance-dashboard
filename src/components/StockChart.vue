@@ -8,7 +8,7 @@
         <option value="month">月线</option>
       </select>
       <span style="margin-left: 20px; color: #666; font-size: 12px;">
-        {{ props.symbol ? `股票代码: ${props.symbol} | ` : '' }}数据量: {{ records?.length || 0 }} 条
+        {{ props.symbol ? `${props.symbol}${props.stockName ? ` - ${props.stockName}` : ''} | ` : '' }}数据量: {{ records?.length || 0 }} 条
       </span>
     </div>
     <div style="margin-bottom: 10px;">
@@ -24,7 +24,9 @@
     <div style="margin-bottom: 10px;">
       <button @click="props.prevStock" :disabled="!props.hasPrev">上一个</button>
       <button @click="props.nextStock" :disabled="!props.hasNext" style="margin-left:10px;">下一个</button>
-      <span style="margin-left: 20px;">当前股票: {{ props.symbol }}</span>
+      <span style="margin-left: 20px; color: #00ff00; font-weight: bold;">
+        当前股票: {{ props.symbol }}{{ props.stockName ? ` - ${props.stockName}` : '' }}
+      </span>
     </div>
     <div style="color: white; font-size: 12px; margin-bottom: 5px;">
       DEBUG: watchlist长度: {{ props.watchlist?.length }} | currentIndex: {{ props.currentIndex }}
@@ -39,6 +41,7 @@ import * as echarts from 'echarts'
 const props = defineProps({
   records: Array,
   symbol: String,
+  stockName: String,
   moneyFlowRecords: Array, // 新增
   prevStock: Function,
   nextStock: Function,
@@ -147,13 +150,41 @@ function drawChart() {
   }
   
   try {
-    //chartInstance = echarts.init(chart.value)
     const { dates, kline, bigMoneyBars } = getKlineData()
     const maxAbsBigMoney = Math.max(...bigMoneyBars.map(v => Math.abs(v)), 1)
+    
+    // ✅ 修复：从 K线数据中直接获取股票名称
+    let stockTitle = props.symbol || ''
+    
+    // 尝试从K线数据中获取股票名称
+    if (props.records && props.records.length > 0) {
+      const firstRecord = props.records[0]
+      const nameFields = ['name', 'stock_name', 'company_name', 'title']
+      
+      for (const field of nameFields) {
+        if (firstRecord[field]) {
+          stockTitle = `${props.symbol} - ${firstRecord[field]}`
+          break
+        }
+      }
+    }
+    
+    // 如果K线数据中没有名称，则使用传入的 stockName
+    if (stockTitle === props.symbol && props.stockName) {
+      stockTitle = `${props.symbol} - ${props.stockName}`
+    }
+    
+    // console.log("stockTitle", stockTitle)
+    
     const option = {
       title: { 
-        text: `${props.symbol || ''} ${kType.value === 'day' ? '日线' : kType.value === 'week' ? '周线' : '月线'}K线图`,
-        left: 'center'
+        text: `${stockTitle} ${kType.value === 'day' ? '日线' : kType.value === 'week' ? '周线' : '月线'}K线图`,
+        left: 'center',
+        textStyle: {
+          color: '#00ff00',      // 亮绿色
+          fontWeight: 'bold',    // 加粗
+          fontSize: 16           // 可选：调整字体大小
+        }
       },
       tooltip: { 
         trigger: 'axis',
@@ -163,9 +194,20 @@ function drawChart() {
           const volumeData = params.find(p => p.seriesName === '成交量')
           const bigMoneyData = params.find(p => p.seriesName === '大资金净买入')
 
+                // ✅ 添加日期显示
+          const currentDate = params[0] ? params[0].axisValue : ''
+          if (currentDate) {
+            tooltip += `<div style="color: #666666; font-weight: bold; font-size: 14px; margin-bottom: 8px;">📅 ${currentDate}</div>`
+          }
+
           if (klineData && klineData.data) {
             const [open, close, low, high] = klineData.data
-            tooltip += `${klineData.name}<br/>开盘: ${open}<br/>收盘: ${close}<br/>最低: ${low}<br/>最高: ${high}`
+            // ✅ 移除这里的日期显示和seriesName
+            tooltip += `<div style="border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 5px;">`
+            tooltip += `开盘: <span style="color: #666666;">${open}</span><br/>`
+            tooltip += `收盘: <span style="color: #666666;">${close}</span><br/>`
+            tooltip += `最低: <span style="color: #666666;">${low}</span><br/>`
+            tooltip += `最高: <span style="color: #666666;">${high}</span></div>`
           }
           if (volumeData) {
             // 找到当前K线的成交金额
@@ -177,12 +219,20 @@ function drawChart() {
             }
           }
           if (bigMoneyData) {
-            tooltip += `<br/><span style="color:#e53935;">●</span> 大资金净买入: <b>${bigMoneyData.data.toLocaleString()}</b>`
-            const mf = props.moneyFlowRecords && props.moneyFlowRecords.find(m => m.trade_date == bigMoneyData.axisValue)
+            tooltip += `<div style="border-top: 1px solid #ccc; padding-top: 5px;">`
+            tooltip += `<span style="color:#e53935;">●</span> 大资金净买入: <b style="color: ${bigMoneyData.data >= 0 ? '#ff6b6b' : '#00ff00'};">${bigMoneyData.data.toLocaleString()}</b><br/>`
+            
+            // ✅ 修复资金流数据查找逻辑
+            const normalizedDate = normalizeDate(currentDate)
+            const mf = props.moneyFlowRecords && props.moneyFlowRecords.find(m => normalizeDate(m.trade_date) === normalizedDate)
+            
             if (mf) {
-              tooltip += `<br/>买入(大+超大): ${((mf.buy_lg_amount||0)+(mf.buy_elg_amount||0)).toLocaleString()}`
-              tooltip += `<br/>卖出(大+超大): ${((mf.sell_lg_amount||0)+(mf.sell_elg_amount||0)).toLocaleString()}`
+              const buyAmount = (mf.buy_lg_amount || 0) + (mf.buy_elg_amount || 0)
+              const sellAmount = (mf.sell_lg_amount || 0) + (mf.sell_elg_amount || 0)
+              tooltip += `买入(大+超大): <span style="color: #ff6b6b;">${buyAmount.toLocaleString()}</span><br/>`
+              tooltip += `卖出(大+超大): <span style="color: #00ff00;">${sellAmount.toLocaleString()}</span>`
             }
+            tooltip += `</div>`
           }
           return tooltip
         }
