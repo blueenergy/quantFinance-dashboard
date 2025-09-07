@@ -11,6 +11,12 @@
         {{ symbol ? `股票代码: ${symbol} | ` : '' }}数据量: {{ records?.length || 0 }} 条
       </span>
     </div>
+    <div style="margin-bottom: 10px;">
+      <label>起始日期：</label>
+      <input type="date" v-model="startDate" @change="drawChart" />
+      <label style="margin-left:10px;">结束日期：</label>
+      <input type="date" v-model="endDate" @change="drawChart" />
+    </div>
     <div ref="chart" style="width: 100%; height: 600px; border: 1px solid #ddd;"></div>
     <div v-if="error" style="color: red; margin-top: 10px;">
       错误: {{ error }}
@@ -24,12 +30,17 @@ import * as echarts from 'echarts'
 
 const props = defineProps({
   records: Array,
-  symbol: String
+  symbol: String,
+  moneyFlowRecords: Array // 新增
 })
 
 const chart = ref(null)
 const kType = ref('day')
 const error = ref('')
+const startDate = ref('')
+const endDate = ref('')
+
+let chartInstance = null
 
 function groupKline(data, type) {
   if (type === 'day') return data
@@ -59,15 +70,52 @@ function groupKline(data, type) {
 
 function getKlineData() {
   const sorted = [...props.records].sort((a, b) => new Date(a.trade_date) - new Date(b.trade_date))
-  const kline = groupKline(sorted, kType.value)
+  // 按日期范围筛选
+  let filtered = sorted
+  if (startDate.value) {
+    filtered = filtered.filter(r => new Date(r.trade_date) >= new Date(startDate.value))
+  }
+  if (endDate.value) {
+    filtered = filtered.filter(r => new Date(r.trade_date) <= new Date(endDate.value))
+  }
+  const kline = groupKline(filtered, kType.value)
+  // money_flow 数据按日期映射
+  const moneyFlowMap = {}
+  if (moneyFlowRecords.value) {
+    moneyFlowRecords.value.forEach(mf => {
+      moneyFlowMap[normalizeDate(mf.trade_date)] = mf
+    })
+  }
+  console.log('moneyFlowRecords:', moneyFlowRecords.value)
+  console.log('moneyFlowRecords sample:', moneyFlowRecords.value && moneyFlowRecords.value.length > 0 ? moneyFlowRecords.value[0] : '无数据')
+  console.log('kline sample:', props.records && props.records.length > 0 ? props.records[0] : '无数据')
+  console.log('moneyFlowMap keys:', Object.keys(moneyFlowMap))
+  console.log('moneyFlowMap:', moneyFlowMap)
+  console.log('kline dates:', kline.map(r => normalizeDate(r.trade_date)))
+  // 计算大资金净买入金额
+  const bigMoneyBars = kline.map(r => {
+    const mf = moneyFlowMap[normalizeDate(r.trade_date)]
+    if (mf) {
+      const buy = (mf.buy_lg_amount || 0) + (mf.buy_elg_amount || 0)
+      const sell = (mf.sell_lg_amount || 0) + (mf.sell_elg_amount || 0)
+      return buy - sell
+    }
+    return 0
+  })
   return {
     dates: kline.map(r => r.trade_date),
     prices: kline.map(r => r.close),
-    kline
+    kline,
+    bigMoneyBars
   }
 }
 
 onMounted(() => {
+  if (props.records && props.records.length > 0) {
+    const dates = props.records.map(r => r.trade_date).sort()
+    startDate.value = dates[0]
+    endDate.value = dates[dates.length - 1]
+  }
   drawChart()
 })
 
@@ -77,8 +125,7 @@ watch(() => [props.records, kType.value], () => {
 
 function drawChart() {
   error.value = ''
-  
-  if (!chart.value) {
+  if (!chartInstance) {
     error.value = '图表容器未找到'
     return
   }
@@ -89,9 +136,9 @@ function drawChart() {
   }
   
   try {
-    const chartInstance = echarts.init(chart.value)
-    const { dates, kline } = getKlineData()
-    
+    chartInstance = echarts.init(chart.value)
+    const { dates, kline, bigMoneyBars } = getKlineData()
+    const maxAbsBigMoney = Math.max(...bigMoneyBars.map(v => Math.abs(v)), 1)
     const option = {
       title: { 
         text: `${props.symbol || ''} ${kType.value === 'day' ? '日线' : kType.value === 'week' ? '周线' : '月线'}K线图`,
@@ -100,54 +147,58 @@ function drawChart() {
       tooltip: { 
         trigger: 'axis',
         formatter: function(params) {
-          const data = params.find(p => p.seriesName === 'K线')
+          let tooltip = ''
+          const klineData = params.find(p => p.seriesName === 'K线')
           const volumeData = params.find(p => p.seriesName === '成交量')
-          if (data && data.data) {
-            const [open, close, low, high] = data.data
-            let tooltip = `${data.name}<br/>开盘: ${open}<br/>收盘: ${close}<br/>最低: ${low}<br/>最高: ${high}`
-            if (volumeData) {
-              tooltip += `<br/>成交量: ${volumeData.data.toLocaleString()}`
-            }
-            return tooltip
+          const bigMoneyData = params.find(p => p.seriesName === '大资金净买入')
+
+          if (klineData && klineData.data) {
+            const [open, close, low, high] = klineData.data
+            tooltip += `${klineData.name}<br/>开盘: ${open}<br/>收盘: ${close}<br/>最低: ${low}<br/>最高: ${high}`
           }
-          return ''
+          if (volumeData) {
+            // 找到当前K线的成交金额
+            const idx = volumeData.dataIndex
+            const turnover = kline[idx] && kline[idx].turnover
+            tooltip += `<br/><span style="color:#5470c6;">●</span> 成交量: <b>${volumeData.data.toLocaleString()}</b>`
+            if (turnover !== undefined) {
+              tooltip += `<br/><span style="color:#5470c6;">●</span> 成交金额: <b>${turnover.toLocaleString()}</b>`
+            }
+          }
+          if (bigMoneyData) {
+            tooltip += `<br/><span style="color:#e53935;">●</span> 大资金净买入: <b>${bigMoneyData.data.toLocaleString()}</b>`
+            const mf = props.moneyFlowRecords && props.moneyFlowRecords.find(m => m.trade_date == bigMoneyData.axisValue)
+            if (mf) {
+              tooltip += `<br/>买入(大+超大): ${((mf.buy_lg_amount||0)+(mf.buy_elg_amount||0)).toLocaleString()}`
+              tooltip += `<br/>卖出(大+超大): ${((mf.sell_lg_amount||0)+(mf.sell_elg_amount||0)).toLocaleString()}`
+            }
+          }
+          return tooltip
         }
       },
       xAxis: [
-        { 
-          type: 'category', 
-          data: dates,
-          axisLabel: {
-            rotate: 45
-          },
-          gridIndex: 0
-        },
-        { 
-          type: 'category', 
-          data: dates,
-          axisLabel: {
-            show: false
-          },
-          gridIndex: 1
-        }
+        { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false } },   // K线显示时间
+        { type: 'category', data: dates, gridIndex: 1, axisLabel: { show: false } },              // 成交量不显示
+        { type: 'category', data: dates, gridIndex: 2, axisLabel: { show: false } }               // 大资金净买入不显示
       ],
       yAxis: [
-        { 
-          type: 'value', 
-          name: '价格',
-          gridIndex: 0
-        },
+        { type: 'value', name: '价格', gridIndex: 0 },
+        { type: 'value',
+          name: '成交量',
+          gridIndex: 1, 
+          nameTextStyle: {
+            padding: [-90, 0, 0, -90] // 上右下左，左侧加30像素
+          },
+          axisLabel: { formatter: v => v >= 10000 ? (v/10000).toFixed(1)+'万' : v } },
         {
           type: 'value',
-          name: '成交量',
-          gridIndex: 1,
+          name: '大资金净买入',
+          gridIndex: 2,
+          nameTextStyle: {
+            padding: [-90, 0, 0, -90] // 上右下左，左侧加30像素
+          },
           axisLabel: {
-            formatter: function(value) {
-              if (value >= 10000) {
-                return (value / 10000).toFixed(1) + '万'
-              }
-              return value
-            }
+            formatter: v => Math.abs(v) >= 10000 ? (v/10000).toFixed(2)+'亿' : v
           }
         }
       ],
@@ -156,13 +207,19 @@ function drawChart() {
           left: '10%',
           right: '10%',
           top: '10%',
-          height: '60%'
+          height: '50%'      // K线
         },
         {
           left: '10%',
           right: '10%',
-          top: '75%',
-          height: '20%'
+          top: '62%',
+          height: '15%'      // 成交量
+        },
+        {
+          left: '10%',
+          right: '10%',
+          top: '80%',
+          height: '15%'      // 大资金净买入
         }
       ],
       series: [
@@ -179,6 +236,7 @@ function drawChart() {
           data: kline.map(r => r.volume),
           xAxisIndex: 1,
           yAxisIndex: 1,
+          barWidth: 10,
           itemStyle: {
             color: function(params) {
               const index = params.dataIndex
@@ -190,14 +248,97 @@ function drawChart() {
               return '#ef5350'
             }
           }
+        },
+        {
+          type: 'bar',
+          name: '大资金净买入',
+          data: bigMoneyBars,
+          xAxisIndex: 2,
+          yAxisIndex: 2,
+          barWidth: 10,
+          itemStyle: {
+            color: params => params.data >= 0 ? '#e53935' : '#26a69a'
+          },
+          z: 10
         }
       ]
     }
     
-    chartInstance.setOption(option)
+    chartInstance.setOption(option, true) // 第二个参数 true 表示重置
   } catch (err) {
     console.error('绘制图表时出错:', err)
     error.value = `绘制失败: ${err.message}`
   }
+}
+
+// 新增：获取资金流向数据
+/**
+ * Fetches money flow records for a given stock symbol from the API.
+ * @param {string} symbol - The stock symbol to fetch money flow records for.
+ * @returns {Promise<Array>} A promise that resolves to an array of money flow records.
+ */
+async function fetchMoneyFlowRecords(symbol) {
+  try {
+    const token = localStorage.getItem('access_token')
+    const res = await fetch(`/api/money-flow-records?symbol=${symbol}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    const moneyFlowRecords = (await res.json()).data
+    //console.log('Debug moneyFlowRecords:', moneyFlowRecords)
+    
+    return moneyFlowRecords
+  } catch (err) {
+    console.error('获取资金流向数据时出错:', err)
+    error.value = `获取资金流向数据失败: ${err.message}`
+    return []
+  }
+}
+
+// 新增：组件挂载后获取资金流向数据
+const moneyFlowRecords = ref([])
+onMounted(async () => {
+  // 获取资金流向数据
+  moneyFlowRecords.value = await fetchMoneyFlowRecords(props.symbol)
+  console.log('moneyFlowRecords:', moneyFlowRecords.value[0])
+
+  // 默认显示最近3个月
+  if (props.records && props.records.length > 0) {
+    const dates = props.records.map(r => normalizeDate(r.trade_date)).sort()
+    const today = new Date()
+    const threeMonthsAgo = new Date(today)
+    threeMonthsAgo.setMonth(today.getMonth() - 3)
+    const startIdx = dates.findIndex(d => {
+      const dObj = d.includes('-') ? new Date(d) : new Date(d.slice(0,4)+'-'+d.slice(6,8)+'-'+d.slice(6,8))
+      return dObj >= threeMonthsAgo
+    })
+    startDate.value = startIdx >= 0 ? dates[startIdx] : dates[0]
+    endDate.value = dates[dates.length - 1]
+  }
+
+  // 只在这里初始化一次
+  chartInstance = echarts.init(chart.value)
+  drawChart()
+})
+
+// 新增：日期格式化函数
+function normalizeDate(d) {
+  if (!d) return ''
+  if (typeof d === 'string') {
+    if (d.length === 8 && !d.includes('-')) {
+      // money_flow 格式 '20250102' -> '2025-01-02'
+      return `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`
+    }
+    if (d.includes('T')) {
+      // K线格式 '2025-06-09T00:00:00' -> '2025-06-09'
+      return d.split('T')[0]
+    }
+    if (d.length === 10 && d.includes('-')) {
+      // 已经是 'YYYY-MM-DD'
+      return d
+    }
+  }
+  return d
 }
 </script>
