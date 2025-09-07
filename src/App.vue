@@ -92,6 +92,7 @@
           <div v-if="activeTab === 'chart'" class="chart-view">
             <StockChart
               :symbol="chartSymbol"
+              :stockName="stockName"
               :records="chartRecords"
               :moneyFlowRecords="moneyFlowRecords"
               :prevStock="prevStock"
@@ -165,11 +166,11 @@ const { user, isAuthenticated, validateToken, logout } = useAuth()
 const symbol = ref('')
 const records = ref([])
 const currentIndex = ref(0)
-const watchlist = ref(['300347', '000002', '600516'])
+const watchlist = ref([]) 
 const chartRecords = ref([])
 const moneyFlowRecords = ref([])
 const activeTab = ref('watchlist')
-
+const stockName = ref('')
 const chartSymbol = computed(() => 
   watchlist.value.length > 0 ? watchlist.value[currentIndex.value] : ''
 )
@@ -244,21 +245,47 @@ async function loadStockData(symbol) {
   if (!symbol) return
   
   try {
-    console.log(`开始加载股票 ${symbol} 的数据...`)
+    // console.log(`开始加载股票 ${symbol} 的数据...`)
     
     // 获取K线数据
     const klineUrl = `/api/records/?limit=2000&sort=-trade_date&symbol=${symbol}`
     const klineRes = await axios.get(klineUrl)
     chartRecords.value = klineRes.data
 
+    // 🔍 添加调试：查看K线数据结构
+    // console.log('K线数据完整响应:', klineRes.data)
+    // if (klineRes.data && klineRes.data.length > 0) {
+    //   // console.log('第一条K线记录:', klineRes.data[0])
+    //   // console.log('第一条记录的所有字段:', Object.keys(klineRes.data[0]))
+    // }
+
     // 获取资金流数据
     moneyFlowRecords.value = await fetchMoneyFlowRecords(symbol)
-    
-    console.log(`股票 ${symbol} 数据加载完成: K线${chartRecords.value.length}条, 资金流${moneyFlowRecords.value.length}条`)
+
+    // 检查是否有股票名称字段
+    const stockInfo = chartRecords.value.find(stock => stock.symbol === symbol)
+    if (stockInfo) {
+      // console.log('找到匹配的股票记录:', stockInfo)
+      const nameFields = ['name', 'stock_name', 'company_name', 'title']
+      let foundName = ''
+      nameFields.forEach(field => {
+        if (stockInfo[field]) {
+          // console.log(`找到名称字段 ${field}:`, stockInfo[field])
+          foundName = stockInfo[field]
+        }
+      })
+      stockName.value = foundName  // ✅ 正确：使用 .value
+    } else {
+      // console.log('未找到匹配的股票记录')
+      stockName.value = ''  // ✅ 正确：使用 .value
+    }
+
+    // console.log(`股票 ${symbol} 数据加载完成: K线${chartRecords.value.length}条, 资金流${moneyFlowRecords.value.length}条, 名称: ${stockName.value}`)
   } catch (error) {
     console.error(`获取股票${symbol}数据失败:`, error)
     chartRecords.value = []
     moneyFlowRecords.value = []
+    stockName.value = ''
   }
 }
 
@@ -336,22 +363,16 @@ onMounted(async () => {
       // 仅在认证通过后获取自选股
       const token = localStorage.getItem('access_token')
       try {
-        console.log('开始获取自选股数据...')
         const res = await axios.get('/api/user/watchlist-stocks', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         })
-        console.log('自选股接口响应:', res)
-        console.log('响应数据:', res.data)
-        console.log('响应状态:', res.status)
         // 兼容后端返回结构，若无 stocks 字段则回退为 []
         if (res.data && res.data.success && Array.isArray(res.data.data)) {
           watchlist.value = res.data.data.map(stock => stock.symbol)
-          console.log('成功获取自选股:', watchlist.value)
         } else {
           // 如果接口失败，使用默认值
-          console.log('接口返回数据格式不符合预期，使用默认值')
           watchlist.value = ['000001', '000002', '000003']
         }
       } catch (e) {
