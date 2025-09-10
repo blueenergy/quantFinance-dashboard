@@ -54,6 +54,14 @@
           >
             {{ tab.name }}
           </button>
+
+          <!-- 在 App.vue 的标签页中添加 -->
+          <button 
+            @click="activeTab = 'ranking'" 
+            :class="{ active: activeTab === 'ranking' }"
+          >
+            股票评分
+          </button>
         </div>
 
         <div class="tab-content">
@@ -115,6 +123,12 @@
           <div v-if="activeTab === 'admin'" class="admin-view">
             <AdminDashboard :current-user="user" />
           </div>
+
+          <!-- 在内容区域添加 -->
+          <StockRanking 
+            v-show="activeTab === 'ranking'" 
+            @view-chart="selectStockForChart"
+          />
         </div>
       </div>
     </div>
@@ -130,6 +144,7 @@ import StockAnalysis from './components/StockAnalysis.vue'
 import AnalysisHistory from './components/AnalysisHistory.vue'
 import MarketAnalysisBulletin from './components/MarketAnalysisBulletin.vue'
 import AdminDashboard from './components/AdminDashboard.vue'
+import StockRanking from './components/StockRanking.vue'
 import { ref, onMounted, computed,watch } from 'vue'
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
