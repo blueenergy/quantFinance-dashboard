@@ -123,8 +123,18 @@ function getKlineData() {
     }
     return 0
   })
-  // 评分数据（如有）
-  const scoreLine = kline.map(r => r.composite_score !== undefined ? r.composite_score : null)
+  // 评分数据（如有），兼容 dict/number，默认用 balanced
+const scoreLine = kline.map(r => {
+  const cs = r.composite_score
+  if (cs === undefined || cs === null) return null
+  let value = null
+  if (typeof cs === 'object' && cs !== null) {
+    value = cs.balanced ?? null
+  } else {
+    value = cs
+  }
+  return { value, composite_score: cs }
+})
   return {
     dates: kline.map(r => normalizeDate(r.trade_date)), // ✅ 确保日期格式一致
     prices: kline.map(r => r.close),
@@ -216,8 +226,13 @@ function drawChart() {
             tooltip += `最低: <span style="color: #666666;">${low}</span><br/>`
             tooltip += `最高: <span style="color: #666666;">${high}</span></div>`
           }
-          if (scoreData && scoreData.data !== null && scoreData.data !== undefined) {
-            tooltip += `<div style='color:#ffd700;font-weight:bold;'>评分: ${scoreData.data}</div>`
+          if (scoreData && scoreData.data && scoreData.data.composite_score !== undefined) {
+            const cs = scoreData.data.composite_score;
+            if (cs && typeof cs === 'object') {
+              tooltip += `<div style='color:#ffd700;font-weight:bold;'>评分(balanced): ${cs.balanced ?? '-'}<br>评分(aggressive): ${cs.aggressive ?? '-'}<br>评分(conservative): ${cs.conservative ?? '-'}</div>`;
+            } else if (cs !== undefined) {
+              tooltip += `<div style='color:#ffd700;font-weight:bold;'>评分: ${cs}</div>`;
+            }
           }
           if (volumeData) {
             // 找到当前K线的成交金额
@@ -336,8 +351,8 @@ function drawChart() {
             itemStyle: { color: '#ff5722' },
             label: { show: true, color: '#fff', fontSize: 10, formatter: '评分' },
             data: scoreLine
-              .map((score, idx) => score !== null && score !== undefined
-                ? { coord: [dates[idx], score], value: score }
+              .map((point, idx) => point && point.value !== null && point.value !== undefined
+                ? { coord: [dates[idx], point.value], value: point.value }
                 : null)
               .filter(Boolean)
           }
