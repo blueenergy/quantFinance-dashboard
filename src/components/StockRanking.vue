@@ -29,6 +29,12 @@
             <option value="100">Top 100</option>
             <option value="200">Top 200</option>
           </select>
+          <label style="margin-left: 24px;">排名策略：</label>
+          <select v-model="rankingStrategy" @change="onRankingStrategyChange">
+            <option value="balanced">均衡</option>
+            <option value="aggressive">激进</option>
+            <option value="conservative">保守</option>
+          </select>
         </div>
 
         <!-- ✅ 指定股票模式控制 -->
@@ -147,8 +153,8 @@
               <span class="name-text" :title="stock.name">{{ stock.name || '-' }}</span>
             </td>
             <td class="td-score" @click="showScoreDetailModal(stock)">
-              <span :style="getScoreStyle(stock.composite_score)" class="score-badge clickable">
-                {{ stock.composite_score }}
+              <span :style="getScoreStyle(typeof stock.composite_score === 'object' ? stock.composite_score?.[rankingStrategy] : stock.composite_score)" class="score-badge clickable">
+                {{ typeof stock.composite_score === 'object' ? stock.composite_score?.[rankingStrategy] : stock.composite_score }}
               </span>
             </td>
             <td class="td-cycle">
@@ -451,7 +457,7 @@ async function fetchRankings() {
     // ✅ 新增：确保前端也做去重处理 (防御性编程)
     rankings.value = deduplicateStocksByLatestDate(rankings.value)
     // 排序处理
-    rankings.value.sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0))
+  rankings.value.sort((a, b) => (b.composite_score?.[rankingStrategy.value] || 0) - (a.composite_score?.[rankingStrategy.value] || 0))
     // 更新时间
     if (rankings.value.length > 0) {
       const scoreDate = rankings.value[0].score_date
@@ -637,7 +643,7 @@ function generateCSV(data) {
     index + 1,
     stock.symbol,
     stock.name || '',
-    stock.composite_score,
+  stock.composite_score?.[rankingStrategy],
     stock.cycle_score,
     stock.growth_score,
     stock.fundamental_score,
@@ -847,7 +853,7 @@ function getRankStyle(stock, rank) {
     }
   } else {
     // 其他模式：按分数着色
-  const score = stock.composite_score || 0
+  const score = stock.composite_score?.[rankingStrategy] || 0
     if (score >= 80) {
       return { 
         background: 'linear-gradient(135deg, #ff6b6b, #ff5252)',
@@ -913,7 +919,7 @@ function getRowClass(stock, rank) {
     if (rank <= 10) return 'top-ten'
     if (rank <= 30) return 'top-thirty'
   } else {
-  const score = stock.composite_score || 0
+  const score = stock.composite_score?.[rankingStrategy] || 0
     if (score >= 80) return 'top-three'
     if (score >= 70) return 'top-ten'
     if (score >= 60) return 'top-thirty'
@@ -986,6 +992,12 @@ onMounted(() => {
   fetchRankings()
   fetchWatchlist()
 })
+
+const rankingStrategy = ref('balanced')
+function onRankingStrategyChange() {
+  rankings.value.sort((a, b) => (b.composite_score?.[rankingStrategy.value] || 0) - (a.composite_score?.[rankingStrategy.value] || 0))
+}
+
 </script>
 
 <style scoped>
