@@ -1,18 +1,23 @@
 <!-- dashboard/src/components/StockRanking.vue -->
 <template>
   <div>
-    <h3>股票评分排行榜</h3>
-    
+  <h3 class="ranking-title">股票评分排行榜</h3>
     <div style="margin-bottom: 20px;">
-      <!-- ✅ 新增：股票选择区域 -->
+      <!-- ✅ 合并日期选择和显示模式设置到同一行 -->
       <div class="control-section">
-        <div class="control-group">
-          <label>显示模式：</label>
-          <select v-model="viewMode" @change="onViewModeChange">
-            <option value="ranking">排行榜模式</option>
-            <option value="selected">指定股票模式</option>
-            <option value="watchlist">自选股模式</option>
-          </select>
+        <div class="control-group" style="gap: 32px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <label>显示模式：</label>
+            <select v-model="viewMode" @change="onViewModeChange">
+              <option value="ranking">排行榜模式</option>
+              <option value="selected">指定股票模式</option>
+              <option value="watchlist">自选股模式</option>
+            </select>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <label>选择日期：</label>
+            <input type="date" v-model="selectedDate" @change="onDateChange" class="date-input" :max="maxDate" />
+          </div>
         </div>
 
         <!-- ✅ 排行榜模式控制 -->
@@ -300,6 +305,9 @@ const stockSuggestions = ref([]) // 股票代码提示列表
 const showQuickSelect = ref(false) // 快速选择模态框
 const selectedCategory = ref('popular') // 快速选择分类
 const loadingMessage = ref('加载中...')
+// 日期选择相关
+const selectedDate = ref('')
+const maxDate = new Date().toISOString().split('T')[0]
 
 // ✅ 快速选择分类数据
 const quickSelectCategories = ref([
@@ -377,29 +385,40 @@ function getAuthHeaders() {
 // ✅ 主数据获取方法 - 根据模式调用不同API
 async function fetchRankings() {
   loading.value = true
-  
   try {
     let response
-    
+    // 构造日期参数
+    let dateParam = ''
+    if (selectedDate.value) {
+      // 期望格式：yyyyMMdd
+      const d = new Date(selectedDate.value)
+      const yyyy = d.getFullYear()
+      const mm = String(d.getMonth() + 1).padStart(2, '0')
+      const dd = String(d.getDate()).padStart(2, '0')
+      dateParam = `${yyyy}${mm}${dd}`
+    }
     switch (viewMode.value) {
-      case 'ranking':
+      case 'ranking': {
         loadingMessage.value = `加载前 ${displayLimit.value} 名股票评分...`
-        response = await axios.get(`/api/stock-rankings?limit=${displayLimit.value}`)
+        let url = `/api/stock-rankings?limit=${displayLimit.value}`
+        if (dateParam) url += `&date=${dateParam}`
+        response = await axios.get(url)
         break
-        
-      case 'selected':
+      }
+      case 'selected': {
         if (selectedStocks.value.length === 0) {
           rankings.value = []
           loading.value = false
           return
         }
         loadingMessage.value = `加载指定股票评分...`
-        response = await axios.post('/api/stock-rankings/selected', {
-          symbols: selectedStocks.value
-        })
+        const payload = { symbols: selectedStocks.value }
+        let url = '/api/stock-rankings/selected'
+        if (dateParam) url += `?date=${dateParam}`
+        response = await axios.post(url, payload)
         break
-        
-      case 'watchlist':
+      }
+      case 'watchlist': {
         if (!isUserLoggedIn()) {
           alert('请先登录后查看自选股评分')
           viewMode.value = 'ranking'
@@ -412,18 +431,15 @@ async function fetchRankings() {
           return
         }
         loadingMessage.value = `加载自选股评分...`
-        response = await axios.post('/api/stock-rankings/selected', {
-          symbols: watchlist.value
-        })
+        const payload = { symbols: watchlist.value }
+        let url = '/api/stock-rankings/selected'
+        if (dateParam) url += `?date=${dateParam}`
+        response = await axios.post(url, payload)
         break
-        
+      }
       default:
         throw new Error('无效的查看模式')
     }
-    
-    console.log('API响应:', response)
-    console.log('响应数据:', response.data)
-    
     // 处理响应数据
     if (response.data && response.data.success && response.data.data) {
       rankings.value = response.data.data
@@ -432,16 +448,10 @@ async function fetchRankings() {
     } else {
       rankings.value = []
     }
-    
     // ✅ 新增：确保前端也做去重处理 (防御性编程)
     rankings.value = deduplicateStocksByLatestDate(rankings.value)
-    
-  // 排序处理
-  // 所有模式都强制按 composite_score 降序排序，防御后端顺序异常
-  rankings.value.sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0))
-    
-    console.log('设置后的rankings:', rankings.value)
-    
+    // 排序处理
+    rankings.value.sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0))
     // 更新时间
     if (rankings.value.length > 0) {
       const scoreDate = rankings.value[0].score_date
@@ -454,11 +464,9 @@ async function fetchRankings() {
         lastUpdateTime.value = new Date().toLocaleDateString()
       }
     }
-    
   } catch (error) {
     console.error('获取股票排行失败:', error)
     console.error('错误详情:', error.response?.data)
-    
     if (error.response?.status === 404) {
       rankings.value = []
     } else {
@@ -468,6 +476,11 @@ async function fetchRankings() {
     loading.value = false
   }
 }
+// 日期选择变化时自动刷新
+function onDateChange() {
+  fetchRankings()
+}
+
 
 // ✅ 股票输入相关方法
 function onStockInputChange() {
@@ -1411,6 +1424,8 @@ onMounted(() => {
 }
 
 /* ✅ 保持原有表格样式 */
+
+/* 提升表格字体对比度和醒目度 */
 .ranking-table {
   width: 100%;
   border-collapse: collapse;
@@ -1418,18 +1433,23 @@ onMounted(() => {
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
   border-radius: 8px;
   overflow: hidden;
+  font-size: 16px;
+  color: #222;
 }
 
 .table-header {
-  background: linear-gradient(135deg, #2c3e50, #34495e);
-  color: white;
+  background: linear-gradient(135deg, #23272f, #34495e);
+  color: #fff;
+  font-size: 17px;
+  letter-spacing: 1px;
 }
 
 .table-header th {
   border: 1px solid #34495e;
-  padding: 12px 8px;
+  padding: 14px 10px;
   font-weight: bold;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+  text-shadow: 1px 1px 4px rgba(0,0,0,0.35);
+  color: #fff;
 }
 
 .th-rank { background: linear-gradient(135deg, #e74c3c, #c0392b); }
@@ -1471,8 +1491,11 @@ onMounted(() => {
 
 .ranking-table td {
   border: 1px solid #e0e0e0;
-  padding: 10px 8px;
+  padding: 12px 10px;
   vertical-align: middle;
+  color: #1a1a1a;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.15);
 }
 
 .rank-badge {
@@ -1512,19 +1535,27 @@ onMounted(() => {
 .score-badge {
   display: inline-block;
   min-width: 50px;
-  padding: 6px 12px;
+  padding: 7px 14px;
   border-radius: 20px;
   font-weight: bold;
   text-align: center;
+  font-size: 18px;
+  color: #fff;
+  text-shadow: 1px 1px 6px rgba(0,0,0,0.18);
+  letter-spacing: 1px;
 }
 
 .cycle-score, .fundamental-score, .technical-score, .money-score, .growth-score, .value-score {
   display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 5px 10px;
+  border-radius: 5px;
   font-weight: bold;
-  min-width: 40px;
+  min-width: 44px;
   text-align: center;
+  font-size: 16px;
+  color: #fff;
+  text-shadow: 1px 1px 6px rgba(0,0,0,0.18);
+  letter-spacing: 1px;
 }
 
 .cycle-score {
@@ -1545,11 +1576,11 @@ onMounted(() => {
 }
 .growth-score {
   background: linear-gradient(135deg, #43e97b, #38f9d7);
-  color: #222;
+  color: #0a2a0a;
 }
 .value-score {
   background: linear-gradient(135deg, #ffd700, #ffb300);
-  color: #222;
+  color: #7a4a00;
 }
 
 .cycle-score {
@@ -1611,6 +1642,20 @@ onMounted(() => {
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
+/* 更亮的排行榜标题样式 */
+.ranking-title {
+  color: #fffbe8;
+  font-size: 2.1rem;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 16px #ffd700, 0 1px 0 #fff, 0 0 8px #ffb300;
+  background: linear-gradient(90deg, #ffb300 0%, #ffd700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 18px;
+}
+
 /* ✅ 响应式设计 */
 @media (max-width: 768px) {
   .control-section {
@@ -1648,6 +1693,15 @@ onMounted(() => {
   .quick-select-modal {
     width: 95%;
     max-height: 90vh;
+  }
+
+  .date-input {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-left: 8px;
+    margin-right: 8px;
   }
 }
 </style>
