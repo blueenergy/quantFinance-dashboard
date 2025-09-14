@@ -97,7 +97,7 @@ function getKlineData() {
     filtered = filtered.filter(r => normalizeDate(r.trade_date) <= endDate.value)
   }
   
-  console.log(`筛选后的数据量: ${filtered.length}`)
+ 
   
   const kline = groupKline(filtered, kType.value)
   // money_flow 数据按日期映射
@@ -123,11 +123,14 @@ function getKlineData() {
     }
     return 0
   })
+  // 评分数据（如有）
+  const scoreLine = kline.map(r => r.composite_score !== undefined ? r.composite_score : null)
   return {
     dates: kline.map(r => normalizeDate(r.trade_date)), // ✅ 确保日期格式一致
     prices: kline.map(r => r.close),
     kline,
-    bigMoneyBars
+    bigMoneyBars,
+    scoreLine
   }
 }
 
@@ -154,8 +157,8 @@ function drawChart() {
   }
   
   try {
-    const { dates, kline, bigMoneyBars } = getKlineData()
-    const maxAbsBigMoney = Math.max(...bigMoneyBars.map(v => Math.abs(v)), 1)
+  const { dates, kline, bigMoneyBars, scoreLine } = getKlineData()
+  const maxAbsBigMoney = Math.max(...bigMoneyBars.map(v => Math.abs(v)), 1)
     
     // ✅ 修复：从 K线数据中直接获取股票名称
     let stockTitle = props.symbol || ''
@@ -197,8 +200,9 @@ function drawChart() {
           const klineData = params.find(p => p.seriesName === 'K线')
           const volumeData = params.find(p => p.seriesName === '成交量')
           const bigMoneyData = params.find(p => p.seriesName === '大资金净买入')
+          const scoreData = params.find(p => p.seriesName === '评分')
 
-                // ✅ 添加日期显示
+          // ✅ 添加日期显示
           const currentDate = params[0] ? params[0].axisValue : ''
           if (currentDate) {
             tooltip += `<div style="color: #666666; font-weight: bold; font-size: 14px; margin-bottom: 8px;">📅 ${currentDate}</div>`
@@ -206,12 +210,14 @@ function drawChart() {
 
           if (klineData && klineData.data) {
             const [open, close, low, high] = klineData.data
-            // ✅ 移除这里的日期显示和seriesName
             tooltip += `<div style="border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 5px;">`
             tooltip += `开盘: <span style="color: #666666;">${open}</span><br/>`
             tooltip += `收盘: <span style="color: #666666;">${close}</span><br/>`
             tooltip += `最低: <span style="color: #666666;">${low}</span><br/>`
             tooltip += `最高: <span style="color: #666666;">${high}</span></div>`
+          }
+          if (scoreData && scoreData.data !== null && scoreData.data !== undefined) {
+            tooltip += `<div style='color:#ffd700;font-weight:bold;'>评分: ${scoreData.data}</div>`
           }
           if (volumeData) {
             // 找到当前K线的成交金额
@@ -248,24 +254,9 @@ function drawChart() {
       ],
       yAxis: [
         { type: 'value', name: '价格', gridIndex: 0 },
-        { type: 'value',
-          name: '成交量',
-          gridIndex: 1, 
-          nameTextStyle: {
-            padding: [-90, 0, 0, -90] // 上右下左，左侧加30像素
-          },
-          axisLabel: { formatter: v => v >= 10000 ? (v/10000).toFixed(1)+'万' : v } },
-        {
-          type: 'value',
-          name: '大资金净买入',
-          gridIndex: 2,
-          nameTextStyle: {
-            padding: [-90, 0, 0, -90] // 上右下左，左侧加30像素
-          },
-          axisLabel: {
-            formatter: v => Math.abs(v) >= 10000 ? (v/10000).toFixed(2)+'亿' : v
-          }
-        }
+        { type: 'value', name: '成交量', gridIndex: 1, nameTextStyle: { padding: [-90, 0, 0, -90] }, axisLabel: { formatter: v => v >= 10000 ? (v/10000).toFixed(1)+'万' : v } },
+        { type: 'value', name: '大资金净买入', gridIndex: 2, nameTextStyle: { padding: [-90, 0, 0, -90] }, axisLabel: { formatter: v => Math.abs(v) >= 10000 ? (v/10000).toFixed(2)+'亿' : v } },
+        { type: 'value', name: '评分', min: 0, max: 100, position: 'right', offset: 60, axisLine: { show: true, lineStyle: { color: '#ffd700' } }, axisLabel: { color: '#ffd700' } }
       ],
       grid: [
         {
@@ -325,6 +316,31 @@ function drawChart() {
             color: params => params.data >= 0 ? '#e53935' : '#26a69a'
           },
           z: 10
+        },
+        {
+          type: 'line',
+          name: '评分',
+          data: scoreLine,
+          yAxisIndex: 3,
+          xAxisIndex: 0,
+          symbol: 'circle',
+          showSymbol: true,
+          symbolSize: 10,
+          lineStyle: { color: '#ffd700', width: 2 },
+          itemStyle: { color: '#ffd700' },
+          smooth: true,
+          z: 20,
+          markPoint: {
+            symbol: 'circle',
+            symbolSize: 16,
+            itemStyle: { color: '#ff5722' },
+            label: { show: true, color: '#fff', fontSize: 10, formatter: '评分' },
+            data: scoreLine
+              .map((score, idx) => score !== null && score !== undefined
+                ? { coord: [dates[idx], score], value: score }
+                : null)
+              .filter(Boolean)
+          }
         }
       ]
     }
