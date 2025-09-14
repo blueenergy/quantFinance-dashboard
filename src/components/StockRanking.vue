@@ -79,10 +79,6 @@
 
         <!-- ✅ 通用控制按钮 -->
         <div class="control-group">
-          <button @click="refreshScores" :disabled="isRefreshing" class="btn-refresh">
-            {{ isRefreshing ? '重新评分中...' : '重新评分' }}
-          </button>
-          
           <button @click="exportScores" class="btn-export">导出数据</button>
           
           <span class="last-update">
@@ -123,10 +119,12 @@
             <th class="th-symbol">股票代码</th>
             <th class="th-name">股票名称</th>
             <th class="th-score">总分</th>
-            <th class="th-cycle">周期评分</th>
-            <th class="th-fundamental">基本面</th>
-            <th class="th-technical">技术面</th>
-            <th class="th-money">资金流</th>
+            <th class="th-cycle">周期</th>
+            <th class="th-growth">成长</th>
+            <th class="th-value">基本面</th>
+            <th class="th-value">价值</th>
+            <th class="th-technical">技术</th>
+            <th class="th-money">资金</th>
             <th class="th-action">操作</th>
           </tr>
         </thead>
@@ -144,15 +142,21 @@
               <span class="name-text" :title="stock.name">{{ stock.name || '-' }}</span>
             </td>
             <td class="td-score" @click="showScoreDetailModal(stock)">
-              <span :style="getScoreStyle(stock.total_score)" class="score-badge clickable">
-                {{ stock.total_score }}
+              <span :style="getScoreStyle(stock.composite_score)" class="score-badge clickable">
+                {{ stock.composite_score }}
               </span>
             </td>
             <td class="td-cycle">
               <span class="cycle-score">{{ stock.cycle_score }}</span>
             </td>
+            <td class="td-growth">
+              <span class="growth-score">{{ stock.growth_score }}</span>
+            </td>
             <td class="td-fundamental">
               <span class="fundamental-score">{{ stock.fundamental_score }}</span>
+            </td>
+            <td class="td-value">
+              <span class="value-score">{{ stock.value_score }}</span>
             </td>
             <td class="td-technical">
               <span class="technical-score">{{ stock.technical_score }}</span>
@@ -223,8 +227,8 @@
         <div class="score-detail-content">
           <div class="score-item total-score">
             <span class="score-label">总分</span>
-            <span class="score-value" :style="getScoreStyle(selectedStock?.total_score)">
-              {{ selectedStock?.total_score }}
+            <span class="score-value" :style="getScoreStyle(selectedStock?.composite_score)">
+              {{ selectedStock?.composite_score }}
             </span>
           </div>
           <div class="score-breakdown">
@@ -234,8 +238,18 @@
               <span class="score-weight">(权重: 25%)</span>
             </div>
             <div class="score-item">
+              <span class="score-label">成长评分</span>
+              <span class="score-value growth">{{ selectedStock?.growth_score }}</span>
+              <span class="score-weight">(权重: 25%)</span>
+            </div>
+            <div class="score-item">
               <span class="score-label">基本面评分</span>
               <span class="score-value fundamental">{{ selectedStock?.fundamental_score }}</span>
+              <span class="score-weight">(权重: 35%)</span>
+            </div>
+            <div class="score-item">
+              <span class="score-label">价值评分</span>
+              <span class="score-value value">{{ selectedStock?.value_score }}</span>
               <span class="score-weight">(权重: 35%)</span>
             </div>
             <div class="score-item">
@@ -419,11 +433,12 @@ async function fetchRankings() {
       rankings.value = []
     }
     
-    // 排序处理
-    if (viewMode.value === 'selected' || viewMode.value === 'watchlist') {
-      // 对指定股票按总分降序排序
-      rankings.value.sort((a, b) => (b.total_score || 0) - (a.total_score || 0))
-    }
+    // ✅ 新增：确保前端也做去重处理 (防御性编程)
+    rankings.value = deduplicateStocksByLatestDate(rankings.value)
+    
+  // 排序处理
+  // 所有模式都强制按 composite_score 降序排序，防御后端顺序异常
+  rankings.value.sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0))
     
     console.log('设置后的rankings:', rankings.value)
     
@@ -604,14 +619,16 @@ async function exportScores() {
 }
 
 function generateCSV(data) {
-  const headers = ['排名', '股票代码', '股票名称', '总分', '周期评分', '基本面评分', '技术面评分', '资金流评分']
+  const headers = ['排名', '股票代码', '股票名称', '总分', '周期评分', '成长评分', '基本面评分', '价值评分', '技术面评分', '资金流评分']
   const rows = data.map((stock, index) => [
     index + 1,
     stock.symbol,
     stock.name || '',
-    stock.total_score,
+    stock.composite_score,
     stock.cycle_score,
+    stock.growth_score,
     stock.fundamental_score,
+    stock.value_score,
     stock.technical_score,
     stock.money_flow_score
   ])
@@ -635,21 +652,6 @@ function downloadCSV(content, filename) {
   document.body.removeChild(link)
 }
 
-async function refreshScores() {
-  isRefreshing.value = true
-  try {
-    const response = await axios.post('/api/stock-rankings/refresh')
-    console.log('刷新响应:', response.data)
-    await fetchRankings()
-    alert('评分刷新成功!')
-  } catch (error) {
-    console.error('重新评分失败:', error)
-    console.error('错误详情:', error.response?.data)
-    alert('重新评分失败: ' + (error.response?.data?.detail || error.message))
-  } finally {
-    isRefreshing.value = false
-  }
-}
 
 // ✅ 获取用户自选股列表
 async function fetchWatchlist() {
@@ -832,7 +834,7 @@ function getRankStyle(stock, rank) {
     }
   } else {
     // 其他模式：按分数着色
-    const score = stock.total_score || 0
+  const score = stock.composite_score || 0
     if (score >= 80) {
       return { 
         background: 'linear-gradient(135deg, #ff6b6b, #ff5252)',
@@ -898,7 +900,7 @@ function getRowClass(stock, rank) {
     if (rank <= 10) return 'top-ten'
     if (rank <= 30) return 'top-thirty'
   } else {
-    const score = stock.total_score || 0
+  const score = stock.composite_score || 0
     if (score >= 80) return 'top-three'
     if (score >= 70) return 'top-ten'
     if (score >= 60) return 'top-thirty'
@@ -918,6 +920,46 @@ function showScoreDetailModal(stock) {
 function closeScoreDetail() {
   showScoreDetail.value = false
   selectedStock.value = null
+}
+
+// ✅ 新增：股票去重函数 - 确保每只股票只保留最新日期的评分
+function deduplicateStocksByLatestDate(stocks) {
+  if (!stocks || stocks.length === 0) return []
+  
+  console.log('📊 去重前股票数量:', stocks.length)
+  
+  // 按股票代码分组
+  const stockGroups = {}
+  stocks.forEach(stock => {
+    const symbol = stock.symbol
+    if (!stockGroups[symbol]) {
+      stockGroups[symbol] = []
+    }
+    stockGroups[symbol].push(stock)
+  })
+  
+  // 对每只股票，选择最新日期的评分
+  const deduplicatedStocks = []
+  Object.keys(stockGroups).forEach(symbol => {
+    const group = stockGroups[symbol]
+    
+    if (group.length === 1) {
+      // 只有一条记录，直接添加
+      deduplicatedStocks.push(group[0])
+    } else {
+      // 多条记录，选择最新日期的
+      const latest = group.reduce((latest, current) => {
+        const latestDate = latest.score_date || '19700101'
+        const currentDate = current.score_date || '19700101'
+        return currentDate > latestDate ? current : latest
+      })
+      deduplicatedStocks.push(latest)
+      console.log(`📅 股票 ${symbol}: 从 ${group.length} 条记录中选择最新日期 ${latest.score_date}`)
+    }
+  })
+  
+  console.log('✅ 去重后股票数量:', deduplicatedStocks.length)
+  return deduplicatedStocks
 }
 
 // ✅ 监听选择股票变化
@@ -974,7 +1016,7 @@ onMounted(() => {
   font-size: 14px;
 }
 
-.btn-add, .btn-clear, .btn-refresh, .btn-export, .btn-manage-watchlist, .btn-clear-watchlist {
+ .btn-add, .btn-clear, .btn-export, .btn-manage-watchlist, .btn-clear-watchlist {
   padding: 8px 16px;
   border: none;
   border-radius: 4px;
@@ -994,10 +1036,6 @@ onMounted(() => {
   color: white;
 }
 
-.btn-refresh {
-  background: linear-gradient(135deg, #28a745, #20c997);
-  color: white;
-}
 
 .btn-export {
   background: linear-gradient(135deg, #6f42c1, #5a31a8);
@@ -1009,10 +1047,6 @@ onMounted(() => {
   color: white;
 }
 
-.btn-refresh:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
-}
 
 .suggestions-list {
   position: absolute;
@@ -1298,20 +1332,33 @@ onMounted(() => {
   margin-right: 10px;
 }
 
+
 .score-value.cycle {
-  background: linear-gradient(135deg, #1abc9c, #16a085);
+  background: linear-gradient(135deg, #42a5f5, #1976d2); /* 蓝色系，和周期相关 */
+}
+
+
+.score-value.growth {
+  background: linear-gradient(135deg, #43e97b, #38f9d7); /* 亮绿色-青色，突出成长 */
+  color: #222;
 }
 
 .score-value.fundamental {
-  background: linear-gradient(135deg, #f39c12, #e67e22);
+  background: linear-gradient(135deg, #ffa726, #fb8c00); /* 橙色系，基本面 */
+}
+
+
+.score-value.value {
+  background: linear-gradient(135deg, #ffd700, #ffb300); /* 金色系，突出价值 */
+  color: #222;
 }
 
 .score-value.technical {
-  background: linear-gradient(135deg, #2ecc71, #27ae60);
+  background: linear-gradient(135deg, #26c6da, #00838f); /* 青色系，技术 */
 }
 
 .score-value.money {
-  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  background: linear-gradient(135deg, #ef5350, #b71c1c); /* 红色系，资金 */
 }
 
 .score-weight {
@@ -1390,7 +1437,9 @@ onMounted(() => {
 .th-name { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
 .th-score { background: linear-gradient(135deg, #e67e22, #d35400); }
 .th-cycle { background: linear-gradient(135deg, #1abc9c, #16a085); }
+.th-growth { background: linear-gradient(135deg, #43e97b, #38f9d7); }
 .th-fundamental { background: linear-gradient(135deg, #f39c12, #e67e22); }
+.th-value { background: linear-gradient(135deg, #ffd700, #ffb300); }
 .th-technical { background: linear-gradient(135deg, #2ecc71, #27ae60); }
 .th-money { background: linear-gradient(135deg, #e74c3c, #c0392b); }
 .th-action { background: linear-gradient(135deg, #95a5a6, #7f8c8d); }
@@ -1469,14 +1518,38 @@ onMounted(() => {
   text-align: center;
 }
 
-.cycle-score, .fundamental-score, .technical-score, .money-score {
+.cycle-score, .fundamental-score, .technical-score, .money-score, .growth-score, .value-score {
   display: inline-block;
-  color: white;
   padding: 4px 8px;
   border-radius: 4px;
   font-weight: bold;
   min-width: 40px;
   text-align: center;
+}
+
+.cycle-score {
+  background: linear-gradient(135deg, #1abc9c, #16a085);
+  color: white;
+}
+.fundamental-score {
+  background: linear-gradient(135deg, #f39c12, #e67e22);
+  color: white;
+}
+.technical-score {
+  background: linear-gradient(135deg, #2ecc71, #27ae60);
+  color: white;
+}
+.money-score {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: white;
+}
+.growth-score {
+  background: linear-gradient(135deg, #43e97b, #38f9d7);
+  color: #222;
+}
+.value-score {
+  background: linear-gradient(135deg, #ffd700, #ffb300);
+  color: #222;
 }
 
 .cycle-score {
