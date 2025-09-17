@@ -1464,7 +1464,12 @@ function onRankingStrategyChange() {
   color: #fff;
 }
 
-.th-rank { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+.th-rank {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+}
 .th-symbol { background: linear-gradient(135deg, #3498db, #2980b9); }
 .th-name { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
 .th-score { background: linear-gradient(135deg, #e67e22, #d35400); }
