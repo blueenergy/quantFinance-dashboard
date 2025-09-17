@@ -168,6 +168,15 @@ function drawChart() {
   
   try {
   const { dates, kline, bigMoneyBars, scoreLine } = getKlineData()
+  // 规范化 scoreLine：统一进行四舍五入，避免在多个地方重复计算
+  const normalizedScoreLine = scoreLine.map(point => {
+    if (!point) return null
+    if (point && typeof point.value === 'number') {
+      const rounded = Math.round(point.value)
+      return { ...point, value: rounded }
+    }
+    return point
+  })
   const maxAbsBigMoney = Math.max(...bigMoneyBars.map(v => Math.abs(v)), 1)
     
     // ✅ 修复：从 K线数据中直接获取股票名称
@@ -226,7 +235,7 @@ function drawChart() {
             tooltip += `最低: <span style="color: #666666;">${low}</span><br/>`
             tooltip += `最高: <span style="color: #666666;">${high}</span></div>`
           }
-          if (scoreData && scoreData.data && scoreData.data.composite_score !== undefined) {
+          if (scoreData && scoreData.data) {
             const cs = scoreData.data.composite_score;
             if (cs && typeof cs === 'object') {
               tooltip += `<div style='color:#ffd700;font-weight:bold;'>评分(balanced): ${cs.balanced ?? '-'}<br>评分(aggressive): ${cs.aggressive ?? '-'}<br>评分(conservative): ${cs.conservative ?? '-'}</div>`;
@@ -238,9 +247,10 @@ function drawChart() {
             // 找到当前K线的成交金额
             const idx = volumeData.dataIndex
             const turnover = kline[idx] && kline[idx].turnover
-            tooltip += `<br/><span style="color:#5470c6;">●</span> 成交量: <b>${volumeData.data.toLocaleString()}</b>`
+            const volume = volumeData.data
+            tooltip += `<br/><span style=\"color:#5470c6;\">●</span> 成交量: <b>${volume !== undefined && volume !== null ? volume.toLocaleString() : '-'}</b>`
             if (turnover !== undefined) {
-              tooltip += `<br/><span style="color:#5470c6;">●</span> 成交金额: <b>${turnover.toLocaleString()}</b>`
+              tooltip += `<br/><span style=\"color:#5470c6;\">●</span> 成交金额: <b>${turnover.toLocaleString()}</b>`
             }
           }
           if (bigMoneyData) {
@@ -335,7 +345,8 @@ function drawChart() {
         {
           type: 'line',
           name: '评分',
-          data: scoreLine,
+          // 使用已规范化的数据（数值已完成 round），保持原有对象结构
+          data: normalizedScoreLine,
           yAxisIndex: 3,
           xAxisIndex: 0,
           symbol: 'circle',
@@ -350,10 +361,16 @@ function drawChart() {
             symbolSize: 16,
             itemStyle: { color: '#ff5722' },
             label: { show: true, color: '#fff', fontSize: 10, formatter: '评分' },
-            data: scoreLine
-              .map((point, idx) => point && point.value !== null && point.value !== undefined
-                ? { coord: [dates[idx], point.value], value: point.value }
-                : null)
+            data: normalizedScoreLine
+              .map((point, idx) => {
+                if (point && typeof point.value === 'number') {
+                  return { coord: [dates[idx], point.value], value: point.value }
+                }
+                if (point && point.value !== null && point.value !== undefined) {
+                  return { coord: [dates[idx], point.value], value: point.value }
+                }
+                return null
+              })
               .filter(Boolean)
           }
         }
