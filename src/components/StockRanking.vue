@@ -14,16 +14,16 @@
               <option value="watchlist">自选股模式</option>
             </select>
           </div>
-          <div style="display: flex; align-items: center; gap: 10px;">
+            <div v-if="viewMode !== 'selected'" style="display: flex; align-items: center; gap: 10px;">
             <label>选择日期：</label>
-            <input type="date" v-model="selectedDate" @change="onDateChange" class="date-input" :max="maxDate" />
+            <input type="date" v-model="selectedDate" @change="onDateChange" class="date-input" :max="maxDate" @click="maybeOpenAvailableDatesForTop" />
           </div>
         </div>
 
-        <!-- ✅ 排行榜模式控制 -->
-        <div v-if="viewMode === 'ranking'" class="control-group">
-          <label>显示数量：</label>
-          <select v-model="displayLimit" @change="fetchRankings">
+        <!-- ✅ 排行榜 / 自选股 模式控制 -->
+        <div v-if="viewMode === 'ranking' || viewMode === 'watchlist'" class="control-group">
+          <label v-if="viewMode === 'ranking'">显示数量：</label>
+          <select v-if="viewMode === 'ranking'" v-model="displayLimit" @change="fetchRankings">
             <option value="10">Top 10</option>
             <option value="50">Top 50</option>
             <option value="100">Top 100</option>
@@ -76,6 +76,31 @@
                 <button @click="removeStockFromQuery(symbol)" class="tag-remove">×</button>
               </span>
             </div>
+            <!-- 策略选择（与排行榜/自选股模式一致） -->
+            <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+              <label>策略：</label>
+              <select v-model="rankingStrategy" @change="onRankingStrategyChange" style="padding:6px; font-size:14px;">
+                <option value="balanced">均衡</option>
+                <option value="aggressive">激进</option>
+                <option value="conservative">保守</option>
+              </select>
+            </div>
+            <!-- ✅ 多日期选择：允许在指定股票模式下选择多个评分日期 -->
+            <div class="multi-date-area" style="margin-top:12px; width:100%;">
+              <!-- Consolidated date control: open backend-driven modal to pick available dates for a selected symbol -->
+              <div style="display:flex; gap:8px; align-items:center;">
+                <button @click="openAvailableDatesPicker" class="btn-add">查看可用评分日期</button>
+                <button @click="clearSelectedDates" class="btn-clear">清空已选日期</button>
+              </div>
+              <div class="helper-text" style="margin-top:6px;">先选中单只股票后点击查看该股票的评分日期</div>
+
+              <div v-if="selectedDates.length > 0" class="selected-dates" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                <div v-for="date in selectedDates" :key="date" class="date-chip" style="background:#fff; border:1px solid #ddd; padding:6px 8px; border-radius:6px; display:flex; align-items:center; gap:8px;">
+                  <strong>{{ formatDateDisplay(date) }}</strong>
+                  <button @click="removeDateFromSelection(date)" class="tag-remove">×</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -120,7 +145,7 @@
       <!-- 显示模式标题 -->
       <div class="mode-header">
         <h4>{{ getModeTitle() }}</h4>
-        <span class="stock-count">共 {{ rankings.length }} 只股票</span>
+  <span class="stock-count">共 {{ (viewMode === 'selected' && selectedDates.length > 0) ? displayRows.length : rankings.length }} 只股票</span>
       </div>
 
       <table class="ranking-table">
@@ -129,6 +154,7 @@
             <th class="th-rank">{{ viewMode === 'ranking' ? '排名' : '序号' }}</th>
             <th class="th-symbol">股票代码</th>
             <th class="th-name">股票名称</th>
+            <th class="th-date">日期</th>
             <th class="th-score">总分</th>
             <th class="th-cycle">周期</th>
             <th class="th-growth">成长</th>
@@ -140,53 +166,59 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(stock, index) in rankings" :key="stock.symbol" class="table-row" :class="getRowClass(stock, index + 1)">
+          <tr v-for="(row, index) in displayRows" :key="row.symbol + '_' + (row.display_date || row.score_date || index)" class="table-row" :class="getRowClass(row, index + 1)">
             <td class="td-rank">
-              <span :style="getRankStyle(stock, index + 1)" class="rank-badge">
+              <span :style="getRankStyle(row, index + 1)" class="rank-badge">
                 {{ viewMode === 'ranking' ? (index + 1) : (index + 1) }}
               </span>
             </td>
             <td class="td-symbol">
-              <span class="symbol-text">{{ stock.symbol }}</span>
+              <span class="symbol-text">{{ row.symbol }}</span>
             </td>
             <td class="td-name">
-              <span class="name-text" :title="stock.name">{{ stock.name || '-' }}</span>
+              <span class="name-text" :title="row.name">{{ row.name || '-' }}</span>
             </td>
-            <td class="td-score" @click="showScoreDetailModal(stock)">
-              <span :style="getScoreStyle(typeof stock.composite_score === 'object' ? stock.composite_score?.[rankingStrategy] : stock.composite_score)" class="score-badge clickable">
-                {{ typeof stock.composite_score === 'object' ? stock.composite_score?.[rankingStrategy] : stock.composite_score }}
-              </span>
+            <td class="td-date">
+              <span>{{ formatDateDisplay(row.display_date || row.score_date) }}</span>
+            </td>
+            <td class="td-score" @click="showScoreDetailModal(row._origin || row)">
+              <div style="display:flex; align-items:center; gap:8px; justify-content:center;">
+                <span :style="getScoreStyle(row.display_composite_score)" class="score-badge clickable">
+                  {{ row.display_composite_score }}
+                </span>
+                <!-- （已移除）策略选择已上移至顶部控制区域，作为全局参数应用于所有显示日期 -->
+              </div>
             </td>
             <td class="td-cycle">
-              <span class="cycle-score">{{ stock.cycle_score }}</span>
+              <span class="cycle-score">{{ row.cycle_score }}</span>
             </td>
             <td class="td-growth">
-              <span class="growth-score">{{ stock.growth_score }}</span>
+              <span class="growth-score">{{ row.growth_score }}</span>
             </td>
             <td class="td-fundamental">
-              <span class="fundamental-score">{{ stock.fundamental_score }}</span>
+              <span class="fundamental-score">{{ row.fundamental_score }}</span>
             </td>
             <td class="td-value">
-              <span class="value-score">{{ stock.value_score }}</span>
+              <span class="value-score">{{ row.value_score }}</span>
             </td>
             <td class="td-technical">
-              <span class="technical-score">{{ stock.technical_score }}</span>
+              <span class="technical-score">{{ row.technical_score }}</span>
             </td>
             <td class="td-money">
-              <span class="money-score">{{ stock.money_flow_score }}</span>
+              <span class="money-score">{{ row.money_flow_score }}</span>
             </td>
             <td class="td-action">
-              <button @click="viewChart(stock.symbol)" class="btn-chart" title="查看图表">📊</button>
+              <button @click="viewChart(row.symbol)" class="btn-chart" title="查看图表">📊</button>
               <button 
-                @click="toggleWatchlist(stock.symbol)" 
-                :class="isInWatchlist(stock.symbol) ? 'btn-watch-active' : 'btn-watch'"
-                :title="isInWatchlist(stock.symbol) ? '从自选股移除' : '添加到自选股'"
+                @click="toggleWatchlist(row.symbol)" 
+                :class="isInWatchlist(row.symbol) ? 'btn-watch-active' : 'btn-watch'"
+                :title="isInWatchlist(row.symbol) ? '从自选股移除' : '添加到自选股'"
               >
-                {{ isInWatchlist(stock.symbol) ? '★' : '⭐' }}
+                {{ isInWatchlist(row.symbol) ? '★' : '⭐' }}
               </button>
               <button 
                 v-if="viewMode === 'selected'" 
-                @click="removeStockFromQuery(stock.symbol)" 
+                @click="removeStockFromQuery(row.symbol)" 
                 class="btn-remove"
                 title="从查询中移除"
               >
@@ -227,6 +259,30 @@
         <div class="quick-select-actions">
           <button @click="applyQuickSelection" class="btn-apply">应用选择 ({{ selectedStocks.length }})</button>
           <button @click="closeQuickSelect" class="btn-cancel">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ✅ 可用评分日期模态框（在指定股票模式且选择单只股票时弹出） -->
+    <div v-if="showAvailableDatesModal" class="modal-overlay" @click="closeAvailableDatesModal">
+      <div class="modal-content" @click.stop style="max-width:520px;">
+        <h4>选择 {{ pickingForSymbol }} 的可用评分日期</h4>
+        <div style="max-height:320px; overflow:auto; border:1px solid #eee; padding:8px; margin-top:8px;">
+            <div v-if="availableDatesForSymbol.length === 0">未找到可用日期。</div>
+            <div v-else>
+              <div style="display:flex; gap:8px; margin-bottom:8px;">
+                <button @click="selectAllAvailableDates" class="btn-apply">全选</button>
+                <button @click="deselectAllAvailableDates" class="btn-cancel">全不选</button>
+              </div>
+              <label v-for="d in availableDatesForSymbol" :key="d" style="display:flex; align-items:center; gap:8px; padding:6px 4px;">
+                <input type="checkbox" :value="d" v-model="availableDatesSelection" />
+                <span>{{ formatDateDisplay(d) }}</span>
+              </label>
+            </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+          <button @click="applyAvailableDatesSelection(availableDatesSelection || [])" class="btn-apply">应用 ({{ (availableDatesSelection || []).length }})</button>
+          <button @click="closeAvailableDatesModal" class="btn-cancel">取消</button>
         </div>
       </div>
     </div>
@@ -293,79 +349,65 @@ import axios from 'axios'
 
 const emit = defineEmits(['view-chart'])
 
-// ✅ 原有状态
+// -------------------------
+// Reactive state (grouped and documented)
+// -------------------------
+// Core data
+// rankings: array of stock score objects returned from the backend.
+// Each item typically contains: { symbol, name, composite_score, score_date, per_date_scores?, per_date_fields?, ... }
 const rankings = ref([])
 const loading = ref(false)
 const displayLimit = ref(50)
-const isRefreshing = ref(false)
+
+// UI mode & inputs
+// viewMode: one of 'ranking' | 'selected' | 'watchlist'
+// stockInput / stockSuggestions: helpers for the stock input autocomplete
+// selectedStocks: array of selected symbols for 'selected' mode
+const viewMode = ref('ranking') // 'ranking' | 'selected' | 'watchlist'
+const stockInput = ref('')
+const stockSuggestions = ref([])
+const selectedStocks = ref([])
+
+// Date / multi-date selections
+// selectedDate: single date input (ISO yyyy-mm-dd)
+// selectedDateInput: auxiliary input used when adding to selectedDates
+// selectedDates: array of selected yyyyMMdd strings used for multi-date flattening
+const selectedDate = ref('')
+const selectedDateInput = ref('')
+const selectedDates = ref([])
+
+// Strategy controls
+// rankingStrategy: global strategy used across modes unless a per-stock override is set
+// perStockStrategies: map { SYMBOL: 'balanced'|'aggressive'|'conservative' } for per-symbol overrides
+const rankingStrategy = ref('balanced')
+const perStockStrategies = ref({})
+
+// UI helpers / tokens
+// refreshKey: small integer token bumped to force expensive computed properties to re-evaluate
+// loadingMessage / lastUpdateTime: UI strings
+const refreshKey = ref(0) // bump to force computed refresh when needed
+const loadingMessage = ref('')
 const lastUpdateTime = ref('')
-const showScoreDetail = ref(false)
-const selectedStock = ref(null)
+
+// Modals / lists
+// Quick select modal state and sample categories (static fallback data)
+const showQuickSelect = ref(false)
+const quickSelectCategories = ref([
+  { key: 'finance', name: '金融股', stocks: [ { symbol: '000001', name: '平安银行' }, { symbol: '600036', name: '招商银行' } ] },
+  { key: 'consume', name: '消费股', stocks: [ { symbol: '000858', name: '五粮液' }, { symbol: '600519', name: '贵州茅台' } ] }
+])
+const selectedCategory = ref(quickSelectCategories.value[0].key)
 const watchlist = ref([])
 
-// ✅ 新增状态
-const viewMode = ref('ranking') // 'ranking', 'selected', 'watchlist'
-const selectedStocks = ref([]) // 用户选择的股票代码列表
-const stockInput = ref('') // 股票输入框内容
-const stockSuggestions = ref([]) // 股票代码提示列表
-const showQuickSelect = ref(false) // 快速选择模态框
-const selectedCategory = ref('popular') // 快速选择分类
-const loadingMessage = ref('加载中...')
-// 日期选择相关
-const selectedDate = ref('')
-const maxDate = new Date().toISOString().split('T')[0]
+// Available-dates modal (used when picking dates for a single symbol)
+const showAvailableDatesModal = ref(false)
+const availableDatesForSymbol = ref([]) // array of yyyyMMdd strings returned by /api/stock-dates
+const availableDatesSelection = ref([])
+const pickingForSymbol = ref('')
 
-// ✅ 快速选择分类数据
-const quickSelectCategories = ref([
-  {
-    key: 'popular',
-    name: '热门股票',
-    stocks: [
-      { symbol: '000001', name: '平安银行' },
-      { symbol: '000002', name: '万科A' },
-      { symbol: '000858', name: '五粮液' },
-      { symbol: '002415', name: '海康威视' },
-      { symbol: '300059', name: '东方财富' },
-      { symbol: '600036', name: '招商银行' },
-      { symbol: '600519', name: '贵州茅台' },
-      { symbol: '600887', name: '伊利股份' }
-    ]
-  },
-  {
-    key: 'tech',
-    name: '科技股',
-    stocks: [
-      { symbol: '002415', name: '海康威视' },
-      { symbol: '300059', name: '东方财富' },
-      { symbol: '300760', name: '迈瑞医疗' },
-      { symbol: '002129', name: '中环股份' },
-      { symbol: '300750', name: '宁德时代' },
-      { symbol: '000725', name: '京东方A' }
-    ]
-  },
-  {
-    key: 'finance',
-    name: '金融股',
-    stocks: [
-      { symbol: '000001', name: '平安银行' },
-      { symbol: '600036', name: '招商银行' },
-      { symbol: '600000', name: '浦发银行' },
-      { symbol: '601318', name: '中国平安' },
-      { symbol: '601166', name: '兴业银行' }
-    ]
-  },
-  {
-    key: 'consume',
-    name: '消费股',
-    stocks: [
-      { symbol: '000858', name: '五粮液' },
-      { symbol: '600519', name: '贵州茅台' },
-      { symbol: '600887', name: '伊利股份' },
-      { symbol: '000568', name: '泸州老窖' },
-      { symbol: '002304', name: '洋河股份' }
-    ]
-  }
-])
+// Score detail modal
+const showScoreDetail = ref(false)
+const selectedStock = ref(null)
 
 // ✅ 计算属性
 const getCurrentCategoryStocks = computed(() => {
@@ -388,10 +430,28 @@ function getAuthHeaders() {
   } : {}
 }
 
+// -------------------------
+// Helper utilities (pure, small)
+// -------------------------
+// Return effective strategy key for a stock (per-stock override > selected-mode global > rankingStrategy)
+function getEffectiveStrategyFor(symbol) {
+  return (perStockStrategies.value && perStockStrategies.value[symbol]) || rankingStrategy.value
+}
+
+// Safely read composite score for a stock (handles number or object)
+function getCompositeScore(stock, strategyKey) {
+  if (!stock) return 0
+  const cs = stock.composite_score
+  if (cs == null) return 0
+  if (typeof cs === 'object') return cs[strategyKey] ?? 0
+  return cs
+}
+
 // ✅ 主数据获取方法 - 根据模式调用不同API
 async function fetchRankings() {
   loading.value = true
   try {
+    console.log('[fetchRankings] start, viewMode=', viewMode.value)
     let response
     // 构造日期参数
     let dateParam = ''
@@ -419,9 +479,17 @@ async function fetchRankings() {
         }
         loadingMessage.value = `加载指定股票评分...`
         const payload = { symbols: selectedStocks.value }
+        // 如果有多日期，传递 dates 数组；否则继续使用单日期参数
         let url = '/api/stock-rankings/selected'
-        if (dateParam) url += `?date=${dateParam}`
-        response = await axios.post(url, payload)
+        if (selectedDates.value.length > 0) {
+          payload.dates = selectedDates.value
+          console.log('[fetchRankings] posting with dates', payload.dates)
+          response = await axios.post(url, payload)
+        } else {
+          if (dateParam) url += `?date=${dateParam}`
+          console.log('[fetchRankings] posting without dates to', url)
+          response = await axios.post(url, payload)
+        }
         break
       }
       case 'watchlist': {
@@ -446,18 +514,54 @@ async function fetchRankings() {
       default:
         throw new Error('无效的查看模式')
     }
-    // 处理响应数据
-    if (response.data && response.data.success && response.data.data) {
-      rankings.value = response.data.data
-    } else if (Array.isArray(response.data)) {
-      rankings.value = response.data
+    console.log('[fetchRankings] got response, status:', response?.status, 'data=', response?.data)
+    // 处理响应数据（防御性检查）
+    if (!response) {
+      console.error('[fetchRankings] empty response')
+      rankings.value = []
+    } else if (response.data && typeof response.data === 'object') {
+      if (response.data.success && response.data.data) {
+        rankings.value = response.data.data
+      } else if (Array.isArray(response.data)) {
+        rankings.value = response.data
+      } else {
+        // server returned object but not expected shape
+        rankings.value = []
+      }
+    } else if (Array.isArray(response)) {
+      // fallback if axios returned array directly
+      rankings.value = response
     } else {
       rankings.value = []
     }
-    // ✅ 新增：确保前端也做去重处理 (防御性编程)
-    rankings.value = deduplicateStocksByLatestDate(rankings.value)
+    console.log('[fetchRankings] rankings count after response:', (rankings.value || []).length)
+      // NOTE: do not auto-populate perStockStrategies here. Keep perStockStrategies
+      // empty unless the user explicitly sets a per-stock override. That allows the
+      // top-level `selectedModeStrategy` to take effect in 'selected' mode.
+      // ✅ 新增：确保前端也做去重处理 (防御性编程)
+      try {
+        if (!(viewMode.value === 'selected' && selectedDates.value.length > 0)) {
+          console.log('[fetchRankings] calling deduplicateStocksByLatestDate')
+          rankings.value = deduplicateStocksByLatestDate(rankings.value)
+          console.log('[fetchRankings] dedupe done, count now:', (rankings.value || []).length)
+        }
+      } catch (e) {
+        console.error('[fetchRankings] error during deduplication:', e)
+      }
     // 排序处理
-  rankings.value.sort((a, b) => (b.composite_score?.[rankingStrategy.value] || 0) - (a.composite_score?.[rankingStrategy.value] || 0))
+  // 如果是多日期并且后端返回每个股票包含 per_date_scores 对象，按当前全局 rankingStrategy 对应某个日期合并排序（默认用首个日期）
+  if (viewMode.value === 'selected' && selectedDates.value.length > 0) {
+    const primaryDate = selectedDates.value[0]
+    rankings.value.sort((a, b) => {
+      const aStrat = getEffectiveStrategyFor(a.symbol)
+      const bStrat = getEffectiveStrategyFor(b.symbol)
+      const aScore = a.per_date_scores?.[primaryDate]?.[aStrat] ?? 0
+      const bScore = b.per_date_scores?.[primaryDate]?.[bStrat] ?? 0
+      return bScore - aScore
+    })
+  } else {
+    rankings.value.sort((a, b) => getCompositeScore(b, rankingStrategy.value) - getCompositeScore(a, rankingStrategy.value))
+  }
     // 更新时间
     if (rankings.value.length > 0) {
       const scoreDate = rankings.value[0].score_date
@@ -485,6 +589,124 @@ async function fetchRankings() {
 // 日期选择变化时自动刷新
 function onDateChange() {
   fetchRankings()
+}
+
+// 如果处于 selected 模式并且只选了一只股票，点击日期输入时打开可用日期选择
+function maybeOpenAvailableDatesForTop() {
+  if (viewMode.value === 'selected' && selectedStocks.value.length === 1) {
+    pickingForSymbol.value = selectedStocks.value[0]
+    fetchAvailableDatesForSymbol(pickingForSymbol.value).then(() => {
+      showAvailableDatesModal.value = true
+    })
+  }
+}
+
+// 当用户在多日期选择框中点击时，也在单只股票场景打开可用日期列表
+function maybeOpenAvailableDatesForMulti() {
+  if (viewMode.value === 'selected' && selectedStocks.value.length === 1) {
+    pickingForSymbol.value = selectedStocks.value[0]
+    fetchAvailableDatesForSymbol(pickingForSymbol.value).then(() => {
+      showAvailableDatesModal.value = true
+    })
+  }
+}
+
+// centralized opener used by the consolidated button
+function openAvailableDatesPicker() {
+  if (selectedStocks.value.length !== 1) {
+    alert('请选择单只股票以查看该股票的可用评分日期')
+    return
+  }
+  pickingForSymbol.value = selectedStocks.value[0]
+  fetchAvailableDatesForSymbol(pickingForSymbol.value).then(() => {
+    showAvailableDatesModal.value = true
+  })
+}
+
+// 多日期管理方法
+function formatDateDisplay(isoOrYyyyMmDd) {
+  // input may be '2025-09-18' or '20250918'
+  if (!isoOrYyyyMmDd) return ''
+  const s = String(isoOrYyyyMmDd)
+  if (s.includes('-')) {
+    const d = new Date(s)
+    return d.toISOString().split('T')[0]
+  }
+  return `${s.substring(0,4)}-${s.substring(4,6)}-${s.substring(6,8)}`
+}
+
+function addDateToSelection() {
+  // 如果当前在指定股票模式且只选择了一只股票，优先从后端获取该股票可用评分日期供选择
+  if (viewMode.value === 'selected' && selectedStocks.value.length === 1) {
+    // open available-dates modal for that symbol
+    pickingForSymbol.value = selectedStocks.value[0]
+    fetchAvailableDatesForSymbol(pickingForSymbol.value).then(() => {
+      showAvailableDatesModal.value = true
+    })
+    return
+  }
+
+  if (!selectedDateInput.value) return
+  const d = new Date(selectedDateInput.value)
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const ymd = `${yyyy}${mm}${dd}`
+  if (!selectedDates.value.includes(ymd)) {
+  selectedDates.value.push(ymd)
+    // 若处于 selected 模式且已有股票，刷新数据
+    if (viewMode.value === 'selected' && selectedStocks.value.length > 0) fetchRankings()
+  }
+}
+
+async function fetchAvailableDatesForSymbol(symbol) {
+  try {
+    const resp = await axios.get(`/api/stock-dates?symbol=${symbol}`)
+    if (resp.data && resp.data.success && Array.isArray(resp.data.data)) {
+      // expect data like ['20250918','20250917',...]
+      availableDatesForSymbol.value = resp.data.data
+      // prefill selection with dates already chosen by user
+      availableDatesSelection.value = availableDatesForSymbol.value.filter(d => selectedDates.value.includes(d))
+    } else {
+      availableDatesForSymbol.value = []
+    }
+  } catch (err) {
+    console.error('获取可用评分日期失败:', err)
+    availableDatesForSymbol.value = []
+  }
+}
+
+function selectAllAvailableDates() {
+  availableDatesSelection.value = [...availableDatesForSymbol.value]
+}
+
+function deselectAllAvailableDates() {
+  availableDatesSelection.value = []
+}
+
+function applyAvailableDatesSelection(selectedArray) {
+  // merge into selectedDates
+  selectedArray.forEach(ymd => {
+    if (!selectedDates.value.includes(ymd)) {
+      selectedDates.value.push(ymd)
+    }
+  })
+  showAvailableDatesModal.value = false
+  if (viewMode.value === 'selected' && selectedStocks.value.length > 0) fetchRankings()
+}
+
+function closeAvailableDatesModal() {
+  showAvailableDatesModal.value = false
+}
+
+function removeDateFromSelection(date) {
+  selectedDates.value = selectedDates.value.filter(d => d !== date)
+  if (viewMode.value === 'selected' && selectedStocks.value.length > 0) fetchRankings()
+}
+
+function clearSelectedDates() {
+  selectedDates.value = []
+  if (viewMode.value === 'selected' && selectedStocks.value.length > 0) fetchRankings()
 }
 
 
@@ -516,7 +738,8 @@ function addStockToQuery() {
     selectedStocks.value.push(symbol)
     stockInput.value = ''
     stockSuggestions.value = []
-    
+    // Do not initialize perStockStrategies for the new symbol here. If the user
+    // wants a per-stock override they can set it explicitly via the UI (onPerStockSelect/onPerStockStrategyChange).
     // 如果是第一次添加股票，自动刷新数据
     if (selectedStocks.value.length === 1) {
       fetchRankings()
@@ -526,6 +749,12 @@ function addStockToQuery() {
 
 function removeStockFromQuery(symbol) {
   selectedStocks.value = selectedStocks.value.filter(s => s !== symbol)
+  // 清理对应的 per-stock 策略
+  if (perStockStrategies.value && perStockStrategies.value[symbol]) {
+    const copy = { ...perStockStrategies.value }
+    delete copy[symbol]
+    perStockStrategies.value = copy
+  }
   if (viewMode.value === 'selected') {
     fetchRankings()
   }
@@ -533,6 +762,7 @@ function removeStockFromQuery(symbol) {
 
 function clearSelectedStocks() {
   selectedStocks.value = []
+  perStockStrategies.value = {}
   if (viewMode.value === 'selected') {
     fetchRankings()
   }
@@ -638,22 +868,44 @@ async function exportScores() {
 }
 
 function generateCSV(data) {
-  const headers = ['排名', '股票代码', '股票名称', '总分', '周期评分', '成长评分', '基本面评分', '价值评分', '技术面评分', '资金流评分']
-  const rows = data.map((stock, index) => [
-    index + 1,
-    stock.symbol,
-    stock.name || '',
-  stock.composite_score?.[rankingStrategy],
-    stock.cycle_score,
-    stock.growth_score,
-    stock.fundamental_score,
-    stock.value_score,
-    stock.technical_score,
-    stock.money_flow_score
-  ])
+  // 如果存在多日期选择，为每个日期增添一列（策略加权的分数）
+  let headers = ['排名', '股票代码', '股票名称']
+  const includePerDate = selectedDates.value.length > 0
+  if (includePerDate) selectedDates.value.forEach(d => headers.push(`总分(${formatDateDisplay(d)})`))
+  else headers = headers.concat(['总分', '周期评分', '成长评分', '基本面评分', '价值评分', '技术面评分', '资金流评分'])
+
+  const rows = data.map((stock, index) => {
+    const base = [index + 1, stock.symbol, stock.name || '']
+    if (includePerDate) {
+      selectedDates.value.forEach(d => {
+        const stockStrat = getEffectiveStrategyFor(stock.symbol)
+        const score = stock.per_date_scores?.[d]?.[stockStrat] ?? ''
+        base.push(score)
+      })
+      return base
+    }
+    const stockStrat = getEffectiveStrategyFor(stock.symbol)
+    return base.concat([
+      getCompositeScore(stock, stockStrat),
+      stock.cycle_score,
+      stock.growth_score,
+      stock.fundamental_score,
+      stock.value_score,
+      stock.technical_score,
+      stock.money_flow_score
+    ])
+  })
   
+  // helper to escape CSV cells consistently
+  function escapeCSV(cell) {
+    if (cell === null || cell === undefined) return ''
+    const s = String(cell)
+    // wrap in double quotes and escape existing quotes
+    return '"' + s.replace(/"/g, '""') + '"'
+  }
+
   const csvContent = [headers, ...rows]
-    .map(row => row.map(cell => `"${cell}"`).join(','))
+    .map(row => row.map(cell => escapeCSV(cell)).join(','))
     .join('\n')
   
   return csvContent
@@ -853,7 +1105,7 @@ function getRankStyle(stock, rank) {
     }
   } else {
     // 其他模式：按分数着色
-  const score = stock.composite_score?.[rankingStrategy] || 0
+  const score = getCompositeScore(stock, rankingStrategy.value)
     if (score >= 80) {
       return { 
         background: 'linear-gradient(135deg, #ff6b6b, #ff5252)',
@@ -919,7 +1171,7 @@ function getRowClass(stock, rank) {
     if (rank <= 10) return 'top-ten'
     if (rank <= 30) return 'top-thirty'
   } else {
-  const score = stock.composite_score?.[rankingStrategy] || 0
+  const score = getCompositeScore(stock, rankingStrategy.value)
     if (score >= 80) return 'top-three'
     if (score >= 70) return 'top-ten'
     if (score >= 60) return 'top-thirty'
@@ -992,11 +1244,94 @@ onMounted(() => {
   fetchRankings()
   fetchWatchlist()
 })
-
-const rankingStrategy = ref('balanced')
 function onRankingStrategyChange() {
+  // If in ranking or watchlist mode, re-fetch to get server-side sorted/updated results
+  if (viewMode.value === 'ranking' || viewMode.value === 'watchlist') {
+    fetchRankings()
+    return
+  }
+  // Otherwise locally re-sort existing rankings
   rankings.value.sort((a, b) => (b.composite_score?.[rankingStrategy.value] || 0) - (a.composite_score?.[rankingStrategy.value] || 0))
 }
+
+// removed selectedModeStrategy handler: now `rankingStrategy` is global across modes
+
+function onPerStockStrategyChange(symbol) {
+  // 确保选项变化后重新计算展示行和排序
+  // perStockStrategies 已经通过 v-model 更新
+  if (viewMode.value === 'selected') {
+    // 重新整理 displayRows 依赖的 rankings（触发 computed 重算）
+    // 强制刷新：小技巧是修改一个不重要的状态或直接重新排序 rankings
+    rankings.value = [...rankings.value]
+  }
+}
+
+function onPerStockSelect(evt, symbol) {
+  const val = evt.target.value
+  perStockStrategies.value = { ...perStockStrategies.value, [symbol]: val }
+  // trigger refresh
+  if (viewMode.value === 'selected') rankings.value = [...rankings.value]
+}
+
+// 生成显示行：如果在指定模式并选择了多个日期，则为每个 symbol/date 生成单独行
+const displayRows = computed(() => {
+  // small reactive token to force re-evaluation when UI-level strategy changes
+  const _rk = refreshKey.value
+  // defensive guards: ensure expected types to avoid runtime errors
+  const rv = Array.isArray(rankings.value) ? rankings.value : []
+  const sDates = Array.isArray(selectedDates.value) ? selectedDates.value.filter(d => !!d) : []
+  // 如果不是 selected 模式或没有多日期，保持原样（每个 stock 一行）
+  if (viewMode.value !== 'selected' || sDates.length === 0) {
+  // Use the global rankingStrategy unless a per-stock override exists
+  const strategyKey = rankingStrategy.value
+  return rv.map(r => ({ ...r, display_composite_score: getCompositeScore(r, strategyKey) }))
+  }
+  // 否则展平为多行：每个股票每个选中日期一行，取 per_date_scores 或 score_date
+  const rows = []
+  // 确保选中的日期按时间降序（近的在前）遍历
+  const sortedDates = [...sDates].sort((a, b) => b.localeCompare(a))
+  rv.forEach(r => {
+    // r.per_date_scores expected: { '20250918': {balanced: 80, aggressive: 82}, ... }
+    sortedDates.forEach(d => {
+      const perDate = r.per_date_scores?.[d]
+      // 策略来源：如果存在 perStockStrategies 的单只覆盖则使用，否则在 selected 模式下使用 selectedModeStrategy，其他情况使用 rankingStrategy
+  const stockStrat = (perStockStrategies.value && perStockStrategies.value[r.symbol]) || rankingStrategy.value
+      let score = ''
+      if (perDate) {
+        const strat = stockStrat
+        score = perDate?.[strat] ?? ''
+      } else if (r.score_date === d) {
+        // fallback: if this record's score_date matches
+        score = (typeof r.composite_score === 'object' ? r.composite_score?.[stockStrat] : r.composite_score)
+      }
+      const copy = { ...r }
+      copy.display_date = d
+      copy.display_composite_score = score
+      // prefer per-date specific numeric fields if available
+      if (r.per_date_fields && r.per_date_fields[d]) {
+        const f = r.per_date_fields[d]
+        copy.cycle_score = f.cycle_score ?? copy.cycle_score
+        copy.growth_score = f.growth_score ?? copy.growth_score
+        copy.fundamental_score = f.fundamental_score ?? copy.fundamental_score
+        copy.value_score = f.value_score ?? copy.value_score
+        copy.technical_score = f.technical_score ?? copy.technical_score
+        copy.money_flow_score = f.money_flow_score ?? copy.money_flow_score
+      }
+      rows.push(copy)
+    })
+  })
+  // 最后按 display_date 降序（近的在上），同一天内按分数降序
+  rows.sort((x, y) => {
+    const dx = (x.display_date || x.score_date || '')
+    const dy = (y.display_date || y.score_date || '')
+    if (dx !== dy) return dy.localeCompare(dx)
+    // 若日期相同，比较 display_composite_score（确保数值比较）
+    const sx = Number(x.display_composite_score || 0)
+    const sy = Number(y.display_composite_score || 0)
+    return sy - sx
+  })
+  return rows
+})
 
 </script>
 
@@ -1196,6 +1531,35 @@ function onRankingStrategyChange() {
   font-size: 14px;
 }
 
+.th-date { width: 120px; }
+.td-date { text-align: center; }
+
+/* 提升日期相关文本的对比度，使“日期”更醒目 */
+.td-date span {
+  color: #0f1724; /* 更深的近黑色，常态更醒目 */
+  font-weight: 800;
+  font-size: 15px;
+  background: linear-gradient(180deg, #ffffff, #f7f9fc);
+  padding: 6px 10px;
+  border-radius: 6px;
+  display: inline-block;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  border: 1px solid rgba(15,23,36,0.06);
+}
+
+/* 控制区内的标签（例如“选择日期：”）更醒目 */
+.control-section .control-group label {
+  color: #1f2937; /* 深灰/接近黑色 */
+  font-weight: 700;
+}
+
+/* 多日期标签中的日期文本 */
+.date-chip strong {
+  color: #0f1724;
+  font-weight: 800;
+  padding-right: 6px;
+}
+
 .clickable {
   cursor: pointer;
 }
@@ -1296,6 +1660,16 @@ function onRankingStrategyChange() {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.selected-dates {
+  margin-top: 8px;
+}
+
+.date-chip select {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 6px;
 }
 
 .btn-apply, .btn-cancel {
@@ -1600,22 +1974,6 @@ function onRankingStrategyChange() {
   color: #7a4a00;
 }
 
-.cycle-score {
-  background: linear-gradient(135deg, #1abc9c, #16a085);
-}
-
-.fundamental-score {
-  background: linear-gradient(135deg, #f39c12, #e67e22);
-}
-
-.technical-score {
-  background: linear-gradient(135deg, #2ecc71, #27ae60);
-}
-
-.money-score {
-  background: linear-gradient(135deg, #e74c3c, #c0392b);
-}
-
 .btn-chart, .btn-watch {
   background: linear-gradient(135deg, #3498db, #2980b9);
   color: white;
@@ -1719,6 +2077,11 @@ function onRankingStrategyChange() {
     font-size: 14px;
     margin-left: 8px;
     margin-right: 8px;
+  }
+
+  .helper-text {
+    color: #6c757d;
+    font-size: 12px;
   }
 }
 </style>
