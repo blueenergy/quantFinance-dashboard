@@ -346,6 +346,8 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
+import { getCompositeScore, formatDateDisplay, generateCSV as utilGenerateCSV, deduplicateStocksByLatestDate } from '../utils/scoreUtils.js'
+import { computeDisplayRows } from '../utils/displayRows.js'
 
 const emit = defineEmits(['view-chart'])
 
@@ -388,6 +390,8 @@ const perStockStrategies = ref({})
 const refreshKey = ref(0) // bump to force computed refresh when needed
 const loadingMessage = ref('')
 const lastUpdateTime = ref('')
+// AbortController for cancelling in-flight fetchRankings requests
+const currentRequestController = ref(null)
 
 // Modals / lists
 // Quick select modal state and sample categories (static fallback data)
@@ -438,20 +442,23 @@ function getEffectiveStrategyFor(symbol) {
   return (perStockStrategies.value && perStockStrategies.value[symbol]) || rankingStrategy.value
 }
 
-// Safely read composite score for a stock (handles number or object)
-function getCompositeScore(stock, strategyKey) {
-  if (!stock) return 0
-  const cs = stock.composite_score
-  if (cs == null) return 0
-  if (typeof cs === 'object') return cs[strategyKey] ?? 0
-  return cs
-}
+// getCompositeScore imported from utils
 
 // ✅ 主数据获取方法 - 根据模式调用不同API
 async function fetchRankings() {
   loading.value = true
   try {
     console.log('[fetchRankings] start, viewMode=', viewMode.value)
+    // cancel any previous in-flight request
+    try {
+      if (currentRequestController.value) {
+        currentRequestController.value.abort()
+      }
+    } catch (e) {
+      // no-op
+    }
+    currentRequestController.value = new AbortController()
+    const signal = currentRequestController.value.signal
     let response
     // 构造日期参数
     let dateParam = ''
@@ -468,7 +475,7 @@ async function fetchRankings() {
         loadingMessage.value = `加载前 ${displayLimit.value} 名股票评分...`
         let url = `/api/stock-rankings?limit=${displayLimit.value}`
         if (dateParam) url += `&date=${dateParam}`
-        response = await axios.get(url)
+  response = await axios.get(url, { signal })
         break
       }
       case 'selected': {
@@ -484,11 +491,11 @@ async function fetchRankings() {
         if (selectedDates.value.length > 0) {
           payload.dates = selectedDates.value
           console.log('[fetchRankings] posting with dates', payload.dates)
-          response = await axios.post(url, payload)
+          response = await axios.post(url, payload, { signal })
         } else {
           if (dateParam) url += `?date=${dateParam}`
           console.log('[fetchRankings] posting without dates to', url)
-          response = await axios.post(url, payload)
+          response = await axios.post(url, payload, { signal })
         }
         break
       }
@@ -508,7 +515,7 @@ async function fetchRankings() {
         const payload = { symbols: watchlist.value }
         let url = '/api/stock-rankings/selected'
         if (dateParam) url += `?date=${dateParam}`
-        response = await axios.post(url, payload)
+  response = await axios.post(url, payload, { signal })
         break
       }
       default:
@@ -574,7 +581,12 @@ async function fetchRankings() {
         lastUpdateTime.value = new Date().toLocaleDateString()
       }
     }
-  } catch (error) {
+    } catch (error) {
+    // Ignore abort errors triggered by new requests
+    if (error.name === 'CanceledError' || error.name === 'AbortError') {
+      console.log('[fetchRankings] request canceled')
+      return
+    }
     console.error('获取股票排行失败:', error)
     console.error('错误详情:', error.response?.data)
     if (error.response?.status === 404) {
@@ -584,6 +596,10 @@ async function fetchRankings() {
     }
   } finally {
     loading.value = false
+    // clear controller if this request finished (success or error other than cancel)
+    if (currentRequestController.value) {
+      try { currentRequestController.value = null } catch (e) {}
+    }
   }
 }
 // 日期选择变化时自动刷新
@@ -624,16 +640,7 @@ function openAvailableDatesPicker() {
 }
 
 // 多日期管理方法
-function formatDateDisplay(isoOrYyyyMmDd) {
-  // input may be '2025-09-18' or '20250918'
-  if (!isoOrYyyyMmDd) return ''
-  const s = String(isoOrYyyyMmDd)
-  if (s.includes('-')) {
-    const d = new Date(s)
-    return d.toISOString().split('T')[0]
-  }
-  return `${s.substring(0,4)}-${s.substring(4,6)}-${s.substring(6,8)}`
-}
+// formatDateDisplay imported from utils
 
 function addDateToSelection() {
   // 如果当前在指定股票模式且只选择了一只股票，优先从后端获取该股票可用评分日期供选择
@@ -859,56 +866,12 @@ function getModeTitle() {
 // ✅ 导出功能
 async function exportScores() {
   try {
-    const csvContent = generateCSV(rankings.value)
+    const csvContent = utilGenerateCSV(rankings.value, selectedDates.value, getEffectiveStrategyFor, getCompositeScore)
     downloadCSV(csvContent, `stock-scores-${viewMode.value}-${new Date().toISOString().split('T')[0]}.csv`)
   } catch (error) {
     console.error('导出失败:', error)
     alert('导出失败: ' + error.message)
   }
-}
-
-function generateCSV(data) {
-  // 如果存在多日期选择，为每个日期增添一列（策略加权的分数）
-  let headers = ['排名', '股票代码', '股票名称']
-  const includePerDate = selectedDates.value.length > 0
-  if (includePerDate) selectedDates.value.forEach(d => headers.push(`总分(${formatDateDisplay(d)})`))
-  else headers = headers.concat(['总分', '周期评分', '成长评分', '基本面评分', '价值评分', '技术面评分', '资金流评分'])
-
-  const rows = data.map((stock, index) => {
-    const base = [index + 1, stock.symbol, stock.name || '']
-    if (includePerDate) {
-      selectedDates.value.forEach(d => {
-        const stockStrat = getEffectiveStrategyFor(stock.symbol)
-        const score = stock.per_date_scores?.[d]?.[stockStrat] ?? ''
-        base.push(score)
-      })
-      return base
-    }
-    const stockStrat = getEffectiveStrategyFor(stock.symbol)
-    return base.concat([
-      getCompositeScore(stock, stockStrat),
-      stock.cycle_score,
-      stock.growth_score,
-      stock.fundamental_score,
-      stock.value_score,
-      stock.technical_score,
-      stock.money_flow_score
-    ])
-  })
-  
-  // helper to escape CSV cells consistently
-  function escapeCSV(cell) {
-    if (cell === null || cell === undefined) return ''
-    const s = String(cell)
-    // wrap in double quotes and escape existing quotes
-    return '"' + s.replace(/"/g, '""') + '"'
-  }
-
-  const csvContent = [headers, ...rows]
-    .map(row => row.map(cell => escapeCSV(cell)).join(','))
-    .join('\n')
-  
-  return csvContent
 }
 
 function downloadCSV(content, filename) {
@@ -1194,44 +1157,7 @@ function closeScoreDetail() {
 }
 
 // ✅ 新增：股票去重函数 - 确保每只股票只保留最新日期的评分
-function deduplicateStocksByLatestDate(stocks) {
-  if (!stocks || stocks.length === 0) return []
-  
-  console.log('📊 去重前股票数量:', stocks.length)
-  
-  // 按股票代码分组
-  const stockGroups = {}
-  stocks.forEach(stock => {
-    const symbol = stock.symbol
-    if (!stockGroups[symbol]) {
-      stockGroups[symbol] = []
-    }
-    stockGroups[symbol].push(stock)
-  })
-  
-  // 对每只股票，选择最新日期的评分
-  const deduplicatedStocks = []
-  Object.keys(stockGroups).forEach(symbol => {
-    const group = stockGroups[symbol]
-    
-    if (group.length === 1) {
-      // 只有一条记录，直接添加
-      deduplicatedStocks.push(group[0])
-    } else {
-      // 多条记录，选择最新日期的
-      const latest = group.reduce((latest, current) => {
-        const latestDate = latest.score_date || '19700101'
-        const currentDate = current.score_date || '19700101'
-        return currentDate > latestDate ? current : latest
-      })
-      deduplicatedStocks.push(latest)
-      console.log(`📅 股票 ${symbol}: 从 ${group.length} 条记录中选择最新日期 ${latest.score_date}`)
-    }
-  })
-  
-  console.log('✅ 去重后股票数量:', deduplicatedStocks.length)
-  return deduplicatedStocks
-}
+// deduplicateStocksByLatestDate imported from utils
 
 // ✅ 监听选择股票变化
 watch(selectedStocks, (newStocks) => {
@@ -1277,60 +1203,14 @@ function onPerStockSelect(evt, symbol) {
 const displayRows = computed(() => {
   // small reactive token to force re-evaluation when UI-level strategy changes
   const _rk = refreshKey.value
-  // defensive guards: ensure expected types to avoid runtime errors
-  const rv = Array.isArray(rankings.value) ? rankings.value : []
-  const sDates = Array.isArray(selectedDates.value) ? selectedDates.value.filter(d => !!d) : []
-  // 如果不是 selected 模式或没有多日期，保持原样（每个 stock 一行）
-  if (viewMode.value !== 'selected' || sDates.length === 0) {
-  // Use the global rankingStrategy unless a per-stock override exists
-  const strategyKey = rankingStrategy.value
-  return rv.map(r => ({ ...r, display_composite_score: getCompositeScore(r, strategyKey) }))
-  }
-  // 否则展平为多行：每个股票每个选中日期一行，取 per_date_scores 或 score_date
-  const rows = []
-  // 确保选中的日期按时间降序（近的在前）遍历
-  const sortedDates = [...sDates].sort((a, b) => b.localeCompare(a))
-  rv.forEach(r => {
-    // r.per_date_scores expected: { '20250918': {balanced: 80, aggressive: 82}, ... }
-    sortedDates.forEach(d => {
-      const perDate = r.per_date_scores?.[d]
-      // 策略来源：如果存在 perStockStrategies 的单只覆盖则使用，否则在 selected 模式下使用 selectedModeStrategy，其他情况使用 rankingStrategy
-  const stockStrat = (perStockStrategies.value && perStockStrategies.value[r.symbol]) || rankingStrategy.value
-      let score = ''
-      if (perDate) {
-        const strat = stockStrat
-        score = perDate?.[strat] ?? ''
-      } else if (r.score_date === d) {
-        // fallback: if this record's score_date matches
-        score = (typeof r.composite_score === 'object' ? r.composite_score?.[stockStrat] : r.composite_score)
-      }
-      const copy = { ...r }
-      copy.display_date = d
-      copy.display_composite_score = score
-      // prefer per-date specific numeric fields if available
-      if (r.per_date_fields && r.per_date_fields[d]) {
-        const f = r.per_date_fields[d]
-        copy.cycle_score = f.cycle_score ?? copy.cycle_score
-        copy.growth_score = f.growth_score ?? copy.growth_score
-        copy.fundamental_score = f.fundamental_score ?? copy.fundamental_score
-        copy.value_score = f.value_score ?? copy.value_score
-        copy.technical_score = f.technical_score ?? copy.technical_score
-        copy.money_flow_score = f.money_flow_score ?? copy.money_flow_score
-      }
-      rows.push(copy)
-    })
+  return computeDisplayRows({
+    rankings: rankings.value,
+    viewMode: viewMode.value,
+    selectedDates: selectedDates.value,
+    rankingStrategy: rankingStrategy.value,
+    perStockStrategies: perStockStrategies.value,
+    getCompositeScore
   })
-  // 最后按 display_date 降序（近的在上），同一天内按分数降序
-  rows.sort((x, y) => {
-    const dx = (x.display_date || x.score_date || '')
-    const dy = (y.display_date || y.score_date || '')
-    if (dx !== dy) return dy.localeCompare(dx)
-    // 若日期相同，比较 display_composite_score（确保数值比较）
-    const sx = Number(x.display_composite_score || 0)
-    const sy = Number(y.display_composite_score || 0)
-    return sy - sx
-  })
-  return rows
 })
 
 </script>
