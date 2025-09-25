@@ -34,6 +34,11 @@
             <option value="balanced">均衡</option>
             <option value="aggressive">激进</option>
             <option value="conservative">保守</option>
+            <option value="defensive">防御</option>
+            <option value="value_oriented">价值型</option>
+            <option value="trading_oriented">交易型</option>
+            <option value="growth_oriented">成长型</option>
+            <option value="cycle_oriented">周期型</option>
           </select>
         </div>
 
@@ -83,6 +88,11 @@
                 <option value="balanced">均衡</option>
                 <option value="aggressive">激进</option>
                 <option value="conservative">保守</option>
+                <option value="defensive">防御</option>
+                <option value="value_oriented">价值型</option>
+                <option value="trading_oriented">交易型</option>
+                <option value="growth_oriented">成长型</option>
+                <option value="cycle_oriented">周期型</option>
               </select>
             </div>
             <!-- ✅ 多日期选择：允许在指定股票模式下选择多个评分日期 -->
