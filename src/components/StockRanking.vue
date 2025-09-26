@@ -539,6 +539,7 @@ async function fetchRankings() {
         }
         loadingMessage.value = `加载指定股票评分...`
         const payload = { symbols: selectedStocks.value }
+        console.log('[fetchRankings] selectedStocks:', selectedStocks.value)
         // 如果有多日期，传递 dates 数组；否则继续使用单日期参数
         let url = '/api/stock-rankings/selected'
         if (selectedDates.value.length > 0) {
@@ -1268,25 +1269,7 @@ async function fetchHS300Constituents() {
     // 🆕 使用本地模拟数据作为fallback
     const mockHS300Data = [
       { symbol: '000001', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.85 },
-      { symbol: '000002', name: '万科A', industry: '房地产开发', market_cap: 250000000000, weight: 0.78 },
-      { symbol: '000858', name: '五粮液', industry: '食品饮料', market_cap: 420000000000, weight: 1.32 },
-      { symbol: '600036', name: '招商银行', industry: '银行', market_cap: 880000000000, weight: 2.76 },
-      { symbol: '600519', name: '贵州茅台', industry: '食品饮料', market_cap: 2200000000000, weight: 6.89 },
-      { symbol: '600887', name: '伊利股份', industry: '食品饮料', market_cap: 230000000000, weight: 0.72 },
-      { symbol: '000725', name: '京东方A', industry: '电子', market_cap: 180000000000, weight: 0.56 },
-      { symbol: '002415', name: '海康威视', industry: '电子', market_cap: 320000000000, weight: 1.00 },
-      { symbol: '000338', name: '潍柴动力', industry: '机械设备', market_cap: 140000000000, weight: 0.44 },
-      { symbol: '600276', name: '恒瑞医药', industry: '医药生物', market_cap: 290000000000, weight: 0.91 },
-      { symbol: '002304', name: '洋河股份', industry: '食品饮料', market_cap: 160000000000, weight: 0.50 },
-      { symbol: '000069', name: '华侨城A', industry: '房地产开发', market_cap: 70000000000, weight: 0.22 },
-      { symbol: '600000', name: '浦发银行', industry: '银行', market_cap: 280000000000, weight: 0.88 },
-      { symbol: '601318', name: '中国平安', industry: '非银金融', market_cap: 1800000000000, weight: 5.64 },
-      { symbol: '600104', name: '上汽集团', industry: '汽车', market_cap: 200000000000, weight: 0.63 },
-      { symbol: '002142', name: '宁波银行', industry: '银行', market_cap: 240000000000, weight: 0.75 },
-      { symbol: '000063', name: '中兴通讯', industry: '通信', market_cap: 160000000000, weight: 0.50 },
-      { symbol: '600309', name: '万华化学', industry: '化工', market_cap: 280000000000, weight: 0.88 },
-      { symbol: '000166', name: '申万宏源', industry: '非银金融', market_cap: 90000000000, weight: 0.28 },
-      { symbol: '600031', name: '三一重工', industry: '机械设备', market_cap: 210000000000, weight: 0.66 }
+      { symbol: '000002', name: '万科A', industry: '房地产开发', market_cap: 250000000000, weight: 0.78 }
     ]
     
     hs300Stocks.value = mockHS300Data
