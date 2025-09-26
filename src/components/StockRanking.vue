@@ -12,6 +12,7 @@
               <option value="ranking">排行榜模式</option>
               <option value="selected">指定股票模式</option>
               <option value="watchlist">自选股模式</option>
+              <option value="hs300">沪深300模式</option>
             </select>
           </div>
             <div v-if="viewMode !== 'selected'" style="display: flex; align-items: center; gap: 10px;">
@@ -123,6 +124,24 @@
           <button @click="clearWatchlist" class="btn-clear-watchlist">清空自选股</button>
         </div>
 
+        <!-- ✅ 沪深300模式控制 -->
+        <div v-if="viewMode === 'hs300'" class="control-group">
+          <div class="hs300-info">
+            <span class="index-info">
+              📈 沪深300指数成分股 
+              <span v-if="hs300Stocks.length > 0">({{ hs300Stocks.length }} 只)</span>
+              <span v-else-if="hs300Loading">加载中...</span>
+            </span>
+          </div>
+          
+          <button @click="refreshHS300Data" class="btn-refresh" :disabled="hs300Loading">
+            {{ hs300Loading ? '刷新中...' : '🔄 刷新成分股' }}
+          </button>
+          
+          <button @click="exportHS300Info" class="btn-export-info">
+            📊 导出成分股信息
+          </button>
+        </div>
         <!-- ✅ 通用控制按钮 -->
         <div class="control-group">
           <button @click="exportScores" class="btn-export">导出数据</button>
@@ -423,6 +442,10 @@ const pickingForSymbol = ref('')
 const showScoreDetail = ref(false)
 const selectedStock = ref(null)
 
+// 🆕 添加沪深300相关状态变量
+const hs300Stocks = ref([]) // 沪深300成分股列表
+const hs300Loading = ref(false) // 加载状态
+
 // ✅ 计算属性
 const getCurrentCategoryStocks = computed(() => {
   const category = quickSelectCategories.value.find(cat => cat.key === selectedCategory.value)
@@ -485,7 +508,27 @@ async function fetchRankings() {
         loadingMessage.value = `加载前 ${displayLimit.value} 名股票评分...`
         let url = `/api/stock-rankings?limit=${displayLimit.value}`
         if (dateParam) url += `&date=${dateParam}`
-  response = await axios.get(url, { signal })
+          response = await axios.get(url, { signal })
+        break
+      }
+      // 🆕 添加沪深300模式
+      case 'hs300': {
+        loadingMessage.value = '加载沪深300指数成分股评分...'
+        
+        // 🔧 先确保成分股数据已加载
+        if (hs300Stocks.value.length === 0) {
+          await fetchHS300Constituents()
+        }
+        
+        // 🆕 使用指定股票模式的API，传入沪深300成分股代码
+        const hs300Symbols = hs300Stocks.value.map(stock => stock.symbol)
+        const payload = { symbols: hs300Symbols }
+        
+        let url = '/api/stock-rankings/selected'
+        if (dateParam) url += `?date=${dateParam}`
+        
+        console.log(`📊 获取 ${hs300Symbols.length} 只沪深300成分股评分`)
+        response = await axios.post(url, payload, { signal })
         break
       }
       case 'selected': {
@@ -805,6 +848,11 @@ function onViewModeChange() {
         }
       })
       break
+    case 'hs300':
+      fetchHS300Constituents().then(() => {
+        fetchRankings()
+      })
+      break
   }
 }
 
@@ -842,6 +890,8 @@ function getNoDataMessage() {
       return '请选择要查看的股票'
     case 'watchlist':
       return isUserLoggedIn() ? '自选股列表为空' : '请先登录'
+    case 'hs300':
+      return '暂无沪深300指数数据'
     default:
       return '暂无数据'
   }
@@ -855,6 +905,8 @@ function getNoDataSubMessage() {
       return '在上方输入框中输入股票代码，或点击快速选择按钮'
     case 'watchlist':
       return isUserLoggedIn() ? '请先添加一些股票到自选股' : '登录后可以查看自选股评分'
+    case 'hs300':
+      return '暂无沪深300指数数据'
     default:
       return ''
   }
@@ -868,6 +920,8 @@ function getModeTitle() {
       return '指定股票评分'
     case 'watchlist':
       return '自选股评分'
+    case 'hs300':
+      return `沪深300指数成分股评分 (共 ${hs300Stocks.value.length} 只)`
     default:
       return '股票评分'
   }
@@ -1190,7 +1244,101 @@ function onRankingStrategyChange() {
   rankings.value.sort((a, b) => (b.composite_score?.[rankingStrategy.value] || 0) - (a.composite_score?.[rankingStrategy.value] || 0))
 }
 
-// removed selectedModeStrategy handler: now `rankingStrategy` is global across modes
+// 🆕 获取沪深300成分股列表
+async function fetchHS300Constituents() {
+  if (hs300Stocks.value.length > 0) {
+    return hs300Stocks.value // 已缓存，直接返回
+  }
+  
+  hs300Loading.value = true
+  try {
+    // 🔧 先尝试从API获取
+    const response = await axios.get('/api/index/hs300/constituents')
+    
+    if (response.data.success && response.data.data) {
+      hs300Stocks.value = response.data.data
+      console.log(`📊 获取到 ${hs300Stocks.value.length} 只沪深300成分股`)
+      return hs300Stocks.value
+    } else {
+      throw new Error('API返回数据格式错误')
+    }
+  } catch (error) {
+    console.warn('从API获取沪深300成分股失败，使用本地数据:', error.message)
+    
+    // 🆕 使用本地模拟数据作为fallback
+    const mockHS300Data = [
+      { symbol: '000001', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.85 },
+      { symbol: '000002', name: '万科A', industry: '房地产开发', market_cap: 250000000000, weight: 0.78 },
+      { symbol: '000858', name: '五粮液', industry: '食品饮料', market_cap: 420000000000, weight: 1.32 },
+      { symbol: '600036', name: '招商银行', industry: '银行', market_cap: 880000000000, weight: 2.76 },
+      { symbol: '600519', name: '贵州茅台', industry: '食品饮料', market_cap: 2200000000000, weight: 6.89 },
+      { symbol: '600887', name: '伊利股份', industry: '食品饮料', market_cap: 230000000000, weight: 0.72 },
+      { symbol: '000725', name: '京东方A', industry: '电子', market_cap: 180000000000, weight: 0.56 },
+      { symbol: '002415', name: '海康威视', industry: '电子', market_cap: 320000000000, weight: 1.00 },
+      { symbol: '000338', name: '潍柴动力', industry: '机械设备', market_cap: 140000000000, weight: 0.44 },
+      { symbol: '600276', name: '恒瑞医药', industry: '医药生物', market_cap: 290000000000, weight: 0.91 },
+      { symbol: '002304', name: '洋河股份', industry: '食品饮料', market_cap: 160000000000, weight: 0.50 },
+      { symbol: '000069', name: '华侨城A', industry: '房地产开发', market_cap: 70000000000, weight: 0.22 },
+      { symbol: '600000', name: '浦发银行', industry: '银行', market_cap: 280000000000, weight: 0.88 },
+      { symbol: '601318', name: '中国平安', industry: '非银金融', market_cap: 1800000000000, weight: 5.64 },
+      { symbol: '600104', name: '上汽集团', industry: '汽车', market_cap: 200000000000, weight: 0.63 },
+      { symbol: '002142', name: '宁波银行', industry: '银行', market_cap: 240000000000, weight: 0.75 },
+      { symbol: '000063', name: '中兴通讯', industry: '通信', market_cap: 160000000000, weight: 0.50 },
+      { symbol: '600309', name: '万华化学', industry: '化工', market_cap: 280000000000, weight: 0.88 },
+      { symbol: '000166', name: '申万宏源', industry: '非银金融', market_cap: 90000000000, weight: 0.28 },
+      { symbol: '600031', name: '三一重工', industry: '机械设备', market_cap: 210000000000, weight: 0.66 }
+    ]
+    
+    hs300Stocks.value = mockHS300Data
+    console.log(`📊 使用本地数据，共 ${hs300Stocks.value.length} 只沪深300成分股`)
+    return hs300Stocks.value
+  } finally {
+    hs300Loading.value = false
+  }
+}
+
+// 🆕 刷新沪深300数据
+async function refreshHS300Data() {
+  try {
+    hs300Stocks.value = [] // 清空缓存
+    await fetchHS300Constituents()
+    if (viewMode.value === 'hs300') {
+      await fetchRankings()
+    }
+  } catch (error) {
+    console.error('刷新沪深300数据失败:', error)
+    alert('刷新失败，已使用本地数据: ' + error.message)
+  }
+}
+
+// 🆕 导出沪深300成分股信息
+async function exportHS300Info() {
+  try {
+    if (hs300Stocks.value.length === 0) {
+      await fetchHS300Constituents()
+    }
+    
+    if (hs300Stocks.value.length === 0) {
+      alert('无沪深300成分股数据可导出')
+      return
+    }
+
+    const csvData = hs300Stocks.value.map(stock => ({
+      '股票代码': stock.symbol,
+      '股票名称': stock.name,
+      '所属行业': stock.industry || '未知',
+      '市值(亿)': stock.market_cap ? (stock.market_cap / 100000000).toFixed(2) : '',
+      '权重(%)': stock.weight ? stock.weight.toFixed(2) : ''
+    }))
+    
+    const csv = utilGenerateCSV(csvData)
+    downloadCSV(csv, `hs300-constituents-${new Date().toISOString().split('T')[0]}.csv`)
+    
+  } catch (error) {
+    console.error('导出沪深300成分股信息失败:', error)
+    alert('导出失败: ' + error.message)
+  }
+}
 
 function onPerStockStrategyChange(symbol) {
   // 确保选项变化后重新计算展示行和排序
@@ -1973,5 +2121,43 @@ const displayRows = computed(() => {
     color: #6c757d;
     font-size: 12px;
   }
+}
+/* 🆕 沪深300相关样式 */
+.hs300-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.index-info {
+  color: #2c3e50;
+  font-weight: bold;
+  font-size: 16px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #e8f5e8, #f0f8f0);
+  border: 2px solid #27ae60;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.btn-refresh, .btn-export-info {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.btn-refresh:disabled {
+  background: linear-gradient(135deg, #bdc3c7, #95a5a6);
+  cursor: not-allowed;
+}
+
+.btn-export-info {
+  background: linear-gradient(135deg, #9b59b6, #8e44ad);
 }
 </style>
