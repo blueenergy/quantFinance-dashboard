@@ -3,154 +3,41 @@
   <div>
   <h3 class="ranking-title">股票评分排行榜</h3>
     <div style="margin-bottom: 20px;">
-      <!-- ✅ 合并日期选择和显示模式设置到同一行 -->
-      <div class="control-section">
-        <div class="control-group" style="gap: 32px;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <label>显示模式：</label>
-            <select v-model="viewMode" @change="onViewModeChange">
-              <option value="ranking">排行榜模式</option>
-              <option value="selected">指定股票模式</option>
-              <option value="watchlist">自选股模式</option>
-              <option value="hs300">沪深300模式</option>
-            </select>
-          </div>
-            <div v-if="viewMode !== 'selected'" style="display: flex; align-items: center; gap: 10px;">
-            <label>选择日期：</label>
-            <input type="date" v-model="selectedDate" @change="onDateChange" class="date-input" :max="maxDate" @click="maybeOpenAvailableDatesForTop" />
-          </div>
-        </div>
-
-        <!-- ✅ 排行榜 / 自选股 模式控制 -->
-        <div v-if="viewMode === 'ranking' || viewMode === 'watchlist'" class="control-group">
-          <label v-if="viewMode === 'ranking'">显示数量：</label>
-          <select v-if="viewMode === 'ranking'" v-model="displayLimit" @change="fetchRankings">
-            <option value="10">Top 10</option>
-            <option value="50">Top 50</option>
-            <option value="100">Top 100</option>
-            <option value="200">Top 200</option>
-          </select>
-          <label style="margin-left: 24px;">排名策略：</label>
-          <select v-model="rankingStrategy" @change="onRankingStrategyChange">
-            <option value="balanced">均衡</option>
-            <option value="aggressive">激进</option>
-            <option value="conservative">保守</option>
-            <option value="defensive">防御</option>
-            <option value="value_oriented">价值型</option>
-            <option value="trading_oriented">交易型</option>
-            <option value="growth_oriented">成长型</option>
-            <option value="cycle_oriented">周期型</option>
-          </select>
-        </div>
-
-        <!-- ✅ 指定股票模式控制 -->
-        <div v-if="viewMode === 'selected'" class="control-group">
-          <div class="stock-input-area">
-            <label>选择股票：</label>
-            <div class="input-row">
-              <input 
-                v-model="stockInput" 
-                @keyup.enter="addStockToQuery"
-                @input="onStockInputChange"
-                placeholder="输入股票代码，如: 000001, 002129..."
-                class="stock-input"
-              />
-              <button @click="addStockToQuery" class="btn-add">添加</button>
-              <button @click="clearSelectedStocks" class="btn-clear">清空</button>
-            </div>
-            
-            <!-- ✅ 股票代码提示 -->
-            <div v-if="stockSuggestions.length > 0" class="suggestions-list">
-              <div 
-                v-for="suggestion in stockSuggestions" 
-                :key="suggestion.symbol"
-                @click="selectSuggestion(suggestion)"
-                class="suggestion-item"
-              >
-                {{ suggestion.symbol }} - {{ suggestion.name }}
-              </div>
-            </div>
-            
-            <!-- ✅ 已选择的股票标签 -->
-            <div v-if="selectedStocks.length > 0" class="selected-stocks">
-              <span 
-                v-for="symbol in selectedStocks" 
-                :key="symbol"
-                class="stock-tag"
-              >
-                {{ symbol }}
-                <button @click="removeStockFromQuery(symbol)" class="tag-remove">×</button>
-              </span>
-            </div>
-            <!-- 策略选择（与排行榜/自选股模式一致） -->
-            <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-              <label>策略：</label>
-              <select v-model="rankingStrategy" @change="onRankingStrategyChange" style="padding:6px; font-size:14px;">
-                <option value="balanced">均衡</option>
-                <option value="aggressive">激进</option>
-                <option value="conservative">保守</option>
-                <option value="defensive">防御</option>
-                <option value="value_oriented">价值型</option>
-                <option value="trading_oriented">交易型</option>
-                <option value="growth_oriented">成长型</option>
-                <option value="cycle_oriented">周期型</option>
-              </select>
-            </div>
-            <!-- ✅ 多日期选择：允许在指定股票模式下选择多个评分日期 -->
-            <div class="multi-date-area" style="margin-top:12px; width:100%;">
-              <!-- Consolidated date control: open backend-driven modal to pick available dates for a selected symbol -->
-              <div style="display:flex; gap:8px; align-items:center;">
-                <button @click="openAvailableDatesPicker" class="btn-add">查看可用评分日期</button>
-                <button @click="clearSelectedDates" class="btn-clear">清空已选日期</button>
-              </div>
-              <div class="helper-text" style="margin-top:6px;">先选中单只股票后点击查看该股票的评分日期</div>
-
-              <div v-if="selectedDates.length > 0" class="selected-dates" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-                <div v-for="date in selectedDates" :key="date" class="date-chip" style="background:#fff; border:1px solid #ddd; padding:6px 8px; border-radius:6px; display:flex; align-items:center; gap:8px;">
-                  <strong>{{ formatDateDisplay(date) }}</strong>
-                  <button @click="removeDateFromSelection(date)" class="tag-remove">×</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ✅ 自选股模式提示 -->
-        <div v-if="viewMode === 'watchlist'" class="control-group">
-          <span class="watchlist-info">
-            📋 显示您的自选股评分 ({{ watchlist.length }} 只)
-          </span>
-          <button @click="viewWatchlistStocks" class="btn-manage-watchlist">查看自选股详情</button>
-          <button @click="clearWatchlist" class="btn-clear-watchlist">清空自选股</button>
-        </div>
-
-        <!-- ✅ 沪深300模式控制 -->
-        <div v-if="viewMode === 'hs300'" class="control-group">
-          <div class="hs300-info">
-            <span class="index-info">
-              📈 沪深300指数成分股 
-              <span v-if="hs300Stocks.length > 0">({{ hs300Stocks.length }} 只)</span>
-              <span v-else-if="hs300Loading">加载中...</span>
-            </span>
-          </div>
-          
-          <button @click="refreshHS300Data" class="btn-refresh" :disabled="hs300Loading">
-            {{ hs300Loading ? '刷新中...' : '🔄 刷新成分股' }}
-          </button>
-          
-          <button @click="exportHS300Info" class="btn-export-info">
-            📊 导出成分股信息
-          </button>
-        </div>
-        <!-- ✅ 通用控制按钮 -->
-        <div class="control-group">
-          <button @click="exportScores" class="btn-export">导出数据</button>
-          
-          <span class="last-update">
-            最后更新: {{ lastUpdateTime }}
-          </span>
-        </div>
-      </div>
+      <!-- Use extracted controls component (original control-section kept but hidden for safe review) -->
+  <StockRankingControls
+    :viewMode="viewMode"
+    :selectedDate="selectedDate"
+    :maxDate="maxDate"
+    :displayLimit="displayLimit"
+    :rankingStrategy="rankingStrategy"
+    :stockInput="stockInput"
+    :stockSuggestions="stockSuggestions"
+    :selectedStocks="selectedStocks"
+    :selectedDates="selectedDates"
+    :watchlistLength="watchlist.length"
+    :hs300StocksLength="hs300Stocks.length"
+    :hs300Loading="hs300Loading"
+    :lastUpdateTime="lastUpdateTime"
+    :selectSuggestionCb="selectSuggestion"
+    :addStockCb="addStockToQuery"
+    @change-view-mode="handleChangeViewMode"
+    @change-date="handleChangeDate"
+    @change-display-limit="handleChildDisplayLimitChange"
+    @change-ranking-strategy="handleChildRankingStrategyChange"
+    @stock-input="handleChildStockInput"
+    @add-stock="addStockToQuery"
+    @clear-selected-stocks="clearSelectedStocks"
+    @select-suggestion="selectSuggestion"
+    @remove-stock="removeStockFromQuery"
+    @maybe-open-available-dates-top="maybeOpenAvailableDatesForTop"
+    @open-available-dates-selected="openAvailableDatesPicker"
+    @clear-selected-dates="clearSelectedDates"
+    @view-watchlist-stocks="viewWatchlistStocks"
+    @clear-watchlist="clearWatchlist"
+    @refresh-hs300="refreshHS300Data"
+    @export-hs300="exportHS300Info"
+    @export-scores="exportScores"
+      />
     </div>
 
     <!-- ✅ 加载状态 -->
@@ -374,6 +261,7 @@
 
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
+import StockRankingControls from './StockRankingControls.vue'
 import axios from 'axios'
 import { getCompositeScore, formatDateDisplay, generateCSV as utilGenerateCSV, deduplicateStocksByLatestDate } from '../utils/scoreUtils.js'
 import { computeDisplayRows } from '../utils/displayRows.js'
@@ -419,6 +307,11 @@ const perStockStrategies = ref({})
 const refreshKey = ref(0) // bump to force computed refresh when needed
 const loadingMessage = ref('')
 const lastUpdateTime = ref('')
+// maxDate used by date inputs: prefer lastUpdateTime when available, otherwise today
+const maxDate = computed(() => {
+  if (lastUpdateTime.value) return lastUpdateTime.value
+  return new Date().toISOString().slice(0, 10)
+})
 // AbortController for cancelling in-flight fetchRankings requests
 const currentRequestController = ref(null)
 
@@ -507,8 +400,10 @@ async function fetchRankings() {
       case 'ranking': {
         loadingMessage.value = `加载前 ${displayLimit.value} 名股票评分...`
         let url = `/api/stock-rankings?limit=${displayLimit.value}`
+        // include selected ranking strategy so server can sort accordingly
+        if (rankingStrategy.value) url += `&strategy=${encodeURIComponent(rankingStrategy.value)}`
         if (dateParam) url += `&date=${dateParam}`
-          response = await axios.get(url, { signal })
+        response = await axios.get(url, { signal })
         break
       }
       // 🆕 添加沪深300模式
@@ -524,8 +419,11 @@ async function fetchRankings() {
         const hs300Symbols = hs300Stocks.value.map(stock => stock.symbol)
         const payload = { symbols: hs300Symbols }
         
-        let url = '/api/stock-rankings/selected'
-        if (dateParam) url += `?date=${dateParam}`
+  let url = '/api/stock-rankings/selected'
+  const qp = []
+  if (dateParam) qp.push(`date=${dateParam}`)
+  if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+  if (qp.length) url += `?${qp.join('&')}`
         
         console.log(`📊 获取 ${hs300Symbols.length} 只沪深300成分股评分`)
         response = await axios.post(url, payload, { signal })
@@ -542,6 +440,8 @@ async function fetchRankings() {
         console.log('[fetchRankings] selectedStocks:', selectedStocks.value)
         // 如果有多日期，传递 dates 数组；否则继续使用单日期参数
         let url = '/api/stock-rankings/selected'
+        // include strategy in payload so server can choose ranking method for selected fetch
+        payload.strategy = rankingStrategy.value
         if (selectedDates.value.length > 0) {
           payload.dates = selectedDates.value
           console.log('[fetchRankings] posting with dates', payload.dates)
@@ -567,9 +467,13 @@ async function fetchRankings() {
         }
         loadingMessage.value = `加载自选股评分...`
         const payload = { symbols: watchlist.value }
-        let url = '/api/stock-rankings/selected'
-        if (dateParam) url += `?date=${dateParam}`
-  response = await axios.post(url, payload, { signal })
+    let url = '/api/stock-rankings/selected'
+    // include strategy and date as query parameters
+    const qp2 = []
+    if (dateParam) qp2.push(`date=${dateParam}`)
+    if (rankingStrategy.value) qp2.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+    if (qp2.length) url += `?${qp2.join('&')}`
+    response = await axios.post(url, payload, { signal })
         break
       }
       default:
@@ -788,6 +692,7 @@ function onStockInputChange() {
 }
 
 function selectSuggestion(suggestion) {
+  console.log('[StockRanking] selectSuggestion received:', suggestion)
   stockInput.value = suggestion.symbol
   stockSuggestions.value = []
   addStockToQuery()
@@ -855,6 +760,45 @@ function onViewModeChange() {
       })
       break
   }
+}
+
+// explicit handlers used by the new controls component
+function handleChangeViewMode(newMode) {
+  if (!newMode) { console.warn('handleChangeViewMode called with empty value:', newMode); return }
+  viewMode.value = newMode
+  onViewModeChange()
+}
+
+function handleChangeDate(newDate) {
+  if (!newDate) { console.warn('handleChangeDate called with empty value:', newDate); return }
+  console.log('[StockRanking] handleChangeDate called with', newDate)
+  selectedDate.value = newDate
+  onDateChange()
+}
+
+// Defensive handlers for child component emits
+function handleChildDisplayLimitChange(v) {
+  const val = (v && typeof v === 'object' && v.target && 'value' in v.target) ? v.target.value : v
+  displayLimit.value = Number(val) || displayLimit.value || 50
+  fetchRankings()
+}
+
+function handleChildRankingStrategyChange(v) {
+  const newVal = (v && typeof v === 'object' && v.target && 'value' in v.target) ? v.target.value : v
+  // Ensure we set the ref value safely
+  if (rankingStrategy && typeof rankingStrategy === 'object' && 'value' in rankingStrategy) {
+    rankingStrategy.value = newVal
+  } else {
+    // fallback: reassign the ref if something odd happened
+    try { rankingStrategy = ref(newVal) } catch (e) { console.error('failed to set rankingStrategy', e) }
+  }
+  try { onRankingStrategyChange() } catch (e) { console.error('onRankingStrategyChange error', e) }
+}
+
+function handleChildStockInput(v) {
+  const newVal = (v && typeof v === 'object' && v.target && 'value' in v.target) ? v.target.value : v
+  stockInput.value = newVal
+  onStockInputChange()
 }
 
 // ✅ 快速选择相关方法
@@ -1241,8 +1185,14 @@ function onRankingStrategyChange() {
     fetchRankings()
     return
   }
-  // Otherwise locally re-sort existing rankings
-  rankings.value.sort((a, b) => (b.composite_score?.[rankingStrategy.value] || 0) - (a.composite_score?.[rankingStrategy.value] || 0))
+  // Otherwise locally re-sort existing rankings using getCompositeScore
+  try {
+    rankings.value.sort((a, b) => getCompositeScore(b, rankingStrategy.value) - getCompositeScore(a, rankingStrategy.value))
+  } catch (e) {
+    console.error('排序失败:', e)
+  }
+  // bump refreshKey to ensure dependent computed properties update
+  try { refreshKey.value = (refreshKey.value || 0) + 1 } catch (e) {}
 }
 
 // 🆕 获取沪深300成分股列表
@@ -1354,152 +1304,13 @@ const displayRows = computed(() => {
   })
 })
 
+// (debug instrumentation removed)
+
+
 </script>
 
 <style scoped>
-/* ✅ 新增控制区域样式 */
-.control-section {
-  background: #f8f9fa;
-  padding: 15px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-
-.control-group {
-  margin-bottom: 15px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.control-group:last-child {
-  margin-bottom: 0;
-}
-
-.stock-input-area {
-  flex: 1;
-  min-width: 300px;
-  position: relative;
-}
-
-.input-row {
-  display: flex;
-  gap: 10px;
-  margin-top: 5px;
-}
-
-.stock-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
- .btn-add, .btn-clear, .btn-export, .btn-manage-watchlist, .btn-clear-watchlist {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  margin-right: 10px;
-}
-
-.btn-add {
-  background: linear-gradient(135deg, #28a745, #20c997);
-  color: white;
-}
-
-.btn-clear, .btn-clear-watchlist {
-  background: linear-gradient(135deg, #dc3545, #c82333);
-  color: white;
-}
-
-
-.btn-export {
-  background: linear-gradient(135deg, #6f42c1, #5a31a8);
-  color: white;
-}
-
-.btn-manage-watchlist {
-  background: linear-gradient(135deg, #17a2b8, #138496);
-  color: white;
-}
-
-
-.suggestions-list {
-  position: absolute;
-  z-index: 1000;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  max-height: 200px;
-  overflow-y: auto;
-  margin-top: 2px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  width: 100%;
-}
-
-.suggestion-item {
-  padding: 8px 12px;
-  cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.suggestion-item:hover {
-  background-color: #f8f9fa;
-}
-
-.selected-stocks {
-  margin-top: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.stock-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 8px;
-  background: linear-gradient(135deg, #007bff, #0056b3);
-  color: white;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: bold;
-}
-
-.tag-remove {
-  background: none;
-  border: none;
-  color: white;
-  margin-left: 5px;
-  cursor: pointer;
-  font-weight: bold;
-  padding: 0;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tag-remove:hover {
-  background-color: rgba(255,255,255,0.2);
-}
-
-.watchlist-info {
-  color: #666;
-  font-size: 14px;
-}
-
-.last-update {
-  color: #666;
-  font-size: 12px;
-  margin-left: 10px;
-}
+/* Control styles moved to StockRankingControls.vue (scoped). */
 
 .loading-container, .no-data-container {
   text-align: center;
@@ -2016,27 +1827,9 @@ const displayRows = computed(() => {
   background: linear-gradient(135deg, #f39c12, #e67e22);
 }
 
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
 
-.modal-content {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  max-width: 500px;
-  width: 90%;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-}
+/* modal overlay and modal-content moved to
+   src/assets/styles/stock-ranking-tokens.css */
 
 /* 更亮的排行榜标题样式 */
 .ranking-title {
