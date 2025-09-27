@@ -1,0 +1,30 @@
+/* Shared tokens and common utilities used by StockRanking and child components */
+:root {
+  --sr-primary: linear-gradient(135deg, #3498db, #2980b9);
+  --sr-accent: linear-gradient(135deg, #ffb300, #ffd700);
+  --sr-bg-muted: #f8f9fa;
+  --sr-text: #222;
+}
+
+/* modal overlay and modal-content are shared */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
