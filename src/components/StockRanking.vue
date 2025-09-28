@@ -34,8 +34,8 @@
     @clear-selected-dates="clearSelectedDates"
     @view-watchlist-stocks="viewWatchlistStocks"
     @clear-watchlist="clearWatchlist"
-    @refresh-hs300="refreshHS300Data"
-    @export-hs300="exportHS300Info"
+  @refresh-hs300="() => refreshIndexData('hs300')"
+  @export-hs300="() => exportIndexInfo('hs300')"
     @export-scores="exportScores"
       />
     </div>
@@ -102,7 +102,6 @@
                 <span :style="getScoreStyle(row.display_composite_score)" class="score-badge clickable">
                   {{ row.display_composite_score }}
                 </span>
-                <!-- （已移除）策略选择已上移至顶部控制区域，作为全局参数应用于所有显示日期 -->
               </div>
             </td>
             <td class="td-cycle">
@@ -138,7 +137,6 @@
                 class="btn-remove"
                 title="从查询中移除"
               >
-                🗑️
               </button>
             </td>
           </tr>
@@ -150,26 +148,87 @@
     <div v-if="showQuickSelect" class="modal-overlay" @click="closeQuickSelect">
       <div class="modal-content quick-select-modal" @click.stop>
         <h4>快速选择热门股票</h4>
-        <div class="quick-select-tabs">
-          <button 
-            v-for="category in quickSelectCategories" 
-            :key="category.key"
-            @click="selectedCategory = category.key"
-            :class="['tab-btn', { active: selectedCategory === category.key }]"
-          >
-            {{ category.name }}
-          </button>
+        <div class="quick-select-tabs-wrapper">
+          <button v-if="showTabsScrollLeft" class="tabs-nav left" @click="scrollTabs('left')">‹</button>
+          <div class="quick-select-tabs" ref="tabsScrollRef" @scroll="updateTabsScrollState">
+            <button 
+              v-for="category in quickSelectCategories" 
+              :key="category.key"
+              @click="selectedCategory = category.key"
+              :class="['tab-btn', { active: selectedCategory === category.key }]"
+            >
+              <span class="tab-label">{{ category.name }}</span>
+              <span 
+                v-if="getCategorySelectedCount(category.key) > 0" 
+                class="tab-badge"
+                :title="formatCategoryBadgeTitle(category.key)"
+              >{{ getCategorySelectedCount(category.key) }}</span>
+            </button>
+          </div>
+          <button v-if="showTabsScrollRight" class="tabs-nav right" @click="scrollTabs('right')">›</button>
         </div>
         <div class="quick-select-content">
-          <div 
-            v-for="stock in getCurrentCategoryStocks()" 
-            :key="stock.symbol"
-            @click="toggleQuickSelectStock(stock.symbol)"
-            :class="['quick-stock-item', { selected: selectedStocks.includes(stock.symbol) }]"
-          >
-            <span class="quick-stock-symbol">{{ stock.symbol }}</span>
-            <span class="quick-stock-name">{{ stock.name }}</span>
-            <span v-if="selectedStocks.includes(stock.symbol)" class="selected-indicator">✓</span>
+          <!-- HS300 loading state -->
+          <div v-if="selectedCategory === 'hs300' && hs300Loading" style="padding:16px; text-align:center; font-weight:600; color:#0353a4;">
+            正在加载沪深300成分股...
+          </div>
+          <!-- HS300 empty state -->
+          <div v-else-if="selectedCategory === 'hs300' && !hs300Loading && getCurrentCategoryStocks.length === 0" style="padding:16px; text-align:center; color:#555;">
+            未获取到成分股数据。
+            <button @click="manualReloadHS300" style="margin-left:8px; background:#0466c8; color:#fff; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">重新加载</button>
+          </div>
+          <!-- Stock list -->
+          <div v-else>
+            <!-- 🆕 HS300 批量操作条 -->
+            <div v-if="selectedCategory === 'hs300' && hs300Stocks.length > 0" class="bulk-select-bar">
+              <button @click="() => selectAllIndex('hs300')" class="btn-bulk-select" :disabled="hs300SelectedCount === hs300Stocks.length">
+                全选沪深300 ({{ hs300Stocks.length }})
+              </button>
+              <button @click="() => deselectAllIndex('hs300')" class="btn-bulk-deselect" :disabled="hs300SelectedCount === 0">
+                取消选择
+              </button>
+              <span class="bulk-selected-count">已选 {{ hs300SelectedCount }} / {{ hs300Stocks.length }}</span>
+            </div>
+            <!-- 🆕 A500 批量操作条 -->
+            <div v-if="selectedCategory === 'a500' && a500Stocks.length > 0" class="bulk-select-bar">
+              <button @click="() => selectAllIndex('a500')" class="btn-bulk-select" :disabled="a500SelectedCount === a500Stocks.length">
+                全选中证A500 ({{ a500Stocks.length }})
+              </button>
+              <button @click="() => deselectAllIndex('a500')" class="btn-bulk-deselect" :disabled="a500SelectedCount === 0">
+                取消选择
+              </button>
+              <span class="bulk-selected-count">已选 {{ a500SelectedCount }} / {{ a500Stocks.length }}</span>
+            </div>
+            <!-- 🆕 CSI500 批量操作条 -->
+            <div v-if="selectedCategory === 'csi500' && csi500Stocks.length > 0" class="bulk-select-bar">
+              <button @click="() => selectAllIndex('csi500')" class="btn-bulk-select" :disabled="csi500SelectedCount === csi500Stocks.length">
+                全选中证500 ({{ csi500Stocks.length }})
+              </button>
+              <button @click="() => deselectAllIndex('csi500')" class="btn-bulk-deselect" :disabled="csi500SelectedCount === 0">
+                取消选择
+              </button>
+              <span class="bulk-selected-count">已选 {{ csi500SelectedCount }} / {{ csi500Stocks.length }}</span>
+            </div>
+            <!-- 🆕 STAR50 批量操作条 -->
+            <div v-if="selectedCategory === 'star50' && star50Stocks.length > 0" class="bulk-select-bar">
+              <button @click="() => selectAllIndex('star50')" class="btn-bulk-select" :disabled="star50SelectedCount === star50Stocks.length">
+                全选科创50 ({{ star50Stocks.length }})
+              </button>
+              <button @click="() => deselectAllIndex('star50')" class="btn-bulk-deselect" :disabled="star50SelectedCount === 0">
+                取消选择
+              </button>
+              <span class="bulk-selected-count">已选 {{ star50SelectedCount }} / {{ star50Stocks.length }}</span>
+            </div>
+            <div 
+              v-for="stock in getCurrentCategoryStocks" 
+              :key="stock.symbol"
+              @click="toggleQuickSelectStock(stock.symbol)"
+              :class="['quick-stock-item', { selected: isSelectedStock(stock.symbol) }]"
+            >
+              <span class="quick-stock-symbol">{{ stock.symbol }}</span>
+              <span class="quick-stock-name">{{ stock.name }}</span>
+              <span v-if="isSelectedStock(stock.symbol)" class="selected-indicator">✓</span>
+            </div>
           </div>
         </div>
         <div class="quick-select-actions">
@@ -260,7 +319,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import StockRankingControls from './StockRankingControls.vue'
 import axios from 'axios'
 import { getCompositeScore, formatDateDisplay, generateCSV as utilGenerateCSV, deduplicateStocksByLatestDate } from '../utils/scoreUtils.js'
@@ -320,7 +379,16 @@ const currentRequestController = ref(null)
 const showQuickSelect = ref(false)
 const quickSelectCategories = ref([
   { key: 'finance', name: '金融股', stocks: [ { symbol: '000001', name: '平安银行' }, { symbol: '600036', name: '招商银行' } ] },
-  { key: 'consume', name: '消费股', stocks: [ { symbol: '000858', name: '五粮液' }, { symbol: '600519', name: '贵州茅台' } ] }
+  { key: 'consume', name: '消费股', stocks: [ { symbol: '000858', name: '五粮液' }, { symbol: '600519', name: '贵州茅台' } ] },
+  { key: 'tech', name: '科技股', stocks: [ { symbol: '000977', name: '浪潮信息' }, { symbol: '600460', name: '士兰微' } ] },
+  { key: 'pharma', name: '医药股', stocks: [ { symbol: '600276', name: '恒瑞医药' }, { symbol: '000538', name: '云南白药' } ] },
+  { key: 'energy', name: '能源', stocks: [ { symbol: '600028', name: '中国石化' }, { symbol: '601857', name: '中国石油' } ] },
+  { key: 'ev', name: '新能源车', stocks: [ { symbol: '002594', name: '比亚迪' }, { symbol: '300750', name: '宁德时代' } ] },
+  { key: 'semi', name: '半导体', stocks: [ { symbol: '688981', name: '中芯国际' }, { symbol: '603986', name: '兆易创新' } ] },
+  { key: 'hs300', name: '沪深300 成分股', stocks: [] },
+  { key: 'a500', name: '中证A500 成分股', stocks: [] },
+  { key: 'csi500', name: '中证500 成分股', stocks: [] },
+  { key: 'star50', name: '科创50 成分股', stocks: [] }
 ])
 const selectedCategory = ref(quickSelectCategories.value[0].key)
 const watchlist = ref([])
@@ -338,9 +406,50 @@ const selectedStock = ref(null)
 // 🆕 添加沪深300相关状态变量
 const hs300Stocks = ref([]) // 沪深300成分股列表
 const hs300Loading = ref(false) // 加载状态
+// 🆕 添加科创50相关状态变量
+const star50Stocks = ref([])
+const star50Loading = ref(false)
+// 🆕 添加中证A500相关状态变量
+const a500Stocks = ref([])
+const a500Loading = ref(false)
+// 🆕 添加中证500相关状态变量
+const csi500Stocks = ref([])
+const csi500Loading = ref(false)
+// Tabs horizontal scroll helpers
+const tabsScrollRef = ref(null)
+const showTabsScrollLeft = ref(false)
+const showTabsScrollRight = ref(false)
+
+function updateTabsScrollState() {
+  const el = tabsScrollRef.value
+  if (!el) return
+  showTabsScrollLeft.value = el.scrollLeft > 5
+  showTabsScrollRight.value = el.scrollWidth - el.clientWidth - el.scrollLeft > 5
+}
+
+function scrollTabs(direction) {
+  const el = tabsScrollRef.value
+  if (!el) return
+  const delta = Math.round(el.clientWidth * 0.6)
+  const target = direction === 'left' ? el.scrollLeft - delta : el.scrollLeft + delta
+  el.scrollTo({ left: target, behavior: 'smooth' })
+}
 
 // ✅ 计算属性
 const getCurrentCategoryStocks = computed(() => {
+  // if user selected the HS300 tab, return the dynamic hs300Stocks list
+  if (selectedCategory.value === 'hs300') {
+    return hs300Stocks.value || []
+  }
+  if (selectedCategory.value === 'star50') {
+    return star50Stocks.value || []
+  }
+  if (selectedCategory.value === 'a500') {
+    return a500Stocks.value || []
+  }
+  if (selectedCategory.value === 'csi500') {
+    return csi500Stocks.value || []
+  }
   const category = quickSelectCategories.value.find(cat => cat.key === selectedCategory.value)
   return category ? category.stocks : []
 })
@@ -412,20 +521,72 @@ async function fetchRankings() {
         
         // 🔧 先确保成分股数据已加载
         if (hs300Stocks.value.length === 0) {
-          await fetchHS300Constituents()
+          await fetchIndexConstituents('hs300')
         }
         
         // 🆕 使用指定股票模式的API，传入沪深300成分股代码
         const hs300Symbols = hs300Stocks.value.map(stock => stock.symbol)
         const payload = { symbols: hs300Symbols }
         
-  let url = '/api/stock-rankings/selected'
-  const qp = []
-  if (dateParam) qp.push(`date=${dateParam}`)
-  if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
-  if (qp.length) url += `?${qp.join('&')}`
+        let url = '/api/stock-rankings/selected'
+        const qp = []
+        if (dateParam) qp.push(`date=${dateParam}`)
+        if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+        if (qp.length) url += `?${qp.join('&')}`
         
         console.log(`📊 获取 ${hs300Symbols.length} 只沪深300成分股评分`)
+        response = await axios.post(url, payload, { signal })
+        break
+      }
+      case 'csi500': {
+        loadingMessage.value = '加载中证500指数成分股评分...'
+        if (csi500Stocks.value.length === 0) {
+          await fetchIndexConstituents('csi500')
+        }
+        const csi500Symbols = csi500Stocks.value.map(stock => stock.symbol)
+        if (csi500Symbols.length === 0) {
+          console.warn('[fetchRankings] csi500 成分股为空，使用回退数据')
+        }
+        const payload = { symbols: csi500Symbols }
+        let url = '/api/stock-rankings/selected'
+        const qp = []
+        if (dateParam) qp.push(`date=${dateParam}`)
+        if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+        if (qp.length) url += `?${qp.join('&')}`
+        console.log(`📊 获取 ${csi500Symbols.length} 只中证500成分股评分`)        
+        response = await axios.post(url, payload, { signal })
+        break
+      }
+      case 'a500': {
+        loadingMessage.value = '加载中证A500指数成分股评分...'
+        if (a500Stocks.value.length === 0) {
+          await fetchIndexConstituents('a500')
+        }
+        const a500Symbols = a500Stocks.value.map(stock => stock.symbol)
+        const payload = { symbols: a500Symbols }
+        let url = '/api/stock-rankings/selected'
+        const qp = []
+        if (dateParam) qp.push(`date=${dateParam}`)
+        if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+        if (qp.length) url += `?${qp.join('&')}`
+        console.log(`📊 获取 ${a500Symbols.length} 只中证A500成分股评分`)
+        response = await axios.post(url, payload, { signal })
+        break
+      }
+      case 'star50': {
+        loadingMessage.value = '加载科创50指数成分股评分...'
+        if (star50Stocks.value.length === 0) {
+          await fetchIndexConstituents('star50')
+        }
+        const star50Symbols = star50Stocks.value.map(stock => stock.symbol)
+        const payload = { symbols: star50Symbols }
+        console.log("payload",{payload})
+        let url = '/api/stock-rankings/selected'
+        const qp = []
+        if (dateParam) qp.push(`date=${dateParam}`)
+        if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+        if (qp.length) url += `?${qp.join('&')}`
+        console.log(`📊 获取 ${star50Symbols.length} 只科创50成分股评分`)
         response = await axios.post(url, payload, { signal })
         break
       }
@@ -467,17 +628,18 @@ async function fetchRankings() {
         }
         loadingMessage.value = `加载自选股评分...`
         const payload = { symbols: watchlist.value }
-    let url = '/api/stock-rankings/selected'
-    // include strategy and date as query parameters
-    const qp2 = []
-    if (dateParam) qp2.push(`date=${dateParam}`)
-    if (rankingStrategy.value) qp2.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
-    if (qp2.length) url += `?${qp2.join('&')}`
-    response = await axios.post(url, payload, { signal })
+        let url = '/api/stock-rankings/selected'
+        // include strategy and date as query parameters
+        const qp2 = []
+        if (dateParam) qp2.push(`date=${dateParam}`)
+        if (rankingStrategy.value) qp2.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+        if (qp2.length) url += `?${qp2.join('&')}`
+        response = await axios.post(url, payload, { signal })
         break
       }
-      default:
+      default: {
         throw new Error('无效的查看模式')
+      }
     }
     console.log('[fetchRankings] got response, status:', response?.status, 'data=', response?.data)
     // 处理响应数据（防御性检查）
@@ -500,30 +662,26 @@ async function fetchRankings() {
       rankings.value = []
     }
     console.log('[fetchRankings] rankings count after response:', (rankings.value || []).length)
-      // NOTE: do not auto-populate perStockStrategies here. Keep perStockStrategies
-      // empty unless the user explicitly sets a per-stock override. That allows the
-      // top-level `selectedModeStrategy` to take effect in 'selected' mode.
-      // ✅ 新增：确保前端也做去重处理 (防御性编程)
       try {
         if (!(viewMode.value === 'selected' && selectedDates.value.length > 0)) {
-          console.log('[fetchRankings] calling deduplicateStocksByLatestDate')
+          // console.log('[fetchRankings] calling deduplicateStocksByLatestDate')
           rankings.value = deduplicateStocksByLatestDate(rankings.value)
-          console.log('[fetchRankings] dedupe done, count now:', (rankings.value || []).length)
+          // console.log('[fetchRankings] dedupe done, count now:', (rankings.value || []).length)
         }
       } catch (e) {
         console.error('[fetchRankings] error during deduplication:', e)
       }
     // 排序处理
   // 如果是多日期并且后端返回每个股票包含 per_date_scores 对象，按当前全局 rankingStrategy 对应某个日期合并排序（默认用首个日期）
-  if (viewMode.value === 'selected' && selectedDates.value.length > 0) {
-    const primaryDate = selectedDates.value[0]
-    rankings.value.sort((a, b) => {
-      const aStrat = getEffectiveStrategyFor(a.symbol)
-      const bStrat = getEffectiveStrategyFor(b.symbol)
-      const aScore = a.per_date_scores?.[primaryDate]?.[aStrat] ?? 0
-      const bScore = b.per_date_scores?.[primaryDate]?.[bStrat] ?? 0
-      return bScore - aScore
-    })
+    if (viewMode.value === 'selected' && selectedDates.value.length > 0) {
+      const primaryDate = selectedDates.value[0]
+      rankings.value.sort((a, b) => {
+        const aStrat = getEffectiveStrategyFor(a.symbol)
+        const bStrat = getEffectiveStrategyFor(b.symbol)
+        const aScore = a.per_date_scores?.[primaryDate]?.[aStrat] ?? 0
+        const bScore = b.per_date_scores?.[primaryDate]?.[bStrat] ?? 0
+        return bScore - aScore
+      })
   } else {
     rankings.value.sort((a, b) => getCompositeScore(b, rankingStrategy.value) - getCompositeScore(a, rankingStrategy.value))
   }
@@ -539,7 +697,7 @@ async function fetchRankings() {
         lastUpdateTime.value = new Date().toLocaleDateString()
       }
     }
-    } catch (error) {
+  } catch (error) {
     // Ignore abort errors triggered by new requests
     if (error.name === 'CanceledError' || error.name === 'AbortError') {
       console.log('[fetchRankings] request canceled')
@@ -704,9 +862,6 @@ function addStockToQuery() {
     selectedStocks.value.push(symbol)
     stockInput.value = ''
     stockSuggestions.value = []
-    // Do not initialize perStockStrategies for the new symbol here. If the user
-    // wants a per-stock override they can set it explicitly via the UI (onPerStockSelect/onPerStockStrategyChange).
-    // 如果是第一次添加股票，自动刷新数据
     if (selectedStocks.value.length === 1) {
       fetchRankings()
     }
@@ -755,13 +910,29 @@ function onViewModeChange() {
       })
       break
     case 'hs300':
-      fetchHS300Constituents().then(() => {
+  fetchIndexConstituents('hs300').then(() => {
         fetchRankings()
       })
       break
+    case 'csi500':
+      fetchIndexConstituents('csi500').then(() => {
+        fetchRankings()
+      })
+      break
+    case 'a500':
+      fetchIndexConstituents('a500').then(() => {
+        fetchRankings()
+      })
+      break
+    case 'star50':
+      fetchIndexConstituents('star50').then(() => {
+        fetchRankings()
+      })
+      break
+    default:
+      break
   }
 }
-
 // explicit handlers used by the new controls component
 function handleChangeViewMode(newMode) {
   if (!newMode) { console.warn('handleChangeViewMode called with empty value:', newMode); return }
@@ -802,8 +973,33 @@ function handleChildStockInput(v) {
 }
 
 // ✅ 快速选择相关方法
-function showQuickSelectModal() {
-  showQuickSelect.value = true
+async function showQuickSelectModal() {
+  try {
+    console.log('[StockRanking] showQuickSelectModal called, debug state:', {
+      selectedStocks: selectedStocks?.value,
+      quickSelectCategories: quickSelectCategories?.value,
+      selectedCategory: selectedCategory?.value,
+      viewMode: viewMode?.value
+    })
+    // If HS300 tab is selected, ensure constituents are loaded
+    if (selectedCategory.value === 'hs300' && (!hs300Stocks.value || hs300Stocks.value.length === 0)) {
+  try { await fetchIndexConstituents('hs300') } catch (e) { console.warn('fetchIndexConstituents hs300 failed', e) }
+    }
+    if (selectedCategory.value === 'star50' && (!star50Stocks.value || star50Stocks.value.length === 0)) {
+  try { await fetchIndexConstituents('star50') } catch (e) { console.warn('fetchIndexConstituents star50 failed', e) }
+    }
+    if (selectedCategory.value === 'a500' && (!a500Stocks.value || a500Stocks.value.length === 0)) {
+  try { await fetchIndexConstituents('a500') } catch (e) { console.warn('fetchIndexConstituents a500 failed', e) }
+    }
+    if (selectedCategory.value === 'csi500' && (!csi500Stocks.value || csi500Stocks.value.length === 0)) {
+  try { await fetchIndexConstituents('csi500') } catch (e) { console.warn('fetchIndexConstituents csi500 failed', e) }
+    }
+    showQuickSelect.value = true
+  } catch (e) {
+    console.error('[StockRanking] showQuickSelectModal error:', e)
+    // Avoid throwing during render/update by setting a safe fallback
+    try { showQuickSelect.value = false } catch (e2) {}
+  }
 }
 
 function closeQuickSelect() {
@@ -823,6 +1019,42 @@ function applyQuickSelection() {
   if (selectedStocks.value.length > 0) {
     viewMode.value = 'selected'
     fetchRankings()
+  }
+}
+
+// ✅ 通用指数批量选择工具
+function selectAllIndex(indexKey) {
+  const st = indexStateMap[indexKey]
+  if (!st || !Array.isArray(st.list.value) || st.list.value.length === 0) return
+  const existing = new Set(selectedStocks.value)
+  st.list.value.forEach(s => existing.add(s.symbol))
+  selectedStocks.value = Array.from(existing)
+}
+function deselectAllIndex(indexKey) {
+  const st = indexStateMap[indexKey]
+  if (!st || !Array.isArray(st.list.value) || st.list.value.length === 0) return
+  const removeSet = new Set(st.list.value.map(s => s.symbol))
+  selectedStocks.value = selectedStocks.value.filter(s => !removeSet.has(s))
+}
+
+// Manual reload button handler for HS300 inside quick select modal
+async function manualReloadHS300() {
+  try {
+    hs300Stocks.value = []
+    await fetchIndexConstituents('hs300')
+  } catch (e) {
+    console.error('manualReloadHS300 failed', e)
+    alert('重新加载失败: ' + (e.message || e))
+  }
+}
+
+// defensive helper used by template to avoid calling .includes on undefined
+function isSelectedStock(symbol) {
+  try {
+    return Array.isArray(selectedStocks.value) && selectedStocks.value.includes(symbol)
+  } catch (e) {
+    console.warn('isSelectedStock check failed', e)
+    return false
   }
 }
 
@@ -1160,6 +1392,33 @@ function showScoreDetailModal(stock) {
   showScoreDetail.value = true
 }
 
+// 分类已选数量统计（含动态指数分类）
+function getCategorySelectedCount(key) {
+  if (key === 'hs300') return hs300SelectedCount.value
+  if (key === 'a500') return a500SelectedCount.value
+  if (key === 'csi500') return csi500SelectedCount.value
+  if (key === 'star50') return star50SelectedCount.value
+  const cat = quickSelectCategories.value.find(c => c.key === key)
+  if (!cat) return 0
+  const set = new Set(selectedStocks.value)
+  return (cat.stocks || []).filter(s => set.has(s.symbol)).length
+}
+
+function getCategoryTotalCount(key) {
+  if (key === 'hs300') return hs300Stocks.value.length
+  if (key === 'a500') return a500Stocks.value.length
+  if (key === 'csi500') return csi500Stocks.value.length
+  if (key === 'star50') return star50Stocks.value.length
+  const cat = quickSelectCategories.value.find(c => c.key === key)
+  return cat && Array.isArray(cat.stocks) ? cat.stocks.length : 0
+}
+
+function formatCategoryBadgeTitle(key) {
+  const sel = getCategorySelectedCount(key)
+  const total = getCategoryTotalCount(key)
+  return `已选 ${sel} / 总 ${total}`
+}
+
 function closeScoreDetail() {
   showScoreDetail.value = false
   selectedStock.value = null
@@ -1175,10 +1434,35 @@ watch(selectedStocks, (newStocks) => {
   }
 }, { deep: true })
 
+// Load HS300 constituents automatically when user switches quick-select tab to hs300
+watch(selectedCategory, async (val) => {
+  if (val === 'hs300' && (!hs300Stocks.value || hs300Stocks.value.length === 0) && !hs300Loading.value) {
+  try { await fetchIndexConstituents('hs300') } catch (e) { console.warn('auto hs300 fetch failed', e) }
+  }
+  if (val === 'star50' && (!star50Stocks.value || star50Stocks.value.length === 0) && !star50Loading.value) {
+  try { await fetchIndexConstituents('star50') } catch (e) { console.warn('auto star50 fetch failed', e) }
+  }
+  if (val === 'a500' && (!a500Stocks.value || a500Stocks.value.length === 0) && !a500Loading.value) {
+  try { await fetchIndexConstituents('a500') } catch (e) { console.warn('auto a500 fetch failed', e) }
+  }
+  if (val === 'csi500' && (!csi500Stocks.value || csi500Stocks.value.length === 0) && !csi500Loading.value) {
+    try { await fetchCSI500Constituents() } catch (e) { console.warn('auto csi500 fetch failed', e) }
+  }
+})
+
 onMounted(() => {
   fetchRankings()
   fetchWatchlist()
+  // next tick update scroll state
+  setTimeout(updateTabsScrollState, 0)
+  // window resize listener to recompute
+  window.addEventListener('resize', updateTabsScrollState)
 })
+
+// cleanup (optional)
+try {
+  onUnmounted(() => { window.removeEventListener('resize', updateTabsScrollState) })
+} catch (e) {}
 function onRankingStrategyChange() {
   // If in ranking or watchlist mode, re-fetch to get server-side sorted/updated results
   if (viewMode.value === 'ranking' || viewMode.value === 'watchlist') {
@@ -1195,99 +1479,91 @@ function onRankingStrategyChange() {
   try { refreshKey.value = (refreshKey.value || 0) + 1 } catch (e) {}
 }
 
-// 🆕 获取沪深300成分股列表
-async function fetchHS300Constituents() {
-  if (hs300Stocks.value.length > 0) {
-    return hs300Stocks.value // 已缓存，直接返回
-  }
-  
-  hs300Loading.value = true
+// =============================
+// ✅ 指数成分股通用工具
+// =============================
+const indexStateMap = {
+  hs300: { list: hs300Stocks, loading: hs300Loading, path: '/api/index/hs300/constituents', fallback: [
+    { symbol: '000001', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.85 },
+    { symbol: '000002', name: '万科A', industry: '房地产开发', market_cap: 250000000000, weight: 0.78 }
+  ] },
+  a500: { list: a500Stocks, loading: a500Loading, path: '/api/index/a500/constituents', fallback: [
+    { symbol: '600519', name: '贵州茅台', industry: '白酒', market_cap: 2500000000000, weight: 2.50 },
+    { symbol: '000333', name: '美的集团', industry: '家电', market_cap: 450000000000, weight: 1.20 }
+  ] },
+  // 修复: 中证500 应使用自身 loading ref 且提供更贴近该指数的示例成分
+  csi500: { list: csi500Stocks, loading: csi500Loading, path: '/api/index/csi500/constituents', fallback: [
+    { symbol: '000001', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.35 },
+    { symbol: '600036', name: '招商银行', industry: '银行', market_cap: 340000000000, weight: 0.40 },
+    { symbol: '002415', name: '海康威视', industry: '电子', market_cap: 310000000000, weight: 0.45 }
+  ] },
+  star50: { list: star50Stocks, loading: star50Loading, path: '/api/index/star50/constituents', fallback: [
+    { symbol: '688001', name: '华兴源创', industry: '半导体', market_cap: 45000000000, weight: 1.10 },
+    { symbol: '688012', name: '中微公司', industry: '半导体设备', market_cap: 120000000000, weight: 2.20 }
+  ] }
+}
+
+async function fetchIndexConstituents(indexKey) {
+  const st = indexStateMap[indexKey]
+  if (!st) throw new Error(`未知指数: ${indexKey}`)
+  if (st.list.value.length > 0) return st.list.value
+  st.loading.value = true
   try {
-    // 🔧 先尝试从API获取
-    const response = await axios.get('/api/index/hs300/constituents')
-    
-    if (response.data.success && response.data.data) {
-      hs300Stocks.value = response.data.data
-      console.log(`📊 获取到 ${hs300Stocks.value.length} 只沪深300成分股`)
-      return hs300Stocks.value
-    } else {
-      throw new Error('API返回数据格式错误')
+    const resp = await axios.get(st.path)
+    if (resp.data.success && resp.data.data) {
+      st.list.value = resp.data.data
+      console.log(`📊 获取到 ${st.list.value.length} 只 ${indexKey} 成分股`)
+      return st.list.value
     }
-  } catch (error) {
-    console.warn('从API获取沪深300成分股失败，使用本地数据:', error.message)
-    
-    // 🆕 使用本地模拟数据作为fallback
-    const mockHS300Data = [
-      { symbol: '000001', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.85 },
-      { symbol: '000002', name: '万科A', industry: '房地产开发', market_cap: 250000000000, weight: 0.78 }
-    ]
-    
-    hs300Stocks.value = mockHS300Data
-    console.log(`📊 使用本地数据，共 ${hs300Stocks.value.length} 只沪深300成分股`)
-    return hs300Stocks.value
+    throw new Error('API返回数据格式错误')
+  } catch (e) {
+    console.warn(`获取 ${indexKey} 成分股失败，使用本地数据:`, e.message)
+    st.list.value = st.fallback
+    return st.list.value
   } finally {
-    hs300Loading.value = false
+    st.loading.value = false
   }
 }
 
-// 🆕 刷新沪深300数据
-async function refreshHS300Data() {
+async function refreshIndexData(indexKey) {
+  const st = indexStateMap[indexKey]
+  if (!st) return
   try {
-    hs300Stocks.value = [] // 清空缓存
-    await fetchHS300Constituents()
-    if (viewMode.value === 'hs300') {
-      await fetchRankings()
-    }
-  } catch (error) {
-    console.error('刷新沪深300数据失败:', error)
-    alert('刷新失败，已使用本地数据: ' + error.message)
+    st.list.value = []
+    await fetchIndexConstituents(indexKey)
+    if (viewMode.value === indexKey) await fetchRankings()
+  } catch (e) {
+    console.error(`刷新 ${indexKey} 数据失败:`, e)
+    alert(`刷新失败，已使用本地数据: ${e.message}`)
   }
 }
 
-// 🆕 导出沪深300成分股信息
-async function exportHS300Info() {
+function buildIndexCSVData(list) {
+  return list.map(stock => ({
+    '股票代码': stock.symbol,
+    '股票名称': stock.name,
+    '所属行业': stock.industry || '未知',
+    '市值(亿)': stock.market_cap ? (stock.market_cap / 100000000).toFixed(2) : '',
+    '权重(%)': stock.weight ? stock.weight.toFixed(2) : ''
+  }))
+}
+
+async function exportIndexInfo(indexKey) {
+  const st = indexStateMap[indexKey]
+  if (!st) return
   try {
-    if (hs300Stocks.value.length === 0) {
-      await fetchHS300Constituents()
-    }
-    
-    if (hs300Stocks.value.length === 0) {
-      alert('无沪深300成分股数据可导出')
+    if (st.list.value.length === 0) await fetchIndexConstituents(indexKey)
+    if (st.list.value.length === 0) {
+      alert(`无${indexKey}成分股数据可导出`)
       return
     }
-
-    const csvData = hs300Stocks.value.map(stock => ({
-      '股票代码': stock.symbol,
-      '股票名称': stock.name,
-      '所属行业': stock.industry || '未知',
-      '市值(亿)': stock.market_cap ? (stock.market_cap / 100000000).toFixed(2) : '',
-      '权重(%)': stock.weight ? stock.weight.toFixed(2) : ''
-    }))
-    
+    const csvData = buildIndexCSVData(st.list.value)
     const csv = utilGenerateCSV(csvData)
-    downloadCSV(csv, `hs300-constituents-${new Date().toISOString().split('T')[0]}.csv`)
-    
-  } catch (error) {
-    console.error('导出沪深300成分股信息失败:', error)
-    alert('导出失败: ' + error.message)
+    downloadCSV(csv, `${indexKey}-constituents-${new Date().toISOString().split('T')[0]}.csv`)
+  } catch (e) {
+    console.error(`导出 ${indexKey} 成分股失败:`, e)
+    alert('导出失败: ' + e.message)
   }
-}
-
-function onPerStockStrategyChange(symbol) {
-  // 确保选项变化后重新计算展示行和排序
-  // perStockStrategies 已经通过 v-model 更新
-  if (viewMode.value === 'selected') {
-    // 重新整理 displayRows 依赖的 rankings（触发 computed 重算）
-    // 强制刷新：小技巧是修改一个不重要的状态或直接重新排序 rankings
-    rankings.value = [...rankings.value]
-  }
-}
-
-function onPerStockSelect(evt, symbol) {
-  const val = evt.target.value
-  perStockStrategies.value = { ...perStockStrategies.value, [symbol]: val }
-  // trigger refresh
-  if (viewMode.value === 'selected') rankings.value = [...rankings.value]
 }
 
 // 生成显示行：如果在指定模式并选择了多个日期，则为每个 symbol/date 生成单独行
@@ -1304,7 +1580,31 @@ const displayRows = computed(() => {
   })
 })
 
-// (debug instrumentation removed)
+// 🆕 计算已选中沪深300数量
+const hs300SelectedCount = computed(() => {
+  if (!hs300Stocks.value || hs300Stocks.value.length === 0) return 0
+  const set = new Set(selectedStocks.value)
+  return hs300Stocks.value.filter(s => set.has(s.symbol)).length
+})
+
+// 🆕 A500 已选数量
+const a500SelectedCount = computed(() => {
+  if (!a500Stocks.value || a500Stocks.value.length === 0) return 0
+  const set = new Set(selectedStocks.value)
+  return a500Stocks.value.filter(s => set.has(s.symbol)).length
+})
+// 🆕 CSI500 已选数量
+const csi500SelectedCount = computed(() => {
+  if (!csi500Stocks.value || csi500Stocks.value.length === 0) return 0
+  const set = new Set(selectedStocks.value)
+  return csi500Stocks.value.filter(s => set.has(s.symbol)).length
+})
+
+const star50SelectedCount = computed(() => {
+  if (!star50Stocks.value || star50Stocks.value.length === 0) return 0
+  const set = new Set(selectedStocks.value)
+  return star50Stocks.value.filter(s => set.has(s.symbol)).length
+})
 
 
 </script>
@@ -1339,14 +1639,71 @@ const displayRows = computed(() => {
 }
 
 .btn-quick-select {
-  background: linear-gradient(135deg, #007bff, #0056b3);
-  color: white;
+  position: relative;
+  background: linear-gradient(135deg, #ffb300, #ff8c00);
+  color: #212121;
   border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
+  padding: 12px 26px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 14px;
-  margin-top: 15px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-top: 18px;
+  box-shadow: 0 4px 12px rgba(255,140,0,0.45), 0 2px 4px rgba(0,0,0,0.18);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+  transition: transform .18s ease, box-shadow .18s ease, background .25s;
+}
+.btn-quick-select::after {
+  content: '★';
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: radial-gradient(circle at 30% 30%, #fff6d5, #ffb300);
+  color: #b34700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 900;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  pointer-events: none;
+}
+.btn-quick-select:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 6px 16px rgba(255,140,0,0.55), 0 3px 6px rgba(0,0,0,0.25);
+}
+.btn-quick-select:active {
+  transform: translateY(0) scale(0.99);
+  box-shadow: 0 3px 10px rgba(255,140,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
+}
+.quick-select-modal h4 {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  background: linear-gradient(90deg,#ff9800,#ffb300,#ffd54f);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 12px rgba(255,152,0,0.35), 0 1px 0 #fff;
+  margin-bottom: 16px;
+  position: relative;
+  padding-left: 6px;
+}
+.quick-select-modal h4::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 70%;
+  background: linear-gradient(180deg,#ffb300,#ff8c00);
+  border-radius: 2px;
+  box-shadow: 0 0 6px rgba(255,140,0,0.6);
 }
 
 .mode-header {
@@ -1429,21 +1786,123 @@ const displayRows = computed(() => {
   display: flex;
   margin-bottom: 15px;
   border-bottom: 1px solid #ddd;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af transparent;
+  scroll-behavior: smooth;
+}
+
+.quick-select-tabs::-webkit-scrollbar {
+  height: 8px;
+}
+.quick-select-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+.quick-select-tabs::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.25);
+  border-radius: 4px;
+}
+.quick-select-tabs::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.4);
+}
+
+.quick-select-tabs-wrapper {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.tabs-nav {
+  background: linear-gradient(135deg,#0466c8,#0353a4);
+  color: #fff;
+  border: none;
+  width: 34px;
+  border-radius: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  transition: background .18s, transform .18s;
+}
+.tabs-nav:hover { transform: translateY(-2px); }
+.tabs-nav:active { transform: translateY(0); }
+.tabs-nav.left { order: -1; }
+.tabs-nav.right { order: 2; }
+
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  background: linear-gradient(135deg,#ff6b6b,#ff3d3d);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+  letter-spacing: .5px;
+}
+@media (prefers-color-scheme: dark) {
+  .tab-badge { background: linear-gradient(135deg,#f87171,#dc2626); }
 }
 
 .tab-btn {
   padding: 8px 16px;
   border: none;
-  background: none;
+  background: rgba(255,255,255,0.85);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   font-size: 14px;
+  color: #0f172a; /* 深色高对比度 */
+  font-weight: 600;
+  position: relative;
+  border-radius: 8px 8px 0 0;
+  margin-right: 4px;
+  transition: background .18s ease, color .18s ease, transform .18s ease, box-shadow .18s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
 }
 
 .tab-btn.active {
-  border-bottom-color: #007bff;
-  color: #007bff;
-  font-weight: bold;
+  border-bottom-color: #0466c8;
+  background: linear-gradient(135deg,#e3f2ff,#ffffff);
+  color: #023e8a;
+  font-weight: 800;
+  box-shadow: 0 3px 10px rgba(4,102,200,0.25), 0 1px 2px rgba(0,0,0,0.08);
+}
+
+.tab-btn:not(.active):hover {
+  background: #f1f5f9;
+  color: #0353a4;
+  transform: translateY(-2px);
+}
+
+.tab-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(4,102,200,0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tab-btn {
+    background: rgba(30,41,59,0.85);
+    color: #f1f5f9;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+  }
+  .tab-btn.active {
+    background: linear-gradient(135deg,#0f3d66,#1e3a8a);
+    color: #ffffff;
+    border-bottom-color: #60a5fa;
+  }
+  .tab-btn:not(.active):hover {
+    background: #1e293b;
+    color: #60a5fa;
+  }
 }
 
 .quick-select-content {
@@ -1454,39 +1913,111 @@ const displayRows = computed(() => {
   margin-bottom: 15px;
 }
 
+/* 🆕 HS300 批量操作条样式 */
+.bulk-select-bar {
+  position: sticky;
+  top: 0;
+  background: linear-gradient(90deg,#fdfdfd,#f6f9ff);
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 2;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+}
+.btn-bulk-select, .btn-bulk-deselect {
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  transition: background .18s, transform .18s;
+}
+.btn-bulk-select {
+  background: linear-gradient(135deg,#28a745,#20c997);
+  color: #fff;
+}
+.btn-bulk-select:disabled {
+  background: linear-gradient(135deg,#9fb9a6,#8aa596);
+  cursor: not-allowed;
+  opacity: .8;
+}
+.btn-bulk-deselect {
+  background: linear-gradient(135deg,#6c757d,#545b62);
+  color: #fff;
+}
+.btn-bulk-deselect:disabled {
+  background: linear-gradient(135deg,#c0c4c7,#a2a7aa);
+  cursor: not-allowed;
+  opacity: .8;
+}
+.btn-bulk-select:not(:disabled):hover, .btn-bulk-deselect:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+}
+.bulk-selected-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  background: #eef6ff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #d0e3f8;
+}
+
 .quick-stock-item {
   display: flex;
   align-items: center;
   padding: 10px;
   cursor: pointer;
   border-bottom: 1px solid #f0f0f0;
-  transition: background-color 0.2s;
+  transition: background-color 0.12s, transform 0.12s;
+  background: #ffffff;
+  color: #0f172a; /* high contrast base text */
+  font-weight: 600;
 }
 
 .quick-stock-item:hover {
-  background-color: #f8f9fa;
+  background-color: #eef6ff; /* higher contrast hover */
+  transform: translateY(-1px);
 }
 
 .quick-stock-item.selected {
-  background-color: #e7f3ff;
-  border-left: 3px solid #007bff;
+  background-color: #cfe8ff; /* stronger, still light */
+  border-left: 4px solid #0466c8;
+  color: #0b2540;
 }
 
 .quick-stock-symbol {
-  font-weight: bold;
+  font-weight: 700;
   margin-right: 10px;
   min-width: 80px;
+  background: linear-gradient(135deg, #0466c8, #0353a4);
+  color: #ffffff !important;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(3,83,164,0.25);
 }
 
 .quick-stock-name {
   flex: 1;
-  color: #666;
+  color: #102a43; /* accessible dark blue-gray */
+  font-weight: 600;
 }
 
 .selected-indicator {
-  color: #007bff;
-  font-weight: bold;
+  color: #03467a;
+  font-weight: 800;
 }
+
+/* Optional high-contrast override hook */
+.force-high-contrast .quick-stock-item { background:#fff !important; color:#0a0f18 !important; }
+.force-high-contrast .quick-stock-item.selected { background:#bcdfff !important; }
 
 .quick-select-actions {
   display: flex;

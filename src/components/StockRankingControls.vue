@@ -8,6 +8,9 @@
           <option value="selected">指定股票模式</option>
           <option value="watchlist">自选股模式</option>
           <option value="hs300">沪深300模式</option>
+          <option value="csi500">中证500模式</option>
+          <option value="a500">中证A500模式</option>
+          <option value="star50">科创50模式</option>
         </select>
       </div>
       <!-- debug: show the received viewMode from parent -->
