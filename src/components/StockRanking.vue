@@ -64,84 +64,20 @@
   <span class="stock-count">共 {{ (viewMode === 'selected' && selectedDates.length > 0) ? displayRows.length : rankings.length }} 只股票</span>
       </div>
 
-      <table class="ranking-table">
-        <thead>
-          <tr class="table-header">
-            <th class="th-rank">{{ viewMode === 'ranking' ? '排名' : '序号' }}</th>
-            <th class="th-symbol">股票代码</th>
-            <th class="th-name">股票名称</th>
-            <th class="th-date">日期</th>
-            <th class="th-score">总分</th>
-            <th class="th-cycle">周期</th>
-            <th class="th-growth">成长</th>
-            <th class="th-value">基本面</th>
-            <th class="th-value">价值</th>
-            <th class="th-technical">技术</th>
-            <th class="th-money">资金</th>
-            <th class="th-action">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(row, index) in displayRows" :key="row.symbol + '_' + (row.display_date || row.score_date || index)" class="table-row" :class="getRowClass(row, index + 1)">
-            <td class="td-rank">
-              <span :style="getRankStyle(row, index + 1)" class="rank-badge">
-                {{ viewMode === 'ranking' ? (index + 1) : (index + 1) }}
-              </span>
-            </td>
-            <td class="td-symbol">
-              <span class="symbol-text">{{ row.symbol }}</span>
-            </td>
-            <td class="td-name">
-              <span class="name-text" :title="row.name">{{ row.name || '-' }}</span>
-            </td>
-            <td class="td-date">
-              <span>{{ formatDateDisplay(row.display_date || row.score_date) }}</span>
-            </td>
-            <td class="td-score" @click="fetchScoreDetails(row._origin || row, 'composite')">
-              <div style="display:flex; align-items:center; gap:8px; justify-content:center;">
-                <span :style="getScoreStyle(row.display_composite_score)" class="score-badge clickable">
-                  {{ row.display_composite_score }}
-                </span>
-              </div>
-            </td>
-            <td class="td-cycle" @click="fetchScoreDetails(row, 'cycle')" style="cursor:pointer;">
-              <span class="cycle-score" :title="'查看周期评分详情'">{{ row.cycle_score }}</span>
-            </td>
-            <td class="td-growth" @click="fetchScoreDetails(row, 'growth')" style="cursor:pointer;">
-              <span class="growth-score" :title="'查看成长评分详情'">{{ row.growth_score }}</span>
-            </td>
-            <td class="td-fundamental" @click="fetchScoreDetails(row, 'fundamental')" style="cursor:pointer;">
-              <span class="fundamental-score" :title="'查看基本面评分详情'">{{ row.fundamental_score }}</span>
-            </td>
-            <td class="td-value" @click="fetchScoreDetails(row, 'value')" style="cursor:pointer;">
-              <span class="value-score" :title="'查看价值评分详情'">{{ row.value_score }}</span>
-            </td>
-            <td class="td-technical" @click="fetchScoreDetails(row, 'technical')" style="cursor:pointer;">
-              <span class="technical-score" :title="'查看技术面评分详情'">{{ row.technical_score }}</span>
-            </td>
-            <td class="td-money" @click="fetchScoreDetails(row, 'money_flow')" style="cursor:pointer;">
-              <span class="money-score" :title="'查看资金流评分详情'">{{ row.money_flow_score }}</span>
-            </td>
-            <td class="td-action">
-              <button @click="viewChart(row.symbol)" class="btn-chart" title="查看图表">📊</button>
-              <button 
-                @click="toggleWatchlist(row.symbol)" 
-                :class="isInWatchlist(row.symbol) ? 'btn-watch-active' : 'btn-watch'"
-                :title="isInWatchlist(row.symbol) ? '从自选股移除' : '添加到自选股'"
-              >
-                {{ isInWatchlist(row.symbol) ? '★' : '⭐' }}
-              </button>
-              <button 
-                v-if="viewMode === 'selected'" 
-                @click="removeStockFromQuery(row.symbol)" 
-                class="btn-remove"
-                title="从查询中移除"
-              >
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <RankingTable
+        :displayRows="displayRows"
+        :viewMode="viewMode"
+        :formatDateDisplay="formatDateDisplay"
+        :getScoreStyle="getScoreStyle"
+        :getRankStyle="getRankStyle"
+        :getRowClass="getRowClass"
+        :isInWatchlist="isInWatchlist"
+        @view-chart="viewChart"
+        @toggle-watchlist="toggleWatchlist"
+        @remove-stock="removeStockFromQuery"
+        @show-score="stock => fetchScoreDetails(stock, 'composite')"
+        @show-score-detail="({ stock, category }) => fetchScoreDetails(stock, category)"
+      />
     </div>
 
     <!-- ✅ 快速选择模态框 -->
@@ -309,6 +245,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import StockRankingControls from './StockRankingControls.vue'
+import RankingTable from './RankingTable.vue'
 import axios from 'axios'
 import { getCompositeScore, formatDateDisplay, generateCSV as utilGenerateCSV, deduplicateStocksByLatestDate } from '../utils/scoreUtils.js'
 import { computeDisplayRows } from '../utils/displayRows.js'
@@ -2242,189 +2179,7 @@ const star50SelectedCount = computed(() => {
 
 /* ✅ 保持原有表格样式 */
 
-/* 提升表格字体对比度和醒目度 */
-.ranking-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-  border-radius: 8px;
-  overflow: hidden;
-  font-size: 16px;
-  color: #222;
-}
-
-.table-header {
-  background: linear-gradient(135deg, #23272f, #34495e);
-  color: #fff;
-  font-size: 17px;
-  letter-spacing: 1px;
-}
-
-.table-header th {
-  border: 1px solid #34495e;
-  padding: 14px 10px;
-  font-weight: bold;
-  text-shadow: 1px 1px 4px rgba(0,0,0,0.35);
-  color: #fff;
-}
-
-.th-rank {
-  background: linear-gradient(135deg, #e74c3c, #c0392b);
-  width: 40px;
-  min-width: 40px;
-  max-width: 40px;
-}
-.th-symbol { background: linear-gradient(135deg, #3498db, #2980b9); }
-.th-name { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
-.th-score { background: linear-gradient(135deg, #e67e22, #d35400); }
-.th-cycle { background: linear-gradient(135deg, #1abc9c, #16a085); }
-.th-growth { background: linear-gradient(135deg, #43e97b, #38f9d7); }
-.th-fundamental { background: linear-gradient(135deg, #f39c12, #e67e22); }
-.th-value { background: linear-gradient(135deg, #ffd700, #ffb300); }
-.th-technical { background: linear-gradient(135deg, #2ecc71, #27ae60); }
-.th-money { background: linear-gradient(135deg, #e74c3c, #c0392b); }
-.th-action { background: linear-gradient(135deg, #95a5a6, #7f8c8d); }
-
-.table-row {
-  transition: all 0.3s ease;
-}
-
-.table-row:hover {
-  background-color: #f8f9fa;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.top-three {
-  background: linear-gradient(135deg, #fff5f5, #ffebee);
-  border-left: 4px solid #ff5252;
-}
-
-.top-ten {
-  background: linear-gradient(135deg, #fff8e1, #fffde7);
-  border-left: 4px solid #ffa726;
-}
-
-.top-thirty {
-  background: linear-gradient(135deg, #f1f8e9, #f9fbe7);
-  border-left: 4px solid #66bb6a;
-}
-
-.ranking-table td {
-  border: 1px solid #e0e0e0;
-  padding: 12px 10px;
-  vertical-align: middle;
-  color: #1a1a1a;
-  font-weight: 600;
-  text-shadow: 0 1px 2px rgba(255,255,255,0.15);
-}
-
-.rank-badge {
-  display: inline-block;
-  min-width: 30px;
-  height: 30px;
-  line-height: 30px;
-  text-align: center;
-  border-radius: 50%;
-  font-weight: bold;
-}
-
-.symbol-text {
-  display: inline-block;
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-weight: bold;
-  font-family: 'Courier New', monospace;
-  letter-spacing: 1px;
-}
-
-.name-text {
-  display: inline-block;
-  background: linear-gradient(135deg, #9b59b6, #8e44ad);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-weight: bold;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.score-badge {
-  display: inline-block;
-  min-width: 50px;
-  padding: 7px 14px;
-  border-radius: 20px;
-  font-weight: bold;
-  text-align: center;
-  font-size: 18px;
-  color: #fff;
-  text-shadow: 1px 1px 6px rgba(0,0,0,0.18);
-  letter-spacing: 1px;
-}
-
-.cycle-score, .fundamental-score, .technical-score, .money-score, .growth-score, .value-score {
-  display: inline-block;
-  padding: 5px 10px;
-  border-radius: 5px;
-  font-weight: bold;
-  min-width: 44px;
-  text-align: center;
-  font-size: 16px;
-  color: #fff;
-  text-shadow: 1px 1px 6px rgba(0,0,0,0.18);
-  letter-spacing: 1px;
-}
-
-.cycle-score {
-  background: linear-gradient(135deg, #1abc9c, #16a085);
-  color: white;
-}
-.fundamental-score {
-  background: linear-gradient(135deg, #f39c12, #e67e22);
-  color: white;
-}
-.technical-score {
-  background: linear-gradient(135deg, #2ecc71, #27ae60);
-  color: white;
-}
-.money-score {
-  background: linear-gradient(135deg, #e74c3c, #c0392b);
-  color: white;
-}
-.growth-score {
-  background: linear-gradient(135deg, #43e97b, #38f9d7);
-  color: #0a2a0a;
-}
-.value-score {
-  background: linear-gradient(135deg, #ffd700, #ffb300);
-  color: #7a4a00;
-}
-
-.btn-chart, .btn-watch {
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  color: white;
-  border: none;
-  padding: 6px 10px;
-  border-radius: 4px;
-  margin: 0 2px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.btn-chart:hover, .btn-watch:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-.btn-watch {
-  background: linear-gradient(135deg, #f39c12, #e67e22);
-}
+/* 表格样式改由 RankingTable.vue 维护，避免重复定义 */
 
 
 /* modal overlay and modal-content moved to
