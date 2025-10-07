@@ -947,14 +947,18 @@ function handleChildDisplayLimitChange(v) {
 
 function handleChildRankingStrategyChange(v) {
   const newVal = (v && typeof v === 'object' && v.target && 'value' in v.target) ? v.target.value : v
-  // Ensure we set the ref value safely
-  if (rankingStrategy && typeof rankingStrategy === 'object' && 'value' in rankingStrategy) {
-    rankingStrategy.value = newVal
+  // Only update the ref's value; never reassign the ref itself (avoids const reassignment build errors)
+  if (typeof newVal === 'string' && newVal.trim()) {
+    rankingStrategy.value = newVal.trim()
   } else {
-    // fallback: reassign the ref if something odd happened
-    try { rankingStrategy = ref(newVal) } catch (e) { console.error('failed to set rankingStrategy', e) }
+    console.warn('handleChildRankingStrategyChange ignored invalid value:', newVal)
+    return
   }
-  try { onRankingStrategyChange() } catch (e) { console.error('onRankingStrategyChange error', e) }
+  try {
+    onRankingStrategyChange()
+  } catch (e) {
+    console.error('onRankingStrategyChange error', e)
+  }
 }
 
 function handleChildStockInput(v) {
