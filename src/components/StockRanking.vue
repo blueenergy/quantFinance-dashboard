@@ -97,30 +97,30 @@
             <td class="td-date">
               <span>{{ formatDateDisplay(row.display_date || row.score_date) }}</span>
             </td>
-            <td class="td-score" @click="showScoreDetailModal(row._origin || row)">
+            <td class="td-score" @click="fetchScoreDetails(row._origin || row, 'composite')">
               <div style="display:flex; align-items:center; gap:8px; justify-content:center;">
                 <span :style="getScoreStyle(row.display_composite_score)" class="score-badge clickable">
                   {{ row.display_composite_score }}
                 </span>
               </div>
             </td>
-            <td class="td-cycle">
-              <span class="cycle-score">{{ row.cycle_score }}</span>
+            <td class="td-cycle" @click="fetchScoreDetails(row, 'cycle')" style="cursor:pointer;">
+              <span class="cycle-score" :title="'查看周期评分详情'">{{ row.cycle_score }}</span>
             </td>
-            <td class="td-growth">
-              <span class="growth-score">{{ row.growth_score }}</span>
+            <td class="td-growth" @click="fetchScoreDetails(row, 'growth')" style="cursor:pointer;">
+              <span class="growth-score" :title="'查看成长评分详情'">{{ row.growth_score }}</span>
             </td>
-            <td class="td-fundamental">
-              <span class="fundamental-score">{{ row.fundamental_score }}</span>
+            <td class="td-fundamental" @click="fetchScoreDetails(row, 'fundamental')" style="cursor:pointer;">
+              <span class="fundamental-score" :title="'查看基本面评分详情'">{{ row.fundamental_score }}</span>
             </td>
-            <td class="td-value">
-              <span class="value-score">{{ row.value_score }}</span>
+            <td class="td-value" @click="fetchScoreDetails(row, 'value')" style="cursor:pointer;">
+              <span class="value-score" :title="'查看价值评分详情'">{{ row.value_score }}</span>
             </td>
-            <td class="td-technical">
-              <span class="technical-score">{{ row.technical_score }}</span>
+            <td class="td-technical" @click="fetchScoreDetails(row, 'technical')" style="cursor:pointer;">
+              <span class="technical-score" :title="'查看技术面评分详情'">{{ row.technical_score }}</span>
             </td>
-            <td class="td-money">
-              <span class="money-score">{{ row.money_flow_score }}</span>
+            <td class="td-money" @click="fetchScoreDetails(row, 'money_flow')" style="cursor:pointer;">
+              <span class="money-score" :title="'查看资金流评分详情'">{{ row.money_flow_score }}</span>
             </td>
             <td class="td-action">
               <button @click="viewChart(row.symbol)" class="btn-chart" title="查看图表">📊</button>
@@ -264,46 +264,34 @@
 
     <!-- ✅ 评分详情弹窗 (保持原有功能并增强) -->
     <div v-if="showScoreDetail" class="modal-overlay" @click="closeScoreDetail">
-      <div class="modal-content score-detail-modal" @click.stop>
-        <h4>{{ selectedStock?.symbol }} - {{ selectedStock?.name }} 评分详情</h4>
+      <div class="modal-content score-detail-modal" @click.stop ref="scoreDetailModalRef">
+        <h4 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span>{{ selectedStock?.symbol }} - {{ selectedStock?.name }} 评分详情</span>
+          <span v-if="scoreDetailCategory" class="category-chip">{{ translateCategory(scoreDetailCategory) }}</span>
+        </h4>
         <div class="score-detail-content">
-          <div class="score-item total-score">
-            <span class="score-label">总分</span>
-            <span class="score-value" :style="getScoreStyle(selectedStock?.composite_score)">
-              {{ selectedStock?.composite_score }}
-            </span>
+          <div v-if="scoreDetailCategory === 'composite'" class="detail-inline-block">
+            <div class="detail-block">
+              <div style="font-weight:600; color:#0353a4; margin-bottom:8px;">总分由以下分项加权计算：</div>
+              <ul class="detail-list compact">
+                <li v-for="(val, key) in scoreDetailData" :key="key">
+                  <strong>{{ key }}:</strong>
+                  <span style="margin-left:4px;">{{ formatDetailValue(val) }}</span>
+                </li>
+              </ul>
+            </div>
           </div>
-          <div class="score-breakdown">
-            <div class="score-item">
-              <span class="score-label">周期评分</span>
-              <span class="score-value cycle">{{ selectedStock?.cycle_score }}</span>
-              <span class="score-weight">(权重: 25%)</span>
+          <div v-else class="detail-inline-block">
+            <div v-if="loadingDetail" class="detail-loading">正在加载 {{ translateCategory(scoreDetailCategory) }} 详情...</div>
+            <div v-else-if="scoreDetailData && Object.keys(scoreDetailData).length > 0" class="detail-block">
+              <ul class="detail-list compact">
+                <li v-for="(val, key) in scoreDetailData" :key="key">
+                  <strong>{{ key }}:</strong>
+                  <span style="margin-left:4px;">{{ formatDetailValue(val) }}</span>
+                </li>
+              </ul>
             </div>
-            <div class="score-item">
-              <span class="score-label">成长评分</span>
-              <span class="score-value growth">{{ selectedStock?.growth_score }}</span>
-              <span class="score-weight">(权重: 25%)</span>
-            </div>
-            <div class="score-item">
-              <span class="score-label">基本面评分</span>
-              <span class="score-value fundamental">{{ selectedStock?.fundamental_score }}</span>
-              <span class="score-weight">(权重: 35%)</span>
-            </div>
-            <div class="score-item">
-              <span class="score-label">价值评分</span>
-              <span class="score-value value">{{ selectedStock?.value_score }}</span>
-              <span class="score-weight">(权重: 35%)</span>
-            </div>
-            <div class="score-item">
-              <span class="score-label">技术面评分</span>
-              <span class="score-value technical">{{ selectedStock?.technical_score }}</span>
-              <span class="score-weight">(权重: 25%)</span>
-            </div>
-            <div class="score-item">
-              <span class="score-label">资金流评分</span>
-              <span class="score-value money">{{ selectedStock?.money_flow_score }}</span>
-              <span class="score-weight">(权重: 15%)</span>
-            </div>
+            <div v-else-if="!loadingDetail" class="detail-empty">暂无 {{ translateCategory(scoreDetailCategory) }} 详情</div>
           </div>
           <div class="score-detail-actions">
             <button @click="viewChart(selectedStock?.symbol)" class="btn-chart-detail">查看走势图</button>
@@ -345,6 +333,75 @@ const viewMode = ref('ranking') // 'ranking' | 'selected' | 'watchlist'
 const stockInput = ref('')
 const stockSuggestions = ref([])
 const selectedStocks = ref([])
+// 评分详情（单类别）
+const scoreDetailCategory = ref(null)
+const scoreDetailData = ref(null)
+const loadingDetail = ref(false)
+
+// 获取当前股票有效策略（优先单股票策略，其次全局策略）
+function getEffectiveStrategyFor(symbol) {
+  return (perStockStrategies.value && perStockStrategies.value[symbol]) || rankingStrategy.value || 'balanced'
+}
+
+async function fetchScoreDetails(row, category) {
+  try {
+    loadingDetail.value = true
+    scoreDetailCategory.value = category
+    selectedStock.value = row
+    scoreDetailData.value = null
+    // 强制刷新弹窗：隐藏后下一帧显示
+    showScoreDetail.value = false
+    await Promise.resolve()
+    showScoreDetail.value = true
+    const params = new URLSearchParams({ symbol: row.symbol, category })
+    if (row.score_date) params.append('score_date', row.score_date)
+    if (category === 'composite') params.append('strategy', getEffectiveStrategyFor(row.symbol))
+    const res = await fetch(`/api/stock-score-detail?${params.toString()}`)
+    const json = await res.json()
+    if (json && json.success) {
+      scoreDetailData.value = json.data.details
+      if (category === 'composite') {
+        const keys = Object.keys(scoreDetailData.value || {})
+        const hasWeight = keys.some(k => k.includes('权重'))
+        const hasStrategy = '当前策略' in (scoreDetailData.value || {})
+        if (!hasWeight || !hasStrategy) {
+          scoreDetailData.value = {
+            ...(scoreDetailData.value || {}),
+            '(提示) 权重信息缺失': '后端未返回策略权重，可能该策略未配置或数据缺失'
+          }
+        }
+      }
+    } else {
+      scoreDetailData.value = { 错误: (json && (json.detail || json.message)) || '获取详情失败' }
+    }
+  } catch (e) {
+    scoreDetailData.value = { 错误: e.message || '请求异常' }
+  } finally {
+    loadingDetail.value = false
+  }
+}
+
+function translateCategory(cat) {
+  const map = {
+    cycle: '周期评分',
+    growth: '成长评分',
+    fundamental: '基本面评分',
+    value: '价值评分',
+    technical: '技术面评分',
+    money_flow: '资金流评分'
+  }
+  return map[cat] || cat
+}
+
+function formatDetailValue(v) {
+  if (v === null || v === undefined) return '-'
+  if (typeof v === 'number') {
+    if (Math.abs(v) > 1000) return v.toFixed(2)
+    return Number.isInteger(v) ? v : v.toFixed(2)
+  }
+  if (typeof v === 'object') return JSON.stringify(v)
+  return v
+}
 
 // Date / multi-date selections
 // selectedDate: single date input (ISO yyyy-mm-dd)
@@ -472,10 +529,7 @@ function getAuthHeaders() {
 // -------------------------
 // Helper utilities (pure, small)
 // -------------------------
-// Return effective strategy key for a stock (per-stock override > selected-mode global > rankingStrategy)
-function getEffectiveStrategyFor(symbol) {
-  return (perStockStrategies.value && perStockStrategies.value[symbol]) || rankingStrategy.value
-}
+// (removed duplicate getEffectiveStrategyFor; unified definition earlier)
 
 // getCompositeScore imported from utils
 
@@ -1388,8 +1442,9 @@ function viewChart(symbol) {
 }
 
 function showScoreDetailModal(stock) {
+  // 保留兼容：若只是查看不含细节，通过总分构造展示
   selectedStock.value = stock
-  showScoreDetail.value = true
+  fetchScoreDetails(stock, 'composite')
 }
 
 // 分类已选数量统计（含动态指数分类）
@@ -1431,6 +1486,19 @@ function closeScoreDetail() {
 watch(selectedStocks, (newStocks) => {
   if (viewMode.value === 'selected' && newStocks.length > 0) {
     fetchRankings()
+  }
+}, { deep: true })
+
+// 当全局策略改变并且当前打开的是综合总分详情时自动刷新
+watch(rankingStrategy, () => {
+  if (showScoreDetail.value && scoreDetailCategory.value === 'composite' && selectedStock.value) {
+    fetchScoreDetails(selectedStock.value, 'composite')
+  }
+})
+// 当单股票策略映射变化时自动刷新当前综合详情（深度监听）
+watch(perStockStrategies, () => {
+  if (showScoreDetail.value && scoreDetailCategory.value === 'composite' && selectedStock.value) {
+    fetchScoreDetails(selectedStock.value, 'composite')
   }
 }, { deep: true })
 
@@ -2467,4 +2535,26 @@ const star50SelectedCount = computed(() => {
 .btn-export-info {
   background: linear-gradient(135deg, #9b59b6, #8e44ad);
 }
+.category-chip {
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .5px;
+}
+.detail-inline-block {
+  background: #fafafa;
+  border: 1px solid #eee;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  max-height: 180px;
+  overflow: auto;
+}
+.detail-loading { color:#555; font-size:13px; }
+.detail-empty { color:#777; font-size:13px; }
+.detail-list { list-style:none; padding:0; margin:0; }
+.detail-list.compact li { padding:2px 0; font-size:13px; line-height:1.3; }
 </style>
