@@ -39,23 +39,23 @@
             </span>
           </div>
         </td>
-        <td class="td-cycle">
-          <span class="cycle-score">{{ row.cycle_score }}</span>
+        <td class="td-cycle" @click="emitCategory(row, 'cycle')">
+          <span class="cycle-score clickable" :title="'查看周期评分详情'">{{ row.cycle_score }}</span>
         </td>
-        <td class="td-growth">
-          <span class="growth-score">{{ row.growth_score }}</span>
+        <td class="td-growth" @click="emitCategory(row, 'growth')">
+          <span class="growth-score clickable" :title="'查看成长评分详情'">{{ row.growth_score }}</span>
         </td>
-        <td class="td-fundamental">
-          <span class="fundamental-score">{{ row.fundamental_score }}</span>
+        <td class="td-fundamental" @click="emitCategory(row, 'fundamental')">
+          <span class="fundamental-score clickable" :title="'查看基本面评分详情'">{{ row.fundamental_score }}</span>
         </td>
-        <td class="td-value">
-          <span class="value-score">{{ row.value_score }}</span>
+        <td class="td-value" @click="emitCategory(row, 'value')">
+          <span class="value-score clickable" :title="'查看价值评分详情'">{{ row.value_score }}</span>
         </td>
-        <td class="td-technical">
-          <span class="technical-score">{{ row.technical_score }}</span>
+        <td class="td-technical" @click="emitCategory(row, 'technical')">
+          <span class="technical-score clickable" :title="'查看技术面评分详情'">{{ row.technical_score }}</span>
         </td>
-        <td class="td-money">
-          <span class="money-score">{{ row.money_flow_score }}</span>
+        <td class="td-money" @click="emitCategory(row, 'money_flow')">
+          <span class="money-score clickable" :title="'查看资金流评分详情'">{{ row.money_flow_score }}</span>
         </td>
         <td class="td-action">
           <button @click="onViewChart(row.symbol)" class="btn-chart" title="查看图表">📊</button>
@@ -93,12 +93,13 @@ const props = defineProps({
   isInWatchlist: { type: Function, required: false }
 })
 
-const emit = defineEmits(['view-chart', 'toggle-watchlist', 'remove-stock', 'show-score'])
+const emit = defineEmits(['view-chart', 'toggle-watchlist', 'remove-stock', 'show-score', 'show-score-detail'])
 
 function onViewChart(symbol) { emit('view-chart', symbol) }
 function onToggleWatchlist(symbol) { emit('toggle-watchlist', symbol) }
 function onRemoveStock(symbol) { emit('remove-stock', symbol) }
 function onShowScore(stock) { emit('show-score', stock) }
+function emitCategory(row, category) { emit('show-score-detail', { stock: row, category }) }
 
 // helpers to access props in template
 const formatDateDisplay = props.formatDateDisplay
