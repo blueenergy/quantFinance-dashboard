@@ -1,5 +1,5 @@
 <template>
-  <div id="app">
+  <v-app id="app">
     <!-- 未登录时显示登录表单 -->
     <LoginForm 
       v-if="!isAuthenticated" 
@@ -53,14 +53,6 @@
             @click="activeTab = tab.id"
           >
             {{ tab.name }}
-          </button>
-
-          <!-- 在 App.vue 的标签页中添加 -->
-          <button 
-            @click="activeTab = 'ranking'" 
-            :class="{ active: activeTab === 'ranking' }"
-          >
-            股票评分
           </button>
         </div>
 
@@ -132,7 +124,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </v-app>
 </template>
 
 <script setup>
@@ -205,6 +197,7 @@ const adminTabs = computed(() => {
 const tabs = ref([
   { id: 'watchlist', name: '自选股' },
   { id: 'data', name: '数据查询' },
+  { id: 'ranking', name: '股票评分' },
   { id: 'chart', name: 'K线图表' },
   { id: 'analysis', name: 'AI分析' },
   { id: 'history', name: '历史分析' }
