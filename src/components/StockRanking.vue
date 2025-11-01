@@ -252,6 +252,10 @@ import { computeDisplayRows } from '../utils/displayRows.js'
 
 const emit = defineEmits(['view-chart'])
 
+// Centralized debug logger (auto disabled in production build)
+const DEBUG = import.meta.env?.DEV === true
+function dlog(...args) { if (DEBUG) { try { console.debug('[StockRanking]', ...args) } catch(e) {} } }
+
 // -------------------------
 // Reactive state (grouped and documented)
 // -------------------------
@@ -474,7 +478,7 @@ function getAuthHeaders() {
 async function fetchRankings() {
   loading.value = true
   try {
-    console.log('[fetchRankings] start, viewMode=', viewMode.value)
+  dlog('fetchRankings start viewMode=', viewMode.value)
     // cancel any previous in-flight request
     try {
       if (currentRequestController.value) {
@@ -525,7 +529,7 @@ async function fetchRankings() {
         if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
         if (qp.length) url += `?${qp.join('&')}`
         
-        console.log(`📊 获取 ${hs300Symbols.length} 只沪深300成分股评分`)
+        dlog(`获取 ${hs300Symbols.length} 只沪深300成分股评分`)
         response = await axios.post(url, payload, { signal })
         break
       }
@@ -544,7 +548,7 @@ async function fetchRankings() {
         if (dateParam) qp.push(`date=${dateParam}`)
         if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
         if (qp.length) url += `?${qp.join('&')}`
-        console.log(`📊 获取 ${csi500Symbols.length} 只中证500成分股评分`)        
+        dlog(`获取 ${csi500Symbols.length} 只中证500成分股评分`)
         response = await axios.post(url, payload, { signal })
         break
       }
@@ -560,7 +564,7 @@ async function fetchRankings() {
         if (dateParam) qp.push(`date=${dateParam}`)
         if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
         if (qp.length) url += `?${qp.join('&')}`
-        console.log(`📊 获取 ${a500Symbols.length} 只中证A500成分股评分`)
+        dlog(`获取 ${a500Symbols.length} 只中证A500成分股评分`)
         response = await axios.post(url, payload, { signal })
         break
       }
@@ -571,13 +575,13 @@ async function fetchRankings() {
         }
         const star50Symbols = star50Stocks.value.map(stock => stock.symbol)
         const payload = { symbols: star50Symbols }
-        console.log("payload",{payload})
+        dlog('star50 payload size=', star50Symbols.length)
         let url = '/api/stock-rankings/selected'
         const qp = []
         if (dateParam) qp.push(`date=${dateParam}`)
         if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
         if (qp.length) url += `?${qp.join('&')}`
-        console.log(`📊 获取 ${star50Symbols.length} 只科创50成分股评分`)
+        dlog(`获取 ${star50Symbols.length} 只科创50成分股评分`)
         response = await axios.post(url, payload, { signal })
         break
       }
@@ -589,18 +593,18 @@ async function fetchRankings() {
         }
         loadingMessage.value = `加载指定股票评分...`
         const payload = { symbols: selectedStocks.value }
-        console.log('[fetchRankings] selectedStocks:', selectedStocks.value)
+        dlog('selectedStocks', selectedStocks.value)
         // 如果有多日期，传递 dates 数组；否则继续使用单日期参数
         let url = '/api/stock-rankings/selected'
         // include strategy in payload so server can choose ranking method for selected fetch
         payload.strategy = rankingStrategy.value
         if (selectedDates.value.length > 0) {
           payload.dates = selectedDates.value
-          console.log('[fetchRankings] posting with dates', payload.dates)
+          dlog('posting with dates', payload.dates)
           response = await axios.post(url, payload, { signal })
         } else {
           if (dateParam) url += `?date=${dateParam}`
-          console.log('[fetchRankings] posting without dates to', url)
+          dlog('posting without dates url=', url)
           response = await axios.post(url, payload, { signal })
         }
         break
@@ -632,7 +636,7 @@ async function fetchRankings() {
         throw new Error('无效的查看模式')
       }
     }
-    console.log('[fetchRankings] got response, status:', response?.status, 'data=', response?.data)
+    dlog('response status', response?.status, 'items=', Array.isArray(response?.data?.data) ? response.data.data.length : (Array.isArray(response?.data) ? response.data.length : 'n/a'))
     // 处理响应数据（防御性检查）
     if (!response) {
       console.error('[fetchRankings] empty response')
@@ -652,7 +656,7 @@ async function fetchRankings() {
     } else {
       rankings.value = []
     }
-    console.log('[fetchRankings] rankings count after response:', (rankings.value || []).length)
+    dlog('rankings count after response', (rankings.value || []).length)
       try {
         if (!(viewMode.value === 'selected' && selectedDates.value.length > 0)) {
           // console.log('[fetchRankings] calling deduplicateStocksByLatestDate')
@@ -691,7 +695,7 @@ async function fetchRankings() {
   } catch (error) {
     // Ignore abort errors triggered by new requests
     if (error.name === 'CanceledError' || error.name === 'AbortError') {
-      console.log('[fetchRankings] request canceled')
+      dlog('request canceled')
       return
     }
     console.error('获取股票排行失败:', error)
@@ -841,7 +845,7 @@ function onStockInputChange() {
 }
 
 function selectSuggestion(suggestion) {
-  console.log('[StockRanking] selectSuggestion received:', suggestion)
+  dlog('selectSuggestion', suggestion)
   stockInput.value = suggestion.symbol
   stockSuggestions.value = []
   addStockToQuery()
@@ -927,13 +931,14 @@ function onViewModeChange() {
 // explicit handlers used by the new controls component
 function handleChangeViewMode(newMode) {
   if (!newMode) { console.warn('handleChangeViewMode called with empty value:', newMode); return }
+  try { console.debug('[StockRanking] handleChangeViewMode received ->', newMode) } catch (err) {}
   viewMode.value = newMode
   onViewModeChange()
 }
 
 function handleChangeDate(newDate) {
   if (!newDate) { console.warn('handleChangeDate called with empty value:', newDate); return }
-  console.log('[StockRanking] handleChangeDate called with', newDate)
+  try { console.debug('[StockRanking] handleChangeDate received ->', newDate) } catch (err) {}
   selectedDate.value = newDate
   onDateChange()
 }
@@ -970,7 +975,7 @@ function handleChildStockInput(v) {
 // ✅ 快速选择相关方法
 async function showQuickSelectModal() {
   try {
-    console.log('[StockRanking] showQuickSelectModal called, debug state:', {
+      dlog('showQuickSelectModal state', {
       selectedStocks: selectedStocks?.value,
       quickSelectCategories: quickSelectCategories?.value,
       selectedCategory: selectedCategory?.value,
@@ -1126,13 +1131,13 @@ function downloadCSV(content, filename) {
 // ✅ 获取用户自选股列表
 async function fetchWatchlist() {
   if (!isUserLoggedIn()) {
-    console.log('用户未登录，跳过获取自选股')
+    dlog('skip watchlist fetch (not logged in)')
     return
   }
   
   try {
     const response = await axios.get('/api/user/watchlist', getAuthHeaders())
-    console.log('自选股响应:', response.data)
+    dlog('watchlist response', response.data)
     
     if (response.data.success && response.data.data) {
       watchlist.value = response.data.data.symbols || []
@@ -1140,7 +1145,7 @@ async function fetchWatchlist() {
   } catch (error) {
     console.error('获取自选股失败:', error)
     if (error.response?.status === 401) {
-      console.log('认证失败，请重新登录')
+      dlog('auth failed while fetching watchlist')
     }
   }
 }
@@ -1167,7 +1172,7 @@ async function addToWatchlist(symbol) {
       getAuthHeaders()
     )
     
-    console.log('添加自选股响应:', response.data)
+  dlog('add watchlist response', response.data)
     
     if (response.data.success) {
       watchlist.value.push(symbol)
@@ -1214,7 +1219,7 @@ async function viewWatchlistStocks() {
   
   try {
     const response = await axios.get('/api/user/watchlist-stocks', getAuthHeaders())
-    console.log('自选股详细信息:', response.data)
+    dlog('watchlist stocks detail', response.data)
     
     if (response.data.success) {
       const stocks = response.data.data
