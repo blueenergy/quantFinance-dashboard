@@ -121,6 +121,7 @@
             v-show="activeTab === 'ranking'" 
             @view-chart="selectStockForChart"
           />
+          <MarketSpectrum v-show="activeTab === 'spectrum'" />
         </div>
       </div>
     </div>
@@ -137,6 +138,7 @@ import AnalysisHistory from './components/AnalysisHistory.vue'
 import MarketAnalysisBulletin from './components/MarketAnalysisBulletin.vue'
 import AdminDashboard from './components/AdminDashboard.vue'
 import StockRanking from './components/StockRanking.vue'
+import MarketSpectrum from './components/MarketSpectrum.vue'
 import { ref, onMounted, computed,watch } from 'vue'
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
@@ -200,7 +202,8 @@ const tabs = ref([
   { id: 'ranking', name: '股票评分' },
   { id: 'chart', name: 'K线图表' },
   { id: 'analysis', name: 'AI分析' },
-  { id: 'history', name: '历史分析' }
+  { id: 'history', name: '历史分析' },
+  {id: 'spectrum', name:'阴阳谱'}
 ])
 
 function formatDate(dateStr) {
