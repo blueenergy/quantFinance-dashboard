@@ -10,12 +10,15 @@
     "start": "vite preview --port 5173 --host 0.0.0.0"
   },
   "dependencies": {
+    "@mdi/font": "^7.4.47",
     "axios": "^1.6.0",
     "echarts": "^6.0.0",
-    "vue": "^3.5.20"
+    "vue": "^3.5.20",
+    "vuetify": "^3.10.8"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
+    "sass": "^1.93.2",
     "vite": "^7.1.3",
     "vitest": "^0.34.1"
   }
