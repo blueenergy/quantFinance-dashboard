@@ -46,34 +46,26 @@ jobs:
           name: build-info
           path: build_info.txt
 
-  preview:
-    name: Preview Deploy (HTML only)
+  deploy:
+    name: Deploy to VolcEngine
     runs-on: ubuntu-latest
     needs: test-build
-    if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist
-      - name: Start simple HTTP server
+      - name: Set up SSH key
         run: |
-          python -m http.server 8080 --directory dist &
-          sleep 3
-      - name: Smoke check index.html
-        run: test -f dist/index.html
-      - name: Print index.html head
-        run: head -n 20 dist/index.html
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VOLC_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan ${{ secrets.VOLC_HOST }} >> ~/.ssh/known_hosts
 
-  # Example future job: e2e tests (Playwright/Cypress)
-  # e2e:
-  #   name: E2E Tests
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '20'
-  #     - run: npm ci
-  #     - run: npx playwright install --with-deps
-  #     - run: npx playwright test --reporter=line
+      - name: Remote git pull & build
+        run: |
+          ssh ${{ secrets.VOLC_USER }}@${{ secrets.VOLC_HOST }} <<'EOF'
+            cd /home/shuyolin/quantFinance-dashboard
+            ls -al
+            whoami
+            git pull
+            npm ci
+            npm run build
+            sudo systemctl restart dashboard
+          EOF
