@@ -34,6 +34,22 @@ jobs:
         with:
           name: frontend-dist
           path: dist/
+      - name: Set Docker image tag
+        id: docker_tag
+        run: |
+          if [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_NAME" == "push" ]]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          else
+            branch=$(echo "$GITHUB_REF" | sed 's|refs/heads/||')
+            echo "tag=$branch" >> $GITHUB_OUTPUT
+          fi
+      - name: Build Docker image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/dashboard:${{ steps.docker_tag.outputs.tag }} .
+      - name: Login to GitHub Container Registry
+        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Push Docker image to GHCR
+        run: docker push ghcr.io/${{ github.repository }}/dashboard:${{ steps.docker_tag.outputs.tag }}
       - name: Upload build metadata (optional)
         if: always()
         run: |
