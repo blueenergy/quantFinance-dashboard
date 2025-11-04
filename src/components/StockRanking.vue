@@ -51,7 +51,7 @@
       <div class="no-data-icon">📊</div>
       <h4>{{ getNoDataMessage() }}</h4>
       <p>{{ getNoDataSubMessage() }}</p>
-      <button v-if="viewMode === 'selected'" @click="showQuickSelectModal" class="btn-quick-select">
+      <button v-if="viewMode === 'selected'" @click="showQuickSelectModal" class="btn-base btn-md btn-gradient-gold btn-badge-star">
         快速选择热门股票
       </button>
     </div>
@@ -68,8 +68,8 @@
         :displayRows="displayRows"
         :viewMode="viewMode"
         :formatDateDisplay="formatDateDisplay"
-        :getScoreStyle="getScoreStyle"
-        :getRankStyle="getRankStyle"
+        :getScoreClass="getScoreClass"
+        :getRankClass="getRankClass"
         :getRowClass="getRowClass"
         :isInWatchlist="isInWatchlist"
         @view-chart="viewChart"
@@ -105,52 +105,52 @@
         </div>
         <div class="quick-select-content">
           <!-- HS300 loading state -->
-          <div v-if="selectedCategory === 'hs300' && hs300Loading" style="padding:16px; text-align:center; font-weight:600; color:#0353a4;">
+          <div v-if="selectedCategory === 'hs300' && hs300Loading" class="center-block text-bold color-primary-dark">
             正在加载沪深300成分股...
           </div>
           <!-- HS300 empty state -->
-          <div v-else-if="selectedCategory === 'hs300' && !hs300Loading && getCurrentCategoryStocks.length === 0" style="padding:16px; text-align:center; color:#555;">
+          <div v-else-if="selectedCategory === 'hs300' && !hs300Loading && getCurrentCategoryStocks.length === 0" class="center-block text-subtle">
             未获取到成分股数据。
-            <button @click="manualReloadHS300" style="margin-left:8px; background:#0466c8; color:#fff; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">重新加载</button>
+            <button @click="manualReloadHS300" class="btn-primary-lite ml-sm">重新加载</button>
           </div>
           <!-- Stock list -->
           <div v-else>
             <!-- 🆕 HS300 批量操作条 -->
             <div v-if="selectedCategory === 'hs300' && hs300Stocks.length > 0" class="bulk-select-bar">
-              <button @click="() => selectAllIndex('hs300')" class="btn-bulk-select" :disabled="hs300SelectedCount === hs300Stocks.length">
+              <button @click="() => selectAllIndex('hs300')" class="btn-base btn-sm btn-gradient-green" :disabled="hs300SelectedCount === hs300Stocks.length">
                 全选沪深300 ({{ hs300Stocks.length }})
               </button>
-              <button @click="() => deselectAllIndex('hs300')" class="btn-bulk-deselect" :disabled="hs300SelectedCount === 0">
+              <button @click="() => deselectAllIndex('hs300')" class="btn-base btn-sm btn-gradient-gray" :disabled="hs300SelectedCount === 0">
                 取消选择
               </button>
               <span class="bulk-selected-count">已选 {{ hs300SelectedCount }} / {{ hs300Stocks.length }}</span>
             </div>
             <!-- 🆕 A500 批量操作条 -->
             <div v-if="selectedCategory === 'a500' && a500Stocks.length > 0" class="bulk-select-bar">
-              <button @click="() => selectAllIndex('a500')" class="btn-bulk-select" :disabled="a500SelectedCount === a500Stocks.length">
+              <button @click="() => selectAllIndex('a500')" class="btn-base btn-sm btn-gradient-green" :disabled="a500SelectedCount === a500Stocks.length">
                 全选中证A500 ({{ a500Stocks.length }})
               </button>
-              <button @click="() => deselectAllIndex('a500')" class="btn-bulk-deselect" :disabled="a500SelectedCount === 0">
+              <button @click="() => deselectAllIndex('a500')" class="btn-base btn-sm btn-gradient-gray" :disabled="a500SelectedCount === 0">
                 取消选择
               </button>
               <span class="bulk-selected-count">已选 {{ a500SelectedCount }} / {{ a500Stocks.length }}</span>
             </div>
             <!-- 🆕 CSI500 批量操作条 -->
             <div v-if="selectedCategory === 'csi500' && csi500Stocks.length > 0" class="bulk-select-bar">
-              <button @click="() => selectAllIndex('csi500')" class="btn-bulk-select" :disabled="csi500SelectedCount === csi500Stocks.length">
+              <button @click="() => selectAllIndex('csi500')" class="btn-base btn-sm btn-gradient-green" :disabled="csi500SelectedCount === csi500Stocks.length">
                 全选中证500 ({{ csi500Stocks.length }})
               </button>
-              <button @click="() => deselectAllIndex('csi500')" class="btn-bulk-deselect" :disabled="csi500SelectedCount === 0">
+              <button @click="() => deselectAllIndex('csi500')" class="btn-base btn-sm btn-gradient-gray" :disabled="csi500SelectedCount === 0">
                 取消选择
               </button>
               <span class="bulk-selected-count">已选 {{ csi500SelectedCount }} / {{ csi500Stocks.length }}</span>
             </div>
             <!-- 🆕 STAR50 批量操作条 -->
             <div v-if="selectedCategory === 'star50' && star50Stocks.length > 0" class="bulk-select-bar">
-              <button @click="() => selectAllIndex('star50')" class="btn-bulk-select" :disabled="star50SelectedCount === star50Stocks.length">
+              <button @click="() => selectAllIndex('star50')" class="btn-base btn-sm btn-gradient-green" :disabled="star50SelectedCount === star50Stocks.length">
                 全选科创50 ({{ star50Stocks.length }})
               </button>
-              <button @click="() => deselectAllIndex('star50')" class="btn-bulk-deselect" :disabled="star50SelectedCount === 0">
+              <button @click="() => deselectAllIndex('star50')" class="btn-base btn-sm btn-gradient-gray" :disabled="star50SelectedCount === 0">
                 取消选择
               </button>
               <span class="bulk-selected-count">已选 {{ star50SelectedCount }} / {{ star50Stocks.length }}</span>
@@ -168,32 +168,32 @@
           </div>
         </div>
         <div class="quick-select-actions">
-          <button @click="applyQuickSelection" class="btn-apply">应用选择 ({{ selectedStocks.length }})</button>
-          <button @click="closeQuickSelect" class="btn-cancel">取消</button>
+          <button @click="applyQuickSelection" class="btn-base btn-md btn-gradient-green">应用选择 ({{ selectedStocks.length }})</button>
+          <button @click="closeQuickSelect" class="btn-base btn-md btn-gradient-gray">取消</button>
         </div>
       </div>
     </div>
 
     <!-- ✅ 可用评分日期模态框（在指定股票模式且选择单只股票时弹出） -->
     <div v-if="showAvailableDatesModal" class="modal-overlay" @click="closeAvailableDatesModal">
-      <div class="modal-content" @click.stop style="max-width:520px;">
+  <div class="modal-content" @click.stop style="max-width:520px;">
         <h4>选择 {{ pickingForSymbol }} 的可用评分日期</h4>
-        <div style="max-height:320px; overflow:auto; border:1px solid #eee; padding:8px; margin-top:8px;">
+  <div class="scroll-box mt-sm" style="max-height:320px;">
             <div v-if="availableDatesForSymbol.length === 0">未找到可用日期。</div>
             <div v-else>
-              <div style="display:flex; gap:8px; margin-bottom:8px;">
-                <button @click="selectAllAvailableDates" class="btn-apply">全选</button>
-                <button @click="deselectAllAvailableDates" class="btn-cancel">全不选</button>
+              <div class="flex-row gap-sm mb-sm">
+                <button @click="selectAllAvailableDates" class="btn-base btn-sm btn-gradient-green">全选</button>
+                <button @click="deselectAllAvailableDates" class="btn-base btn-sm btn-gradient-gray">全不选</button>
               </div>
-              <label v-for="d in availableDatesForSymbol" :key="d" style="display:flex; align-items:center; gap:8px; padding:6px 4px;">
+              <label v-for="d in availableDatesForSymbol" :key="d" class="flex-row-center gap-sm pad-xs">
                 <input type="checkbox" :value="d" v-model="availableDatesSelection" />
                 <span>{{ formatDateDisplay(d) }}</span>
               </label>
             </div>
         </div>
         <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
-          <button @click="applyAvailableDatesSelection(availableDatesSelection || [])" class="btn-apply">应用 ({{ (availableDatesSelection || []).length }})</button>
-          <button @click="closeAvailableDatesModal" class="btn-cancel">取消</button>
+          <button @click="applyAvailableDatesSelection(availableDatesSelection || [])" class="btn-base btn-md btn-gradient-green">应用 ({{ (availableDatesSelection || []).length }})</button>
+          <button @click="closeAvailableDatesModal" class="btn-base btn-md btn-gradient-gray">取消</button>
         </div>
       </div>
     </div>
@@ -201,18 +201,18 @@
     <!-- ✅ 评分详情弹窗 (保持原有功能并增强) -->
     <div v-if="showScoreDetail" class="modal-overlay" @click="closeScoreDetail">
       <div class="modal-content score-detail-modal" @click.stop ref="scoreDetailModalRef">
-        <h4 style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+  <h4 class="flex-row-center gap-md wrap">
           <span>{{ selectedStock?.symbol }} - {{ selectedStock?.name }} 评分详情</span>
           <span v-if="scoreDetailCategory" class="category-chip">{{ translateCategory(scoreDetailCategory) }}</span>
         </h4>
         <div class="score-detail-content">
           <div v-if="scoreDetailCategory === 'composite'" class="detail-inline-block">
             <div class="detail-block">
-              <div style="font-weight:600; color:#0353a4; margin-bottom:8px;">总分由以下分项加权计算：</div>
+              <div class="text-bold color-primary-dark mb-sm">总分由以下分项加权计算：</div>
               <ul class="detail-list compact">
-                <li v-for="(val, key) in scoreDetailData" :key="key">
+                <li v-for="(val, key) in scoreDetailData" :key="key" class="flex-row gap-xs">
                   <strong>{{ key }}:</strong>
-                  <span style="margin-left:4px;">{{ formatDetailValue(val) }}</span>
+                  <span>{{ formatDetailValue(val) }}</span>
                 </li>
               </ul>
             </div>
@@ -221,22 +221,22 @@
             <div v-if="loadingDetail" class="detail-loading">正在加载 {{ translateCategory(scoreDetailCategory) }} 详情...</div>
             <div v-else-if="scoreDetailData && Object.keys(scoreDetailData).length > 0" class="detail-block">
               <ul class="detail-list compact">
-                <li v-for="(val, key) in scoreDetailData" :key="key">
+                <li v-for="(val, key) in scoreDetailData" :key="key" class="flex-row gap-xs">
                   <strong>{{ key }}:</strong>
-                  <span style="margin-left:4px;">{{ formatDetailValue(val) }}</span>
+                  <span>{{ formatDetailValue(val) }}</span>
                 </li>
               </ul>
             </div>
             <div v-else-if="!loadingDetail" class="detail-empty">暂无 {{ translateCategory(scoreDetailCategory) }} 详情</div>
           </div>
           <div class="score-detail-actions">
-            <button @click="viewChart(selectedStock?.symbol)" class="btn-chart-detail">查看走势图</button>
-            <button @click="toggleWatchlist(selectedStock?.symbol)" class="btn-watchlist-detail">
+            <button @click="viewChart(selectedStock?.symbol)" class="btn-base btn-md btn-gradient-teal">查看走势图</button>
+            <button @click="toggleWatchlist(selectedStock?.symbol)" class="btn-base btn-md btn-gradient-green">
               {{ isInWatchlist(selectedStock?.symbol) ? '从自选股移除' : '添加到自选股' }}
             </button>
           </div>
         </div>
-        <button @click="closeScoreDetail" class="btn-close">关闭</button>
+  <button @click="closeScoreDetail" class="btn-base btn-md btn-gradient-gray">关闭</button>
       </div>
     </div>
   </div>
@@ -1281,92 +1281,25 @@ async function clearWatchlist() {
   }
 }
 
-function getRankStyle(stock, rank) {
+function getRankClass(stock, rank) {
   if (viewMode.value === 'ranking') {
-    // 排行榜模式：按排名着色
-    if (rank <= 3) {
-      return { 
-        background: 'linear-gradient(135deg, #ff6b6b, #ff5252)',
-        color: 'white',
-        fontWeight: 'bold', 
-        fontSize: '16px',
-        textShadow: '1px 1px 2px rgba(0,0,0,0.3)'
-      }
-    } else if (rank <= 10) {
-      return { 
-        background: 'linear-gradient(135deg, #ffa726, #ff9800)',
-        color: 'white',
-        fontWeight: 'bold',
-        textShadow: '1px 1px 2px rgba(0,0,0,0.3)'
-      }
-    } else if (rank <= 30) {
-      return { 
-        background: 'linear-gradient(135deg, #66bb6a, #4caf50)',
-        color: 'white',
-        fontWeight: 'bold',
-        textShadow: '1px 1px 2px rgba(0,0,0,0.3)'
-      }
-    }
-  } else {
-    // 其他模式：按分数着色
+    if (rank <= 3) return 'rank-top-three'
+    if (rank <= 10) return 'rank-top-ten'
+    if (rank <= 30) return 'rank-top-thirty'
+    return 'rank-default'
+  }
   const score = getCompositeScore(stock, rankingStrategy.value)
-    if (score >= 80) {
-      return { 
-        background: 'linear-gradient(135deg, #ff6b6b, #ff5252)',
-        color: 'white',
-        fontWeight: 'bold',
-        textShadow: '1px 1px 2px rgba(0,0,0,0.3)'
-      }
-    } else if (score >= 70) {
-      return { 
-        background: 'linear-gradient(135deg, #ffa726, #ff9800)',
-        color: 'white',
-        fontWeight: 'bold',
-        textShadow: '1px 1px 2px rgba(0,0,0,0.3)'
-      }
-    } else if (score >= 60) {
-      return { 
-        background: 'linear-gradient(135deg, #66bb6a, #4caf50)',
-        color: 'white',
-        fontWeight: 'bold',
-        textShadow: '1px 1px 2px rgba(0,0,0,0.3)'
-      }
-    }
-  }
-  
-  return { 
-    background: 'linear-gradient(135deg, #90a4ae, #78909c)',
-    color: 'white'
-  }
+  if (score >= 80) return 'rank-top-three'
+  if (score >= 70) return 'rank-top-ten'
+  if (score >= 60) return 'rank-top-thirty'
+  return 'rank-default'
 }
 
-function getScoreStyle(score) {
-  if (score >= 80) {
-    return { 
-      background: 'linear-gradient(135deg, #4caf50, #388e3c)',
-      color: 'white', 
-      fontWeight: 'bold',
-      textShadow: '1px 1px 2px rgba(0,0,0,0.3)'
-    }
-  } else if (score >= 70) {
-    return { 
-      background: 'linear-gradient(135deg, #ff9800, #f57c00)',
-      color: 'white', 
-      fontWeight: 'bold',
-      textShadow: '1px 1px 2px rgba(0,0,0,0.3)'
-    }
-  } else if (score >= 60) {
-    return { 
-      background: 'linear-gradient(135deg, #2196f3, #1976d2)',
-      color: 'white',
-      fontWeight: 'bold',
-      textShadow: '1px 1px 2px rgba(0,0,0,0.3)'
-    }
-  }
-  return { 
-    background: 'linear-gradient(135deg, #9e9e9e, #757575)',
-    color: 'white'
-  }
+function getScoreClass(score) {
+  if (score >= 80) return 'score-high'
+  if (score >= 70) return 'score-mid-high'
+  if (score >= 60) return 'score-mid'
+  return 'score-low'
 }
 
 function getRowClass(stock, rank) {
@@ -2049,23 +1982,6 @@ const star50SelectedCount = computed(() => {
   padding: 4px 6px;
 }
 
-.btn-apply, .btn-cancel {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.btn-apply {
-  background: linear-gradient(135deg, #28a745, #20c997);
-  color: white;
-}
-
-.btn-cancel {
-  background: linear-gradient(135deg, #6c757d, #545b62);
-  color: white;
-}
 
 /* ✅ 评分详情模态框增强样式 */
 .score-detail-modal {
@@ -2155,36 +2071,6 @@ const star50SelectedCount = computed(() => {
   border-top: 1px solid #ddd;
 }
 
-.btn-chart-detail, .btn-watchlist-detail {
-  flex: 1;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.btn-chart-detail {
-  background: linear-gradient(135deg, #17a2b8, #138496);
-  color: white;
-}
-
-.btn-watchlist-detail {
-  background: linear-gradient(135deg, #28a745, #20c997);
-  color: white;
-}
-
-.btn-close {
-  width: 100%;
-  padding: 10px;
-  background: linear-gradient(135deg, #6c757d, #545b62);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  margin-top: 15px;
-}
 
 /* ✅ 保持原有表格样式 */
 
