@@ -1,9 +1,9 @@
 <template>
   <div class="control-section">
-    <v-row class="control-group" align="center" style="gap:24px;">
+  <v-row class="control-group gap-md" align="center">
       <v-col cols="12" sm="6" md="4">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <label style="min-width:72px">显示模式：</label>
+        <div class="flex-row-center gap-sm">
+          <label class="label-fixed">显示模式：</label>
           <v-select
             v-model="internalViewMode"
             :items="viewModeOptions"
@@ -15,12 +15,12 @@
             :menu-props="{ maxHeight: 320 }"
           />
         </div>
-        <div style="margin-top:6px; color:#666; font-size:13px;">(child viewMode: <strong>{{ viewMode }}</strong>)</div>
+  <div class="mt-xs text-muted info-inline">(child viewMode: <strong>{{ viewMode }}</strong>)</div>
       </v-col>
 
       <v-col cols="12" sm="6" md="4" v-show="viewMode !== 'selected'">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <label style="min-width:72px">选择日期：</label>
+        <div class="flex-row-center gap-sm">
+          <label class="label-fixed">选择日期：</label>
           <v-text-field
             v-model="internalSelectedDate"
             type="date"
@@ -63,7 +63,7 @@
       <v-col cols="12">
         <div class="stock-input-area">
           <label>选择股票：</label>
-          <div style="display:flex; gap:8px; align-items:center;">
+          <div class="flex-row-center gap-sm">
             <v-text-field
               v-model="internalStockInput"
               placeholder="输入股票代码，如: 000001, 002129..."
@@ -79,11 +79,11 @@
             <div v-for="suggestion in stockSuggestions" :key="suggestion.symbol" @click="handleSuggestionClick(suggestion)" class="suggestion-item">{{ suggestion.symbol }} - {{ suggestion.name }}</div>
           </div>
 
-          <div v-if="selectedStocks.length > 0" class="selected-stocks" style="margin-top:8px;">
+          <div v-if="selectedStocks.length > 0" class="selected-stocks mt-sm">
             <v-chip v-for="symbol in selectedStocks" :key="symbol" class="ma-1" closable @click:close="handleRemoveStock(symbol)">{{ symbol }}</v-chip>
           </div>
 
-          <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+          <div class="flex-row-center gap-sm mt-sm">
             <label>策略：</label>
             <v-select
               v-model="internalRankingStrategy"
@@ -96,15 +96,15 @@
             />
           </div>
 
-          <div class="multi-date-area" style="margin-top:12px; width:100%;">
-            <div style="display:flex; gap:8px; align-items:center;">
+          <div class="multi-date-area mt-md" style="width:100%;">
+            <div class="flex-row-center gap-sm">
               <v-btn small color="primary" @click="handleOpenAvailableDates">查看可用评分日期</v-btn>
               <v-btn small text @click="handleClearSelectedDates">清空已选日期</v-btn>
             </div>
-            <div class="helper-text" style="margin-top:6px;">先选中单只股票后点击查看该股票的评分日期</div>
+            <div class="helper-text mt-xs">先选中单只股票后点击查看该股票的评分日期</div>
 
-            <div v-if="selectedDates.length > 0" class="selected-dates" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-              <div v-for="date in selectedDates" :key="date" class="date-chip" style="background:#fff; border:1px solid #ddd; padding:6px 8px; border-radius:6px; display:flex; align-items:center; gap:8px;">
+            <div v-if="selectedDates.length > 0" class="selected-dates mt-sm flex-row flex-wrap gap-sm">
+              <div v-for="date in selectedDates" :key="date" class="date-chip chip">
                 <strong>{{ formatDateDisplay(date) }}</strong>
                 <v-btn icon small @click="handleRemoveDate(date)">×</v-btn>
               </div>
@@ -455,12 +455,12 @@ onMounted(() => {
 }
 
 .watchlist-info {
-  color: #666;
+  color: var(--color-muted);
   font-size: 14px;
 }
 
 .last-update {
-  color: #666;
+  color: var(--color-muted);
   font-size: 12px;
   margin-left: 10px;
 }
@@ -475,7 +475,7 @@ onMounted(() => {
 }
 
 .helper-text {
-  color: #6c757d;
+  color: var(--color-subtle);
   font-size: 12px;
 }
 
@@ -508,5 +508,10 @@ onMounted(() => {
 /* small utility kept local */
 .quick-select-actions { display:flex; justify-content:flex-end; gap:10px; }
 .selected-dates { margin-top: 8px; }
+
+/* New utility mappings for extracted inline styles */
+.label-fixed { min-width:72px; }
+.info-inline { font-size:13px; }
+.date-chip { display:flex; align-items:center; }
 
 </style>
