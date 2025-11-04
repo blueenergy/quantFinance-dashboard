@@ -1,0 +1,96 @@
+.flex-row { display:flex; }
+.flex-row-center { display:flex; align-items:center; }
+.flex-wrap { flex-wrap:wrap; }
+.gap-xs { gap: var(--space-xs); }
+.gap-sm { gap: var(--space-sm); }
+.gap-md { gap: var(--space-md); }
+
+.mt-xs { margin-top: var(--space-xs); }
+.mt-sm { margin-top: var(--space-sm); }
+.mt-md { margin-top: var(--space-md); }
+.mb-sm { margin-bottom: var(--space-sm); }
+.mb-md { margin-bottom: var(--space-md); }
+
+.text-muted { color: var(--color-muted); }
+.text-subtle { color: var(--color-subtle); }
+
+.chip {
+  background:#fff;
+  border:1px solid var(--color-border);
+  padding:6px 8px;
+  border-radius: var(--radius-md);
+  display:flex;
+  align-items:center;
+  gap: var(--space-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.scroll-box {
+  max-height:320px;
+  overflow:auto;
+  border:1px solid var(--color-border-light);
+  padding: var(--space-sm);
+  background:#fff;
+}
+
+.panel-header {
+  padding: var(--space-lg);
+  text-align:center;
+  font-weight:600;
+  color: var(--color-primary-dark);
+}
+
+.btn-primary-lite {
+  background: var(--color-primary);
+  color:#fff;
+  border:none;
+  padding:4px 10px;
+  border-radius: var(--radius-sm);
+  cursor:pointer;
+}
+.btn-primary-lite:hover { background:#0353a4; }
+
+.flex-center-between { display:flex; align-items:center; justify-content:space-between; }
+.flex-center { display:flex; align-items:center; }
+.justify-end { justify-content:flex-end; }
+.wrap { flex-wrap:wrap; }
+.center-block { padding:16px; text-align:center; }
+.text-bold { font-weight:600; }
+.color-primary-dark { color: var(--color-primary-dark); }
+.ml-sm { margin-left: var(--space-sm); }
+.mt-lg { margin-top: var(--space-lg); }
+.pad-xs { padding: var(--space-xs); }
+.max-w-520 { max-width:520px; }
+
+/* === Button Utilities === */
+.btn-base { border:none; cursor:pointer; font-weight:600; letter-spacing:.5px; transition:transform .18s ease, box-shadow .18s ease, background .25s ease; display:inline-flex; align-items:center; justify-content:center; gap:4px; position:relative; }
+.btn-sm { padding:6px 10px; font-size:12px; border-radius:4px; }
+.btn-md { padding:8px 16px; font-size:14px; border-radius:6px; }
+.btn-lg { padding:12px 24px; font-size:16px; border-radius:8px; }
+
+/* Gradient thematic variants */
+.btn-gradient-red { background: linear-gradient(135deg,#ff6b6b,#ff5252); color:#fff; }
+.btn-gradient-orange { background: linear-gradient(135deg,#ffa726,#ff9800); color:#fff; }
+.btn-gradient-gold { background: linear-gradient(135deg,#ffd700,#ffb300); color:#593400; }
+.btn-gradient-green { background: linear-gradient(135deg,#28a745,#20c997); color:#fff; }
+.btn-gradient-teal { background: linear-gradient(135deg,#17a2b8,#138496); color:#fff; }
+.btn-gradient-blue { background: linear-gradient(135deg,#3498db,#2980b9); color:#fff; }
+.btn-gradient-purple { background: linear-gradient(135deg,#9b59b6,#8e44ad); color:#fff; }
+.btn-gradient-gray { background: linear-gradient(135deg,#6c757d,#545b62); color:#fff; }
+.btn-gradient-watch-active { background: linear-gradient(135deg,#ffc107,#e0a800); color:#000; }
+
+.btn-base:hover { transform:translateY(-2px); box-shadow:0 4px 10px rgba(0,0,0,0.15); }
+.btn-base:active { transform:translateY(0); box-shadow:0 2px 6px rgba(0,0,0,0.25); }
+.btn-base:disabled { opacity:.55; cursor:not-allowed; transform:none; box-shadow:none; }
+
+/* Special badge star for quick-select */
+.btn-badge-star::after { content:'★'; position:absolute; top:-10px; right:-10px; background: radial-gradient(circle at 30% 30%, #fff6d5, #ffb300); color:#b34700; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:900; box-shadow:0 2px 6px rgba(0,0,0,0.25); pointer-events:none; }
+
+/* === Tag Utilities (Advice / Risk) === */
+.tag { display:inline-flex; align-items:center; font-size:12px; font-weight:600; padding:2px 8px; border-radius:4px; line-height:1; }
+.tag-buy { background: var(--tag-buy-bg); color: var(--tag-buy-fg); }
+.tag-hold { background: var(--tag-hold-bg); color: var(--tag-hold-fg); }
+.tag-sell { background: var(--tag-sell-bg); color: var(--tag-sell-fg); }
+.tag-risk-low { background: var(--tag-risk-low-bg); color: var(--tag-risk-low-fg); }
+.tag-risk-medium { background: var(--tag-risk-medium-bg); color: var(--tag-risk-medium-fg); }
+.tag-risk-high { background: var(--tag-risk-high-bg); color: var(--tag-risk-high-fg); }

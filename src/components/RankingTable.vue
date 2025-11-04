@@ -6,7 +6,7 @@
         <th class="th-symbol">股票代码</th>
         <th class="th-name">股票名称</th>
         <th class="th-date">日期</th>
-        <th class="th-score">总分</th>
+  <th class="th-score">总分</th>
         <th class="th-cycle">周期</th>
         <th class="th-growth">成长</th>
         <th class="th-value">基本面</th>
@@ -19,7 +19,7 @@
     <tbody>
       <tr v-for="(row, index) in displayRows" :key="row.symbol + '_' + (row.display_date || row.score_date || index)" class="table-row" :class="getRowClass(row, index + 1)">
         <td class="td-rank">
-          <span :style="getRankStyle(row, index + 1)" class="rank-badge">
+          <span :class="['rank-badge', getRankClass(row, index + 1)]">
             {{ index + 1 }}
           </span>
         </td>
@@ -33,8 +33,8 @@
           <span>{{ formatDateDisplay(row.display_date || row.score_date) }}</span>
         </td>
         <td class="td-score" @click="onShowScore(row._origin || row)">
-          <div style="display:flex; align-items:center; gap:8px; justify-content:center;">
-            <span :style="getScoreStyle(row.display_composite_score)" class="score-badge clickable">
+          <div class="score-badge-wrapper">
+            <span :class="['score-badge', getScoreClass(row.display_composite_score), 'clickable']">
               {{ row.display_composite_score }}
             </span>
           </div>
@@ -87,8 +87,8 @@ const props = defineProps({
   displayRows: { type: Array, required: true },
   viewMode: { type: String, required: true },
   formatDateDisplay: { type: Function, required: true },
-  getScoreStyle: { type: Function, required: true },
-  getRankStyle: { type: Function, required: true },
+  getScoreClass: { type: Function, required: true },
+  getRankClass: { type: Function, required: true },
   getRowClass: { type: Function, required: true },
   isInWatchlist: { type: Function, required: false }
 })
@@ -103,8 +103,8 @@ function emitCategory(row, category) { emit('show-score-detail', { stock: row, c
 
 // helpers to access props in template
 const formatDateDisplay = props.formatDateDisplay
-const getScoreStyle = props.getScoreStyle
-const getRankStyle = props.getRankStyle
+const getScoreClass = props.getScoreClass
+const getRankClass = props.getRankClass
 const getRowClass = props.getRowClass
 const isInWatchlist = props.isInWatchlist
 const viewMode = props.viewMode
@@ -173,6 +173,10 @@ const displayRows = props.displayRows
 }
 
 .rank-badge { display: inline-block; min-width: 30px; height: 30px; line-height: 30px; text-align: center; border-radius: 50%; font-weight: bold; }
+.rank-badge.rank-top-three { background: linear-gradient(135deg, #ff6b6b, #ff5252); color:#fff; font-size:16px; text-shadow:1px 1px 2px rgba(0,0,0,0.3); }
+.rank-badge.rank-top-ten { background: linear-gradient(135deg, #ffa726, #ff9800); color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.3); }
+.rank-badge.rank-top-thirty { background: linear-gradient(135deg, #66bb6a, #4caf50); color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.3); }
+.rank-badge.rank-default { background: linear-gradient(135deg, #90a4ae, #78909c); color:#fff; }
 
 .symbol-text {
   display: inline-block;
@@ -198,7 +202,12 @@ const displayRows = props.displayRows
   white-space: nowrap;
 }
 
+.score-badge-wrapper { display:flex; align-items:center; justify-content:center; gap:8px; }
 .score-badge { display: inline-block; min-width: 50px; padding: 7px 14px; border-radius: 20px; font-weight: bold; text-align: center; font-size: 18px; color: #fff; text-shadow: 1px 1px 6px rgba(0,0,0,0.18); letter-spacing: 1px; }
+.score-badge.score-high { background: linear-gradient(135deg, #4caf50, #388e3c); }
+.score-badge.score-mid-high { background: linear-gradient(135deg, #ff9800, #f57c00); }
+.score-badge.score-mid { background: linear-gradient(135deg, #2196f3, #1976d2); }
+.score-badge.score-low { background: linear-gradient(135deg, #9e9e9e, #757575); }
 
 .cycle-score, .fundamental-score, .technical-score, .money-score, .growth-score, .value-score { display: inline-block; padding: 5px 10px; border-radius: 5px; font-weight: bold; min-width: 44px; text-align: center; font-size: 16px; color: #fff; text-shadow: 1px 1px 6px rgba(0,0,0,0.18); letter-spacing: 1px; }
 .cycle-score { background: linear-gradient(135deg, #1abc9c, #16a085); color: white; }
@@ -208,11 +217,18 @@ const displayRows = props.displayRows
 .growth-score { background: linear-gradient(135deg, #43e97b, #38f9d7); color: #0a2a0a; }
 .value-score { background: linear-gradient(135deg, #ffd700, #ffb300); color: #7a4a00; }
 
-.btn-chart, .btn-watch { background: linear-gradient(135deg, #3498db, #2980b9); color: white; border: none; padding: 6px 10px; border-radius: 4px; margin: 0 2px; cursor: pointer; font-size: 14px; transition: all 0.3s ease; }
-.btn-chart:hover, .btn-watch:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-.btn-watch { background: linear-gradient(135deg, #f39c12, #e67e22); }
-
-.btn-remove { background: linear-gradient(135deg, #dc3545, #c82333); color: white; border: none; padding: 6px 10px; border-radius: 4px; margin: 0 2px; cursor: pointer; font-size: 12px; }
+.btn-chart, .btn-watch, .btn-remove {
+  border:none; cursor:pointer; font-weight:600; letter-spacing:.5px;
+  transition:transform .18s ease, box-shadow .18s ease, background .25s ease;
+  display:inline-flex; align-items:center; justify-content:center; gap:4px;
+  position:relative; padding:6px 10px; font-size:12px; border-radius:4px;
+}
+.btn-chart { background: linear-gradient(135deg,#3498db,#2980b9); color:#fff; }
+.btn-watch { background: linear-gradient(135deg,#ffa726,#ff9800); color:#fff; }
+.btn-remove { background: linear-gradient(135deg,#ff6b6b,#ff5252); color:#fff; }
+.btn-chart:hover, .btn-watch:hover, .btn-remove:hover { transform:translateY(-2px); box-shadow:0 2px 6px rgba(0,0,0,0.25); }
+.btn-chart:active, .btn-watch:active, .btn-remove:active { transform:translateY(0); box-shadow:0 1px 3px rgba(0,0,0,0.25); }
+.btn-watch-active { background: linear-gradient(135deg,#ffc107,#e0a800) !important; color:#000 !important; }
 
 @media (max-width: 768px) {
   .ranking-table { font-size: 12px; }

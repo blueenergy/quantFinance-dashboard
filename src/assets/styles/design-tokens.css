@@ -1,0 +1,33 @@
+:root {
+  --color-primary: #0466c8;
+  --color-primary-dark: #0353a4;
+  --color-secondary: #ffb300;
+  --color-success: #28a745;
+  --color-info: #17a2b8;
+  --color-muted: #666;
+  --color-subtle: #555;
+  --color-border: #ddd;
+  --color-border-light: #eee;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 2px 6px rgba(0,0,0,0.10);
+  /* Advice / Risk state colors */
+  --tag-buy-bg: #d4edda;
+  --tag-buy-fg: #155724;
+  --tag-hold-bg: #fff3cd;
+  --tag-hold-fg: #856404;
+  --tag-sell-bg: #f8d7da;
+  --tag-sell-fg: #721c24;
+  --tag-risk-low-bg: #d4edda;
+  --tag-risk-low-fg: #155724;
+  --tag-risk-medium-bg: #fff3cd;
+  --tag-risk-medium-fg: #856404;
+  --tag-risk-high-bg: #f8d7da;
+  --tag-risk-high-fg: #721c24;
+}
