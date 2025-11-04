@@ -1,4 +1,6 @@
 import './assets/styles/stock-ranking-tokens.css';
+import './assets/styles/design-tokens.css';
+import './assets/styles/utilities.css';
 import { createApp } from 'vue';
 import App from './App.vue';
 

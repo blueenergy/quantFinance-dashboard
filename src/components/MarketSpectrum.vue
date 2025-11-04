@@ -1,20 +1,20 @@
 <template>
   <div class="market-spectrum-page">
     <h3 class="page-title">市场阴阳谱</h3>
-    <div class="controls">
-      <div class="date-range">
+  <div class="controls flex-column gap-sm">
+  <div class="date-range flex-row-center gap-sm wrap">
         <label>开始日期:</label>
         <input type="date" v-model="startDate" :max="today" />
         <label>结束日期:</label>
         <input type="date" v-model="endDate" :max="today" />
-        <button @click="fetchSpectrum" :disabled="loading || !startDate || !endDate">加载</button>
-        <button @click="refreshCurrent" :disabled="loading">刷新</button>
+  <button @click="fetchSpectrum" :disabled="loading || !startDate || !endDate" class="btn-base btn-sm btn-gradient-blue">加载</button>
+  <button @click="refreshCurrent" :disabled="loading" class="btn-base btn-sm btn-gradient-teal">刷新</button>
       </div>
-      <div class="quick-range">
+  <div class="quick-range flex-row-center gap-sm wrap">
         <span class="qr-label">快捷区间:</span>
-        <button @click="setQuickRange(7)" :disabled="loading">最近7天</button>
-        <button @click="setQuickRange(30)" :disabled="loading">最近30天</button>
-        <button @click="setQuickRange(90)" :disabled="loading">最近90天</button>
+  <button @click="setQuickRange(7)" :disabled="loading" class="btn-base btn-sm btn-gradient-orange">最近7天</button>
+  <button @click="setQuickRange(30)" :disabled="loading" class="btn-base btn-sm btn-gradient-orange">最近30天</button>
+  <button @click="setQuickRange(90)" :disabled="loading" class="btn-base btn-sm btn-gradient-orange">最近90天</button>
       </div>
       <div class="hint">阳谱(yang_spectrum) 是上涨占比, 阴谱(yin_spectrum) 是下跌/未达标占比</div>
     </div>
@@ -22,8 +22,8 @@
   <!-- 折线图展示：使用 v-show 保持 DOM，避免 ref 在首次更新时不存在 -->
   <div ref="chartRef" class="spectrum-chart" v-show="records.length > 0"></div>
 
-    <div v-if="loading" class="loading">加载中...</div>
-    <div v-else-if="records.length === 0" class="empty">暂无数据, 请调整日期范围</div>
+  <div v-if="loading" class="loading text-subtle">加载中...</div>
+  <div v-else-if="records.length === 0" class="empty text-subtle">暂无数据, 请调整日期范围</div>
 
     <table v-else class="spectrum-table">
       <thead>
@@ -60,6 +60,7 @@
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
+import { chartColors } from '../theme/chartTheme.js'
 
 // 默认展示最近30天，提升首次加载可视化体验
 const todayDate = new Date()
@@ -151,7 +152,7 @@ function updateChart() {
       min: 0,
       max: 1,
       axisLabel: { formatter: v => (v * 100).toFixed(0) + '%' },
-      splitLine: { lineStyle: { color: '#e2e8f0' } }
+  splitLine: { lineStyle: { color: chartColors.gridLine } }
     },
     dataZoom: [
       { type: 'slider', start: 0, end: 100, height: 18, bottom: 40 },
@@ -163,13 +164,13 @@ function updateChart() {
         type: 'line',
         smooth: true,
         data: yangVals,
-        lineStyle: { width: 2, color: '#ffb300' },
-        areaStyle: { opacity: 0.15, color: '#ffe082' },
+  lineStyle: { width: 2, color: chartColors.yangLine },
+  areaStyle: { opacity: 0.15, color: chartColors.yangArea },
   // 已移除首次银/金手指标记，保留阈值虚线
         markLine: {
           silent: true,
           symbol: 'none',
-          lineStyle: { type: 'dashed', color: '#999' },
+          lineStyle: { type: 'dashed', color: chartColors.thresholdLine },
           data: [
             { yAxis: 0.35, name: '银手指阈值 35%' },
             { yAxis: 0.50, name: '金手指阈值 50%' }
@@ -182,8 +183,8 @@ function updateChart() {
         type: 'line',
         smooth: true,
         data: yinVals,
-        lineStyle: { width: 2, color: '#1e88e5' },
-        areaStyle: { opacity: 0.10, color: '#90caf9' }
+  lineStyle: { width: 2, color: chartColors.yinLine },
+  areaStyle: { opacity: 0.10, color: chartColors.yinArea }
       }
     ]
   }
@@ -219,8 +220,8 @@ onBeforeUnmount(() => {
 .controls { margin-bottom:12px; display:flex; flex-direction:column; gap:8px; }
 .date-range { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .date-range input { padding:6px 8px; border:1px solid #ccc; border-radius:4px; }
-.date-range button { padding:6px 14px; background:#0466c8; color:#fff; border:none; border-radius:4px; cursor:pointer; }
-.date-range button:disabled { background:#9aa7b4; cursor:not-allowed; }
+/* buttons now use global utilities; keep disabled override */
+.date-range button:disabled { opacity:.55; cursor:not-allowed; }
 .hint { font-size:12px; color:#666; }
 .loading, .empty { padding:20px; text-align:center; color:#555; }
 .spectrum-chart { width:100%; height:320px; margin-bottom:16px; border:1px solid #e2e8f0; border-radius:6px; }

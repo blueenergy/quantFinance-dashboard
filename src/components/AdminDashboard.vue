@@ -74,7 +74,7 @@
       <div class="section-header">
         <h3>👥 用户管理</h3>
         <div class="search-bar">
-          <input 
+          <input
             v-model="userSearch"
             @input="searchUsers"
             placeholder="搜索用户名、邮箱或姓名..."
@@ -82,75 +82,14 @@
           >
         </div>
       </div>
-
-      <div class="users-table" v-if="users.length > 0">
-        <table>
-          <thead>
-            <tr>
-              <th>用户名</th>
-              <th>邮箱</th>
-              <th>姓名</th>
-              <th>状态</th>
-              <th>权限</th>
-              <th>注册时间</th>
-              <th>最后登录</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="user in users" :key="user.id">
-              <td>{{ user.username }}</td>
-              <td>{{ user.email }}</td>
-              <td>{{ user.full_name || '-' }}</td>
-              <td>
-                <span :class="['status', user.is_active ? 'active' : 'inactive']">
-                  {{ user.is_active ? '激活' : '禁用' }}
-                </span>
-              </td>
-              <td>
-                <span :class="['role', user.is_admin ? 'admin' : 'user']">
-                  {{ user.is_admin ? '管理员' : '普通用户' }}
-                </span>
-              </td>
-              <td>{{ formatDate(user.created_at) }}</td>
-              <td>{{ formatDate(user.last_login) || '从未' }}</td>
-              <td>
-                <button 
-                  @click="toggleUserStatus(user)"
-                  :class="['action-btn', user.is_active ? 'disable' : 'enable']"
-                  :disabled="user.username === currentUser?.username"
-                >
-                  {{ user.is_active ? '禁用' : '激活' }}
-                </button>
-                <button @click="viewUserDetail(user)" class="action-btn view">
-                  详情
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- 分页 -->
-      <div class="pagination" v-if="usersPagination">
-        <button 
-          @click="loadUsers(usersPagination.page - 1)"
-          :disabled="usersPagination.page <= 1"
-          class="page-btn"
-        >
-          上一页
-        </button>
-        <span class="page-info">
-          第 {{ usersPagination.page }} 页，共 {{ usersPagination.total_pages }} 页
-        </span>
-        <button 
-          @click="loadUsers(usersPagination.page + 1)"
-          :disabled="usersPagination.page >= usersPagination.total_pages"
-          class="page-btn"
-        >
-          下一页
-        </button>
-      </div>
+      <UsersTable
+        :users="users"
+        :current-user="currentUser"
+        :format-date="formatDate"
+        @toggle-status="toggleUserStatus"
+        @view-detail="viewUserDetail"
+      />
+      <Pagination v-if="usersPagination" :page="usersPagination.page" :total-pages="usersPagination.total_pages" @change="loadUsers" />
     </div>
 
     <!-- 登录日志 -->
@@ -159,65 +98,17 @@
         <h3>📋 登录日志</h3>
         <div class="log-filters">
           <label>
-            <input 
-              v-model="showSuccessOnly" 
+            <input
+              v-model="showSuccessOnly"
               @change="loadLoginLogs(1)"
               type="checkbox"
-            > 
+            >
             仅显示成功登录
           </label>
         </div>
       </div>
-
-      <div class="logs-table" v-if="loginLogs.length > 0">
-        <table>
-          <thead>
-            <tr>
-              <th>用户名</th>
-              <th>IP地址</th>
-              <th>浏览器</th>
-              <th>登录时间</th>
-              <th>状态</th>
-              <th>失败原因</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="log in loginLogs" :key="log._id">
-              <td>{{ log.username }}</td>
-              <td>{{ log.ip_address }}</td>
-              <td class="user-agent">{{ formatUserAgent(String(log.user_agent || '')) }}</td>
-              <td>{{ formatDate(log.login_time) }}</td>
-              <td>
-                <span :class="['status', log.success ? 'success' : 'failed']">
-                  {{ log.success ? '成功' : '失败' }}
-                </span>
-              </td>
-              <td>{{ log.failure_reason || '-' }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- 分页 -->
-      <div class="pagination" v-if="logsPagination">
-        <button 
-          @click="loadLoginLogs(logsPagination.page - 1)"
-          :disabled="logsPagination.page <= 1"
-          class="page-btn"
-        >
-          上一页
-        </button>
-        <span class="page-info">
-          第 {{ logsPagination.page }} 页，共 {{ logsPagination.total_pages }} 页
-        </span>
-        <button 
-          @click="loadLoginLogs(logsPagination.page + 1)"
-          :disabled="logsPagination.page >= logsPagination.total_pages"
-          class="page-btn"
-        >
-          下一页
-        </button>
-      </div>
+      <LoginLogsTable :logs="loginLogs" :format-date="formatDate" :format-user-agent="formatUserAgent" />
+      <Pagination v-if="logsPagination" :page="logsPagination.page" :total-pages="logsPagination.total_pages" @change="loadLoginLogs" />
     </div>
 
     <!-- 管理员操作日志 -->
@@ -225,29 +116,7 @@
       <div class="section-header">
         <h3>⚙️ 管理员操作日志</h3>
       </div>
-
-      <div class="logs-table" v-if="adminLogs.length > 0">
-        <table>
-          <thead>
-            <tr>
-              <th>管理员</th>
-              <th>操作</th>
-              <th>目标用户</th>
-              <th>详情</th>
-              <th>时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="log in adminLogs" :key="log._id">
-              <td>{{ log.admin_username }}</td>
-              <td>{{ log.action }}</td>
-              <td>{{ log.target_username || '-' }}</td>
-              <td class="details">{{ log.details }}</td>
-              <td>{{ formatDate(log.timestamp) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AdminLogsTable :logs="adminLogs" :format-date="formatDate" />
     </div>
 
     <!-- AI分析日志 -->
@@ -255,146 +124,20 @@
       <div class="section-header">
         <h3>🧠 AI 分析日志</h3>
       </div>
-
-      <div class="logs-table" v-if="aiAnalysisLogs.length > 0">
-        <table>
-          <thead>
-            <tr>
-              <th>任务ID</th>
-              <th>状态</th>
-              <th>创建时间</th>
-              <th>完成时间</th>
-              <th>耗时 (秒)</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="log in aiAnalysisLogs" :key="log.task_id">
-              <td>{{ log.task_id }}</td>
-              <td>
-                <span :class="['status', log.status === '成功' ? 'success' : 'failed']">
-                  {{ log.status }}
-                </span>
-              </td>
-              <td>{{ formatDate(log.created_at) }}</td>
-              <td>{{ formatDate(log.completed_at) || '-' }}</td>
-              <td>{{ log.duration || '-' }}</td>
-              <td>
-                <button @click="viewAILogDetail(log)" class="action-btn view">
-                  详情
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- 分页 -->
-      <div class="pagination" v-if="aiLogsPagination">
-        <button 
-          @click="loadAIAnalysisLogs(aiLogsPagination.page - 1)"
-          :disabled="aiLogsPagination.page <= 1"
-          class="page-btn"
-        >
-          上一页
-        </button>
-        <span class="page-info">
-          第 {{ aiLogsPagination.page }} 页，共 {{ aiLogsPagination.total_pages }} 页
-        </span>
-        <button 
-          @click="loadAIAnalysisLogs(aiLogsPagination.page + 1)"
-          :disabled="aiLogsPagination.page >= aiLogsPagination.total_pages"
-          class="page-btn"
-        >
-          下一页
-        </button>
-      </div>
+      <AIAnalysisLogsTable :logs="aiAnalysisLogs" :format-date="formatDate" @view-detail="viewAILogDetail" />
+      <Pagination v-if="aiLogsPagination" :page="aiLogsPagination.page" :total-pages="aiLogsPagination.total_pages" @change="loadAIAnalysisLogs" />
     </div>
 
-    <!-- AI分析统计 -->
+    <!-- AI用户分析记录（复用 aiAnalysisLogs 数据集） -->
     <div v-if="activeTab === 'ai-logs'" class="ai-logs-section">
       <div class="section-header">
         <h3>🤖 用户AI分析统计</h3>
       </div>
-      <div class="ai-logs-table" v-if="aiAnalysisLogs.length > 0">
-        <table>
-          <thead>
-            <tr>
-              <th>用户名</th>
-              <th>用户ID</th>
-              <th>股票代码</th>
-              <th>服务商</th>
-              <th>模型</th>
-              <th>分析时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="log in aiAnalysisLogs" :key="log._id">
-              <td>{{ log.username || '-' }}</td>
-              <td>{{ log.user_id }}</td>
-              <td>{{ log.symbol }}</td>
-              <td>{{ log.provider }}</td>
-              <td>{{ log.model }}</td>
-              <td>{{ formatDate(log.timestamp) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div v-else class="empty-msg">暂无分析记录</div>
-      <!-- 分页 -->
-      <div class="pagination" v-if="aiLogsPagination">
-        <button 
-          @click="loadAIAnalysisLogs(aiLogsPagination.page - 1)"
-          :disabled="aiLogsPagination.page <= 1"
-          class="page-btn"
-        >上一页</button>
-        <span class="page-info">
-          第 {{ aiLogsPagination.page }} 页，共 {{ aiLogsPagination.total_pages }} 页
-        </span>
-        <button 
-          @click="loadAIAnalysisLogs(aiLogsPagination.page + 1)"
-          :disabled="aiLogsPagination.page >= aiLogsPagination.total_pages"
-          class="page-btn"
-        >下一页</button>
-      </div>
+      <AIUserAnalysisTable :records="aiAnalysisLogs" :format-date="formatDate" />
     </div>
 
     <!-- 用户详情模态框 -->
-    <div v-if="selectedUser" class="modal-overlay" @click="closeUserDetail">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>👤 用户详情</h3>
-          <button @click="closeUserDetail" class="close-btn">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="user-info">
-            <p><strong>用户名:</strong> {{ selectedUser.username }}</p>
-            <p><strong>邮箱:</strong> {{ selectedUser.email }}</p>
-            <p><strong>姓名:</strong> {{ selectedUser.full_name || '未设置' }}</p>
-            <p><strong>状态:</strong> {{ selectedUser.is_active ? '激活' : '禁用' }}</p>
-            <p><strong>权限:</strong> {{ selectedUser.is_admin ? '管理员' : '普通用户' }}</p>
-            <p><strong>注册时间:</strong> {{ formatDate(selectedUser.created_at) }}</p>
-            <p><strong>最后登录:</strong> {{ formatDate(selectedUser.last_login) || '从未' }}</p>
-          </div>
-          
-          <div v-if="selectedUserStats" class="user-stats">
-            <h4>📊 用户统计</h4>
-            <p><strong>自选股数量:</strong> {{ selectedUserStats.watchlist_count }}</p>
-            
-            <h4>🔐 最近登录记录</h4>
-            <div class="recent-logins">
-              <div v-for="login in selectedUserStats.recent_logins" :key="login._id" class="login-record">
-                <span class="login-time">{{ formatDate(login.login_time) }}</span>
-                <span class="login-ip">{{ login.ip_address }}</span>
-                <span :class="['login-status', login.success ? 'success' : 'failed']">
-                  {{ login.success ? '成功' : '失败' }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <UserDetailModal :user="selectedUser" :stats="selectedUserStats" :format-date="formatDate" @close="closeUserDetail" />
 
     <!-- 加载提示 -->
     <div v-if="loading" class="loading">
@@ -406,9 +149,17 @@
 
 <script>
 import axios from 'axios'
+import Pagination from './Pagination.vue'
+import UsersTable from './UsersTable.vue'
+import LoginLogsTable from './LoginLogsTable.vue'
+import AdminLogsTable from './AdminLogsTable.vue'
+import AIAnalysisLogsTable from './AIAnalysisLogsTable.vue'
+import AIUserAnalysisTable from './AIUserAnalysisTable.vue'
+import UserDetailModal from './UserDetailModal.vue'
 
 export default {
   name: 'AdminDashboard',
+  components: { Pagination, UsersTable, LoginLogsTable, AdminLogsTable, AIAnalysisLogsTable, AIUserAnalysisTable, UserDetailModal },
   props: {
     currentUser: Object
   },
@@ -416,6 +167,7 @@ export default {
     return {
       activeTab: 'overview',
       loading: false,
+      searchTimer: null,
       
       // 导航标签
       tabs: [
@@ -457,22 +209,32 @@ export default {
     }
   },
   async mounted() {
-    await this.loadStatistics()
-    await this.loadUsers()
-    await this.loadAIAnalysisLogs()
+    // 并行加载初始数据以降低首屏等待时间
+    await Promise.all([
+      this.loadStatistics(),
+      this.loadUsers(),
+      this.loadAIAnalysisLogs()
+    ])
   },
   methods: {
+    // 通用 GET 请求助手：成功返回 data.data 部分，失败抛出错误
+    async apiGet(url, params = {}) {
+      const response = await axios.get(url, { params })
+      if (!response.data || response.data.success !== true) {
+        const msg = response.data?.message || '请求失败'
+        throw new Error(msg)
+      }
+      return response.data.data
+    },
     // 加载统计数据
     async loadStatistics() {
       try {
         this.loading = true
-        const response = await axios.get('/api/admin/statistics')
-        if (response.data.success) {
-          this.statistics = response.data.data
-        }
+        const data = await this.apiGet('/api/admin/statistics')
+        this.statistics = data
       } catch (error) {
         console.error('加载统计数据失败:', error)
-        alert('加载统计数据失败')
+        alert(error.message || '加载统计数据失败')
       } finally {
         this.loading = false
       }
@@ -483,18 +245,13 @@ export default {
       try {
         this.loading = true
         const params = { page, page_size: 20 }
-        if (this.userSearch) {
-          params.search = this.userSearch
-        }
-        
-        const response = await axios.get('/api/admin/users', { params })
-        if (response.data.success) {
-          this.users = response.data.data.users
-          this.usersPagination = response.data.data.pagination
-        }
+        if (this.userSearch) params.search = this.userSearch.trim()
+        const data = await this.apiGet('/api/admin/users', params)
+        this.users = data.users
+        this.usersPagination = data.pagination
       } catch (error) {
         console.error('加载用户列表失败:', error)
-        alert('加载用户列表失败')
+        alert(error.message || '加载用户列表失败')
       } finally {
         this.loading = false
       }
@@ -502,7 +259,11 @@ export default {
     
     // 搜索用户
     searchUsers() {
-      this.loadUsers(1)
+      // 输入防抖，减少频繁请求
+      if (this.searchTimer) clearTimeout(this.searchTimer)
+      this.searchTimer = setTimeout(() => {
+        this.loadUsers(1)
+      }, 300)
     },
     
     // 切换用户状态
@@ -563,20 +324,13 @@ export default {
     async loadLoginLogs(page = 1) {
       try {
         this.loading = true
-        const params = { 
-          page, 
-          page_size: 50,
-          success_only: this.showSuccessOnly
-        }
-        
-        const response = await axios.get('/api/admin/login-logs', { params })
-        if (response.data.success) {
-          this.loginLogs = response.data.data.logs
-          this.logsPagination = response.data.data.pagination
-        }
+        const params = { page, page_size: 50, success_only: this.showSuccessOnly }
+        const data = await this.apiGet('/api/admin/login-logs', params)
+        this.loginLogs = data.logs
+        this.logsPagination = data.pagination
       } catch (error) {
         console.error('加载登录日志失败:', error)
-        alert('加载登录日志失败')
+        alert(error.message || '加载登录日志失败')
       } finally {
         this.loading = false
       }
@@ -586,16 +340,12 @@ export default {
     async loadAdminLogs(page = 1) {
       try {
         this.loading = true
-        const response = await axios.get('/api/admin/actions', {
-          params: { page, page_size: 50 }
-        })
-        if (response.data.success) {
-          this.adminLogs = response.data.data.actions
-          this.adminLogsPagination = response.data.data.pagination
-        }
+        const data = await this.apiGet('/api/admin/actions', { page, page_size: 50 })
+        this.adminLogs = data.actions
+        this.adminLogsPagination = data.pagination
       } catch (error) {
         console.error('加载管理员日志失败:', error)
-        alert('加载管理员日志失败')
+        alert(error.message || '加载管理员日志失败')
       } finally {
         this.loading = false
       }
@@ -605,21 +355,18 @@ export default {
     async loadAIAnalysisLogs(page = 1) {
       try {
         this.loading = true
-        const params = { page, page_size: 50 }
-        const response = await axios.get('/api/admin/analysis-logs', { params })
-        if (response.data.success) {
-          this.aiAnalysisLogs = response.data.data.logs
-          const pag = response.data.data.pagination
-          this.aiLogsPagination = {
-            page: pag.page,
-            page_size: pag.page_size,
-            total: pag.total,
-            total_pages: Math.ceil(pag.total / pag.page_size)
-          }
+        const data = await this.apiGet('/api/admin/analysis-logs', { page, page_size: 50 })
+        this.aiAnalysisLogs = data.logs
+        const pag = data.pagination
+        this.aiLogsPagination = {
+          page: pag.page,
+          page_size: pag.page_size,
+          total: pag.total,
+          total_pages: Math.ceil(pag.total / pag.page_size)
         }
       } catch (error) {
         console.error('加载AI分析日志失败:', error)
-        alert('加载AI分析日志失败')
+        alert(error.message || '加载AI分析日志失败')
       } finally {
         this.loading = false
       }
@@ -917,140 +664,6 @@ tr:last-child td {
   border-bottom: none;
 }
 
-/* 状态标签 - 蓝白指示器 */
-.status {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border: 1px solid;
-}
-
-.status.active, .status.success {
-  background: #dcfce7;
-  color: #166534;
-  border-color: #16a34a;
-}
-
-.status.inactive, .status.failed {
-  background: #fef2f2;
-  color: #991b1b;
-  border-color: #dc2626;
-}
-
-/* 角色标签 */
-.role {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border: 1px solid;
-}
-
-.role.admin {
-  background: #fef3c7;
-  color: #92400e;
-  border-color: #f59e0b;
-}
-
-.role.user {
-  background: #dbeafe;
-  color: #1e40af;
-  border-color: #3b82f6;
-}
-
-/* 操作按钮 - 蓝白功能按钮 */
-.action-btn {
-  padding: 6px 12px;
-  border: 1px solid;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  margin-right: 4px;
-  transition: all 0.15s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  background: #ffffff;
-}
-
-.action-btn.enable {
-  color: #16a34a;
-  border-color: #16a34a;
-}
-
-.action-btn.disable {
-  color: #dc2626;
-  border-color: #dc2626;
-}
-
-.action-btn.view {
-  color: #3b82f6;
-  border-color: #3b82f6;
-}
-
-.action-btn:hover:not(:disabled) {
-  background: #3b82f6;
-  color: #ffffff;
-  border-color: #3b82f6;
-}
-
-.action-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* 分页样式 - 蓝白导航 */
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  margin: 40px 0;
-}
-
-.page-btn {
-  padding: 8px 16px;
-  background: #ffffff;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-weight: 500;
-  font-size: 14px;
-  min-width: 48px;
-  text-align: center;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: #f1f5f9;
-  color: #475569;
-  border-color: #cbd5e1;
-}
-
-.page-btn.active {
-  background: #3b82f6;
-  color: #ffffff;
-  border-color: #3b82f6;
-}
-
-.page-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.page-info {
-  color: #64748b;
-  font-size: 14px;
-  font-weight: 500;
-  margin: 0 20px;
-  font-variant-numeric: tabular-nums;
-}
 
 /* 模态框样式 - 蓝白对话框 */
 .modal-overlay {
@@ -1266,133 +879,6 @@ tr:last-child td {
   }
 }
 
-/* 状态标签 - 极简指示器 */
-.status {
-  padding: 4px 8px;
-  border-radius: 0;
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border: 1px solid;
-}
-
-.status.active, .status.success {
-  background: #ffffff;
-  color: #2e7d32;
-  border-color: #2e7d32;
-}
-
-.status.inactive, .status.failed {
-  background: #ffffff;
-  color: #d32f2f;
-  border-color: #d32f2f;
-}
-
-/* 角色标签 */
-.role {
-  padding: 4px 8px;
-  border-radius: 0;
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border: 1px solid;
-}
-
-.role.admin {
-  background: #ffffff;
-  color: #f57c00;
-  border-color: #f57c00;
-}
-
-.role.user {
-  background: #ffffff;
-  color: #1976d2;
-  border-color: #1976d2;
-}
-
-/* 操作按钮 - 极简功能按钮 */
-.action-btn {
-  padding: 6px 12px;
-  border: 1px solid;
-  border-radius: 0;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  margin-right: 4px;
-  transition: all 0.15s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  background: #ffffff;
-}
-
-.action-btn.enable {
-  color: #2e7d32;
-  border-color: #2e7d32;
-}
-
-.action-btn.disable {
-  color: #d32f2f;
-  border-color: #d32f2f;
-}
-
-.action-btn.view {
-  color: #1976d2;
-  border-color: #1976d2;
-}
-
-.action-btn:hover:not(:disabled) {
-  background: #000000;
-  color: #ffffff;
-  border-color: #000000;
-}
-
-.action-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-/* 分页样式 - 极简导航 */
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1px;
-  margin: 40px 0;
-}
-
-.page-btn {
-  padding: 8px 16px;
-  background: #ffffff;
-  color: #666666;
-  border: 1px solid #e0e0e0;
-  border-radius: 0;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-weight: 400;
-  font-size: 14px;
-  min-width: 48px;
-  text-align: center;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: #f0f0f0;
-  color: #333333;
-}
-
-.page-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-.page-info {
-  color: #888888;
-  font-size: 14px;
-  font-weight: 400;
-  margin: 0 20px;
-  font-variant-numeric: tabular-nums;
-}
 
 /* 模态框样式 - 极简对话框 */
 .modal-overlay {
@@ -1481,39 +967,6 @@ tr:last-child td {
   cursor: not-allowed;
 }
 
-/* 分页样式 */
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 20px;
-  margin: 20px 0;
-}
-
-.page-btn {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #8a2be2 0%, #9a4cf2 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #9a2bf2 0%, #aa5cf3 100%);
-  transform: translateY(-2px);
-}
-
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  color: #cccccc;
-  font-size: 0.9em;
-}
 
 /* 模态框样式 */
 .modal-overlay {
