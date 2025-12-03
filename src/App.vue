@@ -306,11 +306,20 @@ async function loadStockData(symbol) {
   if (!symbol) return
   
   try {
-    // console.log(`开始加载股票 ${symbol} 的数据...`)
-    
-    // 获取K线数据
-    const klineUrl = `/api/records/?limit=2000&sort=-trade_date&symbol=${symbol}`
-    const klineRes = await axios.get(klineUrl)
+    // 计算最近90天的日期范围，减少初次加载数据量
+    const end = new Date()
+    const start = new Date()
+    start.setDate(end.getDate() - 89)
+    const toYmd = (d) => d.toISOString().slice(0,10).replace(/-/g, '')
+    const startDate = toYmd(start)
+    const endDate = toYmd(end)
+
+    // 并行获取K线与资金流数据，并添加请求超时避免长时间阻塞
+    const klineUrl = `/api/records/?limit=1000&sort=-trade_date&symbol=${symbol}&start_date=${startDate}&end_date=${endDate}`
+    const klineReq = axios.get(klineUrl, { timeout: 10000 })
+    const moneyFlowReq = fetchMoneyFlowRecords(symbol)
+
+    const [klineRes, moneyFlowRes] = await Promise.all([klineReq, moneyFlowReq])
     chartRecords.value = klineRes.data
 
     // 🔍 添加调试：查看K线数据结构
@@ -321,7 +330,7 @@ async function loadStockData(symbol) {
     // }
 
     // 获取资金流数据
-    moneyFlowRecords.value = await fetchMoneyFlowRecords(symbol)
+    moneyFlowRecords.value = moneyFlowRes
 
     // 检查是否有股票名称字段
     const stockInfo = chartRecords.value.find(stock => stock.symbol === symbol)
