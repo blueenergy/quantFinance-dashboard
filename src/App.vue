@@ -90,7 +90,9 @@
           </div>
 
           <div v-if="activeTab === 'chart'" class="chart-view">
-            <StockChart
+            <Suspense>
+              <template #default>
+                <StockChart
               :symbol="chartSymbol"
               :stockName="stockName"
               :records="chartRecords"
@@ -101,27 +103,64 @@
               :hasNext="hasNext"
               :watchlist="watchlist"
               :currentIndex="currentIndex"
-            />
+                />
+              </template>
+              <template #fallback>
+                <div class="skeleton skeleton-chart">图表加载中...</div>
+              </template>
+            </Suspense>
           </div>
 
           <div v-if="activeTab === 'analysis'" class="analysis-view">
-            <StockAnalysis />
+            <Suspense>
+              <template #default>
+                <StockAnalysis />
+              </template>
+              <template #fallback>
+                <div class="skeleton skeleton-card">分析模块加载中...</div>
+              </template>
+            </Suspense>
           </div>
 
           <div v-if="activeTab === 'history'" class="history-view">
-            <AnalysisHistory />
+            <Suspense>
+              <template #default>
+                <AnalysisHistory />
+              </template>
+              <template #fallback>
+                <div class="skeleton skeleton-table">历史记录加载中...</div>
+              </template>
+            </Suspense>
           </div>
 
           <div v-if="activeTab === 'admin'" class="admin-view">
-            <AdminDashboard :current-user="user" />
+            <Suspense>
+              <template #default>
+                <AdminDashboard :current-user="user" />
+              </template>
+              <template #fallback>
+                <div class="skeleton skeleton-card">管理面板加载中...</div>
+              </template>
+            </Suspense>
           </div>
 
           <!-- 在内容区域添加 -->
-          <StockRanking 
-            v-show="activeTab === 'ranking'" 
-            @view-chart="selectStockForChart"
-          />
-          <MarketSpectrum v-show="activeTab === 'spectrum'" />
+          <Suspense v-show="activeTab === 'ranking'">
+            <template #default>
+              <StockRanking @view-chart="selectStockForChart" />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">评分模块加载中...</div>
+            </template>
+          </Suspense>
+          <Suspense v-show="activeTab === 'spectrum'">
+            <template #default>
+              <MarketSpectrum />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-chart">市场阴阳谱加载中...</div>
+            </template>
+          </Suspense>
         </div>
       </div>
     </div>
@@ -661,6 +700,20 @@ const hasNext = computed(() => currentIndex.value < watchlist.value.length - 1)
   background: rgba(30, 30, 63, 0.3);
   border-radius: 8px;
 }
+
+/* Simple skeleton loaders for async components */
+.skeleton {
+  border: 1px dashed rgba(138, 43, 226, 0.4);
+  background: rgba(30, 30, 63, 0.25);
+  color: #b19cd9;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.skeleton-card { height: 140px; }
+.skeleton-table { height: 220px; }
+.skeleton-chart { height: 300px; }
 
 /* 滚动条样式 */
 ::-webkit-scrollbar {
