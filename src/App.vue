@@ -87,6 +87,9 @@
               </tbody>
             </table>
             <div v-else class="empty">暂无数据</div>
+            <div class="load-more" v-if="activeTab === 'data'">
+              <button class="tab-button" @click="loadMoreRecords">加载更多 (当前 {{ recordsLimit }} )</button>
+            </div>
           </div>
 
           <div v-if="activeTab === 'chart'" class="chart-view">
@@ -214,6 +217,7 @@ const { user, isAuthenticated, validateToken, logout } = useAuth()
 
 const symbol = ref('')
 const records = ref([])
+const recordsLimit = ref(100)
 const currentIndex = ref(0)
 const watchlist = ref([]) 
 const chartRecords = ref([])
@@ -252,7 +256,7 @@ function formatDate(dateStr) {
 }
 
 async function fetchData() {
-  let url = '/api/records/?limit=2000&sort=-trade_date'
+  let url = `/api/records/?limit=${recordsLimit.value}&sort=-trade_date`
   if (symbol.value) url += `&symbol=${symbol.value}`
   try {
     const res = await axios.get(url)
@@ -261,6 +265,12 @@ async function fetchData() {
     console.error('获取数据失败:', e)
     records.value = []
   }
+}
+
+function loadMoreRecords() {
+  // Increase limit and refetch; backend pagination unknown, so expand window size
+  recordsLimit.value = Math.min(recordsLimit.value + 200, 2000)
+  fetchData()
 }
 
 function selectStock(stockSymbol) {
