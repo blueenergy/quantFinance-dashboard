@@ -10,8 +10,8 @@ import { createVuetify } from 'vuetify';
 // Explicit component/directive imports to avoid missing dropdown rendering
 import * as components from 'vuetify/components';
 import * as directives from 'vuetify/directives';
-import { aliases, mdi } from 'vuetify/iconsets/mdi';
-import '@mdi/font/css/materialdesignicons.css';
+// Use SVG icon set to avoid loading large icon font
+import { aliases, mdi } from 'vuetify/iconsets/mdi-svg';
 
 const vuetify = createVuetify({
 	components,
