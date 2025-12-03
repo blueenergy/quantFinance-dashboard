@@ -264,7 +264,7 @@ function dlog(...args) { if (DEBUG) { try { console.debug('[StockRanking]', ...a
 // Each item typically contains: { symbol, name, composite_score, score_date, per_date_scores?, per_date_fields?, ... }
 const rankings = ref([])
 const loading = ref(false)
-const displayLimit = ref(50)
+const displayLimit = ref(30)
 
 // UI mode & inputs
 // viewMode: one of 'ranking' | 'selected' | 'watchlist'

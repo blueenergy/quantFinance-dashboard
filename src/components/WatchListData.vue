@@ -792,7 +792,6 @@ function getPriceChangeClass(value) {
 
 // 组件挂载时初始化
 onMounted(async () => {
-  loadHistory()
   // 初始化时检查登录状态并加载相应的自选股
   if (isAuthenticated?.value) {
     await handleUserLogin()
