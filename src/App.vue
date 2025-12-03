@@ -132,14 +132,15 @@
 import LoginForm from './components/LoginForm.vue'
 import UserInfo from './components/UserInfo.vue'
 import WatchListData from './components/WatchListData.vue'
-import StockChart from './components/StockChart.vue'
-import StockAnalysis from './components/StockAnalysis.vue'
-import AnalysisHistory from './components/AnalysisHistory.vue'
-import MarketAnalysisBulletin from './components/MarketAnalysisBulletin.vue'
-import AdminDashboard from './components/AdminDashboard.vue'
-import StockRanking from './components/StockRanking.vue'
-import MarketSpectrum from './components/MarketSpectrum.vue'
-import { ref, onMounted, computed,watch } from 'vue'
+// Lazy-load heavy views/components to avoid loading them for normal users
+import { defineAsyncComponent, ref, onMounted, computed,watch } from 'vue'
+const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
+const StockAnalysis = defineAsyncComponent(() => import('./components/StockAnalysis.vue'))
+const AnalysisHistory = defineAsyncComponent(() => import('./components/AnalysisHistory.vue'))
+const MarketAnalysisBulletin = defineAsyncComponent(() => import('./components/MarketAnalysisBulletin.vue'))
+const AdminDashboard = defineAsyncComponent(() => import('./components/AdminDashboard.vue'))
+const StockRanking = defineAsyncComponent(() => import('./components/StockRanking.vue'))
+const MarketSpectrum = defineAsyncComponent(() => import('./components/MarketSpectrum.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
