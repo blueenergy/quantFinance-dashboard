@@ -148,7 +148,7 @@
           </div>
 
           <!-- 在内容区域添加 -->
-          <Suspense v-show="activeTab === 'ranking'">
+          <Suspense v-if="activeTab === 'ranking'">
             <template #default>
               <StockRanking @view-chart="selectStockForChart" />
             </template>
@@ -156,7 +156,7 @@
               <div class="skeleton skeleton-table">评分模块加载中...</div>
             </template>
           </Suspense>
-          <Suspense v-show="activeTab === 'spectrum'">
+          <Suspense v-if="activeTab === 'spectrum'">
             <template #default>
               <MarketSpectrum />
             </template>

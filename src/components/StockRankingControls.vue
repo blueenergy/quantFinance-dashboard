@@ -45,6 +45,10 @@
           density="compact"
           variant="outlined"
         />
+        <div v-if="viewMode === 'ranking'" class="mt-xs">
+          <v-btn size="small" variant="text" @click="incrementDisplayLimit">加载更多</v-btn>
+          <span class="ml-xs text-muted">当前: {{ internalDisplayLimit }}</span>
+        </div>
       </v-col>
       <v-col cols="12" sm="6">
         <label style="margin-left: 0">排名策略：</label>
@@ -256,6 +260,11 @@ const internalDisplayLimit = computed({
   get: () => displayLimit.value,
   set: v => { emit('change-display-limit', v) }
 })
+
+function incrementDisplayLimit() {
+  const next = Math.min(Number(internalDisplayLimit.value) + 20, 200)
+  emit('change-display-limit', next)
+}
 const internalRankingStrategy = computed({
   get: () => rankingStrategy.value,
   set: v => { emit('change-ranking-strategy', v) }
@@ -266,6 +275,7 @@ const internalStockInput = computed({
 })
 const displayLimitOptions = [
   { label: 'Top 10', value: 10 },
+  { label: 'Top 30', value: 30 },
   { label: 'Top 50', value: 50 },
   { label: 'Top 100', value: 100 },
   { label: 'Top 200', value: 200 }
