@@ -36,7 +36,8 @@
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import * as echarts from 'echarts'
+// Lazy-load ECharts to reduce initial bundle size
+let echarts
 
 const props = defineProps({
   records: Array,
@@ -394,6 +395,10 @@ onMounted(async () => {
   }
 
   // 初始化图表实例
+  if (!echarts) {
+    const mod = await import('echarts')
+    echarts = mod.default || mod
+  }
   chartInstance = echarts.init(chart.value)
 
   // ✅ 修复：设置默认日期范围为最近3个月

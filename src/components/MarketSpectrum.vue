@@ -59,7 +59,8 @@
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import axios from 'axios'
-import * as echarts from 'echarts'
+// Lazy-load ECharts to reduce initial bundle size
+let echarts
 import { chartColors } from '../theme/chartTheme.js'
 
 // 默认展示最近30天，提升首次加载可视化体验
@@ -120,9 +121,13 @@ function setQuickRange(days) {
 }
 
 
-function updateChart() {
+async function updateChart() {
   if (!chartRef.value) return
   if (!chartInstance) {
+    if (!echarts) {
+      const mod = await import('echarts')
+      echarts = mod.default || mod
+    }
     chartInstance = echarts.init(chartRef.value)
     window.addEventListener('resize', handleResize)
   }
