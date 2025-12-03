@@ -396,40 +396,48 @@ function handleLogout() {
 }
 
 onMounted(async () => {
-  // 验证现有token是否有效
-  if (isAuthenticated.value) {
-    const isValid = await validateToken()
-    if (!isValid) {
-      console.log('Token已失效,请重新登录')
-    } else {
-      // Token有效，根据用户角色设置默认界面
-      if (user.value?.is_admin) {
-        activeTab.value = 'admin'
-        console.log('管理员自动跳转到系统管理页面')
+  // 并行验证 Token 与获取自选股，减少等待时间
+  if (!isAuthenticated.value) return
+
+  const token = localStorage.getItem('access_token')
+  const fetchWatchlist = async () => {
+    try {
+      const res = await axios.get('/api/user/watchlist-stocks', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.data && res.data.success && Array.isArray(res.data.data)) {
+        watchlist.value = res.data.data.map(stock => stock.symbol)
       } else {
-        activeTab.value = 'watchlist'
-        // 普通用户加载初始数据
-        fetchData()
-      }
-      // 仅在认证通过后获取自选股
-      const token = localStorage.getItem('access_token')
-      try {
-        const res = await axios.get('/api/user/watchlist-stocks', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
-        // 兼容后端返回结构，若无 stocks 字段则回退为 []
-        if (res.data && res.data.success && Array.isArray(res.data.data)) {
-          watchlist.value = res.data.data.map(stock => stock.symbol)
-        } else {
-          // 如果接口失败，使用默认值
-          watchlist.value = ['000001', '000002', '000003']
-        }
-      } catch (e) {
-        console.error('获取自选股失败:', e)
         watchlist.value = ['000001', '000002', '000003']
       }
+    } catch (e) {
+      console.error('获取自选股失败:', e)
+      watchlist.value = ['000001', '000002', '000003']
+    }
+  }
+
+  const [tokenResult, watchlistResult] = await Promise.allSettled([
+    validateToken(),
+    fetchWatchlist()
+  ])
+
+  const isValid = tokenResult.status === 'fulfilled' ? tokenResult.value : false
+  if (!isValid) {
+    console.log('Token已失效,请重新登录')
+    return
+  }
+
+  // Token有效，根据用户角色设置默认界面
+  if (user.value?.is_admin) {
+    activeTab.value = 'admin'
+    console.log('管理员自动跳转到系统管理页面')
+  } else {
+    activeTab.value = 'watchlist'
+    // 将初始数据加载推迟到首屏渲染后，避免阻塞
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => fetchData())
+    } else {
+      setTimeout(() => fetchData(), 0)
     }
   }
 })
