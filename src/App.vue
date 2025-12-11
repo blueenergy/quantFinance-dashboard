@@ -147,6 +147,17 @@
             </Suspense>
           </div>
 
+          <div v-if="activeTab === 'strategies'" class="strategies-view">
+            <Suspense>
+              <template #default>
+                <WatchlistStrategyTable />
+              </template>
+              <template #fallback>
+                <div class="skeleton skeleton-table">策略配置加载中...</div>
+              </template>
+            </Suspense>
+          </div>
+
           <!-- 在内容区域添加 -->
           <Suspense v-if="activeTab === 'ranking'">
             <template #default>
@@ -183,6 +194,7 @@ const MarketAnalysisBulletin = defineAsyncComponent(() => import('./components/M
 const AdminDashboard = defineAsyncComponent(() => import('./components/AdminDashboard.vue'))
 const StockRanking = defineAsyncComponent(() => import('./components/StockRanking.vue'))
 const MarketSpectrum = defineAsyncComponent(() => import('./components/MarketSpectrum.vue'))
+const WatchlistStrategyTable = defineAsyncComponent(() => import('./components/WatchlistStrategyTable.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
@@ -242,6 +254,7 @@ const adminTabs = computed(() => {
 
 const tabs = ref([
   { id: 'watchlist', name: '自选股' },
+  { id: 'strategies', name: '策略配置' },
   { id: 'data', name: '数据查询' },
   { id: 'ranking', name: '股票评分' },
   { id: 'chart', name: 'K线图表' },
