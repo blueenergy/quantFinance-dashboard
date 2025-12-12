@@ -1,7 +1,7 @@
 <template>
   <div>
     <div style="margin-bottom: 10px;">
-      <label>选择K线类型：</label>
+      <label>选择K线类型:</label>
       <select v-model="kType" @change="drawChart">
         <option value="day">日线</option>
         <option value="week">周线</option>
@@ -318,7 +318,7 @@ function drawChart() {
           data: kline.map(r => r.volume),
           xAxisIndex: 1,
           yAxisIndex: 1,
-          barWidth: 10,
+          barWidth: 6,
           itemStyle: {
             color: function(params) {
               const index = params.dataIndex
@@ -337,7 +337,7 @@ function drawChart() {
           data: bigMoneyBars,
           xAxisIndex: 2,
           yAxisIndex: 2,
-          barWidth: 10,
+          barWidth: 6,
           itemStyle: {
             color: params => params.data >= 0 ? '#e53935' : '#26a69a'
           },
@@ -352,16 +352,16 @@ function drawChart() {
           xAxisIndex: 0,
           symbol: 'circle',
           showSymbol: true,
-          symbolSize: 10,
+          symbolSize: 6,
           lineStyle: { color: '#ffd700', width: 2 },
           itemStyle: { color: '#ffd700' },
           smooth: true,
           z: 20,
           markPoint: {
             symbol: 'circle',
-            symbolSize: 16,
+            symbolSize: 10,
             itemStyle: { color: '#ff5722' },
-            label: { show: true, color: '#fff', fontSize: 10, formatter: '评分' },
+            label: { show: false },
             data: normalizedScoreLine
               .map((point, idx) => {
                 if (point && typeof point.value === 'number') {
