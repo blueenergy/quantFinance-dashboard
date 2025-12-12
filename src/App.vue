@@ -250,7 +250,6 @@ const adminTabs = computed(() => {
   const baseTabs = [
     { id: 'watchlist', name: '自选股' },
     { id: 'strategies', name: '策略配置' },
-    { id: 'data', name: '行情数据' },
     { id: 'chart', name: 'K线图' },
     { id: 'history', name: '分析历史' },
     { id: 'ranking', name: '评分' },
@@ -264,40 +263,6 @@ const adminTabs = computed(() => {
   return baseTabs
 })
 
-// const adminTabs = [
-//   { id: 'watchlist', name: '自选股' },
-//   { id: 'data', name: '行情数据' },
-//   { id: 'chart', name: 'K线图' },
-//   { id: 'analysis', name: 'AI分析' },
-//   { id: 'history', name: '分析历史' },
-//   { id: 'strategies', name: '策略配置' },
-//   { id: 'ranking', name: '评分' },
-//   { id: 'spectrum', name: '市场谱' },
-//   { id: 'securities', name: '证券账户' }, // 新增tab
-//   { id: 'admin', name: '管理后台' },
-// ]
-
-// const adminTabs = computed(() => {
-//   if (user.value?.is_admin) {
-//     // 管理员只显示管理相关标签
-//     return [
-//       { id: 'admin', name: '系统管理' }
-//     ]
-//   }
-//   // 普通用户显示业务功能标签
-//   return tabs.value
-// })
-
-// const tabs = ref([
-//   { id: 'watchlist', name: '自选股' },
-//   { id: 'strategies', name: '策略配置' },
-//   { id: 'data', name: '数据查询' },
-//   { id: 'ranking', name: '股票评分' },
-//   { id: 'chart', name: 'K线图表' },
-//   { id: 'analysis', name: 'AI分析' },
-//   { id: 'history', name: '历史分析' },
-//   {id: 'spectrum', name:'阴阳谱'}
-// ])
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
@@ -364,19 +329,13 @@ async function loadStockData(symbol) {
     const endDate = toYmd(end)
 
     // 并行获取K线与资金流数据，并添加请求超时避免长时间阻塞
-    const klineUrl = `/api/records/?limit=1000&sort=-trade_date&symbol=${symbol}&start_date=${startDate}&end_date=${endDate}`
+    const klineUrl = `/api/records/?limit=300&sort=-trade_date&symbol=${symbol}&start_date=${startDate}&end_date=${endDate}`
     const klineReq = axios.get(klineUrl, { timeout: 10000 })
     const moneyFlowReq = fetchMoneyFlowRecords(symbol)
 
     const [klineRes, moneyFlowRes] = await Promise.all([klineReq, moneyFlowReq])
     chartRecords.value = klineRes.data
 
-    // 🔍 添加调试：查看K线数据结构
-    // console.log('K线数据完整响应:', klineRes.data)
-    // if (klineRes.data && klineRes.data.length > 0) {
-    //   // console.log('第一条K线记录:', klineRes.data[0])
-    //   // console.log('第一条记录的所有字段:', Object.keys(klineRes.data[0]))
-    // }
 
     // 获取资金流数据
     moneyFlowRecords.value = moneyFlowRes
