@@ -136,7 +136,7 @@
             </Suspense>
           </div>
 
-          <div v-if="activeTab === 'admin'" class="admin-view">
+          <div v-if="activeTab === 'admin' && user?.is_admin" class="admin-view">
             <Suspense>
               <template #default>
                 <AdminDashboard :current-user="user" />
@@ -175,6 +175,10 @@
               <div class="skeleton skeleton-chart">市场阴阳谱加载中...</div>
             </template>
           </Suspense>
+
+          <div v-if="activeTab === 'securities'" class="securities-view">
+            <SecuritiesAccountManager />
+          </div>
         </div>
       </div>
     </div>
@@ -195,6 +199,7 @@ const AdminDashboard = defineAsyncComponent(() => import('./components/AdminDash
 const StockRanking = defineAsyncComponent(() => import('./components/StockRanking.vue'))
 const MarketSpectrum = defineAsyncComponent(() => import('./components/MarketSpectrum.vue'))
 const WatchlistStrategyTable = defineAsyncComponent(() => import('./components/WatchlistStrategyTable.vue'))
+import SecuritiesAccountManager from './components/SecuritiesAccountManager.vue'
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
@@ -242,26 +247,57 @@ const chartSymbol = computed(() =>
 
 // 动态标签 - 管理员只显示管理功能，普通用户显示业务功能
 const adminTabs = computed(() => {
+  const baseTabs = [
+    { id: 'watchlist', name: '自选股' },
+    { id: 'strategies', name: '策略配置' },
+    { id: 'data', name: '行情数据' },
+    { id: 'chart', name: 'K线图' },
+    { id: 'history', name: '分析历史' },
+    { id: 'ranking', name: '评分' },
+    { id: 'spectrum', name: '阴阳谱' },
+    { id: 'securities', name: '证券账户' },
+    { id: 'analysis', name: 'AI分析' },
+  ]
   if (user.value?.is_admin) {
-    // 管理员只显示管理相关标签
-    return [
-      { id: 'admin', name: '系统管理' }
-    ]
+    baseTabs.push({ id: 'admin', name: '管理后台' })
   }
-  // 普通用户显示业务功能标签
-  return tabs.value
+  return baseTabs
 })
 
-const tabs = ref([
-  { id: 'watchlist', name: '自选股' },
-  { id: 'strategies', name: '策略配置' },
-  { id: 'data', name: '数据查询' },
-  { id: 'ranking', name: '股票评分' },
-  { id: 'chart', name: 'K线图表' },
-  { id: 'analysis', name: 'AI分析' },
-  { id: 'history', name: '历史分析' },
-  {id: 'spectrum', name:'阴阳谱'}
-])
+// const adminTabs = [
+//   { id: 'watchlist', name: '自选股' },
+//   { id: 'data', name: '行情数据' },
+//   { id: 'chart', name: 'K线图' },
+//   { id: 'analysis', name: 'AI分析' },
+//   { id: 'history', name: '分析历史' },
+//   { id: 'strategies', name: '策略配置' },
+//   { id: 'ranking', name: '评分' },
+//   { id: 'spectrum', name: '市场谱' },
+//   { id: 'securities', name: '证券账户' }, // 新增tab
+//   { id: 'admin', name: '管理后台' },
+// ]
+
+// const adminTabs = computed(() => {
+//   if (user.value?.is_admin) {
+//     // 管理员只显示管理相关标签
+//     return [
+//       { id: 'admin', name: '系统管理' }
+//     ]
+//   }
+//   // 普通用户显示业务功能标签
+//   return tabs.value
+// })
+
+// const tabs = ref([
+//   { id: 'watchlist', name: '自选股' },
+//   { id: 'strategies', name: '策略配置' },
+//   { id: 'data', name: '数据查询' },
+//   { id: 'ranking', name: '股票评分' },
+//   { id: 'chart', name: 'K线图表' },
+//   { id: 'analysis', name: 'AI分析' },
+//   { id: 'history', name: '历史分析' },
+//   {id: 'spectrum', name:'阴阳谱'}
+// ])
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
