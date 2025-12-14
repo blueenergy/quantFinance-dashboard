@@ -30,9 +30,8 @@ export async function setWatchlistStrategy(payload) {
   return res.json();
 }
 
-const STRATEGIES_API_URL = import.meta.env.VITE_STRATEGIES_API_URL || "http://10.183.72.186:8000/strategies";
 export async function getAvailableStrategies() {
-  const res = await fetch(STRATEGIES_API_URL, {
+  const res = await fetch(`${API_BASE}/strategy/strategies`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error(`Failed available strategies: ${res.status}`);
