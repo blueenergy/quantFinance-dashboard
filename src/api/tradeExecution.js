@@ -40,10 +40,34 @@ export async function getTradeExecutionStats() {
   return res.json();
 }
 
+export async function getTradeActivitiesStats() {
+  const res = await fetch(`${API_BASE}/trade-activities/stats`, { 
+    headers: authHeaders() 
+  });
+  if (!res.ok) throw new Error(`Failed to fetch trade activities stats: ${res.status}`);
+  return res.json();
+}
+
 export async function getTradeStrategies() {
   const res = await fetch(`${API_BASE}/trade-executions/strategies`, { 
     headers: authHeaders() 
   });
   if (!res.ok) throw new Error(`Failed to fetch trade strategies: ${res.status}`);
+  return res.json();
+}
+
+export async function getAllTradeActivities(params = {}) {
+  const queryParams = new URLSearchParams();
+  if (params.limit) queryParams.append('limit', params.limit);
+  if (params.skip) queryParams.append('skip', params.skip);
+  if (params.days) queryParams.append('days', params.days);
+  if (params.start_date) queryParams.append('start_date', params.start_date);
+  if (params.end_date) queryParams.append('end_date', params.end_date);
+  if (params.status_filter) queryParams.append('status_filter', params.status_filter);
+  
+  const res = await fetch(`${API_BASE}/trade-activities/?${queryParams.toString()}`, {
+    headers: authHeaders()
+  });
+  if (!res.ok) throw new Error(`Failed to fetch trade activities: ${res.status}`);
   return res.json();
 }
