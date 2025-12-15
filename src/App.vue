@@ -10,7 +10,7 @@
     <div v-else class="container">
       <header class="header">
         <div class="header-left">
-          <h1>� 悟空量化金融智能助手</h1>
+          <h1>🔥 悟空量化金融智能助手</h1>
         </div>
         <div class="header-right">
           <UserInfo :user="user" @logout="handleLogout" />
@@ -179,6 +179,16 @@
           <div v-if="activeTab === 'securities'" class="securities-view">
             <SecuritiesAccountManager />
           </div>
+
+          <!-- 添加这一部分 -->
+          <Suspense v-if="activeTab === 'trade-executions'">
+            <template #default>
+              <TradeExecutionTable />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">交易执行记录加载中...</div>
+            </template>
+          </Suspense>
         </div>
       </div>
     </div>
@@ -199,6 +209,7 @@ const AdminDashboard = defineAsyncComponent(() => import('./components/AdminDash
 const StockRanking = defineAsyncComponent(() => import('./components/StockRanking.vue'))
 const MarketSpectrum = defineAsyncComponent(() => import('./components/MarketSpectrum.vue'))
 const WatchlistStrategyTable = defineAsyncComponent(() => import('./components/WatchlistStrategyTable.vue'))
+const TradeExecutionTable = defineAsyncComponent(() => import('./components/TradeExecutionTable.vue'))
 import SecuritiesAccountManager from './components/SecuritiesAccountManager.vue'
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
@@ -250,12 +261,13 @@ const adminTabs = computed(() => {
   const baseTabs = [
     { id: 'watchlist', name: '自选股' },
     { id: 'strategies', name: '策略配置' },
+    { id: 'trade-executions', name: '交易执行' },
     { id: 'chart', name: 'K线图' },
     { id: 'history', name: '分析历史' },
     { id: 'ranking', name: '评分' },
     { id: 'spectrum', name: '阴阳谱' },
     { id: 'securities', name: '证券账户' },
-    { id: 'analysis', name: 'AI分析' },
+    { id: 'analysis', name: 'AI分析' }
   ]
   if (user.value?.is_admin) {
     baseTabs.push({ id: 'admin', name: '管理后台' })
@@ -597,7 +609,6 @@ const hasNext = computed(() => currentIndex.value < watchlist.value.length - 1)
   border-radius: 8px;
   padding: 40px;
   text-align: center;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
 .welcome-card h2 {
