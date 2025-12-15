@@ -1,7 +1,7 @@
 <template>
   <div>
     <v-card>
-      <v-card-title>交易执行记录</v-card-title>
+      <v-card-title>交易活动记录</v-card-title>
       <v-card-text>
         <div class="d-flex flex-wrap ga-4 mb-4">
           <v-text-field
@@ -15,6 +15,14 @@
             v-model="selectedStrategy"
             :items="strategyOptions"
             label="策略筛选"
+            density="compact"
+            variant="outlined"
+            hide-details
+          />
+          <v-select
+            v-model="statusFilter"
+            :items="statusFilterOptions"
+            label="状态筛选"
             density="compact"
             variant="outlined"
             hide-details
@@ -92,6 +100,17 @@
           </v-col>
         </v-row>
 
+        <!-- Error/Info Alert -->
+        <v-alert
+          v-if="errorMessage"
+          :type="trades.length === 0 && !loading ? 'info' : 'warning'"
+          class="mb-4"
+          closable
+          @click:close="errorMessage = ''"
+        >
+          {{ errorMessage }}
+        </v-alert>
+
         <v-data-table
           :items="filteredTrades"
           :headers="headers"
@@ -108,7 +127,12 @@
             {{ item.stock_name || item.name || '-' }}
           </template>
           <template #item.side="{ item }">
-            <span :class="(item.side || item.action)?.toLowerCase()">{{ item.side || item.action || '-' }}</span>
+            <span :class="(item.direction || item.side || item.action)?.toLowerCase()">{{ item.direction || item.side || item.action || '-' }}</span>
+          </template>
+          <template #item.status="{ item }">
+            <v-chip :color="getStatusColor(item.status)" size="small">
+              {{ item.status || '-' }}
+            </v-chip>
           </template>
           <template #item.target_price="{ item }">
             {{ item.target_price?.toFixed(2) || item.price?.toFixed(2) || '-' }}
@@ -138,6 +162,7 @@ const stats = ref(null);
 const strategies = ref([]);
 const searchSymbol = ref('');
 const selectedStrategy = ref('');
+const statusFilter = ref('all');
 const selectedDate = ref('');
 const dateRangeType = ref('all'); // 'all', 'single', 'range', 'recent7', 'recent30'
 const startDate = ref('');
@@ -145,6 +170,14 @@ const endDate = ref('');
 const currentPage = ref(1);
 const pageSize = ref(20);
 const loading = ref(false);
+const errorMessage = ref('');
+
+// 状态筛选选项
+const statusFilterOptions = [
+  { title: '全部', value: 'all' },
+  { title: '仅已执行', value: 'executed' },
+  { title: '仅待执行', value: 'pending' }
+];
 
 // 日期范围选项
 const dateRangeOptions = [
@@ -219,47 +252,44 @@ function formatDate(timestamp) {
 async function loadTrades() {
   try {
     loading.value = true;
-    let response;
+    errorMessage.value = '';
     
-    // 构建查询参数
-    const params = new URLSearchParams();
-    params.append('limit', pageSize.value);
-    params.append('skip', (currentPage.value - 1) * pageSize.value);
+    // 使用新的融合 API
+    const params = {
+      limit: pageSize.value,
+      skip: (currentPage.value - 1) * pageSize.value
+    };
+    
+    // 添加状态筛选
+    if (statusFilter.value && statusFilter.value !== 'all') {
+      params.status_filter = statusFilter.value;
+    }
     
     // 处理日期筛选
     if (dateRangeType.value === 'recent7') {
-      params.append('days', '7');
+      params.days = 7;
     } else if (dateRangeType.value === 'recent30') {
-      params.append('days', '30');
-    } else if (dateRangeType.value === 'single' && selectedDate.value) {
-      // 单一日期，使用原有的 date API
-      response = await tradeApi.getTradeExecutionsByDate(selectedDate.value, pageSize.value, (currentPage.value - 1) * pageSize.value);
-      trades.value = response.data || [];
-      loading.value = false;
-      return;
+      params.days = 30;
     } else if (dateRangeType.value === 'range') {
-      if (startDate.value) params.append('start_date', startDate.value);
-      if (endDate.value) params.append('end_date', endDate.value);
-    }
-    // dateRangeType === 'all' 时不添加任何日期参数
-    
-    // 处理股票代码筛选
-    if (searchSymbol.value) {
-      response = await tradeApi.getTradeExecutionsBySymbol(searchSymbol.value, pageSize.value, (currentPage.value - 1) * pageSize.value);
-    } else {
-      // 使用带日期参数的 API
-      const res = await fetch(`/api/trade-executions/?${params.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        }
-      });
-      if (!res.ok) throw new Error(`Failed to fetch trade executions: ${res.status}`);
-      response = await res.json();
+      if (startDate.value) params.start_date = startDate.value;
+      if (endDate.value) params.end_date = endDate.value;
     }
     
+    const response = await tradeApi.getAllTradeActivities(params);
     trades.value = response.data || [];
+    
+    // Show message if no data
+    if (trades.value.length === 0) {
+      if (response.message) {
+        errorMessage.value = response.message;
+      } else {
+        errorMessage.value = 'No trade activities found. Start trading to see data here.';
+      }
+    }
+    
   } catch (error) {
     console.error('Failed to load trades:', error);
+    errorMessage.value = `Failed to load trade data: ${error.message || 'Unknown error'}`;
     trades.value = [];
   } finally {
     loading.value = false;
@@ -268,8 +298,8 @@ async function loadTrades() {
 
 async function loadStats() {
   try {
-    const response = await tradeApi.getTradeExecutionStats();
-    // Fix: Access response.stats directly as that's what the backend returns
+    const response = await tradeApi.getTradeActivitiesStats();
+    // Use the new merged stats API
     stats.value = response.stats || null;
   } catch (error) {
     console.error('Failed to load stats:', error);
@@ -299,8 +329,20 @@ function updatePage(page) {
   loadTrades();
 }
 
+function getStatusColor(status) {
+  const statusUpper = (status || '').toUpperCase();
+  const colorMap = {
+    'FILLED': 'green',
+    'PENDING': 'orange',
+    'RETRY': 'amber',
+    'SUBMITTED': 'blue',
+    'FAILED': 'red'
+  };
+  return colorMap[statusUpper] || 'grey';
+}
+
 // Watchers
-watch([searchSymbol, selectedStrategy, dateRangeType, selectedDate, startDate, endDate], () => {
+watch([searchSymbol, selectedStrategy, statusFilter, dateRangeType, selectedDate, startDate, endDate], () => {
   currentPage.value = 1;
   loadTrades();
 });
