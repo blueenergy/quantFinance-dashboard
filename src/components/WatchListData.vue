@@ -11,6 +11,8 @@
       
       <div class="user-status" v-if="isAuthenticated">
         <span class="success-tip">✅ 已登录，自选股已同步到服务器</span>
+        <span v-if="useRealtimeData" class="realtime-badge">🔴 实时数据</span>
+        <span v-else class="history-badge">📊 历史数据</span>
       </div>
       
       <!-- 迁移提示 -->
@@ -27,6 +29,9 @@
         <button @click="addStock" :disabled="loading">添加</button>
         <button @click="refreshAll" :disabled="loading" class="refresh-btn">
           {{ loading ? '刷新中...' : '🔄 刷新全部' }}
+        </button>
+        <button @click="toggleDataSource" :disabled="loading" class="toggle-source-btn" v-if="isAuthenticated">
+          {{ useRealtimeData ? '📊 切换到历史数据' : '🔴 切换到实时数据' }}
         </button>
         <button @click="addSampleStock" class="sample-btn">
           📊 添加示例(000001)
@@ -47,10 +52,13 @@
               <th>股票代码</th>
               <th>股票名称</th>
               <th>最新价格</th>
+              <th>开盘</th>
+              <th>最高</th>
+              <th>最低</th>
               <th>涨跌额</th>
               <th>涨跌幅</th>
               <th>成交量</th>
-              <th>成交金额</th>
+              <th v-if="useRealtimeData">更新时间</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -62,15 +70,18 @@
                 </span>
               </td>
               <td class="stock-name">{{ stock.name || stock.symbol }}</td>
-              <td class="price">{{ stock.close || '-' }}</td>
+              <td class="price">{{ formatPrice(stock.price || stock.close) }}</td>
+              <td class="price">{{ formatPrice(stock.open) }}</td>
+              <td class="price">{{ formatPrice(stock.high) }}</td>
+              <td class="price">{{ formatPrice(stock.low) }}</td>
               <td :class="getPriceChangeClass(stock.change)">
                 {{ formatChange(stock.change) }}
               </td>
-              <td :class="getPriceChangeClass(stock.change_percent)">
-                {{ formatPercent(stock.change_percent) }}
+              <td :class="getPriceChangeClass(stock.change_percent || stock.change_pct)">
+                {{ formatPercent(stock.change_percent || stock.change_pct) }}
               </td>
               <td>{{ formatVolume(stock.volume) }}</td>
-              <td>{{ formatTurnover(stock.turnover) }}</td>
+              <td v-if="useRealtimeData" class="update-time">{{ formatUpdateTime(stock.update_time) }}</td>
               <td>
                   <div class="action-btn-group">
                     <button @click="selectChart(stock.symbol)" class="chart-btn">📈 K线</button>
@@ -217,6 +228,7 @@ const currentAnalysis = ref({ symbol: '', data: null, timestamp: null })
 const migrationComplete = ref(false)
 const showHistoryModal = ref(false)
 const historySymbol = ref('')
+const useRealtimeData = ref(true)  // 默认使用实时数据
 
 
 // 计算没有数据的股票
@@ -683,22 +695,41 @@ async function refreshAll() {
   
   try {
     if (isAuthenticated?.value) {
-      // 用户已登录，使用用户专属API
-      const response = await watchlistService.getUserWatchlistStocks()
-      stocksData.value = response.map(stock => ({
-        symbol: stock.symbol,
-        name: stock.name,
-        close: stock.close,
-        change: stock.change,
-        change_percent: stock.change_percent,
-        volume: stock.volume,
-        turnover: stock.turnover,
-        turnover_rate: stock.turnover_rate,
-        pe: stock.pe,
-        market_cap: stock.market_cap,
-        circ_market_cap: stock.circ_market_cap,
-        date: stock.trade_date
-      }))
+      // 用户已登录，根据 useRealtimeData 选择数据源
+      if (useRealtimeData.value) {
+        // 使用实时数据 API
+        const response = await watchlistService.getUserWatchlistRealtime()
+        stocksData.value = response.map(stock => ({
+          symbol: stock.symbol,
+          name: stock.name,
+          price: stock.price,           // 最新价格
+          open: stock.open,             // 开盘价
+          high: stock.high,             // 最高价
+          low: stock.low,               // 最低价
+          close: stock.price,           // 兼容性
+          change: stock.change,         // 涨跌额
+          change_pct: stock.change_pct, // 涨跌幅
+          volume: stock.volume,         // 成交量
+          update_time: stock.update_time // 更新时间
+        }))
+      } else {
+        // 使用历史数据 API
+        const response = await watchlistService.getUserWatchlistStocks()
+        stocksData.value = response.map(stock => ({
+          symbol: stock.symbol,
+          name: stock.name,
+          close: stock.close,
+          change: stock.change,
+          change_percent: stock.change_percent,
+          volume: stock.volume,
+          turnover: stock.turnover,
+          turnover_rate: stock.turnover_rate,
+          pe: stock.pe,
+          market_cap: stock.market_cap,
+          circ_market_cap: stock.circ_market_cap,
+          date: stock.trade_date
+        }))
+      }
     } else {
       // 未登录，使用传统批量API
       const symbolsStr = watchList.value.join(',')
@@ -739,15 +770,36 @@ async function refreshAll() {
   }
 }
 
+// 切换数据源
+function toggleDataSource() {
+  useRealtimeData.value = !useRealtimeData.value
+  refreshAll()  // 切换后立即刷新数据
+}
+
 // 格式化函数
 function formatDate(dateStr) {
   if (!dateStr) return '-'
   return dateStr.substring(0, 10)
 }
 
+function formatPrice(price) {
+  if (price === undefined || price === null) return '-'
+  return Number(price).toFixed(2)
+}
+
 function formatChange(change) {
   if (change === undefined || change === null) return '-'
   return change >= 0 ? `+${change.toFixed(2)}` : change.toFixed(2)
+}
+
+function formatUpdateTime(timeStr) {
+  if (!timeStr) return '-'
+  // timeStr 格式: "2025-12-16 14:30:00"
+  // 只显示时间部分
+  if (typeof timeStr === 'string' && timeStr.includes(' ')) {
+    return timeStr.split(' ')[1]  // 返回 "14:30:00"
+  }
+  return timeStr
 }
 
 function formatPE(val) {
@@ -860,6 +912,31 @@ onMounted(async () => {
   border-radius: 8px;
   display: inline-block;
   box-shadow: 0 2px 8px rgba(52, 211, 153, 0.2);
+  margin-right: 8px;
+}
+
+.realtime-badge {
+  color: #ef4444;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: bold;
+  display: inline-block;
+  margin-left: 8px;
+}
+
+.history-badge {
+  color: #60a5fa;
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.1), rgba(59, 130, 246, 0.1));
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: bold;
+  display: inline-block;
+  margin-left: 8px;
 }
 
 .migration-tip {
@@ -954,6 +1031,25 @@ onMounted(async () => {
   background: linear-gradient(135deg, #f7931e 0%, #e67e22 100%);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(255, 107, 53, 0.5);
+}
+
+.toggle-source-btn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: white;
+  margin-left: 8px;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+}
+
+.toggle-source-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5);
+}
+
+.update-time {
+  color: #9ca3af;
+  font-size: 12px;
 }
 
 .empty-watchlist {

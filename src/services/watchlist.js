@@ -61,6 +61,24 @@ class WatchlistService {
     }
   }
 
+  // 获取用户自选股实时数据（基于分钟K线）
+  async getUserWatchlistRealtime() {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/user/watchlist-stocks/realtime`, {
+        headers: this.getAuthHeaders()
+      })
+      
+      if (response.data.success) {
+        return response.data.data || []
+      } else {
+        throw new Error(response.data.message || '获取实时数据失败')
+      }
+    } catch (error) {
+      console.error('获取实时数据失败:', error)
+      throw error
+    }
+  }
+
   // 添加股票到自选股
   async addToWatchlist(symbol) {
     try {
