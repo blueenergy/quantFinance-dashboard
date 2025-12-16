@@ -1,29 +1,95 @@
 <template>
   <div>
     <v-card>
-      <v-card-title>自选股策略配置</v-card-title>
+      <v-card-title>
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span>自选股策略配置 ({{ viewMode === 'compact' ? '横向视图' : '详细视图' }})</span>
+          <div>
+            <v-btn 
+              :variant="viewMode === 'compact' ? 'flat' : 'outlined'"
+              :color="viewMode === 'compact' ? 'primary' : ''"
+              size="small"
+              @click="viewMode = 'compact'"
+              style="margin-right: 8px;"
+            >
+              <v-icon :icon="mdiViewColumn"></v-icon>
+              横向视图
+            </v-btn>
+            <v-btn 
+              :variant="viewMode === 'detailed' ? 'flat' : 'outlined'"
+              :color="viewMode === 'detailed' ? 'primary' : ''"
+              size="small"
+              @click="viewMode = 'detailed'"
+            >
+              <v-icon :icon="mdiViewList"></v-icon>
+              详细视图
+            </v-btn>
+          </div>
+        </div>
+      </v-card-title>
       <v-card-text>
-        <v-data-table :items="rows" :headers="headers" class="elevation-1">
+        <!-- Compact View: Horizontal multi-strategy layout -->
+        <v-data-table v-if="viewMode === 'compact'" :items="rows" :headers="headers" class="elevation-1">
+          <!-- Dynamic strategy columns -->
+          <template v-for="stratKey in availableStrategyKeys" :key="stratKey" v-slot:[`item.strategy_${stratKey}`]="{ item }">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <v-switch
+                v-model="item.strategies[stratKey].enabled"
+                :label="item.strategies[stratKey].enabled ? '✅' : ''"
+                color="primary"
+                density="compact"
+                hide-details
+                @change="toggleStrategy(item, stratKey)"
+              />
+              <v-btn 
+                v-if="item.strategies[stratKey].enabled"
+                size="x-small" 
+                variant="text" 
+                icon
+                @click="openParams(item, stratKey)"
+              >
+                <v-icon :icon="mdiCog"></v-icon>
+              </v-btn>
+            </div>
+          </template>
+        </v-data-table>
+        
+        <!-- Detailed View: Vertical one-strategy-per-row layout -->
+        <v-data-table v-else :items="detailedRows" :headers="detailedHeaders" class="elevation-1">
           <template #item.strategy="{ item }">
+            <v-chip v-if="item.strategy_key" color="primary" variant="outlined" size="small">
+              {{ strategyMeta[item.strategy_key]?.name || item.strategy_key }}
+            </v-chip>
             <v-select
+              v-else
               :items="strategyOptions"
-              v-model="item.strategy"
               item-title="name"
               item-value="key"
+              label="选择策略"
               density="compact"
-              @update:modelValue="onStrategySelect(item)"
+              variant="outlined"
+              @update:modelValue="(val) => onAddStrategy(item, val)"
+              style="min-width: 150px;"
             />
           </template>
           <template #item.params="{ item }">
-            <v-btn size="small" @click="openParams(item)">编辑参数</v-btn>
+            <v-btn v-if="item.strategy_key" size="small" variant="text" @click="openParamsDetailed(item)">
+              <v-icon :icon="mdiCog" size="small" start></v-icon>
+              参数
+            </v-btn>
+            <span v-else style="color: #999;">-</span>
           </template>
           <template #item.enabled="{ item }">
             <v-switch
+              v-if="item.strategy_key"
               v-model="item.enabled"
               :label="item.enabled ? '已激活' : '未激活'"
               color="primary"
-              @change="toggleEnabled(item)"
+              density="compact"
+              hide-details
+              @change="toggleStrategyDetailed(item)"
             />
+            <span v-else style="color: #999;">-</span>
           </template>
         </v-data-table>
       </v-card-text>
@@ -31,7 +97,7 @@
 
     <v-dialog v-model="paramsDialog" max-width="900">
       <v-card>
-        <v-card-title>编辑参数 - {{ editingRow?.symbol }}</v-card-title>
+        <v-card-title>编辑参数 - {{ editingRow?.symbol }} - {{ strategyMeta[editingStrategy]?.name }}</v-card-title>
         <v-card-text>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
             <!-- 左侧：当前参数 -->
@@ -40,7 +106,7 @@
               <v-textarea 
                 v-model="paramsJson" 
                 rows="14" 
-                label="JSON 参数" 
+                :label="`${strategyMeta[editingStrategy]?.name} - JSON 参数`" 
                 variant="outlined"
                 density="compact"
               ></v-textarea>
@@ -54,7 +120,7 @@
                 :items="availablePresets"
                 item-title="label"
                 item-value="preset"
-                label="选择预设模板"
+                :label="`${strategyMeta[editingStrategy]?.name} - 选择预设模板`"
                 density="compact"
                 variant="outlined"
                 clearable
@@ -98,30 +164,60 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies, API_BASE, authHeaders} from '../api/user'
+import { mdiViewColumn, mdiViewList, mdiCog } from '@mdi/js'
 
-const headers = [
-  { title: '代码', key: 'symbol' },
-  { title: '名称', key: 'name' },
-  { title: '策略', key: 'strategy' },
-  { title: '参数', key: 'params' },
-  { title: '更新时间', key: 'updated_at' },
-  { title: '激活状态', key: 'enabled' },
-  { title: '操作', key: 'actions', sortable: false },
-]
+// ============================================================================
+// State Management
+// ============================================================================
+
+// Strategy metadata
 const strategyOptions = ref([])
 const strategyMeta = ref({})
-const strategyTemplates = ref({})  // Store templates grouped by strategy
+const strategyTemplates = ref({})
+const availableStrategyKeys = ref([])
 
-const rows = ref([])
+// View state
+const viewMode = ref('detailed')  // 'compact' | 'detailed'
+const rows = ref([])  // Compact view data
+const detailedRows = ref([])  // Detailed view data
+
+// Dialog state
 const paramsDialog = ref(false)
 const editingRow = ref(null)
+const editingStrategy = ref(null)
 const paramsJson = ref('{}')
 const selectedPreset = ref(null)
 const availablePresets = ref([])
 
+// ============================================================================
+// Computed Properties
+// ============================================================================
+
+// Compact view: dynamic headers based on available strategies
+const headers = computed(() => [
+  { title: '代码', key: 'symbol', width: '100px' },
+  { title: '名称', key: 'name', width: '120px' },
+  ...availableStrategyKeys.value.map(key => ({
+    title: strategyMeta.value[key]?.name || key,
+    key: `strategy_${key}`,
+    sortable: false,
+    width: '120px'
+  }))
+])
+
+// Detailed view: fixed headers
+const detailedHeaders = [
+  { title: '代码', key: 'symbol', width: '100px' },
+  { title: '名称', key: 'name', width: '150px' },
+  { title: '策略', key: 'strategy', width: '150px' },
+  { title: '参数', key: 'params', sortable: false, width: '120px' },
+  { title: '更新时间', key: 'updated_at', width: '180px' },
+  { title: '激活状态', key: 'enabled', width: '150px' },
+]
+
 const selectedPresetObj = computed(() => {
-  if (!selectedPreset.value || !editingRow.value?.strategy) return null
-  const templates = strategyTemplates.value[editingRow.value.strategy] || []
+  if (!selectedPreset.value || !editingStrategy.value) return null
+  const templates = strategyTemplates.value[editingStrategy.value] || []
   return templates.find(t => t.preset === selectedPreset.value)
 })
 
@@ -129,11 +225,27 @@ const selectedPresetParams = computed(() =>
   selectedPresetObj.value ? JSON.stringify(selectedPresetObj.value.params, null, 2) : ''
 )
 
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
 function formatTimestamp(ts) {
   if (!ts) return ''
   if (ts < 10000000000) ts = ts * 1000
   return new Date(ts).toLocaleString()
 }
+
+function normalizeSymbol(symbol) {
+  return symbol != null ? symbol.toString().padStart(6, '0') : ''
+}
+
+function hasStrategyConfig(strategies) {
+  return Object.values(strategies).some(s => s.enabled || Object.keys(s.params || {}).length > 0)
+}
+
+// ============================================================================
+// Data Loading & Processing
+// ============================================================================
 
 async function loadData() {
   const [wl, stratResp, avail, stocksResp, templatesResp] = await Promise.all([
@@ -143,95 +255,227 @@ async function loadData() {
     fetch(`${API_BASE}/user/watchlist-stocks`, { headers: authHeaders() }).then(r => r.json()),
     fetch(`${API_BASE}/strategy/templates`).then(r => r.json())
   ])
-  const syms = wl?.data?.symbols || []
-  const stratMap = {}
-  ;(stratResp?.data || []).forEach(s => { stratMap[s.symbol] = s })
+  
+  // Initialize strategy metadata
   strategyOptions.value = avail.map(s => ({ key: s.key, name: s.name }))
   strategyMeta.value = Object.fromEntries(avail.map(s => [s.key, s]))
+  availableStrategyKeys.value = avail.map(s => s.key)
+  strategyTemplates.value = templatesResp?.ok ? templatesResp.templates || {} : {}
   
-  // Store strategy templates
-  if (templatesResp?.ok) {
-    strategyTemplates.value = templatesResp.templates || {}
-    console.log('Loaded strategy templates:', strategyTemplates.value)
-  } else {
-    console.warn('Failed to load strategy templates:', templatesResp)
-  }
+  // Build data maps
+  const watchlistSymbols = wl?.data?.symbols || []
+  const symbolStrategyMap = buildStrategyMap(stratResp?.data || [])
+  const symbolNameMap = buildNameMap(stocksResp?.data || [])
   
-  // Map symbol to name
-  const nameMap = {}
-  if (stocksResp?.data) {
-    stocksResp.data.forEach(s => { nameMap[s.symbol] = s.name })
-  }
-  // 合并自选股和有策略的symbol，取并集
-  const allSymbols = Array.from(new Set([
-    ...syms,
-    ...Object.keys(stratMap)
-  ]))
-  rows.value = allSymbols.map(symbol => {
-    const symbolStr = symbol != null ? symbol.toString().padStart(6, '0') : ''
-    // 没有策略时 enabled 设为 false
-    const hasStrategy = !!stratMap[symbolStr]?.strategy_key
+  // Build view data
+  rows.value = buildCompactViewData(watchlistSymbols, symbolStrategyMap, symbolNameMap)
+  detailedRows.value = buildDetailedViewData(watchlistSymbols, symbolStrategyMap, symbolNameMap)
+}
+
+function buildStrategyMap(strategies) {
+  const map = {}
+  strategies.forEach(s => {
+    const sym = s.symbol
+    if (!map[sym]) map[sym] = {}
+    map[sym][s.strategy_key] = {
+      params: s.params || {},
+      enabled: s.enabled !== false,
+      updated_at: s.updated_at,
+    }
+  })
+  return map
+}
+
+function buildNameMap(stocks) {
+  const map = {}
+  stocks.forEach(s => { map[s.symbol] = s.name })
+  return map
+}
+
+function buildCompactViewData(symbols, strategyMap, nameMap) {
+  const data = symbols.map(symbol => {
+    const symbolStr = normalizeSymbol(symbol)
+    const strategies = {}
+    
+    availableStrategyKeys.value.forEach(key => {
+      strategies[key] = strategyMap[symbolStr]?.[key] || { enabled: false, params: {} }
+    })
+    
     return {
       symbol: symbolStr,
       name: nameMap[symbolStr] || symbolStr,
-      strategy: stratMap[symbolStr]?.strategy_key || '',
-      params: stratMap[symbolStr]?.params || {},
-      updated_at: formatTimestamp(stratMap[symbolStr]?.updated_at),
-      enabled: hasStrategy ? (stratMap[symbolStr]?.enabled !== false) : false,
+      strategies,
     }
+  })
+  
+  // Sort: configured strategies first
+  data.sort((a, b) => {
+    const aHasConfig = hasStrategyConfig(a.strategies)
+    const bHasConfig = hasStrategyConfig(b.strategies)
+    return aHasConfig === bHasConfig ? 0 : (aHasConfig ? -1 : 1)
+  })
+  
+  return data
+}
+
+function buildDetailedViewData(symbols, strategyMap, nameMap) {
+  const withStrategies = []
+  const withoutStrategies = []
+  
+  symbols.forEach(symbol => {
+    const symbolStr = normalizeSymbol(symbol)
+    const name = nameMap[symbolStr] || symbolStr
+    const rows = []
+    
+    availableStrategyKeys.value.forEach(stratKey => {
+      if (strategyMap[symbolStr]?.[stratKey]) {
+        const stratData = strategyMap[symbolStr][stratKey]
+        rows.push({
+          symbol: symbolStr,
+          name,
+          strategy_key: stratKey,
+          params: stratData.params,
+          enabled: stratData.enabled,
+          updated_at: formatTimestamp(stratData.updated_at),
+        })
+      }
+    })
+    
+    // Stocks without any strategy get a placeholder row
+    if (rows.length === 0) {
+      rows.push({
+        symbol: symbolStr,
+        name,
+        strategy_key: null,
+        params: {},
+        enabled: false,
+        updated_at: '-',
+      })
+      withoutStrategies.push(...rows)
+    } else {
+      withStrategies.push(...rows)
+    }
+  })
+  
+  return [...withStrategies, ...withoutStrategies]
+}
+
+// ============================================================================
+// Strategy Actions
+// ============================================================================
+
+async function toggleStrategy(item, strategyKey) {
+  await setWatchlistStrategy({ 
+    symbol: normalizeSymbol(item.symbol), 
+    strategy: strategyKey, 
+    params: item.strategies[strategyKey].params || {}, 
+    enabled: item.strategies[strategyKey].enabled
   })
 }
 
-function onStrategySelect(item) {
-  console.log('onStrategySelect symbol:', item.symbol, typeof item.symbol)
-  setWatchlistStrategy({ symbol: item.symbol.toString().padStart(6, '0'), strategy: item.strategy, params: item.params || {} })
-    .catch(err => console.error(err))
+async function toggleStrategyDetailed(item) {
+  await setWatchlistStrategy({ 
+    symbol: normalizeSymbol(item.symbol), 
+    strategy: item.strategy_key, 
+    params: item.params || {}, 
+    enabled: item.enabled 
+  })
+  
+  // Sync with compact view
+  const compactRow = rows.value.find(r => r.symbol === item.symbol)
+  if (compactRow?.strategies[item.strategy_key]) {
+    compactRow.strategies[item.strategy_key].enabled = item.enabled
+  }
 }
 
-function openParams(item) {
-  editingRow.value = item
-  paramsJson.value = JSON.stringify(item.params || {}, null, 2)
+async function onAddStrategy(item, strategyKey) {
+  if (!strategyKey) return
   
-  // Load available presets for this strategy
-  const templates = strategyTemplates.value[item.strategy] || []
+  try {
+    await setWatchlistStrategy({ 
+      symbol: normalizeSymbol(item.symbol), 
+      strategy: strategyKey, 
+      params: {},
+      enabled: false
+    })
+    await loadData()
+  } catch (err) {
+    console.error('Failed to add strategy:', err)
+    alert('添加策略失败，请重试')
+  }
+}
+
+// ============================================================================
+// Parameter Dialog Management
+// ============================================================================
+
+function openParams(item, strategyKey) {
+  editingRow.value = item
+  editingStrategy.value = strategyKey
+  paramsJson.value = JSON.stringify(item.strategies[strategyKey].params || {}, null, 2)
+  loadPresetsForStrategy(strategyKey)
+  paramsDialog.value = true
+}
+
+function openParamsDetailed(item) {
+  editingRow.value = item
+  editingStrategy.value = item.strategy_key
+  paramsJson.value = JSON.stringify(item.params || {}, null, 2)
+  loadPresetsForStrategy(item.strategy_key)
+  paramsDialog.value = true
+}
+
+function loadPresetsForStrategy(strategyKey) {
+  const templates = strategyTemplates.value[strategyKey] || []
   availablePresets.value = templates.map(t => ({
     preset: t.preset,
     label: `${t.preset} - ${t.description}`,
     description: t.description,
     params: t.params
   }))
-  
   selectedPreset.value = null
-  paramsDialog.value = true
 }
 
 function applyPreset() {
-  if (selectedPresetObj.value) {
-    // Apply template params to current params (left side)
-    paramsJson.value = JSON.stringify(selectedPresetObj.value.params, null, 2)
-    if (editingRow.value) {
-      editingRow.value.params = { ...selectedPresetObj.value.params }
-    }
-    console.log('Applied template:', selectedPresetObj.value.preset)
+  if (!selectedPresetObj.value) return
+  
+  paramsJson.value = JSON.stringify(selectedPresetObj.value.params, null, 2)
+  if (editingRow.value) {
+    editingRow.value.params = { ...selectedPresetObj.value.params }
   }
 }
 
 async function saveParams() {
   try {
     const parsed = JSON.parse(paramsJson.value || '{}')
-    if (editingRow.value) editingRow.value.params = parsed
-    await setWatchlistStrategy({ symbol: editingRow.value.symbol.toString().padStart(6, '0'), strategy: editingRow.value.strategy || '', params: parsed })
+    if (!editingRow.value || !editingStrategy.value) return
+    
+    // Update local data
+    if (editingRow.value.strategies) {
+      editingRow.value.strategies[editingStrategy.value].params = parsed
+    }
+    if (editingRow.value.strategy_key) {
+      editingRow.value.params = parsed
+    }
+    
+    // Save to backend
+    await setWatchlistStrategy({ 
+      symbol: normalizeSymbol(editingRow.value.symbol), 
+      strategy: editingStrategy.value, 
+      params: parsed,
+      enabled: editingRow.value.strategies?.[editingStrategy.value]?.enabled ?? editingRow.value.enabled
+    })
+    
     paramsDialog.value = false
   } catch (e) {
     console.error('Invalid JSON', e)
+    alert('参数格式错误，请检查 JSON 格式')
   }
 }
 
-async function toggleEnabled(item) {
-  console.log('toggleEnabled symbol:', item.symbol, typeof item.symbol, 'to', item.enabled)
-  await setWatchlistStrategy({ symbol: item.symbol.toString().padStart(6, '0'), strategy: item.strategy, params: item.params, enabled: item.enabled })
-  // 不 reload，直接本地切换
-}
+// ============================================================================
+// Lifecycle
+// ============================================================================
 
 onMounted(loadData)
 </script>
