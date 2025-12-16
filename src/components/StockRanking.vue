@@ -1190,6 +1190,20 @@ async function addToWatchlist(symbol) {
 // ✅ 添加从自选股移除功能
 async function removeFromWatchlist(symbol) {
   try {
+    // Check if the stock has any active strategies
+    const stratCheckResponse = await axios.get('/api/user/watchlist/strategies', getAuthHeaders())
+    
+    if (stratCheckResponse.data.success) {
+      const activeStrategies = stratCheckResponse.data.data
+        .filter(s => s.symbol === symbol && s.enabled === true)
+      
+      if (activeStrategies.length > 0) {
+        const strategyNames = activeStrategies.map(s => s.strategy_key).join(', ')
+        alert(`❌ 无法删除：该股票还有 ${activeStrategies.length} 个策略处于激活状态 (${strategyNames})\n\n请先在“策略配置”页面停用相关策略，然后再删除股票。`)
+        return
+      }
+    }
+    
     const response = await axios.delete(`/api/user/watchlist/remove/${symbol}`, getAuthHeaders())
     
     if (response.data.success) {

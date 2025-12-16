@@ -407,8 +407,28 @@ async function removeStock(symbol) {
       // 用户已登录，从服务器移除
       console.log('从服务器移除股票:', symbol)
       
-      // 检查watchlistService的认证头
+      // Check if the stock has any active strategies
       const authHeaders = watchlistService.getAuthHeaders()
+      try {
+        const stratCheckResponse = await axios.get('/api/user/watchlist/strategies', {
+          headers: authHeaders
+        })
+        
+        if (stratCheckResponse.data.success) {
+          const activeStrategies = stratCheckResponse.data.data
+            .filter(s => s.symbol === symbol && s.enabled === true)
+          
+          if (activeStrategies.length > 0) {
+            const strategyNames = activeStrategies.map(s => s.strategy_key).join(', ')
+            alert(`❌ 无法删除：该股票还有 ${activeStrategies.length} 个策略处于激活状态 (${strategyNames})\n\n请先在“策略配置”页面停用相关策略，然后再删除股票。`)
+            return
+          }
+        }
+      } catch (err) {
+        console.warn('检查策略状态失败，继续删除操作:', err)
+      }
+      
+      // 检查watchlistService的认证头
       console.log('认证头:', authHeaders)
       
       const result = await watchlistService.removeFromWatchlist(symbol)
