@@ -3,6 +3,22 @@
     <v-card>
       <v-card-title>交易活动记录</v-card-title>
       <v-card-text>
+        <div class="d-flex ga-2 mb-3">
+          <v-btn
+            size="small"
+            :color="viewMode === 'executions' ? 'primary' : 'default'"
+            @click="setViewMode('executions')"
+          >
+            执行记录
+          </v-btn>
+          <v-btn
+            size="small"
+            :color="viewMode === 'signals' ? 'primary' : 'default'"
+            @click="setViewMode('signals')"
+          >
+            交易信号
+          </v-btn>
+        </div>
         <div class="d-flex flex-wrap ga-4 mb-4">
           <v-text-field
             v-model="searchSymbol"
@@ -65,7 +81,7 @@
           <v-btn color="primary" @click="refreshData">刷新</v-btn>
         </div>
 
-        <v-row v-if="stats" class="mb-4">
+        <v-row v-if="stats && viewMode === 'executions'" class="mb-4">
           <v-col cols="12" md="3">
             <v-card>
               <v-card-text class="text-center">
@@ -118,6 +134,7 @@
           class="elevation-1"
           :items-per-page="pageSize"
           :page="currentPage"
+          :items-length="totalTrades"
           @update:page="updatePage"
         >
           <template #item.timestamp="{ item }">
@@ -160,9 +177,10 @@ import * as tradeApi from '../api/tradeExecution.js';
 const trades = ref([]);
 const stats = ref(null);
 const strategies = ref([]);
+const viewMode = ref('executions');
 const searchSymbol = ref('');
 const selectedStrategy = ref('');
-const statusFilter = ref('all');
+const statusFilter = ref('executed');
 const selectedDate = ref('');
 const dateRangeType = ref('all'); // 'all', 'single', 'range', 'recent7', 'recent30'
 const startDate = ref('');
@@ -171,6 +189,7 @@ const currentPage = ref(1);
 const pageSize = ref(20);
 const loading = ref(false);
 const errorMessage = ref('');
+const totalTrades = ref(0);
 
 // 状态筛选选项
 const statusFilterOptions = [
@@ -198,7 +217,8 @@ const headers = [
   { title: '目标价', key: 'target_price' },
   { title: '成交价', key: 'filled_price' },
   { title: '数量', key: 'quantity' },
-  { title: '状态', key: 'status' }
+  { title: '状态', key: 'status' },
+  { title: '订单号', key: 'order_id' }
 ];
 
 // Computed properties
@@ -256,8 +276,8 @@ async function loadTrades() {
     
     // 使用新的融合 API
     const params = {
-      limit: pageSize.value,
-      skip: (currentPage.value - 1) * pageSize.value
+      limit: 1000,
+      skip: 0,
     };
     
     // 添加状态筛选
@@ -277,6 +297,7 @@ async function loadTrades() {
     
     const response = await tradeApi.getAllTradeActivities(params);
     trades.value = response.data || [];
+    totalTrades.value = response.total ?? trades.value.length;
     
     // Show message if no data
     if (trades.value.length === 0) {
@@ -298,8 +319,11 @@ async function loadTrades() {
 
 async function loadStats() {
   try {
-    const response = await tradeApi.getTradeActivitiesStats();
-    // Use the new merged stats API
+    if (viewMode.value !== 'executions') {
+      stats.value = null;
+      return;
+    }
+    const response = await tradeApi.getTradeExecutionStats();
     stats.value = response.stats || null;
   } catch (error) {
     console.error('Failed to load stats:', error);
@@ -318,6 +342,15 @@ async function loadStrategies() {
   }
 }
 
+function setViewMode(mode) {
+  if (viewMode.value === mode) return;
+  viewMode.value = mode;
+  statusFilter.value = mode === 'executions' ? 'executed' : 'pending';
+  currentPage.value = 1;
+  loadTrades();
+  loadStats();
+}
+
 function refreshData() {
   currentPage.value = 1;
   loadTrades();
@@ -326,7 +359,6 @@ function refreshData() {
 
 function updatePage(page) {
   currentPage.value = page;
-  loadTrades();
 }
 
 function getStatusColor(status) {
