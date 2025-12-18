@@ -71,3 +71,21 @@ export async function getAllTradeActivities(params = {}) {
   if (!res.ok) throw new Error(`Failed to fetch trade activities: ${res.status}`);
   return res.json();
 }
+
+export async function getTradePnlSummary(params = {}) {
+  const queryParams = new URLSearchParams();
+  if (params.days) queryParams.append('days', params.days);
+  if (params.start_date) queryParams.append('start_date', params.start_date);
+  if (params.end_date) queryParams.append('end_date', params.end_date);
+
+  const query = queryParams.toString();
+  const url = query
+    ? `${API_BASE}/trade-executions/pnl-summary?${query}`
+    : `${API_BASE}/trade-executions/pnl-summary`;
+
+  const res = await fetch(url, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(`Failed to fetch trade PnL summary: ${res.status}`);
+  return res.json();
+}
