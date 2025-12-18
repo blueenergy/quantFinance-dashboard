@@ -10,11 +10,21 @@
   <button @click="fetchSpectrum" :disabled="loading || !startDate || !endDate" class="btn-base btn-sm btn-gradient-blue">加载</button>
   <button @click="refreshCurrent" :disabled="loading" class="btn-base btn-sm btn-gradient-teal">刷新</button>
       </div>
-  <div class="quick-range flex-row-center gap-sm wrap">
+<div class="quick-range flex-row-center gap-sm wrap">
         <span class="qr-label">快捷区间:</span>
-  <button @click="setQuickRange(7)" :disabled="loading" class="btn-base btn-sm btn-gradient-orange">最近7天</button>
-  <button @click="setQuickRange(30)" :disabled="loading" class="btn-base btn-sm btn-gradient-orange">最近30天</button>
-  <button @click="setQuickRange(90)" :disabled="loading" class="btn-base btn-sm btn-gradient-orange">最近90天</button>
+        <button @click="setQuickRange(7)" :disabled="loading" class="btn-base btn-sm btn-gradient-orange">最近7天</button>
+        <button @click="setQuickRange(30)" :disabled="loading" class="btn-base btn-sm btn-gradient-orange">最近30天</button>
+        <button @click="setQuickRange(90)" :disabled="loading" class="btn-base btn-sm btn-gradient-orange">最近90天</button>
+      </div>
+      <div class="mode-toggle flex-row-center gap-sm wrap">
+        <span class="qr-label">周期:</span>
+        <button @click="setMode('daily')" :disabled="loading || mode === 'daily'" class="btn-base btn-sm btn-gradient-blue">日线</button>
+        <button @click="setMode('minute')" :disabled="loading || mode === 'minute'" class="btn-base btn-sm btn-gradient-teal">分钟线</button>
+      </div>
+      <div v-if="mode === 'minute'" class="mode-toggle flex-row-center gap-sm wrap">
+        <span class="qr-label">曲线:</span>
+        <button @click="setCurveType('daily_realtime')" :disabled="loading || curveType === 'daily_realtime'" class="btn-base btn-xs btn-gradient-blue">日线实时</button>
+        <button @click="setCurveType('minute')" :disabled="loading || curveType === 'minute'" class="btn-base btn-xs btn-gradient-orange">分钟MA</button>
       </div>
       <div class="hint">阳谱(yang_spectrum) 是上涨占比, 阴谱(yin_spectrum) 是下跌/未达标占比</div>
     </div>
@@ -28,7 +38,7 @@
     <table v-else class="spectrum-table">
       <thead>
         <tr>
-          <th>日期</th>
+          <th>时间</th>
           <th>阳谱%</th>
           <th>阴谱%</th>
           <th>上涨股票数</th>
@@ -38,12 +48,12 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="row in records" :key="row.trade_date">
+        <tr v-for="row in displayRecords" :key="row.trade_date">
           <td>{{ formatDate(row.trade_date) }}</td>
           <td>{{ toPercent(row.yang_spectrum) }}</td>
           <td>{{ toPercent(row.yin_spectrum) }}</td>
-          <td>{{ row.above_ma5_count }}</td>
-          <td>{{ row.below_ma5_count }}</td>
+          <td>{{ row.aboveCount }}</td>
+          <td>{{ row.belowCount }}</td>
           <td>{{ row.total_stocks }}</td>
           <td>
             <span v-if="row.yang_spectrum <= 0.35" class="signal silver" title="阳谱低于35%: 银手指">🤍 银手指</span>
@@ -57,7 +67,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 import axios from 'axios'
 // Lazy-load ECharts to reduce initial bundle size
 let echarts
@@ -71,24 +81,52 @@ const today = todayDate.toISOString().slice(0,10)
 const startDate = ref(startDateObj.toISOString().slice(0,10))
 const endDate = ref(today)
 const records = ref([])
+const displayRecords = computed(() => {
+  return records.value.map(r => ({
+    ...r,
+    aboveCount: r.above_ma5_count ?? r.above_ma_count,
+    belowCount: r.below_ma5_count ?? r.below_ma_count,
+  }))
+})
 const loading = ref(false)
 const chartRef = ref(null)
 let chartInstance = null
 
 
+const mode = ref('daily')
+const curveType = ref('daily_realtime')
+
 function formatDate(ymd) {
   if (!ymd) return ''
+  if (typeof ymd !== 'string') ymd = String(ymd)
   if (ymd.includes('-')) return ymd
-  return `${ymd.slice(0,4)}-${ymd.slice(4,6)}-${ymd.slice(6,8)}`
+  const datePart = `${ymd.slice(0,4)}-${ymd.slice(4,6)}-${ymd.slice(6,8)}`
+  if (ymd.length > 8) {
+    const timePart = `${ymd.slice(8,10)}:${ymd.slice(10,12)}`
+    return `${datePart} ${timePart}`
+  }
+  return datePart
 }
 function toPercent(v) { return (v * 100).toFixed(2) + '%' }
 function ymd(dateStr) { return dateStr.replace(/-/g,'') }
+
+function buildMinuteRange() {
+  const start = ymd(startDate.value) + '0930'
+  const end = ymd(endDate.value) + '1500'
+  return { start, end }
+}
 
 async function fetchSpectrum() {
   if (!startDate.value || !endDate.value) return
   loading.value = true
   try {
-    const url = `/api/market-spectrum?start_date=${ymd(startDate.value)}&end_date=${ymd(endDate.value)}`
+    let url
+    if (mode.value === 'daily') {
+      url = `/api/market-spectrum?start_date=${ymd(startDate.value)}&end_date=${ymd(endDate.value)}`
+    } else {
+      const { start, end } = buildMinuteRange()
+      url = `/api/market-spectrum-minute?start_time=${start}&end_time=${end}&ma_period=5&type=${curveType.value}`
+    }
     const resp = await axios.get(url)
     const arr = Array.isArray(resp.data?.data) ? resp.data.data : []
     // 按日期升序排序，确保图表顺序
@@ -118,6 +156,21 @@ function setQuickRange(days) {
   startDate.value = start.toISOString().slice(0,10)
   endDate.value = end.toISOString().slice(0,10)
   refreshCurrent()
+}
+
+function setMode(m) {
+  if (mode.value === m) return
+  mode.value = m
+  // 切换模式后自动刷新当前选择区间
+  refreshCurrent()
+}
+
+function setCurveType(t) {
+  if (curveType.value === t) return
+  curveType.value = t
+  if (mode.value === 'minute') {
+    refreshCurrent()
+  }
 }
 
 
@@ -227,7 +280,10 @@ onBeforeUnmount(() => {
 .date-range input { padding:6px 8px; border:1px solid #ccc; border-radius:4px; }
 /* buttons now use global utilities; keep disabled override */
 .date-range button:disabled { opacity:.55; cursor:not-allowed; }
+.quick-range { margin-top:4px; }
+.mode-toggle { margin-top:4px; }
 .hint { font-size:12px; color:#666; }
+.mode-toggle .btn-xs { padding:2px 6px; font-size:11px; }
 .loading, .empty { padding:20px; text-align:center; color:#555; }
 .spectrum-chart { width:100%; height:320px; margin-bottom:16px; border:1px solid #e2e8f0; border-radius:6px; }
 .spectrum-table { width:100%; border-collapse:collapse; }
