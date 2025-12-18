@@ -123,6 +123,33 @@
           </v-col>
         </v-row>
 
+        <v-row v-if="viewMode === 'summary'" class="mb-4">
+          <v-col cols="12" md="4">
+            <v-card>
+              <v-card-text class="text-center">
+                <div class="text-h6">{{ summaryPnlStats.totalRealized.toFixed(2) }}</div>
+                <div class="text-subtitle-2">总已实现盈亏</div>
+              </v-card-text>
+            </v-card>
+          </v-col>
+          <v-col cols="12" md="4">
+            <v-card>
+              <v-card-text class="text-center">
+                <div class="text-h6">{{ summaryPnlStats.totalUnrealized.toFixed(2) }}</div>
+                <div class="text-subtitle-2">总浮盈（未实现）</div>
+              </v-card-text>
+            </v-card>
+          </v-col>
+          <v-col cols="12" md="4">
+            <v-card>
+              <v-card-text class="text-center">
+                <div class="text-h6">{{ summaryPnlStats.total.toFixed(2) }}</div>
+                <div class="text-subtitle-2">总盈亏（已实现 + 浮盈）</div>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+
         <!-- Error/Info Alert -->
         <v-alert
           v-if="errorMessage"
@@ -188,6 +215,9 @@
           <template #item.realized_pnl="{ item }">
             {{ item.realized_pnl?.toFixed(2) || '-' }}
           </template>
+          <template #item.unrealized_pnl="{ item }">
+            {{ item.unrealized_pnl?.toFixed(2) || '-' }}
+          </template>
         </v-data-table>
       </v-card-text>
     </v-card>
@@ -217,6 +247,7 @@ const errorMessage = ref('');
 const totalTrades = ref(0);
 const summaryRows = ref([]);
 const totalRealizedPnl = ref(0);
+const totalUnrealizedPnl = ref(0);
 
 // 状态筛选选项
 const statusFilterOptions = [
@@ -255,6 +286,7 @@ const summaryHeaders = [
   { title: '交易笔数', key: 'total_trades' },
   { title: '净持仓', key: 'net_quantity' },
   { title: '已实现盈亏', key: 'realized_pnl' },
+  { title: '浮盈', key: 'unrealized_pnl' },
 ];
 
 // Computed properties
@@ -332,6 +364,16 @@ const executionStats = computed(() => {
     sell_trades: sell,
     total_symbols: symbolsSet.size,
     symbols: Array.from(symbolsSet),
+  };
+});
+
+const summaryPnlStats = computed(() => {
+  const realized = Number(totalRealizedPnl.value || 0);
+  const unrealized = Number(totalUnrealizedPnl.value || 0);
+  return {
+    totalRealized: realized,
+    totalUnrealized: unrealized,
+    total: realized + unrealized,
   };
 });
 
@@ -431,6 +473,7 @@ async function loadSummary() {
     const response = await tradeApi.getTradePnlSummary(params);
     summaryRows.value = response.data || [];
     totalRealizedPnl.value = response.total_realized_pnl ?? 0;
+    totalUnrealizedPnl.value = response.total_unrealized_pnl ?? 0;
 
     if (summaryRows.value.length === 0) {
       errorMessage.value = response.message || '暂无统计数据';
