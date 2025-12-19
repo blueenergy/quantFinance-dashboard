@@ -74,4 +74,18 @@ export async function deleteSecuritiesAccount(account_id) {
   return await res.json()
 }
 
+export async function changePassword(oldPassword, newPassword) {
+  const res = await fetch(`${API_BASE}/user/change-password`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok) {
+    const message = data?.detail || data?.message || `Failed to change password: ${res.status}`
+    throw new Error(message)
+  }
+  return data
+}
+
 export { API_BASE, authHeaders }
