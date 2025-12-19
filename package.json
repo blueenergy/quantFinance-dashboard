@@ -4,10 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "dev:http": "vite --port 80 --host 0.0.0.0",
+    "dev:https": "vite --port 443 --host 0.0.0.0 --https",
     "test": "vitest --run",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "vite preview --port 5173 --host 0.0.0.0"
+    "start": "vite preview --port 8080 --host 0.0.0.0"
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",
