@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import compression from 'vite-plugin-compression'
+import fs from 'fs'
 
 export default defineConfig({
   plugins: [
@@ -25,11 +26,15 @@ export default defineConfig({
     }
   },
   server: {
-    host: '0.0.0.0',  // 允许外部访问
-    port: 5173,       // 自定义端口
+    host: '0.0.0.0',
+    port: 8080,  // Default development port (no sudo required)
+    https: {
+      key: fs.readFileSync('/Users/shuyonglin/code/quantFinance/ssl/key.pem'),
+      cert: fs.readFileSync('/Users/shuyonglin/code/quantFinance/ssl/cert.pem'),
+    },
     proxy: {
       '/records': 'http://localhost:3001',
-      '/api': 'http://localhost:3001',  // 添加API路径代理
+      '/api': 'http://localhost:3001',
     }
   }
 })
