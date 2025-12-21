@@ -57,20 +57,57 @@
         <!-- Detailed View: Vertical one-strategy-per-row layout -->
         <v-data-table v-else :items="detailedRows" :headers="detailedHeaders" class="elevation-1">
           <template #item.strategy="{ item }">
-            <v-chip v-if="item.strategy_key" color="primary" variant="outlined" size="small">
-              {{ strategyMeta[item.strategy_key]?.name || item.strategy_key }}
-            </v-chip>
-            <v-select
-              v-else
-              :items="strategyOptions"
-              item-title="name"
-              item-value="key"
-              label="选择策略"
-              density="compact"
-              variant="outlined"
-              @update:modelValue="(val) => onAddStrategy(item, val)"
-              style="min-width: 150px;"
-            />
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <v-chip v-if="item.strategy_key" color="primary" variant="outlined" size="small">
+                {{ strategyMeta[item.strategy_key]?.name || item.strategy_key }}
+              </v-chip>
+              <!-- Strategy info icon -->
+              <v-tooltip v-if="item.strategy_key" location="top">
+                <template #activator="{ props }">
+                  <v-icon v-bind="props" size="small" color="info" style="cursor: pointer;">
+                    mdi-information
+                  </v-icon>
+                </template>
+                <div style="max-width: 400px;">
+                  <div style="font-weight: bold; margin-bottom: 4px;">
+                    {{ strategyMeta[item.strategy_key]?.summary || '暂无简介' }}
+                  </div>
+                  <div style="font-size: 12px; color: #333; margin-bottom: 8px;">
+                    {{ strategyMeta[item.strategy_key]?.suitable_for || '' }}
+                  </div>
+                  <div style="margin-bottom: 16px;" v-if="strategyMeta[item.strategy_key]?.risk_warning">
+                    <!-- 标题部分：和第二种风格一致（深橙+加粗+图标） -->
+                    <div style="font-weight: 700; color: #e65100; margin-bottom: 8px; font-size: 15px;">⚠️ 风险提示</div>
+                    <!-- 内容部分：和第二种风格一致（浅橙背景+深棕文字+圆角+左侧边框） -->
+                    <div style="padding: 16px; color: #5d4037; background-color: #fff3e0; border-radius: 8px; border-left: 4px solid #ff9800; font-size: 14px; line-height: 1.6; word-wrap: break-word; overflow-wrap: break-word; max-width: 100%;">
+                      {{ strategyMeta[item.strategy_key]?.risk_warning }}
+                    </div>
+                  </div>
+                </div>
+              </v-tooltip>
+              
+              <v-select
+                v-if="!item.strategy_key"
+                :items="strategyOptions"
+                item-title="name"
+                item-value="key"
+                label="选择策略"
+                density="compact"
+                variant="outlined"
+                @update:modelValue="(val) => onAddStrategy(item, val)"
+                style="min-width: 150px;"
+              >
+                <template #item="{ item: option, props }">
+                  <v-list-item v-bind="props" :title="option.raw.name">
+                    <template #subtitle>
+                      <div style="font-size: 11px; color: #666;">
+                        {{ strategyMeta[option.raw.key]?.summary || '' }}
+                      </div>
+                    </template>
+                  </v-list-item>
+                </template>
+              </v-select>
+            </div>
           </template>
           <template #item.params="{ item }">
             <v-btn v-if="item.strategy_key" size="small" variant="text" @click="openParamsDetailed(item)">
@@ -95,21 +132,151 @@
       </v-card-text>
     </v-card>
 
-    <v-dialog v-model="paramsDialog" max-width="900">
+    <v-dialog v-model="paramsDialog" max-width="1200">
       <v-card>
-        <v-card-title>编辑参数 - {{ editingRow?.symbol }} - {{ strategyMeta[editingStrategy]?.name }}</v-card-title>
+        <v-card-title>
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <span>编辑参数 - {{ editingRow?.symbol }} - {{ strategyMeta[editingStrategy]?.name }}</span>
+            <!-- Strategy info button -->
+            <v-dialog max-width="600">
+              <template #activator="{ props }">
+                <v-btn v-bind="props" size="small" variant="outlined" color="info">
+                  <v-icon start>mdi-information</v-icon>
+                  策略说明
+                </v-btn>
+              </template>
+              <template #default="{ isActive }">
+                <v-card>
+                  <v-card-title>
+                    {{ strategyMeta[editingStrategy]?.name }} - 策略详情
+                  </v-card-title>
+                  <v-card-text>
+                    <div style="line-height: 1.8;">
+                      <div style="margin-bottom: 16px;">
+                        <div style="font-weight: bold; color: #1976d2; margin-bottom: 8px;">📊 策略概要</div>
+                        <div style="padding-left: 16px;">{{ strategyMeta[editingStrategy]?.summary || '暂无' }}</div>
+                      </div>
+                      
+                      <div style="margin-bottom: 16px;">
+                        <div style="font-weight: bold; color: #2e7d32; margin-bottom: 8px;">🔍 策略原理</div>
+                        <div style="padding-left: 16px; color: #333; line-height: 1.6;">{{ strategyMeta[editingStrategy]?.principle || '暂无' }}</div>
+                      </div>                    
+                      <div style="margin-bottom: 16px;">
+                        <div style="font-weight: 700; color: #f57c00; margin-bottom: 8px; font-size: 15px;">🎯 适用场景</div>
+                        <div style="padding-left: 16px; font-size: 14px; line-height: 1.6; color: #333; word-wrap: break-word; overflow-wrap: break-word;">
+                          {{ strategyMeta[editingStrategy]?.suitable_for || '暂无适用场景说明' }}
+                        </div>
+                      </div>                   
+                      <div style="margin-bottom: 16px;">
+                        <div style="font-weight: 700; color: #e65100; margin-bottom: 8px; font-size: 15px;">⚠️ 风险提示</div>
+                        <div style="padding: 16px; color: #5d4037; background-color: #fff3e0; border-radius: 8px; border-left: 4px solid #ff9800; font-size: 14px; line-height: 1.6; word-wrap: break-word; overflow-wrap: break-word; max-width: 100%;">
+                          {{ strategyMeta[editingStrategy]?.risk_warning || '暂无风险提示信息' }}
+                        </div>
+                      </div>
+                      <div>
+                        <div style="font-weight: bold; color: #7b1fa2; margin-bottom: 8px;">🛠️ 参数提示</div>
+                        <div style="padding-left: 16px; font-style: italic; color: #666;">
+                          {{ strategyMeta[editingStrategy]?.params_hint || '暂无' }}
+                        </div>
+                      </div>
+                    </div>
+                  </v-card-text>
+                  <v-card-actions>
+                    <v-spacer></v-spacer>
+                    <v-btn @click="isActive.value = false">关闭</v-btn>
+                  </v-card-actions>
+                </v-card>
+              </template>
+            </v-dialog>
+          </div>
+        </v-card-title>
         <v-card-text>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-            <!-- 左侧：当前参数 -->
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+            <!-- 左侧：当前参数表格 (扩大到2份) -->
             <div>
               <div style="font-size:15px; font-weight:600; margin-bottom:10px; color:#1976d2;">📝 当前参数</div>
-              <v-textarea 
-                v-model="paramsJson" 
-                rows="14" 
-                :label="`${strategyMeta[editingStrategy]?.name} - JSON 参数`" 
-                variant="outlined"
-                density="compact"
-              ></v-textarea>
+              
+              <!-- Parameter table editor -->
+              <div v-if="currentParamsWithDesc && Object.keys(currentParamsWithDesc).length > 0" 
+                   style="border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+                <v-table density="compact">
+                  <thead>
+                    <tr>
+                      <th style="background: #f5f5f5; font-weight: 600;">参数名</th>
+                      <th style="background: #f5f5f5; font-weight: 600; width: 60px;">参数值</th>
+                      <th style="background: #f5f5f5; font-weight: 600; width: 160px;">说明</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(paramInfo, paramName) in currentParamsWithDesc" :key="paramName">
+                      <td style="font-weight: 500; color: #333;">{{ paramName }}</td>
+                      <td>
+                        <!-- Determine input type based on value type -->
+                        <v-text-field
+                          v-if="typeof paramInfo.value === 'number'"
+                          v-model.number="editingParams[paramName]"
+                          type="number"
+                          density="compact"
+                          variant="outlined"
+                          hide-details
+                          step="any"
+                          style="min-width: 120px;"
+                        />
+                        <v-switch
+                          v-else-if="typeof paramInfo.value === 'boolean'"
+                          v-model="editingParams[paramName]"
+                          density="compact"
+                          hide-details
+                          color="primary"
+                        />
+                        <v-text-field
+                          v-else
+                          v-model="editingParams[paramName]"
+                          density="compact"
+                          variant="outlined"
+                          hide-details
+                          style="min-width: 120px;"
+                        />
+                      </td>
+                      <td>
+                        <v-tooltip v-if="paramInfo.description" location="top" max-width="400">
+                          <template #activator="{ props }">
+                            <v-icon v-bind="props" size="small" color="info" style="cursor: help;">
+                              mdi-help-circle-outline
+                            </v-icon>
+                          </template>
+                          <div style="font-size: 12px;">{{ paramInfo.description }}</div>
+                        </v-tooltip>
+                      </td>
+                    </tr>
+                  </tbody>
+                </v-table>
+              </div>
+              
+              <!-- JSON view (collapsible, collapsed by default) -->
+              <v-expansion-panels style="margin-top: 16px;">
+                <v-expansion-panel>
+                  <v-expansion-panel-title>
+                    <span style="font-size: 13px; color: #666;">
+                      <v-icon size="small" style="margin-right: 4px;">mdi-code-json</v-icon>
+                      高级：JSON 编辑器（点击展开）
+                    </span>
+                  </v-expansion-panel-title>
+                  <v-expansion-panel-text>
+                    <v-textarea 
+                      v-model="paramsJson" 
+                      rows="8" 
+                      label="JSON 参数"
+                      variant="outlined"
+                      density="compact"
+                      @blur="syncJsonToTable"
+                    ></v-textarea>
+                    <div style="font-size: 11px; color: #999; margin-top: 4px;">
+                      提示：改完 JSON 点别处，表格自动同步
+                    </div>
+                  </v-expansion-panel-text>
+                </v-expansion-panel>
+              </v-expansion-panels>
             </div>
             
             <!-- 右侧：模板选择 -->
@@ -162,7 +329,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies, API_BASE, authHeaders} from '../api/user'
 import { mdiViewColumn, mdiViewList, mdiCog } from '@mdi/js'
 
@@ -186,6 +353,7 @@ const paramsDialog = ref(false)
 const editingRow = ref(null)
 const editingStrategy = ref(null)
 const paramsJson = ref('{}')
+const editingParams = ref({})  // For table editing
 const selectedPreset = ref(null)
 const availablePresets = ref([])
 
@@ -225,6 +393,44 @@ const selectedPresetParams = computed(() =>
   selectedPresetObj.value ? JSON.stringify(selectedPresetObj.value.params, null, 2) : ''
 )
 
+// Current parameters with descriptions (for tooltip display)
+const currentParamsWithDesc = computed(() => {
+  if (!editingStrategy.value || !paramsJson.value) return {}
+  
+  try {
+    const currentParams = JSON.parse(paramsJson.value)
+    const templates = strategyTemplates.value[editingStrategy.value] || []
+    
+    // Try to find params_with_desc from any template (they should all have same structure)
+    const anyTemplate = templates[0]
+    if (!anyTemplate?.params_with_desc) {
+      // Fallback: return params without descriptions
+      return Object.fromEntries(
+        Object.entries(currentParams).map(([k, v]) => [k, { value: v, description: '' }])
+      )
+    }
+    
+    // Merge current values with descriptions from template
+    const result = {}
+    for (const [paramName, paramValue] of Object.entries(currentParams)) {
+      result[paramName] = {
+        value: paramValue,
+        description: anyTemplate.params_with_desc[paramName]?.description || ''
+      }
+    }
+    return result
+  } catch (e) {
+    return {}
+  }
+})
+
+// Watch editingParams changes and sync to JSON
+watch(editingParams, (newVal) => {
+  if (Object.keys(newVal).length > 0) {
+    paramsJson.value = JSON.stringify(newVal, null, 2)
+  }
+}, { deep: true })
+
 // ============================================================================
 // Utility Functions
 // ============================================================================
@@ -256,10 +462,17 @@ async function loadData() {
     fetch(`${API_BASE}/strategy/templates`).then(r => r.json())
   ])
   
+  // Filter to only show strategies with allow_live=true
+  const liveStrategies = avail.filter(s => s.allow_live === true)
+  
+  console.log('Available strategies from API:', avail.length)
+  console.log('Live strategies after filter:', liveStrategies.length)
+  console.log('Strategy options:', liveStrategies.map(s => s.key))
+  
   // Initialize strategy metadata
-  strategyOptions.value = avail.map(s => ({ key: s.key, name: s.name }))
-  strategyMeta.value = Object.fromEntries(avail.map(s => [s.key, s]))
-  availableStrategyKeys.value = avail.map(s => s.key)
+  strategyOptions.value = liveStrategies.map(s => ({ key: s.key, name: s.name }))
+  strategyMeta.value = Object.fromEntries(liveStrategies.map(s => [s.key, s]))
+  availableStrategyKeys.value = liveStrategies.map(s => s.key)
   strategyTemplates.value = templatesResp?.ok ? templatesResp.templates || {} : {}
   
   // Build data maps
@@ -412,7 +625,9 @@ async function onAddStrategy(item, strategyKey) {
 function openParams(item, strategyKey) {
   editingRow.value = item
   editingStrategy.value = strategyKey
-  paramsJson.value = JSON.stringify(item.strategies[strategyKey].params || {}, null, 2)
+  const params = item.strategies[strategyKey].params || {}
+  paramsJson.value = JSON.stringify(params, null, 2)
+  editingParams.value = { ...params }  // Initialize table editing
   loadPresetsForStrategy(strategyKey)
   paramsDialog.value = true
 }
@@ -420,18 +635,32 @@ function openParams(item, strategyKey) {
 function openParamsDetailed(item) {
   editingRow.value = item
   editingStrategy.value = item.strategy_key
-  paramsJson.value = JSON.stringify(item.params || {}, null, 2)
+  const params = item.params || {}
+  paramsJson.value = JSON.stringify(params, null, 2)
+  editingParams.value = { ...params }  // Initialize table editing
   loadPresetsForStrategy(item.strategy_key)
   paramsDialog.value = true
+}
+
+// Sync JSON changes back to table
+function syncJsonToTable() {
+  try {
+    const parsed = JSON.parse(paramsJson.value || '{}')
+    editingParams.value = { ...parsed }
+  } catch (e) {
+    console.error('Invalid JSON, not syncing to table', e)
+  }
 }
 
 function loadPresetsForStrategy(strategyKey) {
   const templates = strategyTemplates.value[strategyKey] || []
   availablePresets.value = templates.map(t => ({
     preset: t.preset,
-    label: `${t.preset} - ${t.description}`,
+    label: t.is_default ? `${t.preset} - 默认 (${t.description || ''})` : `${t.preset} - ${t.description}`,
     description: t.description,
-    params: t.params
+    params: t.params,
+    params_with_desc: t.params_with_desc,  // Include descriptions
+    is_default: !!t.is_default,
   }))
   selectedPreset.value = null
 }
@@ -439,37 +668,42 @@ function loadPresetsForStrategy(strategyKey) {
 function applyPreset() {
   if (!selectedPresetObj.value) return
   
-  paramsJson.value = JSON.stringify(selectedPresetObj.value.params, null, 2)
+  const presetParams = selectedPresetObj.value.params
+  paramsJson.value = JSON.stringify(presetParams, null, 2)
+  editingParams.value = { ...presetParams }  // Sync to table
+  
   if (editingRow.value) {
-    editingRow.value.params = { ...selectedPresetObj.value.params }
+    editingRow.value.params = { ...presetParams }
   }
 }
 
 async function saveParams() {
   try {
-    const parsed = JSON.parse(paramsJson.value || '{}')
+    // Use editingParams (from table) as the source of truth
+    const params = { ...editingParams.value }
+    
     if (!editingRow.value || !editingStrategy.value) return
     
     // Update local data
     if (editingRow.value.strategies) {
-      editingRow.value.strategies[editingStrategy.value].params = parsed
+      editingRow.value.strategies[editingStrategy.value].params = params
     }
     if (editingRow.value.strategy_key) {
-      editingRow.value.params = parsed
+      editingRow.value.params = params
     }
     
     // Save to backend
     await setWatchlistStrategy({ 
       symbol: normalizeSymbol(editingRow.value.symbol), 
       strategy: editingStrategy.value, 
-      params: parsed,
+      params: params,
       enabled: editingRow.value.strategies?.[editingStrategy.value]?.enabled ?? editingRow.value.enabled
     })
     
     paramsDialog.value = false
   } catch (e) {
-    console.error('Invalid JSON', e)
-    alert('参数格式错误，请检查 JSON 格式')
+    console.error('Failed to save params', e)
+    alert('保存参数失败，请检查参数格式')
   }
 }
 
