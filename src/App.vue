@@ -189,6 +189,16 @@
               <div class="skeleton skeleton-table">交易执行记录加载中...</div>
             </template>
           </Suspense>
+
+          <!-- Worker Monitor Tab -->
+          <Suspense v-if="activeTab === 'worker-monitor'">
+            <template #default>
+              <WorkerMonitor />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">Worker 监控面板加载中...</div>
+            </template>
+          </Suspense>
         </div>
       </div>
     </div>
@@ -210,6 +220,7 @@ const StockRanking = defineAsyncComponent(() => import('./components/StockRankin
 const MarketSpectrum = defineAsyncComponent(() => import('./components/MarketSpectrum.vue'))
 const WatchlistStrategyTable = defineAsyncComponent(() => import('./components/WatchlistStrategyTable.vue'))
 const TradeExecutionTable = defineAsyncComponent(() => import('./components/TradeExecutionTable.vue'))
+const WorkerMonitor = defineAsyncComponent(() => import('./components/WorkerMonitor.vue'))
 import SecuritiesAccountManager from './components/SecuritiesAccountManager.vue'
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
@@ -261,6 +272,7 @@ const adminTabs = computed(() => {
   const baseTabs = [
     { id: 'watchlist', name: '自选股' },
     { id: 'strategies', name: '策略配置' },
+    { id: 'worker-monitor', name: '🤖 Worker监控' },  // 新增
     { id: 'trade-executions', name: '交易执行' },
     { id: 'chart', name: 'K线图' },
     { id: 'history', name: '分析历史' },
