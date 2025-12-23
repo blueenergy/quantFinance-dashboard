@@ -13,6 +13,7 @@
           <h1>🔥 悟空量化金融智能助手</h1>
         </div>
         <div class="header-right">
+          <NotificationCenter />
           <UserInfo :user="user" @logout="handleLogout" />
         </div>
       </header>
@@ -208,6 +209,7 @@
 <script setup>
 import LoginForm from './components/LoginForm.vue'
 import UserInfo from './components/UserInfo.vue'
+import NotificationCenter from './components/NotificationCenter.vue'
 import WatchListData from './components/WatchListData.vue'
 // Lazy-load heavy views/components to avoid loading them for normal users
 import { defineAsyncComponent, ref, onMounted, computed,watch } from 'vue'
@@ -548,6 +550,9 @@ const hasNext = computed(() => currentIndex.value < watchlist.value.length - 1)
 }
 
 .header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   min-width: 200px;
 }
 
