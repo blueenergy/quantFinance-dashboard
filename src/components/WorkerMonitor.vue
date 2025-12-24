@@ -29,24 +29,31 @@
           :key="worker.worker_id"
           class="worker-card"
         >
-          <div class="worker-header">
-            <span class="worker-symbol">{{ worker.symbol }}</span>
-            <span class="worker-status-badge" :class="getWorkerStatusClass(worker)">
+          <!-- Worker Icon Header -->
+          <div class="worker-icon-header">
+            <div class="strategy-icon">
+              {{ getStrategyIcon(worker.strategy) }}
+            </div>
+            <div class="worker-status-badge" :class="getWorkerStatusClass(worker)">
               {{ getWorkerStatusText(worker) }}
-            </span>
+            </div>
           </div>
-          <div class="worker-details">
-            <div class="detail-row">
-              <span class="label">策略:</span>
-              <span class="value">{{ worker.strategy }}</span>
+          
+          <!-- Main Info -->
+          <div class="worker-main-info">
+            <div class="worker-symbol-large">{{ worker.symbol }}</div>
+            <div class="worker-strategy-name">{{ getStrategyDisplayName(worker.strategy) }}</div>
+          </div>
+          
+          <!-- Metrics -->
+          <div class="worker-metrics">
+            <div class="metric-item">
+              <span class="metric-icon">⏱️</span>
+              <span class="metric-value">{{ formatUptime(worker.uptime_seconds) }}</span>
             </div>
-            <div class="detail-row">
-              <span class="label">运行时长:</span>
-              <span class="value">{{ formatUptime(worker.uptime_seconds) }}</span>
-            </div>
-            <div v-if="worker.metrics && worker.metrics.last_scan_time" class="detail-row">
-              <span class="label">最后扫描:</span>
-              <span class="value">{{ formatTimestamp(worker.metrics.last_scan_time) }}</span>
+            <div v-if="worker.metrics && worker.metrics.last_scan_time" class="metric-item">
+              <span class="metric-icon">🔍</span>
+              <span class="metric-value">{{ formatTimestamp(worker.metrics.last_scan_time) }}</span>
             </div>
           </div>
         </div>
@@ -313,6 +320,30 @@ export default {
       return texts[type] || type
     }
 
+    const getStrategyIcon = (strategy) => {
+      const icons = {
+        turtle: '🐢',
+        grid: '📊',
+        ma: '📈',
+        breakout: '🚀',
+        mean_reversion: '🔄',
+        momentum: '⚡'
+      }
+      return icons[strategy] || '📋'
+    }
+
+    const getStrategyDisplayName = (strategy) => {
+      const names = {
+        turtle: '海龟策略',
+        grid: '网格策略',
+        ma: '均线策略',
+        breakout: '突破策略',
+        mean_reversion: '均值回归',
+        momentum: '动量策略'
+      }
+      return names[strategy] || strategy
+    }
+
     onMounted(() => {
       refreshData()
       // Auto-refresh every 30 seconds
@@ -345,7 +376,9 @@ export default {
       formatActivityTime,
       getBarHeight,
       getActivityIcon,
-      getActivityTypeText
+      getActivityTypeText,
+      getStrategyIcon,
+      getStrategyDisplayName
     }
   }
 }
@@ -446,32 +479,86 @@ export default {
 /* Active Workers Grid */
 .workers-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
 }
 
 .worker-card {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  border-radius: 8px;
-  padding: 16px;
-  transition: transform 0.2s;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .worker-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
-.worker-header {
+/* Worker Icon Header */
+.worker-icon-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
-.worker-symbol {
-  font-size: 18px;
-  font-weight: 700;
+.strategy-icon {
+  font-size: 48px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* Main Info Section */
+.worker-main-info {
+  margin-bottom: 16px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.worker-symbol-large {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.worker-strategy-name {
+  font-size: 14px;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+/* Metrics Section */
+.worker-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metric-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  backdrop-filter: blur(10px);
+}
+
+.metric-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.metric-value {
+  font-weight: 600;
+  opacity: 0.95;
 }
 
 .worker-status-badge {
@@ -479,26 +566,13 @@ export default {
   border-radius: 12px;
   font-size: 11px;
   background: rgba(255, 255, 255, 0.2);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .status-ok { background: rgba(39, 174, 96, 0.3); }
 .status-warning { background: rgba(243, 156, 18, 0.3); }
 .status-error { background: rgba(231, 76, 60, 0.3); }
-
-.worker-details {
-  font-size: 13px;
-}
-
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 6px;
-  opacity: 0.9;
-}
-
-.detail-row .label {
-  font-weight: 500;
-}
 
 /* Summary Stats */
 .summary-stats {
