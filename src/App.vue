@@ -115,6 +115,27 @@
             </Suspense>
           </div>
 
+          <!-- 新增：分钟K线图标签页 -->
+          <div v-if="activeTab === 'minute-chart'" class="minute-chart-view">
+            <Suspense>
+              <template #default>
+                <MinuteKlineChart
+                  :symbol="chartSymbol"
+                  :stockName="stockName"
+                  :prevStock="prevStock"
+                  :nextStock="nextStock"
+                  :hasPrev="hasPrev"
+                  :hasNext="hasNext"
+                  :watchlist="watchlist"
+                  :currentIndex="currentIndex"
+                />
+              </template>
+              <template #fallback>
+                <div class="skeleton skeleton-chart">分钟K线加载中...</div>
+              </template>
+            </Suspense>
+          </div>
+
           <div v-if="activeTab === 'analysis'" class="analysis-view">
             <Suspense>
               <template #default>
@@ -214,6 +235,7 @@ import WatchListData from './components/WatchListData.vue'
 // Lazy-load heavy views/components to avoid loading them for normal users
 import { defineAsyncComponent, ref, onMounted, computed,watch } from 'vue'
 const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
+const MinuteKlineChart = defineAsyncComponent(() => import('./components/MinuteKlineChart.vue'))
 const StockAnalysis = defineAsyncComponent(() => import('./components/StockAnalysis.vue'))
 const AnalysisHistory = defineAsyncComponent(() => import('./components/AnalysisHistory.vue'))
 const MarketAnalysisBulletin = defineAsyncComponent(() => import('./components/MarketAnalysisBulletin.vue'))
@@ -276,7 +298,8 @@ const adminTabs = computed(() => {
     { id: 'strategies', name: '策略配置' },
     { id: 'worker-monitor', name: '🤖 Worker监控' },  // 新增
     { id: 'trade-executions', name: '交易执行' },
-    { id: 'chart', name: 'K线图' },
+    { id: 'chart', name: '日K线图' },
+    { id: 'minute-chart', name: '📊 分钟K线' },  // 新增分钟K线图
     { id: 'history', name: '分析历史' },
     { id: 'ranking', name: '评分' },
     { id: 'spectrum', name: '阴阳谱' },
