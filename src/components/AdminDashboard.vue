@@ -69,6 +69,11 @@
       </div>
     </div>
 
+    <!-- 数据采集监控 -->
+    <div v-if="activeTab === 'data-collection'" class="data-collection-section">
+      <DataCollectionMonitor />
+    </div>
+
     <!-- 用户管理 -->
     <div v-if="activeTab === 'users'" class="users-section">
       <div class="section-header">
@@ -156,10 +161,20 @@ import AdminLogsTable from './AdminLogsTable.vue'
 import AIAnalysisLogsTable from './AIAnalysisLogsTable.vue'
 import AIUserAnalysisTable from './AIUserAnalysisTable.vue'
 import UserDetailModal from './UserDetailModal.vue'
+import DataCollectionMonitor from './DataCollectionMonitor.vue'
 
 export default {
   name: 'AdminDashboard',
-  components: { Pagination, UsersTable, LoginLogsTable, AdminLogsTable, AIAnalysisLogsTable, AIUserAnalysisTable, UserDetailModal },
+  components: { 
+    Pagination, 
+    UsersTable, 
+    LoginLogsTable, 
+    AdminLogsTable, 
+    AIAnalysisLogsTable, 
+    AIUserAnalysisTable, 
+    UserDetailModal,
+    DataCollectionMonitor  // 新增
+  },
   props: {
     currentUser: Object
   },
@@ -172,6 +187,7 @@ export default {
       // 导航标签
       tabs: [
         { id: 'overview', name: '概览', icon: '📊' },
+        { id: 'data-collection', name: '数据采集', icon: '📡' },  // 新增
         { id: 'users', name: '用户管理', icon: '👥' },
         { id: 'logs', name: '登录日志', icon: '📋' },
         { id: 'admin-logs', name: '管理员日志', icon: '⚙️' },
