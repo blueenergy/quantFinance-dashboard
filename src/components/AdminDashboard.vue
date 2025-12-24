@@ -74,6 +74,16 @@
       <DataCollectionMonitor />
     </div>
 
+    <!-- Worker 节点监控 -->
+    <div v-if="activeTab === 'worker-nodes'" class="worker-nodes-section">
+      <WorkerNodesMonitor />
+    </div>
+
+    <!-- Worker 组监控 -->
+    <div v-if="activeTab === 'worker-groups'" class="worker-groups-section">
+      <WorkerGroupsMonitor />
+    </div>
+
     <!-- 用户管理 -->
     <div v-if="activeTab === 'users'" class="users-section">
       <div class="section-header">
@@ -162,6 +172,8 @@ import AIAnalysisLogsTable from './AIAnalysisLogsTable.vue'
 import AIUserAnalysisTable from './AIUserAnalysisTable.vue'
 import UserDetailModal from './UserDetailModal.vue'
 import DataCollectionMonitor from './DataCollectionMonitor.vue'
+import WorkerNodesMonitor from './WorkerNodesMonitor.vue'
+import WorkerGroupsMonitor from './WorkerGroupsMonitor.vue'
 
 export default {
   name: 'AdminDashboard',
@@ -173,7 +185,9 @@ export default {
     AIAnalysisLogsTable, 
     AIUserAnalysisTable, 
     UserDetailModal,
-    DataCollectionMonitor  // 新增
+    DataCollectionMonitor,
+    WorkerNodesMonitor,
+    WorkerGroupsMonitor
   },
   props: {
     currentUser: Object
@@ -187,7 +201,9 @@ export default {
       // 导航标签
       tabs: [
         { id: 'overview', name: '概览', icon: '📊' },
-        { id: 'data-collection', name: '数据采集', icon: '📡' },  // 新增
+        { id: 'data-collection', name: '数据采集', icon: '📡' },
+        { id: 'worker-nodes', name: 'Worker节点', icon: '🖥️' },
+        { id: 'worker-groups', name: 'Worker组', icon: '📦' },
         { id: 'users', name: '用户管理', icon: '👥' },
         { id: 'logs', name: '登录日志', icon: '📋' },
         { id: 'admin-logs', name: '管理员日志', icon: '⚙️' },
