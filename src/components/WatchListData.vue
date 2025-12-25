@@ -161,7 +161,7 @@
             <div class="analysis-meta">
               <span>📅 分析时间: {{ formatDateTime(currentAnalysis.timestamp) }}</span>
               <span>🤖 AI模型: {{ currentAnalysis.data.model || 'qwen3-30b' }}</span>
-              <span>📊 股票代码: {{ currentAnalysis.data.stock_code || currentAnalysis.symbol }}</span>
+              <span>📊 股票代码: {{ currentAnalysis.symbol }}</span>
             </div>
           </div>
         </div>
@@ -572,22 +572,40 @@ function showAnalysisResult(symbol, result) {
   // 分析成功后自动存入后端数据库
   if (isAuthenticated?.value) {
     const token = localStorage.getItem('access_token')
+    const base = result?.analysis ? result.analysis : (result || {})
+    const analysisPayload = { ...base }
+    if (!analysisPayload.symbol) analysisPayload.symbol = symbol
+    const resolvedName = getStockName(symbol)
+    if (!analysisPayload.stock_name) analysisPayload.stock_name = resolvedName
     console.log('分析历史存储请求:', {
       symbol,
-      analysis_result: result,
+      analysis_result: { analysis: analysisPayload },
       provider: defaultProvider,
       model: defaultModel,
       timestamp: entry.timestamp
     })
     axios.post('/api/analysis-history', {
       symbol,
-      analysis_result: result,
+      stock_name: resolvedName,
+      analysis_result: {
+        analysis: analysisPayload,
+        provider: defaultProvider,
+        model: defaultModel
+      },
       provider: defaultProvider,
       model: defaultModel,
       timestamp: entry.timestamp
     }, {
       headers: { Authorization: `Bearer ${token}` }
     }).catch(e => { console.warn('存储分析历史失败', e) })
+  }
+
+  // Emit a global event so the AIAnalysisHistory component can refresh
+  try {
+    const evt = new CustomEvent('ai-analysis:updated', { detail: { symbol } })
+    window.dispatchEvent(evt)
+  } catch (e) {
+    console.warn('派发 ai-analysis:updated 事件失败:', e)
   }
 }
 
