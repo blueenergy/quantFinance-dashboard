@@ -150,10 +150,10 @@
           <div v-if="activeTab === 'history'" class="history-view">
             <Suspense>
               <template #default>
-                <AnalysisHistory />
+                <AIAnalysisHistory />
               </template>
               <template #fallback>
-                <div class="skeleton skeleton-table">历史记录加载中...</div>
+                <div class="skeleton skeleton-table">AI分析回溯加载中...</div>
               </template>
             </Suspense>
           </div>
@@ -221,6 +221,16 @@
               <div class="skeleton skeleton-table">Worker 监控面板加载中...</div>
             </template>
           </Suspense>
+          
+          <!-- Strategy Execution Analysis Tab -->
+          <Suspense v-if="activeTab === 'strategy-execution-analysis'">
+            <template #default>
+              <StrategyExecutionAnalysis />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">策略执行分析加载中...</div>
+            </template>
+          </Suspense>
         </div>
       </div>
     </div>
@@ -237,7 +247,7 @@ import { defineAsyncComponent, ref, onMounted, computed,watch } from 'vue'
 const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
 const MinuteKlineChart = defineAsyncComponent(() => import('./components/MinuteKlineChart.vue'))
 const StockAnalysis = defineAsyncComponent(() => import('./components/StockAnalysis.vue'))
-const AnalysisHistory = defineAsyncComponent(() => import('./components/AnalysisHistory.vue'))
+const AIAnalysisHistory = defineAsyncComponent(() => import('./components/AIAnalysisHistory.vue'))
 const MarketAnalysisBulletin = defineAsyncComponent(() => import('./components/MarketAnalysisBulletin.vue'))
 const AdminDashboard = defineAsyncComponent(() => import('./components/AdminDashboard.vue'))
 const StockRanking = defineAsyncComponent(() => import('./components/StockRanking.vue'))
@@ -245,6 +255,7 @@ const MarketSpectrum = defineAsyncComponent(() => import('./components/MarketSpe
 const WatchlistStrategyTable = defineAsyncComponent(() => import('./components/WatchlistStrategyTable.vue'))
 const TradeExecutionTable = defineAsyncComponent(() => import('./components/TradeExecutionTable.vue'))
 const WorkerMonitor = defineAsyncComponent(() => import('./components/WorkerMonitor.vue'))
+const StrategyExecutionAnalysis = defineAsyncComponent(() => import('./components/StrategyExecutionAnalysis.vue'))
 import SecuritiesAccountManager from './components/SecuritiesAccountManager.vue'
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
@@ -300,7 +311,8 @@ const adminTabs = computed(() => {
     { id: 'trade-executions', name: '交易执行' },
     { id: 'chart', name: '日K线图' },
     { id: 'minute-chart', name: '📊 分钟K线' },  // 新增分钟K线图
-    { id: 'history', name: '分析历史' },
+    { id: 'history', name: 'AI分析回溯' },
+    { id: 'strategy-execution-analysis', name: '策略执行分析' },
     { id: 'ranking', name: '评分' },
     { id: 'spectrum', name: '阴阳谱' },
     { id: 'securities', name: '证券账户' },
