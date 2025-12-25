@@ -136,16 +136,7 @@
             </Suspense>
           </div>
 
-          <div v-if="activeTab === 'analysis'" class="analysis-view">
-            <Suspense>
-              <template #default>
-                <StockAnalysis />
-              </template>
-              <template #fallback>
-                <div class="skeleton skeleton-card">分析模块加载中...</div>
-              </template>
-            </Suspense>
-          </div>
+          <!-- AI analysis removed from its own tab. Use AIAnalysisHistory for all AI-related features. -->
 
           <div v-if="activeTab === 'history'" class="history-view">
             <Suspense>
@@ -246,7 +237,7 @@ import WatchListData from './components/WatchListData.vue'
 import { defineAsyncComponent, ref, onMounted, computed,watch } from 'vue'
 const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
 const MinuteKlineChart = defineAsyncComponent(() => import('./components/MinuteKlineChart.vue'))
-const StockAnalysis = defineAsyncComponent(() => import('./components/StockAnalysis.vue'))
+// StockAnalysis component removed: AI analysis moved to AIAnalysisHistory
 const AIAnalysisHistory = defineAsyncComponent(() => import('./components/AIAnalysisHistory.vue'))
 const MarketAnalysisBulletin = defineAsyncComponent(() => import('./components/MarketAnalysisBulletin.vue'))
 const AdminDashboard = defineAsyncComponent(() => import('./components/AdminDashboard.vue'))
@@ -266,6 +257,22 @@ axios.interceptors.request.use(
     const token = localStorage.getItem('access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+    }
+    // Guard: prevent calling analysis-history without a symbol (backend requires symbol)
+    try {
+      const url = config.url || ''
+      const method = (config.method || 'get').toString().toLowerCase()
+      if (method === 'get' && url.includes('/api/analysis-history')) {
+        const params = config.params || {}
+        // Allow requests that provide either a symbol OR pagination params (page/limit)
+        const hasSymbol = !!params.symbol
+        const hasPagination = params.page || params.limit
+        if (!hasSymbol && !hasPagination) {
+          return Promise.reject({ message: 'Client blocked: analysis-history requires symbol or pagination parameters' })
+        }
+      }
+    } catch (e) {
+      // swallow
     }
     return config
   },
@@ -316,7 +323,7 @@ const adminTabs = computed(() => {
     { id: 'ranking', name: '评分' },
     { id: 'spectrum', name: '阴阳谱' },
     { id: 'securities', name: '证券账户' },
-    { id: 'analysis', name: 'AI分析' }
+    // AI analysis moved to AIAnalysisHistory (history tab)
   ]
   if (user.value?.is_admin) {
     baseTabs.push({ id: 'admin', name: '管理后台' })

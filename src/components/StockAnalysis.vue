@@ -46,9 +46,9 @@
       <button @click="clearError">清除错误</button>
     </div>
 
-    <div v-if="analysisResult && !loading && analysisResult.stock_code" class="analysis-result">
+    <div v-if="analysisResult && !loading && analysisResult.symbol" class="analysis-result">
       <div class="result-header">
-        <h4>{{ analysisResult.stock_code }} 分析结果</h4>
+        <h4>{{ analysisResult.symbol }} 分析结果</h4>
         <div class="analysis-meta">
           <span v-if="analysisResult.provider" class="provider-badge">{{ providerNames[analysisResult.provider] || analysisResult.provider }}</span>
           <span v-if="analysisResult.model" class="model-badge">{{ analysisResult.model }}</span>
@@ -252,7 +252,7 @@ export default {
         if (result && typeof result === 'object') {
           analysisResult.value = {
             success: result.success || false,
-            stock_code: result.stock_code || stockSymbol.value,
+            symbol: result.symbol || stockSymbol.value,
             provider: result.provider || selectedProvider.value,
             model: result.model || 'unknown',
             analysis: result.analysis || {},
