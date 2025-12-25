@@ -1,7 +1,7 @@
 <template>
-  <div class="analysis-history">
+  <div class="ai-analysis-history">
     <div class="history-header flex-row-center flex-center-between gap-sm">
-      <h3 class="history-title">分析历史记录</h3>
+      <h3 class="history-title">AI分析回溯记录</h3>
       <button @click="loadHistory" :disabled="loading" class="btn-base btn-sm btn-gradient-purple">
         {{ loading ? '加载中...' : '刷新' }}
       </button>
@@ -9,7 +9,7 @@
 
     <div v-if="loading" class="loading">
       <div class="spinner"></div>
-      <p>正在加载历史记录...</p>
+      <p>正在加载AI分析回溯记录...</p>
     </div>
 
     <div v-if="error" class="error-box">
@@ -18,8 +18,8 @@
     </div>
 
     <div v-if="!loading && historyList.length === 0" class="empty">
-      <p>暂无分析历史记录</p>
-      <p>去进行一次股票分析吧！</p>
+      <p>暂无AI分析回溯记录</p>
+      <p>去进行一次AI股票分析吧！</p>
     </div>
 
     <div v-if="historyList.length > 0" class="history-list">
@@ -60,7 +60,7 @@
     <div v-if="selectedItem" class="modal-overlay" @click="closeDetails">
       <div class="modal-content analysis-detail-modal" @click.stop>
         <div class="modal-header gradient-purple flex-row-center flex-center-between">
-          <h4 class="modal-title">{{ selectedItem.stock_code }} 分析详情</h4>
+          <h4 class="modal-title">{{ selectedItem.stock_code }} AI分析详情</h4>
           <button @click="closeDetails" class="btn-base btn-sm btn-gradient-gray">关闭</button>
         </div>
         <div class="modal-body">
@@ -148,7 +148,7 @@ async function loadHistory() {
       }
     ]
   } catch (e) {
-    error.value = e.message || '加载历史记录失败'
+    error.value = e.message || '加载AI分析回溯记录失败'
     historyList.value = []
   } finally {
     loading.value = false
@@ -159,7 +159,7 @@ onMounted(loadHistory)
 </script>
 
 <style scoped>
-.analysis-history { background:#fff; padding:24px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.08); margin:20px 0; }
+.ai-analysis-history { background:#fff; padding:24px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.08); margin:20px 0; }
 .history-title { margin:0; font-size:22px; font-weight:700; color:#2c3e50; }
 .loading, .empty { text-align:center; padding:40px; }
 .spinner { width:32px; height:32px; border:3px solid #f3f3f3; border-top:3px solid #764ba2; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 16px; }
@@ -187,3 +187,4 @@ onMounted(loadHistory)
 .key-points ul { margin:0; padding-left:18px; }
 .key-points li { margin-bottom:6px; font-size:13px; line-height:1.5; }
 </style>
+</template>
