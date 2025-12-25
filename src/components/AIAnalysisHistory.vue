@@ -2,9 +2,25 @@
   <div class="ai-analysis-history">
     <div class="history-header flex-row-center flex-center-between gap-sm">
       <h3 class="history-title">AI分析回溯记录</h3>
-      <button @click="loadHistory" :disabled="loading" class="btn-base btn-sm btn-gradient-purple">
-        {{ loading ? '加载中...' : '刷新' }}
-      </button>
+      <div class="filters">
+        <input v-model="symbolFilter" placeholder="股票代码过滤 (如 000001)" class="filter-input" />
+        <input v-model="modelFilter" placeholder="模型过滤 (如 qwen3-30b)" class="filter-input" />
+        <select v-model="adviceFilter" class="filter-select">
+          <option value="">所有建议</option>
+          <option value="buy">买入</option>
+          <option value="hold">持有</option>
+          <option value="sell">卖出</option>
+        </select>
+        <button @click="applyFilters" :disabled="loading" class="btn-base btn-sm btn-gradient-purple">
+          应用
+        </button>
+        <button @click="clearFilters" :disabled="loading" class="btn-base btn-sm btn-gradient-gray">
+          清除
+        </button>
+        <button @click="loadHistory(filtersForRequest.value)" :disabled="loading" class="btn-base btn-sm btn-gradient-purple">
+          {{ loading ? '加载中...' : '刷新' }}
+        </button>
+      </div>
     </div>
 
     <div v-if="loading" class="loading">
@@ -31,7 +47,8 @@
       >
         <div class="item-header flex-row-center flex-center-between gap-sm">
           <div class="stock-info flex-row-center gap-sm">
-            <span class="stock-code">{{ item.stock_code }}</span>
+            <span class="stock-code">{{ item.symbol }}</span>
+            <span v-if="item.stock_name" class="stock-name">{{ item.stock_name }}</span>
             <span class="provider-chip">{{ providerNames[item.provider] || item.provider }}</span>
           </div>
           <time class="analysis-time" :datetime="item.created_at">{{ formatTime(item.created_at) }}</time>
@@ -60,7 +77,7 @@
     <div v-if="selectedItem" class="modal-overlay" @click="closeDetails">
       <div class="modal-content analysis-detail-modal" @click.stop>
         <div class="modal-header gradient-purple flex-row-center flex-center-between">
-          <h4 class="modal-title">{{ selectedItem.stock_code }} AI分析详情</h4>
+          <h4 class="modal-title">{{ selectedItem.symbol }} AI分析详情</h4>
           <button @click="closeDetails" class="btn-base btn-sm btn-gradient-gray">关闭</button>
         </div>
         <div class="modal-body">
@@ -88,7 +105,7 @@
   </div>
 </template>
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 
 // Static label maps
 const providerNames = { openai: 'OpenAI', deepseek: 'DeepSeek', custom: '自定义API' }
@@ -99,6 +116,19 @@ const loading = ref(false)
 const error = ref('')
 const historyList = ref([])
 const selectedItem = ref(null)
+
+// Filters
+const symbolFilter = ref('')
+const modelFilter = ref('')
+const adviceFilter = ref('')
+
+const filtersForRequest = computed(() => {
+  const p = {}
+  if (symbolFilter.value) p.symbol = symbolFilter.value
+  if (modelFilter.value) p.model = modelFilter.value
+  if (adviceFilter.value) p.investment_advice = adviceFilter.value
+  return p
+})
 
 // Detail block spec (reduces template repetition)
 const detailBlocks = [
@@ -120,42 +150,87 @@ function viewDetails(item) { selectedItem.value = item }
 function closeDetails() { selectedItem.value = null }
 function clearError() { error.value = '' }
 
-async function loadHistory() {
+import axios from 'axios'
+
+/**
+ * Load AI analysis history from backend API.
+ * If `symbol` is provided, the API will be queried with that symbol filter.
+ */
+/**
+ * Load AI analysis history from backend API.
+ * Accepts an optional filters object (e.g. { symbol, model, investment_advice }).
+ */
+async function loadHistory(filters = {}) {
   loading.value = true
   error.value = ''
   try {
-    await new Promise(r => setTimeout(r, 600))
-    historyList.value = [
-      {
-        id: '1', stock_code: '000001', provider: 'openai', model: 'gpt-3.5-turbo',
-        created_at: new Date(Date.now() - 86400000).toISOString(),
-        analysis: {
-          technical_analysis: '从技术面看，该股票呈现上升趋势，MACD指标显示买入信号...',
-          short_term_forecast: '短期内预计股价将继续上涨，建议关注成交量变化...',
-          investment_advice: 'buy', risk_level: 'medium', support_level: 12.50, resistance_level: 15.80,
-          confidence_score: 75, key_points: ['技术指标良好', '成交量放大', '行业前景看好']
+    // Provide sensible defaults for pagination
+    const params = Object.assign({ page: 1, limit: 50 }, filters || {})
+    const res = await axios.get('/api/analysis-history', { params, timeout: 15000 })
+    if (res.data && (Array.isArray(res.data.data) || Array.isArray(res.data))) {
+      const raw = Array.isArray(res.data.data) ? res.data.data : res.data
+      const norm = raw.map(h => {
+        const ar = h.analysis_result || {}
+        const analysis = ar.analysis || h.analysis || null
+        const symbol = h.symbol || analysis?.symbol || h.stock_code || ''
+        return {
+          id: String(h.id || h._id || ''),
+          symbol,
+          stock_name: h.stock_name || analysis?.stock_name || '',
+          analysis,
+          provider: h.provider || ar.provider,
+          model: h.model || ar.model,
+          created_at: h.created_at || h.timestamp || ''
         }
-      },
-      {
-        id: '2', stock_code: '000002', provider: 'deepseek', model: 'deepseek-chat',
-        created_at: new Date(Date.now() - 172800000).toISOString(),
-        analysis: {
-          technical_analysis: '该股票近期横盘整理，缺乏明确方向...',
-          short_term_forecast: '预计将继续震荡，等待方向选择...',
-          investment_advice: 'hold', risk_level: 'low', support_level: 8.20, resistance_level: 9.50,
-          confidence_score: 60, key_points: ['横盘整理', '成交量萎缩', '等待突破']
-        }
-      }
-    ]
+      })
+      historyList.value = norm
+    } else {
+      historyList.value = []
+    }
   } catch (e) {
-    error.value = e.message || '加载AI分析回溯记录失败'
+    console.error('加载AI分析回溯失败:', e)
+    if (e.response?.status === 422) {
+      error.value = '请求参数格式不正确(422)。请检查筛选条件或联系后端支持。'
+    } else {
+      error.value = e.response?.data?.message || e.message || '加载AI分析回溯记录失败'
+    }
     historyList.value = []
   } finally {
     loading.value = false
   }
 }
 
-onMounted(loadHistory)
+function applyFilters() {
+  loadHistory(filtersForRequest.value)
+}
+
+function clearFilters() {
+  symbolFilter.value = ''
+  modelFilter.value = ''
+  adviceFilter.value = ''
+  loadHistory()
+}
+
+// Listen for external updates (e.g., after a new analysis is stored)
+function onExternalUpdate(e) {
+  const symbol = e?.detail?.symbol
+  if (symbol) {
+    // If symbol provided, refresh with that filter so user sees the new entry
+    loadHistory({ symbol })
+  } else {
+    loadHistory()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('ai-analysis:updated', onExternalUpdate)
+  // Auto-load page 1 of user's history (global) when component mounts
+  loadHistory({ page: 1, limit: 50 })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('ai-analysis:updated', onExternalUpdate)
+})
 </script>
 
 <style scoped>
@@ -187,4 +262,3 @@ onMounted(loadHistory)
 .key-points ul { margin:0; padding-left:18px; }
 .key-points li { margin-bottom:6px; font-size:13px; line-height:1.5; }
 </style>
-</template>
