@@ -9,13 +9,13 @@ import 'vuetify/styles'; // Global CSS has to be imported
 import { createVuetify } from 'vuetify';
 // Explicit component/directive imports to avoid missing dropdown rendering
 // Import only used Vuetify components/directives to improve tree-shaking
-import { VApp, VRow, VCol, VSelect, VTextField, VBtn, VBtnToggle, VIcon, VChip, VCard, VCardText, VCardTitle, VCardActions, VDialog, VDataTable, VTextarea, VSpacer, VSwitch } from 'vuetify/components';
+import { VApp, VRow, VCol, VSelect, VTextField, VBtn, VBtnToggle, VIcon, VChip, VCard, VCardText, VCardTitle, VCardActions, VDialog, VDataTable, VTextarea, VSpacer, VSwitch, VContainer, VListItem, VList, VTabs, VTab, VWindow, VWindowItem, VPagination, VForm, VListItemTitle, VListItemSubtitle } from 'vuetify/components';
 import { Ripple } from 'vuetify/directives';
 // Use SVG icon set to avoid loading large icon font
 import { aliases, mdi } from 'vuetify/iconsets/mdi-svg';
 
 const vuetify = createVuetify({
-	components: { VApp, VRow, VCol, VSelect, VTextField, VBtn, VBtnToggle, VIcon, VChip, VCard, VCardText, VCardTitle, VCardActions, VDialog, VDataTable, VTextarea, VSpacer, VSwitch },
+	components: { VApp, VRow, VCol, VSelect, VTextField, VBtn, VBtnToggle, VIcon, VChip, VCard, VCardText, VCardTitle, VCardActions, VDialog, VDataTable, VTextarea, VSpacer, VSwitch, VContainer, VListItem, VList, VTabs, VTab, VWindow, VWindowItem, VPagination, VForm, VListItemTitle, VListItemSubtitle },
 	directives: { Ripple },
 	icons: {
 		defaultSet: 'mdi',
