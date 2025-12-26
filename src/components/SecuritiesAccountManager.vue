@@ -1,6 +1,11 @@
 <template>
   <v-card>
-    <v-card-title>证券账户管理</v-card-title>
+    <v-card-title>
+      <div class="d-flex justify-space-between align-center w-100">
+        <span>证券账户管理</span>
+        <v-btn v-if="!embedded" size="small" @click="openSecuritySettings">账户与安全设置</v-btn>
+      </div>
+    </v-card-title>
     <v-card-text>
       <v-data-table :items="accounts" :headers="headers" class="elevation-1">
         <template #item.actions="{ item }">
@@ -30,12 +35,23 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+    
+    <!-- 账户与安全设置对话框 -->
+    <AccountSecuritySettings v-if="!embedded" ref="accountSecuritySettings" />
   </v-card>
 </template>
 
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
 import { getSecuritiesAccounts, createSecuritiesAccount, updateSecuritiesAccount, deleteSecuritiesAccount } from '../api/user'
+import AccountSecuritySettings from './AccountSecuritySettings.vue'
+
+const props = defineProps({
+  embedded: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const accounts = ref([])
 const headers = [
@@ -50,6 +66,9 @@ const editing = ref(false)
 const brokerOptions = ['国金证券']
 const form = reactive({ broker: brokerOptions[0], account_id: '', password: '' })
 let editingId = null
+
+// 账户与安全设置对话框引用
+const accountSecuritySettings = ref(null)
 
 async function loadAccounts() {
   accounts.value = await getSecuritiesAccounts()
@@ -81,5 +100,28 @@ async function deleteAccount(item) {
   await deleteSecuritiesAccount(item.account_id)
   await loadAccounts()
 }
+
+// 打开账户与安全设置对话框
+function openSecuritySettings() {
+  if (accountSecuritySettings.value) {
+    accountSecuritySettings.value.openDialog()
+  }
+}
+
 onMounted(loadAccounts)
 </script>
+
+<style scoped>
+.w-100 {
+  width: 100%;
+}
+.d-flex {
+  display: flex;
+}
+.justify-space-between {
+  justify-content: space-between;
+}
+.align-center {
+  align-items: center;
+}
+</style>

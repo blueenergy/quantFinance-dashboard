@@ -190,7 +190,14 @@
           </Suspense>
 
           <div v-if="activeTab === 'securities'" class="securities-view">
-            <SecuritiesAccountManager />
+            <Suspense>
+              <template #default>
+                <SecuritiesAccountDashboard />
+              </template>
+              <template #fallback>
+                <div class="skeleton skeleton-table">账户工作台加载中...</div>
+              </template>
+            </Suspense>
           </div>
 
           <!-- 添加这一部分 -->
@@ -247,7 +254,7 @@ const WatchlistStrategyTable = defineAsyncComponent(() => import('./components/W
 const TradeExecutionTable = defineAsyncComponent(() => import('./components/TradeExecutionTable.vue'))
 const WorkerMonitor = defineAsyncComponent(() => import('./components/WorkerMonitor.vue'))
 const StrategyExecutionAnalysis = defineAsyncComponent(() => import('./components/StrategyExecutionAnalysis.vue'))
-import SecuritiesAccountManager from './components/SecuritiesAccountManager.vue'
+const SecuritiesAccountDashboard = defineAsyncComponent(() => import('./components/SecuritiesAccountDashboard.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
