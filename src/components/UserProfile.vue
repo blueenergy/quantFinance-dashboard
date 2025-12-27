@@ -381,17 +381,9 @@
               class="form-control" 
               placeholder="请输入账户ID"
             />
-          </div>
-          
-          <!-- 真实账户才需要密码 -->
-          <div v-if="currentAccount.account_type === 'real'" class="form-group">
-            <label>密码</label>
-            <input 
-              v-model="currentAccount.password" 
-              type="password" 
-              class="form-control" 
-              placeholder="请输入账户密码"
-            />
+            <small class="form-hint">
+              <strong>提示：</strong>真实交易需要在 quantTrader 中配置券商账户密码，此处无需填写密码。
+            </small>
           </div>
         </div>
         
@@ -473,7 +465,6 @@ export default {
       id: '',
       broker: '',
       account_id: '',
-      password: '',
       account_type: 'simulated',  // 默认模拟账户
       initial_cash: 1000000  // 默认100万
     })
@@ -920,9 +911,6 @@ export default {
           if (currentAccount.account_type === 'real') {
             updateData.account_id = currentAccount.account_id
           }
-          if (currentAccount.password) {
-            updateData.password = currentAccount.password
-          }
           response = await axios.put(`/api/user/securities_accounts/${currentAccount.id}`, updateData)
         } else {
           // 创建新账户
@@ -933,7 +921,6 @@ export default {
           
           if (currentAccount.account_type === 'real') {
             createData.account_id = currentAccount.account_id
-            createData.password = currentAccount.password
           } else {
             // 模拟账户：account_id 在后端自动生成，只发送初始资金
             createData.initial_cash = currentAccount.initial_cash || 1000000
