@@ -13,14 +13,19 @@ export function useAnalysisHistory() {
       console.warn('loadHistory 被调用但 symbol 无效:', symbol)
       return
     }
+    console.log(`[loadHistory] 开始加载 ${symbol} 的历史记录`)
     if (isAuthenticated?.value) {
       // 登录状态下从后端获取
       try {
         const token = localStorage.getItem('access_token')
-        const resp = await axios.get(`/api/analysis-history?symbol=${symbol}`, {
-          headers: { Authorization: `Bearer ${token}` }
+        // 使用 params 对象而不是 URL 字符串，确保客户端验证可以检测到 symbol
+        const resp = await axios.get('/api/analysis-history', {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { symbol }  // 明确使用 params 对象
         })
+        console.log(`[loadHistory] API 响应:`, resp.data)
         const raw = resp.data?.data || []
+        console.log(`[loadHistory] 解析后的数据数量: ${raw.length}`)
         analysisHistory.value[symbol] = raw.map((h) => {
           const ar = h.analysis_result || {}
           const analysis = ar.analysis || h.analysis || null
@@ -33,7 +38,9 @@ export function useAnalysisHistory() {
             model: h.model || ar.model
           }
         })
+        console.log(`[loadHistory] 设置 analysisHistory[${symbol}]:`, analysisHistory.value[symbol])
       } catch (e) {
+        console.error(`[loadHistory] 加载 ${symbol} 失败:`, e)
         analysisHistory.value[symbol] = []
       }
     } else {

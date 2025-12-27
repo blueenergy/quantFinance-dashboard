@@ -66,6 +66,8 @@
           </li>
         </ol>
       </div>
+      
+
     </div>
     
     <div v-if="showChangePassword" class="change-password-panel">
@@ -180,6 +182,8 @@ export default {
         apiToken.value = localStorage.getItem('access_token') || ''
         // 计算过期时间（如果 backend 返回了 expires_in）
         calculateTokenExpiry()
+        
+
       }
     }
     
@@ -229,7 +233,7 @@ export default {
       
       try {
         // 重新登录获取新 token（或调用专门的 refresh token API）
-        const response = await axios.post('/api/token/refresh')
+        const response = await axios.post('/api/auth/token/refresh')
         
         if (response.data.access_token) {
           apiToken.value = response.data.access_token
@@ -269,7 +273,7 @@ export default {
       tokenGenerating.value = true
       
       try {
-        await axios.post('/api/token/revoke')
+        await axios.post('/api/auth/token/revoke')
         apiToken.value = ''
         tokenSuccess.value = 'Token 已撤销'
       } catch (err) {
@@ -342,6 +346,7 @@ export default {
         changing.value = false
       }
     }
+    
 
     return {
       userInitials,
@@ -746,6 +751,120 @@ export default {
   margin-top: 4px;
   font-size: 12px;
   color: #e74c3c;
+}
+
+/* LLM Configuration Styles */
+.llm-config-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.llm-config-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.llm-config-description {
+  font-size: 12px;
+  color: #666;
+  margin: 0 0 16px 0;
+}
+
+.llm-config-form {
+  margin-top: 12px;
+}
+
+.form-row {
+  margin-bottom: 12px;
+}
+
+.form-row label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.config-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.config-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.save-btn {
+  padding: 8px 16px;
+  background: #27ae60;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: #219a52;
+}
+
+.save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.reset-btn {
+  padding: 8px 16px;
+  background: #95a5a6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.reset-btn:hover:not(:disabled) {
+  background: #7f8c8d;
+}
+
+.reset-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.llm-config-error {
+  padding: 8px 12px;
+  background: #f8d7da;
+  color: #721c24;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.llm-config-success {
+  padding: 8px 12px;
+  background: #d4edda;
+  color: #155724;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-top: 8px;
 }
 
 .change-password-success {

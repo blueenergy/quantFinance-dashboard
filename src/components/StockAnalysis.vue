@@ -2,23 +2,7 @@
   <div class="stock-analysis">
     <div class="analysis-header">
       <h3>智能股票分析</h3>
-      <div class="provider-selector">
-        <label>选择AI服务商:</label>
-        <select v-model="selectedProvider" @change="onProviderChange">
-          <option v-for="provider in safeAvailableProviders" :key="provider" :value="provider">
-            {{ providerNames[provider] || provider }}
-          </option>
-        </select>
-        <!-- 刷新按钮 -->
-        <button @click="fetchAvailableProviders" class="refresh-btn" title="刷新服务商列表">
-          🔄
-        </button>
-        <!-- 调试信息 -->
-        <div style="font-size: 12px; margin-top: 5px;">
-          <div>可用服务商数量: {{ safeAvailableProviders.length }}</div>
-          <div>当前选择: {{ selectedProvider }}</div>
-        </div>
-      </div>
+      <p class="header-subtitle">使用您配置的 LLM 进行智能分析</p>
     </div>
 
     <div class="analysis-input">
@@ -50,7 +34,7 @@
       <div class="result-header">
         <h4>{{ analysisResult.symbol }} 分析结果</h4>
         <div class="analysis-meta">
-          <span v-if="analysisResult.provider" class="provider-badge">{{ providerNames[analysisResult.provider] || analysisResult.provider }}</span>
+          <span v-if="analysisResult.provider" class="provider-badge">{{ analysisResult.provider }}</span>
           <span v-if="analysisResult.model" class="model-badge">{{ analysisResult.model }}</span>
         </div>
       </div>
@@ -111,8 +95,9 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive } from 'vue'
 import { useAuth } from '../services/auth.js'
+import { checkUserLlmConfig } from '../services/userService.js'
 
 export default {
   name: 'StockAnalysis',
@@ -123,15 +108,8 @@ export default {
     const loading = ref(false)
     const error = ref('')
     const analysisResult = ref(null)
-    const selectedProvider = ref('openai')
-    const availableProviders = ref(['openai']) // 设置默认值
 
-    const providerNames = {
-      'openai': 'OpenAI',
-      'deepseek': 'DeepSeek',
-      'custom': '自定义API'
-    }
-
+    // 只保留真正需要翻译的标签
     const adviceLabels = {
       'buy': '买入',
       'hold': '持有',
@@ -154,63 +132,22 @@ export default {
       confidence_score: 0,
       key_points: []
     })
-
-    // 安全的服务商列表计算属性
-    const safeAvailableProviders = computed(() => {
-      return Array.isArray(availableProviders.value) && availableProviders.value.length > 0 
-        ? availableProviders.value 
-        : ['openai']
-    })
-
-    const fetchAvailableProviders = async () => {
-      try {
-        console.log('正在获取LLM服务商列表...')
-        const response = await fetch('/api/llm-providers')
-        console.log('响应状态:', response.status)
-        
-        if (!response.ok) {
-          throw new Error(`HTTP错误! 状态: ${response.status}`)
-        }
-        
-        const contentType = response.headers.get('content-type')
-        let data = null
-        
-        if (contentType && contentType.includes('application/json')) {
-          const text = await response.text()
-          if (text.trim()) {
-            try {
-              data = JSON.parse(text)
-              console.log('响应数据:', data)
-            } catch (e) {
-              console.error('JSON解析错误:', e)
-              throw new Error('服务器响应格式错误')
-            }
-          } else {
-            throw new Error('服务器返回空响应')
-          }
-        } else {
-          throw new Error('服务器返回非JSON格式响应')
-        }
-        
-        // 确保providers是数组
-        availableProviders.value = Array.isArray(data.providers) ? data.providers : []
-        console.log('可用服务商:', availableProviders.value)
-        
-        if (data.default && availableProviders.value.includes(data.default)) {
-          selectedProvider.value = data.default
-          console.log('默认服务商:', data.default)
-        }
-      } catch (err) {
-        console.error('获取服务商列表失败:', err)
-        // 设置默认的服务商列表
-        availableProviders.value = ['openai']
-        selectedProvider.value = 'openai'
-      }
-    }
-
+    
     const analyzeStock = async () => {
       if (!stockSymbol.value.trim()) {
         error.value = '请输入股票代码'
+        return
+      }
+
+      // 检查用户是否已配置LLM
+      const llmConfigStatus = await checkUserLlmConfig()
+      if (!llmConfigStatus.hasConfig) {
+        error.value = '请先在用户设置中配置您的LLM API令牌，然后才能使用AI分析功能'
+        return
+      }
+      
+      if (!llmConfigStatus.isActive) {
+        error.value = '您已配置LLM，但还未激活任何配置。请进入用户设置激活一个LLM配置'
         return
       }
 
@@ -219,12 +156,12 @@ export default {
       analysisResult.value = null
 
       try {
+        // 不传递 provider 和 model，让后端从用户激活的配置中读取
         const response = await authenticatedRequest('/api/analyze-stock', {
           method: 'POST',
           body: JSON.stringify({
-            symbol: stockSymbol.value.trim(),
-            provider: selectedProvider.value,
-            model: null // 使用默认模型
+            symbol: stockSymbol.value.trim()
+            // 删除了 provider 和 model 参数，使用用户配置
           })
         })
 
@@ -253,7 +190,7 @@ export default {
           analysisResult.value = {
             success: result.success || false,
             symbol: result.symbol || stockSymbol.value,
-            provider: result.provider || selectedProvider.value,
+            provider: result.provider || 'unknown',
             model: result.model || 'unknown',
             analysis: result.analysis || {},
             error: result.error || null
@@ -286,40 +223,21 @@ export default {
       }
     }
 
-    const onProviderChange = () => {
-      // 清除之前的结果，但保持安全的状态
-      if (analysisResult.value) {
-        analysisResult.value = null
-      }
-      if (error.value) {
-        error.value = ''
-      }
-    }
-
     const clearError = () => {
       error.value = ''
     }
-
-    onMounted(() => {
-      fetchAvailableProviders()
-    })
 
     return {
       stockSymbol,
       loading,
       error,
       analysisResult,
-      selectedProvider,
-      availableProviders,
-      safeAvailableProviders,
-      providerNames,
       adviceLabels,
       riskLabels,
       analysis,
       analyzeStock,
-      onProviderChange,
       clearError,
-      fetchAvailableProviders
+      checkUserLlmConfig
     }
   }
 }
@@ -341,10 +259,16 @@ export default {
 }
 
 .analysis-header h3 {
-  margin: 0 0 16px 0;
+  margin: 0 0 8px 0;
   color: #2c3e50;
   font-size: 24px;
   font-weight: 600;
+}
+
+.header-subtitle {
+  margin: 0;
+  color: #6c757d;
+  font-size: 14px;
 }
 
 .provider-selector {
