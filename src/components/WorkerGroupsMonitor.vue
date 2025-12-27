@@ -101,9 +101,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001'
+import request from '../utils/request'
 
 const loading = ref(false)
 const groups = ref([])
@@ -155,24 +153,18 @@ const formatTime = (timestamp) => {
 const refreshData = async () => {
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
-    console.log('[WorkerGroupsMonitor] Fetching worker groups...', {
-      url: `${API_BASE}/api/admin/worker-groups/status`,
-      hasToken: !!token
-    })
+    console.log('[WorkerGroupsMonitor] Fetching worker groups...')
     
-    const resp = await axios.get(`${API_BASE}/api/admin/worker-groups/status`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    const data = await request.get('/admin/worker-groups/status')
     
-    console.log('[WorkerGroupsMonitor] Response:', resp.data)
+    console.log('[WorkerGroupsMonitor] Response:', data)
     
-    if (resp.data.success) {
-      groups.value = resp.data.data.groups || []
-      summary.value = resp.data.data.summary || {}
+    if (data.success) {
+      groups.value = data.data.groups || []
+      summary.value = data.data.summary || {}
       console.log('[WorkerGroupsMonitor] Loaded groups:', groups.value.length)
     } else {
-      console.error('[WorkerGroupsMonitor] API returned success=false:', resp.data)
+      console.error('[WorkerGroupsMonitor] API returned success=false:', data)
     }
   } catch (error) {
     console.error('[WorkerGroupsMonitor] Failed to fetch worker groups:', error)

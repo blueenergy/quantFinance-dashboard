@@ -87,9 +87,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import axios from 'axios'
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001'
+import request from '../utils/request'
 
 const loading = ref(false)
 const nodes = ref([])
@@ -126,14 +124,11 @@ const formatHeartbeat = (timestamp) => {
 const refreshData = async () => {
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
-    const resp = await axios.get(`${API_BASE}/api/admin/worker-nodes/status`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    const data = await request.get('/admin/worker-nodes/status')
     
-    if (resp.data.success) {
-      nodes.value = resp.data.data.nodes || []
-      summary.value = resp.data.data.summary || {}
+    if (data.success) {
+      nodes.value = data.data.nodes || []
+      summary.value = data.data.summary || {}
     }
   } catch (error) {
     console.error('Failed to fetch worker nodes:', error)
