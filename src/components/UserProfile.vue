@@ -247,20 +247,47 @@
               v-for="account in securitiesAccounts" 
               :key="account.id" 
               class="account-item"
+              :class="{ 'simulated-account': account.account_type === 'simulated' }"
             >
               <div class="account-header">
-                <span class="broker-name">{{ account.broker }}</span>
-                <span class="account-id">{{ account.account_id }}</span>
+                <div class="account-title">
+                  <span class="broker-name">{{ account.broker }}</span>
+                  <span class="account-type-badge" :class="account.account_type">
+                    {{ account.account_type === 'simulated' ? '🧪 模拟' : '💼 真实' }}
+                  </span>
+                </div>
                 <div class="account-actions">
                   <button @click="editAccount(account)" class="edit-btn">编辑</button>
                   <button @click="deleteAccount(account.id)" class="delete-btn">删除</button>
                 </div>
               </div>
               <div class="account-details">
-                <span>状态: {{ account.status || '已连接' }}</span>
-                <span>创建时间: {{ formatDate(account.created_at) }}</span>
+                <div class="detail-row">
+                  <span class="detail-label">账户ID:</span>
+                  <span class="detail-value">{{ account.account_id }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">数据库ID:</span>
+                  <span class="detail-value id-monospace">{{ account.id }}</span>
+                  <button @click="copyToClipboard(account.id)" class="copy-btn" title="复制ID">📋</button>
+                </div>
+                <div v-if="account.account_type === 'simulated' && account.initial_cash" class="detail-row">
+                  <span class="detail-label">初始资金:</span>
+                  <span class="detail-value">￥{{ account.initial_cash.toLocaleString() }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">创建时间:</span>
+                  <span class="detail-value">{{ formatDate(account.created_at) }}</span>
+                </div>
               </div>
             </div>
+          </div>
+          
+          <!-- 单账户限制提示 -->
+          <div v-if="securitiesAccounts.length > 0" class="info-notice" style="margin-top: 16px;">
+            <small style="color: #666;">
+              💡 当前版本每个用户只支持一个账户。如需多账户，请注册多个用户。
+            </small>
           </div>
         </div>
       </div>
@@ -276,6 +303,56 @@
         
         <div class="modal-body">
           <div class="form-group">
+            <label>账户类型</label>
+            <select 
+              v-model="currentAccount.account_type" 
+              class="form-control"
+            >
+              <option value="simulated">模拟账户（推荐）</option>
+              <option value="real">真实账户</option>
+            </select>
+            <small class="form-hint">
+              <strong>观察模式：</strong>Worker 会生成交易信号，但 quantTrader 不会执行，您可以观察信号质量<br>
+              <strong>真实交易：</strong>配置后 quantTrader 会自动执行交易信号
+            </small>
+          </div>
+          
+          <!-- 模拟账户特有字段 -->
+          <div v-if="currentAccount.account_type === 'simulated'" class="form-group">
+            <label>初始资金（元）</label>
+            <input 
+              v-model.number="currentAccount.initial_cash" 
+              type="number" 
+              class="form-control" 
+              placeholder="默认 1,000,000 元"
+              step="10000"
+            />
+            <small class="form-hint">
+              用于前端显示模拟盈亏，默认100万元
+            </small>
+          </div>
+          
+          <!-- 观察模式提示信息 -->
+          <div v-if="currentAccount.account_type === 'simulated'" class="form-group">
+            <div class="info-box">
+              <span class="info-icon">👀</span>
+              <div>
+                <div><strong>观察模式</strong>可以让您：</div>
+                <ul style="margin: 8px 0; padding-left: 20px;">
+                  <li>看到 Worker 生成的所有交易信号</li>
+                  <li>评估策略的信号质量</li>
+                  <li>零风险体验完整流程</li>
+                  <li>随时切换到真实交易</li>
+                </ul>
+                <div style="margin-top: 8px; color: #666;">
+                  提示：quantTrader 会自动跳过观察模式账户的信号执行
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 真实账户才需要选择券商 -->
+          <div v-if="currentAccount.account_type === 'real'" class="form-group">
             <label>券商</label>
             <select 
               v-model="currentAccount.broker" 
@@ -285,13 +362,18 @@
               <option value="中信证券">中信证券</option>
               <option value="华泰证券">华泰证券</option>
               <option value="国泰君安">国泰君安</option>
+              <option value="国金证券">国金证券</option>
               <option value="招商证券">招商证券</option>
               <option value="东方财富">东方财富</option>
+              <option value="广发证券">广发证券</option>
+              <option value="光大证券">光大证券</option>
+              <option value="海通证券">海通证券</option>
               <option value="其他">其他</option>
             </select>
           </div>
           
-          <div class="form-group">
+          <!-- 真实账户才需要输入账户ID -->
+          <div v-if="currentAccount.account_type === 'real'" class="form-group">
             <label>账户ID</label>
             <input 
               v-model="currentAccount.account_id" 
@@ -301,7 +383,8 @@
             />
           </div>
           
-          <div class="form-group">
+          <!-- 真实账户才需要密码 -->
+          <div v-if="currentAccount.account_type === 'real'" class="form-group">
             <label>密码</label>
             <input 
               v-model="currentAccount.password" 
@@ -390,7 +473,9 @@ export default {
       id: '',
       broker: '',
       account_id: '',
-      password: ''
+      password: '',
+      account_type: 'simulated',  // 默认模拟账户
+      initial_cash: 1000000  // 默认100万
     })
     
     // 切换标签页
@@ -753,6 +838,26 @@ export default {
       try {
         const response = await axios.get('/api/user/securities_accounts')
         securitiesAccounts.value = response.data || []
+        
+        // 调试：打印账户数据
+        console.log('=== 证券账户加载成功 ===')
+        console.log('账户数量:', securitiesAccounts.value.length)
+        securitiesAccounts.value.forEach((acc, index) => {
+          console.log(`账户 ${index + 1}:`, {
+            id: acc.id,
+            broker: acc.broker,
+            account_id: acc.account_id,
+            account_type: acc.account_type
+          })
+        })
+        
+        // 检查是否有重复的 id
+        const ids = securitiesAccounts.value.map(acc => acc.id)
+        const uniqueIds = new Set(ids)
+        if (ids.length !== uniqueIds.size) {
+          console.error('⚠️ 警告：发现重复的账户ID！')
+          console.error('所有ID:', ids)
+        }
       } catch (error) {
         console.error('加载证券账户失败:', error)
       }
@@ -765,7 +870,9 @@ export default {
         id: '',
         broker: '',
         account_id: '',
-        password: ''
+        password: '',
+        account_type: 'simulated',
+        initial_cash: 1000000
       })
       showAddAccountModal.value = true
     }
@@ -784,30 +891,58 @@ export default {
     
     // 保存账户
     const saveAccount = async () => {
-      if (!currentAccount.broker || !currentAccount.account_id || !currentAccount.password) {
-        alert('请填写所有必填字段')
-        return
+      // 真实账户必须填写券商、账户ID和密码
+      if (currentAccount.account_type === 'real') {
+        if (!currentAccount.broker) {
+          alert('请选择券商')
+          return
+        }
+        if (!currentAccount.account_id) {
+          alert('请输入账户ID')
+          return
+        }
+        if (!currentAccount.password) {
+          alert('请输入密码')
+          return
+        }
       }
+      // 模拟账户不需要任何输入验证
       
       try {
         let response
         if (editingAccount.value) {
           // 更新现有账户
-          response = await axios.put(`/api/user/securities_accounts/${currentAccount.id}`, {
+          const updateData = {
             broker: currentAccount.broker,
-            account_id: currentAccount.account_id,
-            password: currentAccount.password
-          })
+            account_type: currentAccount.account_type
+          }
+          // 真实账户才需要账户ID
+          if (currentAccount.account_type === 'real') {
+            updateData.account_id = currentAccount.account_id
+          }
+          if (currentAccount.password) {
+            updateData.password = currentAccount.password
+          }
+          response = await axios.put(`/api/user/securities_accounts/${currentAccount.id}`, updateData)
         } else {
           // 创建新账户
-          response = await axios.post('/api/user/securities_accounts', {
+          const createData = {
             broker: currentAccount.broker,
-            account_id: currentAccount.account_id,
-            password: currentAccount.password
-          })
+            account_type: currentAccount.account_type
+          }
+          
+          if (currentAccount.account_type === 'real') {
+            createData.account_id = currentAccount.account_id
+            createData.password = currentAccount.password
+          } else {
+            // 模拟账户：account_id 在后端自动生成，只发送初始资金
+            createData.initial_cash = currentAccount.initial_cash || 1000000
+          }
+          
+          response = await axios.post('/api/user/securities_accounts', createData)
         }
         
-        if (response.data.success) {
+        if (response.data) {
           alert(editingAccount.value ? '账户更新成功' : '账户添加成功')
           closeModal()
           loadSecuritiesAccounts() // 重新加载账户列表
@@ -830,7 +965,16 @@ export default {
         loadSecuritiesAccounts() // 重新加载账户列表
       } catch (error) {
         console.error('删除账户失败:', error)
-        alert('删除失败: ' + (error.response?.data?.detail || error.message))
+        
+        // 如果是404，说明账户已经不存在了，直接刷新列表
+        if (error.response?.status === 404) {
+          alert('账户不存在或已被删除，将刷新列表')
+          loadSecuritiesAccounts() // 刷新列表移除UI中的该账户
+        } else if (error.response?.status === 403) {
+          alert('无权删除此账户')
+        } else {
+          alert('删除失败: ' + (error.response?.data?.detail || error.message))
+        }
       }
     }
     
@@ -843,6 +987,23 @@ export default {
     const formatDate = (dateString) => {
       if (!dateString) return '未知'
       return new Date(dateString).toLocaleString('zh-CN')
+    }
+    
+    // 复制到剪贴板
+    const copyToClipboard = async (text) => {
+      try {
+        await navigator.clipboard.writeText(text)
+        alert('已复制到剪贴板')
+      } catch (err) {
+        // 备用方案
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+        alert('已复制到剪贴板')
+      }
     }
     
     // 初始化加载个人资料
@@ -920,7 +1081,8 @@ export default {
       closeModal,
       
       // 工具函数
-      formatDate
+      formatDate,
+      copyToClipboard
     }
   }
 }
@@ -1020,6 +1182,34 @@ export default {
   outline: none;
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.form-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #e3f2fd;
+  border-left: 4px solid #2196f3;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #0d47a1;
+}
+
+.info-box div {
+  line-height: 1.6;
+}
+
+.info-icon {
+  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .email-input-group {
@@ -1139,6 +1329,16 @@ export default {
   border: 1px solid #e9ecef;
   border-radius: 6px;
   background: white;
+  transition: all 0.3s;
+}
+
+.account-item:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.account-item.simulated-account {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-color: #667eea;
 }
 
 .account-header {
@@ -1148,14 +1348,90 @@ export default {
   margin-bottom: 8px;
 }
 
+.account-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .broker-name {
   font-weight: 600;
   color: #333;
 }
 
+.account-type-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.account-type-badge.simulated {
+  background: #667eea;
+  color: white;
+}
+
+.account-type-badge.real {
+  background: #28a745;
+  color: white;
+}
+
 .account-id {
   color: #6c757d;
   font-family: monospace;
+}
+
+.account-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: #666;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-label {
+  font-weight: 500;
+  color: #555;
+  min-width: 80px;
+}
+
+.detail-value {
+  color: #333;
+}
+
+.id-monospace {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.copy-btn {
+  background: transparent;
+  border: 1px solid #ddd;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.copy-btn:hover {
+  background: #f0f0f0;
+  border-color: #007bff;
+}
+
+.account-details span {
+  display: inline-flex;
+  align-items: center;
 }
 
 .account-actions {
