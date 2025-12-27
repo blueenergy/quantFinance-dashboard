@@ -176,29 +176,18 @@
           <button @click="closeHistoryModal" class="close-btn">×</button>
         </div>
         <div class="modal-body">
-          <HistoryAnalysis :history="analysisHistory[historySymbol]" :defaultModel="defaultModel" />
+          <!-- 调试信息 -->
+          <div v-if="!analysisHistory[historySymbol] || analysisHistory[historySymbol].length === 0" style="padding: 20px; text-align: center; color: #666;">
+            <p>此股票还没有AI分析历史记录</p>
+            <p style="font-size: 12px; margin-top: 10px;">请先点击“AI分析”按钮进行分析</p>
+          </div>
+          <HistoryAnalysis :history="analysisHistory[historySymbol]" />
         </div>
       </div>
     </div>
 
     <!-- 历史分析区域（子组件） -->
-    <HistoryAnalysis :history="analysisHistory[currentAnalysis.symbol]?.slice(1)" :defaultModel="defaultModel" />
-
-    <!-- 历史分析弹窗 -->
-    <div v-if="showHistoryModal" class="modal-overlay" @click="closeHistoryModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>🕑 {{ historySymbol }} 历史AI分析</h3>
-          <button @click="closeHistoryModal" class="close-btn">×</button>
-        </div>
-        <div class="modal-body">
-          <HistoryAnalysis :history="analysisHistory[historySymbol]" :defaultModel="defaultModel" />
-        </div>
-      </div>
-    </div>
-
-    <!-- 历史分析区域（子组件） -->
-    <HistoryAnalysis :history="analysisHistory[currentAnalysis.symbol]?.slice(1)" :defaultModel="defaultModel" />
+    <HistoryAnalysis :history="analysisHistory[currentAnalysis.symbol]?.slice(1)" />
   </div>
 </template>
 
@@ -208,10 +197,8 @@ import axios from 'axios'
 import { useAuth } from '../services/auth.js'
 import { watchlistService } from '../services/watchlist.js'
 import { useAnalysisHistory } from '../composables/useAnalysisHistory'
+import { checkUserLlmConfig } from '../services/userService.js'
 import HistoryAnalysis from './HistoryAnalysis.vue'
-
-const defaultProvider = import.meta.env.VITE_DEFAULT_PROVIDER || 'custom'
-const defaultModel = import.meta.env.VITE_DEFAULT_MODEL || 'qwen-plus'
 
 const emit = defineEmits(['select-chart'])
 const { isAuthenticated, currentUser } = useAuth()
@@ -477,6 +464,18 @@ async function analyzeStock(symbol) {
       alert('请先登录后再进行AI分析')
       return
     }
+    
+    // 检查用户是否已配置LLM
+    const llmConfigStatus = await checkUserLlmConfig()
+    if (!llmConfigStatus.hasConfig) {
+      alert('请先在用户设置中配置您的LLM API令牌，然后才能使用AI分析功能')
+      return
+    }
+    
+    if (!llmConfigStatus.isActive) {
+      alert('您已配置LLM，但还未激活任何配置。请进入用户设置激活一个LLM配置')
+      return
+    }
 
     analyzingStock.value = symbol
     console.log(`开始分析股票: ${symbol}`)
@@ -490,10 +489,10 @@ async function analyzeStock(symbol) {
     
     console.log('发送AI分析请求...')
     
+    // 不传递 provider 和 model，让后端从用户激活的配置中读取
     const response = await axios.post('/api/analyze-stock', {
-      symbol: symbol,
-      provider: defaultProvider,
-      model: defaultModel
+      symbol: symbol
+      // 删除了 provider 和 model 参数，使用用户配置
     }, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -577,11 +576,16 @@ function showAnalysisResult(symbol, result) {
     if (!analysisPayload.symbol) analysisPayload.symbol = symbol
     const resolvedName = getStockName(symbol)
     if (!analysisPayload.stock_name) analysisPayload.stock_name = resolvedName
+    
+    // 从后端返回的结果中获取 provider 和 model
+    const usedProvider = result.provider || 'unknown'
+    const usedModel = result.model || 'unknown'
+    
     console.log('分析历史存储请求:', {
       symbol,
       analysis_result: { analysis: analysisPayload },
-      provider: defaultProvider,
-      model: defaultModel,
+      provider: usedProvider,
+      model: usedModel,
       timestamp: entry.timestamp
     })
     axios.post('/api/analysis-history', {
@@ -589,11 +593,11 @@ function showAnalysisResult(symbol, result) {
       stock_name: resolvedName,
       analysis_result: {
         analysis: analysisPayload,
-        provider: defaultProvider,
-        model: defaultModel
+        provider: usedProvider,
+        model: usedModel
       },
-      provider: defaultProvider,
-      model: defaultModel,
+      provider: usedProvider,
+      model: usedModel,
       timestamp: entry.timestamp
     }, {
       headers: { Authorization: `Bearer ${token}` }
@@ -621,6 +625,10 @@ function openHistoryModal(symbol) {
     console.warn('历史分析弹窗打开时 symbol 无效:', symbol)
     return
   }
+  console.log('打开历史分析弹窗:', symbol)
+  console.log('analysisHistory:', analysisHistory.value)
+  console.log(`analysisHistory[${symbol}]:`, analysisHistory.value[symbol])
+  
   historySymbol.value = symbol
   loadHistory(symbol)
   showHistoryModal.value = true
@@ -879,6 +887,8 @@ function getPriceChangeClass(value) {
   if (value === undefined || value === null) return ''
   return value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral'
 }
+
+
 
 // 组件挂载时初始化
 onMounted(async () => {

@@ -7,7 +7,7 @@
           {{ item.symbol }}<span v-if="item.stock_name"> - {{ item.stock_name }}</span>
         </span>
         <span class="history-date">{{ formatDateTime(item.created_at || item.timestamp) }}</span>
-        <span class="history-model">🧠 模型: <b>{{ item.model || defaultModel }}</b></span>
+        <span class="history-model">🧠 模型: <b>{{ item.model || 'unknown' }}</b></span>
       </div>
       <div class="history-body">
         <div><span class="label">📊 技术面分析:</span> {{ item.analysis?.technical_analysis || '无' }}</div>
@@ -46,8 +46,7 @@
 
 <script setup>
 const props = defineProps({
-  history: Array,
-  defaultModel: String
+  history: Array
 })
 function formatDateTime(timestamp) {
   if (!timestamp) return ''

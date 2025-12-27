@@ -143,7 +143,7 @@ export default {
       error.value = ''
 
       try {
-        const endpoint = isLogin.value ? '/api/user/login' : '/api/user/register'
+        const endpoint = isLogin.value ? '/api/auth/login' : '/api/auth/register'
         const payload = isLogin.value 
           ? { username: formData.username, password: formData.password }
           : { 
@@ -187,7 +187,7 @@ export default {
         } else {
           // 注册成功，切换到登录模式
           error.value = ''
-          alert('注册成功！请登录。')
+          alert('注册成功！请检查您的邮箱并点击验证链接，然后才能登录。')
           isLogin.value = true
           resetForm()
         }
