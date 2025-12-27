@@ -266,6 +266,15 @@ export default {
       } else if (notification.type === 'signal_generated' && notification.data?.order_id) {
         // Navigate to trade executions
         // emit('navigate-to-trade-executions')
+      } else if (notification.type === 'user_registration') {
+        // 新用户注册通知，显示提示信息
+        alert(`新用户注册待审批
+
+用户名: ${notification.data?.username || 'N/A'}
+邮箱: ${notification.data?.email || 'N/A'}
+
+请前往管理员控制台 > 用户管理 进行审批。`)
+        showPanel.value = false  // 关闭通知面板
       }
     }
 
@@ -312,14 +321,23 @@ export default {
         worker_timeout: '⚠️',
         signal_generated: '⚡',
         daily_report: '📊',
-        system_alert: '🔔'
+        system_alert: '🔔',
+        user_registration: '👤'  // 新用户注册通知图标
       }
       return icons[type] || '📝'
     }
 
     const formatTime = (timestamp) => {
       if (!timestamp) return ''
-      const date = new Date(timestamp * 1000)
+      
+      // 处理ISO格式字符串或Unix时间戳
+      let date
+      if (typeof timestamp === 'string') {
+        date = new Date(timestamp)  // ISO字符串
+      } else {
+        date = new Date(timestamp * 1000)  // Unix时间戳
+      }
+      
       const now = new Date()
       const diff = Math.floor((now - date) / 1000)
 
