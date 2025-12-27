@@ -187,7 +187,7 @@ export default {
         } else {
           // 注册成功，切换到登录模式
           error.value = ''
-          alert('注册成功！请检查您的邮箱并点击验证链接，然后才能登录。')
+          alert('注册成功！您的账户正在等待管理员审批，审批通过后即可登录。')
           isLogin.value = true
           resetForm()
         }
