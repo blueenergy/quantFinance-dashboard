@@ -10,11 +10,11 @@
     <div v-else class="container">
       <header class="header">
         <div class="header-left">
-          <h1>🔥 悟空量化金融智能助手</h1>
+          <h1 v-if="isAuthenticated">🔥 悟空量化金融智能助手</h1>
         </div>
         <div class="header-right">
           <NotificationCenter />
-          <UserInfo :user="user" @logout="handleLogout" />
+          <UserAvatar :user="user" @logout="handleLogout" />
         </div>
       </header>
       
@@ -33,7 +33,7 @@
         </template>
 
         <!-- 管理员显示：极简管理仪表板说明 -->
-        <div v-if="user?.is_admin" class="admin-welcome">
+        <div v-if="isAuthenticated && user?.is_admin" class="admin-welcome">
           <div class="welcome-card">
             <h2>系统管理控制台</h2>
             <p>悟空量化金融智能助手管理后台</p>
@@ -239,6 +239,16 @@
               <div class="skeleton skeleton-table">策略执行分析加载中...</div>
             </template>
           </Suspense>
+          
+          <!-- User Profile Tab -->
+          <Suspense v-if="activeTab === 'user-profile'">
+            <template #default>
+              <UserProfile :user="user" />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">用户配置加载中...</div>
+            </template>
+          </Suspense>
         </div>
       </div>
     </div>
@@ -247,7 +257,7 @@
 
 <script setup>
 import LoginForm from './components/LoginForm.vue'
-import UserInfo from './components/UserInfo.vue'
+import UserAvatar from './components/UserAvatar.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
 import WatchListData from './components/WatchListData.vue'
 // Lazy-load heavy views/components to avoid loading them for normal users
@@ -267,6 +277,7 @@ const TradingManualPanel = defineAsyncComponent(() => import('./components/Tradi
 const WorkerMonitor = defineAsyncComponent(() => import('./components/WorkerMonitor.vue'))
 const StrategyExecutionAnalysis = defineAsyncComponent(() => import('./components/StrategyExecutionAnalysis.vue'))
 const SecuritiesAccountDashboard = defineAsyncComponent(() => import('./components/SecuritiesAccountDashboard.vue'))
+const UserProfile = defineAsyncComponent(() => import('./components/UserProfile.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
@@ -343,6 +354,7 @@ const adminTabs = computed(() => {
     { id: 'ranking', name: '评分' },
     { id: 'spectrum', name: '阴阳谱' },
     { id: 'securities', name: '证券账户' },
+    { id: 'user-profile', name: '用户配置' },  // 新增用户配置
     // AI analysis moved to AIAnalysisHistory (history tab)
   ]
   if (user.value?.is_admin) {

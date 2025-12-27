@@ -74,6 +74,7 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { useAuth } from '../services/auth.js'
+import { checkUserLlmConfig } from '../services/userService.js'
 
 const { user, isAuthenticated, authService } = useAuth()
 
@@ -90,6 +91,16 @@ async function refreshAnalysis(isManual = false) {
     // 检查是否已登录
     if (!isAuthenticated.value) {
       throw new Error('请先登录后再获取分析')
+    }
+    
+    // 检查用户是否已配置LLM
+    const llmConfigStatus = await checkUserLlmConfig()
+    if (!llmConfigStatus.hasConfig) {
+      throw new Error('请先在用户设置中配置您的LLM API令牌，然后才能使用AI分析功能')
+    }
+    
+    if (!llmConfigStatus.isActive) {
+      throw new Error('您已配置LLM，但还未激活任何配置。请进入用户设置激活一个LLM配置')
     }
     
     // 发送API请求，只有手动刷新时才加force_refresh
@@ -123,6 +134,8 @@ async function refreshAnalysis(isManual = false) {
       error.value = '登录已过期，请重新登录'
     } else if (err.message.includes('请先登录')) {
       error.value = err.message
+    } else if (err.message.includes('请先在用户设置中配置')) {
+      error.value = err.message
     } else {
       error.value = err.response?.data?.detail || err.message || '网络连接失败'
     }
@@ -150,6 +163,8 @@ async function refreshAnalysis(isManual = false) {
     loading.value = false
   }
 }
+
+
 
 // 格式化时间
 function formatDateTime(timestamp) {

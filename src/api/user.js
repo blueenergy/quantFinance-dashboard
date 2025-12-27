@@ -43,12 +43,12 @@ export async function getAvailableStrategies() {
 }
 
 export async function getSecuritiesAccounts() {
-  const res = await fetch(`${API_BASE}/user/securities_account`, { headers: authHeaders() })
+  const res = await fetch(`${API_BASE}/user/securities_accounts`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`Failed to get accounts: ${res.status}`)
   return await res.json()
 }
 export async function createSecuritiesAccount(payload) {
-  const res = await fetch(`${API_BASE}/user/securities_account`, {
+  const res = await fetch(`${API_BASE}/user/securities_accounts`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(payload),
@@ -57,7 +57,7 @@ export async function createSecuritiesAccount(payload) {
   return await res.json()
 }
 export async function updateSecuritiesAccount(account_id, payload) {
-  const res = await fetch(`${API_BASE}/user/securities_account/${account_id}`, {
+  const res = await fetch(`${API_BASE}/user/securities_accounts/${account_id}`, {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify(payload),
@@ -66,7 +66,7 @@ export async function updateSecuritiesAccount(account_id, payload) {
   return await res.json()
 }
 export async function deleteSecuritiesAccount(account_id) {
-  const res = await fetch(`${API_BASE}/user/securities_account/${account_id}`, {
+  const res = await fetch(`${API_BASE}/user/securities_accounts/${account_id}`, {
     method: 'DELETE',
     headers: authHeaders(),
   })
