@@ -7,6 +7,59 @@
       </div>
     </v-card-title>
     
+    <!-- 账户切换器 -->
+    <v-card-text v-if="securitiesAccounts.length > 0">
+      <v-select
+        v-model="selectedAccountId"
+        :items="accountOptions"
+        label="选择账户"
+        variant="outlined"
+        density="compact"
+        @update:model-value="onAccountChange"
+      >
+        <template #selection="{ item }">
+          <span class="account-type-chip" :class="item.raw.account_type">
+            {{ item.raw.account_type === 'simulated' ? '🧪' : '💼' }}
+          </span>
+          <span class="ml-2">{{ item.title }}</span>
+        </template>
+        <template #item="{ props, item }">
+          <v-list-item v-bind="props">
+            <template #prepend>
+              <span class="account-type-icon">
+                {{ item.raw.account_type === 'simulated' ? '🧪' : '💼' }}
+              </span>
+            </template>
+            <template #append>
+              <v-chip
+                size="x-small"
+                :color="item.raw.account_type === 'simulated' ? 'blue' : 'green'"
+              >
+                {{ item.raw.account_type === 'simulated' ? '观察模式' : '真实交易' }}
+              </v-chip>
+            </template>
+          </v-list-item>
+        </template>
+      </v-select>
+      
+      <!-- 观察模式提示 -->
+      <v-alert v-if="currentAccount && currentAccount.account_type === 'simulated'" type="info" variant="tonal" class="mt-2">
+        <div class="d-flex align-center">
+          <span>👀</span>
+          <div class="ml-2">
+            <strong>观察模式</strong>：下方数据为根据交易信号模拟计算的盈亏，实际未执行交易<br>
+            <small>配置真实券商账户后，quantTrader 将自动执行交易信号</small>
+          </div>
+        </div>
+      </v-alert>
+    </v-card-text>
+    
+    <v-card-text v-else>
+      <v-alert type="info" border="left">
+        您还没有添加证券账户，请先在<a href="#" @click.prevent="openSecuritySettings">账户设置</a>中添加。
+      </v-alert>
+    </v-card-text>
+    
     <!-- 账户概览 -->
     <v-card class="mb-4">
       <v-card-title>账户概览</v-card-title>
@@ -140,8 +193,13 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { getTraderAccount, getTraderPositions } from '../api/trader'
+import { getTraderAccount, getTraderPositions, getSecuritiesAccounts, getTradeSignals } from '../api/trader'
 import AccountSecuritySettings from './AccountSecuritySettings.vue'
+
+// 证券账户列表
+const securitiesAccounts = ref([])
+// 当前选中的账户ID
+const selectedAccountId = ref(null)
 
 // 账户概览数据
 const overview = ref({
@@ -173,6 +231,25 @@ const positionHeaders = [
 
 // 账户与安全设置对话框引用
 const accountSecuritySettings = ref(null)
+
+// 账户选项（用于v-select）
+const accountOptions = computed(() => {
+  return securitiesAccounts.value.map(acc => ({
+    value: acc.id,
+    title: `${acc.broker} - ${acc.account_id}`,
+    raw: acc
+  }))
+})
+
+// 当前选中的账户
+const currentAccount = computed(() => {
+  return securitiesAccounts.value.find(acc => acc.id === selectedAccountId.value)
+})
+
+// 是否为观察模式
+const isObservationMode = computed(() => {
+  return currentAccount.value && currentAccount.value.account_type === 'simulated'
+})
 
 // 计算最大持仓占比
 const largestPositionRatio = computed(() => {
@@ -225,8 +302,14 @@ function formatPercent(value) {
 // 加载账户概览
 async function loadOverview() {
   try {
-    const data = await getTraderAccount()
-    // 如果后端没有返回有效数据，使用默认值
+    // 如果是观察模式，使用模拟计算
+    if (isObservationMode.value) {
+      overview.value = await calculateSimulatedOverview()
+      return
+    }
+    
+    // 真实账户：从后端获取
+    const data = await getTraderAccount(selectedAccountId.value)
     overview.value = data || {
       total_assets: 0,
       available_cash: 0,
@@ -236,7 +319,6 @@ async function loadOverview() {
     }
   } catch (error) {
     console.error('获取账户概览失败:', error)
-    // 设置默认值
     overview.value = {
       total_assets: 0,
       available_cash: 0,
@@ -250,16 +332,141 @@ async function loadOverview() {
 // 加载持仓数据
 async function loadPositions() {
   try {
-    const data = await getTraderPositions()
+    // 如果是观察模式，使用模拟计算
+    if (isObservationMode.value) {
+      positions.value = await calculateSimulatedPositions()
+      return
+    }
+    
+    // 真实账户：从后端获取
+    const data = await getTraderPositions(selectedAccountId.value)
     positions.value = Array.isArray(data) ? data.map(item => ({
       ...item,
-      // Vuetify data table 需要 raw 属性
       raw: item
     })) : []
   } catch (error) {
     console.error('获取持仓数据失败:', error)
     positions.value = []
   }
+}
+
+// 观察模式：根据交易信号计算模拟盈亏
+async function calculateSimulatedOverview() {
+  const initial_cash = currentAccount.value?.initial_cash || 1000000
+  const simulatedPositions = await calculateSimulatedPositions()
+  
+  const market_value = simulatedPositions.reduce((sum, pos) => sum + (pos.raw.market_value || 0), 0)
+  const cash = initial_cash - simulatedPositions.reduce((sum, pos) => {
+    return sum + (pos.raw.cost_price * pos.raw.quantity)
+  }, 0)
+  
+  return {
+    total_assets: cash + market_value,
+    available_cash: cash,
+    market_value: market_value,
+    daily_pnl: 0,  // 观察模式不计算日盈亏
+    daily_pnl_ratio: 0
+  }
+}
+
+// 观察模式：根据交易信号计算模拟持仓
+async function calculateSimulatedPositions() {
+  try {
+    // 获取所有交易信号
+    const signals = await getTradeSignals(selectedAccountId.value)
+    
+    // 按照时间顺序排序
+    signals.sort((a, b) => a.timestamp - b.timestamp)
+    
+    // 计算每个股票的持仓
+    const positionMap = {}
+    
+    for (const signal of signals) {
+      const symbol = signal.symbol
+      if (!positionMap[symbol]) {
+        positionMap[symbol] = {
+          symbol: symbol,
+          stock_name: signal.stock_name || symbol,
+          quantity: 0,
+          cost_price: 0,
+          total_cost: 0
+        }
+      }
+      
+      const pos = positionMap[symbol]
+      
+      if (signal.action === 'buy') {
+        // 买入：更新平均成本
+        const buyAmount = signal.price * signal.size
+        pos.total_cost += buyAmount
+        pos.quantity += signal.size
+        pos.cost_price = pos.total_cost / pos.quantity
+      } else if (signal.action === 'sell') {
+        // 卖出：按照平均成本计算
+        const sellQty = Math.min(signal.size, pos.quantity)
+        pos.quantity -= sellQty
+        pos.total_cost = pos.cost_price * pos.quantity
+      }
+    }
+    
+    // 转换为数组并计算市值和盈亏（使用最后一个信号的价格作为当前价）
+    const positions = Object.values(positionMap)
+      .filter(pos => pos.quantity > 0)
+      .map(pos => {
+        // 找到最后一个信号的价格作为当前价
+        const lastSignal = signals.filter(s => s.symbol === pos.symbol).pop()
+        const current_price = lastSignal ? lastSignal.price : pos.cost_price
+        
+        const market_value = current_price * pos.quantity
+        const profit_loss = market_value - (pos.cost_price * pos.quantity)
+        const profit_loss_ratio = pos.cost_price > 0 ? (profit_loss / (pos.cost_price * pos.quantity)) * 100 : 0
+        
+        return {
+          ...pos,
+          current_price: current_price,
+          market_value: market_value,
+          profit_loss: profit_loss,
+          profit_loss_ratio: profit_loss_ratio,
+          available_qty: pos.quantity,
+          frozen_qty: 0,
+          broker: currentAccount.value?.broker || '模拟交易',
+          account_id: currentAccount.value?.account_id || '',
+          raw: null  // 先设为null
+        }
+      })
+    
+    // 为每个 position 设置 raw 属性
+    return positions.map(pos => ({
+      ...pos,
+      raw: pos
+    }))
+    
+  } catch (error) {
+    console.error('计算模拟持仓失败:', error)
+    return []
+  }
+}
+
+// 加载证券账户列表
+async function loadSecuritiesAccounts() {
+  try {
+    const accounts = await getSecuritiesAccounts()
+    securitiesAccounts.value = Array.isArray(accounts) ? accounts : []
+    
+    // 如果没有选中账户，默认选择第一个
+    if (securitiesAccounts.value.length > 0 && !selectedAccountId.value) {
+      selectedAccountId.value = securitiesAccounts.value[0].id
+    }
+  } catch (error) {
+    console.error('获取证券账户失败:', error)
+    securitiesAccounts.value = []
+  }
+}
+
+// 账户切换事件
+function onAccountChange() {
+  console.log('切换到账户:', selectedAccountId.value)
+  refreshData()
 }
 
 // 刷新数据
@@ -277,8 +484,13 @@ function openSecuritySettings() {
   }
 }
 
-onMounted(() => {
-  refreshData()
+onMounted(async () => {
+  // 先加载账户列表
+  await loadSecuritiesAccounts()
+  // 然后加载数据
+  if (selectedAccountId.value) {
+    await refreshData()
+  }
 })
 </script>
 
@@ -294,5 +506,22 @@ onMounted(() => {
 }
 .align-center {
   align-items: center;
+}
+.account-type-chip {
+  display: inline-block;
+  font-size: 18px;
+}
+.account-type-chip.simulated {
+  color: #667eea;
+}
+.account-type-chip.real {
+  color: #28a745;
+}
+.account-type-icon {
+  font-size: 24px;
+  margin-right: 8px;
+}
+.ml-2 {
+  margin-left: 8px;
 }
 </style>
