@@ -7,29 +7,16 @@
           ({{ analysis.analysisDate }})
         </span>
       </h3>
-      <div class="header-actions">
-        <button 
-          @click="refreshAnalysis(true)" 
-          :disabled="loading || !hasLlmConfig" 
-          class="refresh-btn"
-          :title="!hasLlmConfig ? '请先配置LLM API令牌' : ''"
-        >
-          <span v-if="loading">分析中...</span>
-          <span v-else-if="!hasLlmConfig">⚠️ 未配置LLM</span>
-          <span v-else>🔄 刷新分析</span>
-        </button>
-      </div>
     </div>
     
     <div class="bulletin-content">
       <div v-if="loading" class="loading">
         <div class="spinner"></div>
-        <p>AI正在分析当前市场情况...</p>
+        <p>AI正在分析最新市场情况...</p>
       </div>
       
       <div v-else-if="error" class="error">
         <p>❌ {{ error }}</p>
-        <button @click="refreshAnalysis(true)" class="retry-btn">重试</button>
       </div>
       
       <div v-else-if="analysis" class="analysis-content">
@@ -70,13 +57,9 @@
       </div>
       
       <div v-else class="no-data">
-        <p v-if="!hasLlmConfig">
-          ⚠️ 暂无分析数据<br>
-          <small>请先在“用户管理”中配置LLM API令牌，然后点击刷新按钮获取最新分析</small>
-        </p>
-        <p v-else>
+        <p>
           📈 暂无分析数据<br>
-          <small>点击刷新按钮获取最新分析</small>
+          <small>系统将在交易日的预定时间自动生成最新的大盘分析，请稍后查看</small>
         </p>
       </div>
     </div>
@@ -84,28 +67,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
-import axios from 'axios'
+import { ref, onMounted } from 'vue'
+import request from '../utils/request'
 import { useAuth } from '../services/auth.js'
-import { checkUserLlmConfig } from '../services/userService.js'
 
 const { user, isAuthenticated, authService } = useAuth()
 
 const loading = ref(false)
 const error = ref('')
 const analysis = ref(null)
-const hasLlmConfig = ref(true)  // 默认假设有配置，加载后再检查
-
-// 检查LLM配置状态
-async function checkLlmConfigStatus() {
-  try {
-    const llmConfigStatus = await checkUserLlmConfig()
-    hasLlmConfig.value = llmConfigStatus.hasConfig && llmConfigStatus.isActive
-  } catch (err) {
-    console.error('检查LLM配置失败:', err)
-    hasLlmConfig.value = false
-  }
-}
 
 // 获取大盘分析
 async function refreshAnalysis(isManual = false) {
@@ -131,29 +101,29 @@ async function refreshAnalysis(isManual = false) {
     }
     
     // 发送API请求，只有手动刷新时才加force_refresh
-    const response = await axios.post('/api/analyze-market', {
+    const response = await request.post('/analyze-market', {
       type: 'daily_overview',
       ...(isManual ? { force_refresh: true } : {})
     })
     
-    if (response.data.success) {
+    if (response.success) {
       analysis.value = {
-        timestamp: response.data.cache_info?.created_at || new Date().toISOString(),  // 使用后端返回的分析时间
-        analysisDate: response.data.analysis_date || '未知日期',  // 添加分析基准日期
-        cacheInfo: response.data.cache_info || null,  // 添加缓存信息
-        mood: response.data.mood || '谨慎乐观',
-        summary: response.data.summary || '市场表现平稳，投资者情绪较为理性。',
-        keyPoints: response.data.keyPoints || [
+        timestamp: response.cache_info?.created_at || new Date().toISOString(),  // 使用后端返回的分析时间
+        analysisDate: response.analysis_date || '未知日期',  // 添加分析基准日期
+        cacheInfo: response.cache_info || null,  // 添加缓存信息
+        mood: response.mood || '谨慎乐观',
+        summary: response.summary || '市场表现平稳，投资者情绪较为理性。',
+        keyPoints: response.keyPoints || [
           '主要指数震荡调整，成交量较前日有所放大',
           '科技股表现相对强势，金融股承压',
           '外围市场保持稳定，人民币汇率企稳'
         ],
-        outlook: response.data.outlook || '短期内市场可能延续震荡格局，建议关注结构性机会。',
-        riskLevel: response.data.riskLevel || 'medium',
-        riskNote: response.data.riskNote || '注意控制仓位，分散投资风险。'
+        outlook: response.outlook || '短期内市场可能延续震荡格局，建议关注结构性机会。',
+        riskLevel: response.riskLevel || 'medium',
+        riskNote: response.riskNote || '注意控制仓位，分散投资风险。'
       }
     } else {
-      throw new Error(response.data.error || '分析失败')
+      throw new Error(response.error || '分析失败')
     }
   } catch (err) {
     console.error('获取市场分析失败:', err)
@@ -240,9 +210,6 @@ function getCacheIcon(fromCache) {
 
 // 自动加载时调用（不加force_refresh）
 onMounted(async () => {
-  // 先检查LLM配置状态
-  await checkLlmConfigStatus()
-  // 然后加载最新报告（不需要LLM配置，从数据库读取）
   await refreshAnalysis(false)
 })
 </script>
