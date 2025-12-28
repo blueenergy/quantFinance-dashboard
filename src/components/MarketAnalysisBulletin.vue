@@ -8,8 +8,14 @@
         </span>
       </h3>
       <div class="header-actions">
-        <button @click="refreshAnalysis(true)" :disabled="loading" class="refresh-btn">
+        <button 
+          @click="refreshAnalysis(true)" 
+          :disabled="loading || !hasLlmConfig" 
+          class="refresh-btn"
+          :title="!hasLlmConfig ? '请先配置LLM API令牌' : ''"
+        >
           <span v-if="loading">分析中...</span>
+          <span v-else-if="!hasLlmConfig">⚠️ 未配置LLM</span>
           <span v-else>🔄 刷新分析</span>
         </button>
       </div>
@@ -64,14 +70,21 @@
       </div>
       
       <div v-else class="no-data">
-        <p>暂无分析数据，点击刷新按钮获取最新分析</p>
+        <p v-if="!hasLlmConfig">
+          ⚠️ 暂无分析数据<br>
+          <small>请先在“用户管理”中配置LLM API令牌，然后点击刷新按钮获取最新分析</small>
+        </p>
+        <p v-else>
+          📈 暂无分析数据<br>
+          <small>点击刷新按钮获取最新分析</small>
+        </p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import { useAuth } from '../services/auth.js'
 import { checkUserLlmConfig } from '../services/userService.js'
@@ -81,6 +94,18 @@ const { user, isAuthenticated, authService } = useAuth()
 const loading = ref(false)
 const error = ref('')
 const analysis = ref(null)
+const hasLlmConfig = ref(true)  // 默认假设有配置，加载后再检查
+
+// 检查LLM配置状态
+async function checkLlmConfigStatus() {
+  try {
+    const llmConfigStatus = await checkUserLlmConfig()
+    hasLlmConfig.value = llmConfigStatus.hasConfig && llmConfigStatus.isActive
+  } catch (err) {
+    console.error('检查LLM配置失败:', err)
+    hasLlmConfig.value = false
+  }
+}
 
 // 获取大盘分析
 async function refreshAnalysis(isManual = false) {
@@ -93,14 +118,16 @@ async function refreshAnalysis(isManual = false) {
       throw new Error('请先登录后再获取分析')
     }
     
-    // 检查用户是否已配置LLM
-    const llmConfigStatus = await checkUserLlmConfig()
-    if (!llmConfigStatus.hasConfig) {
-      throw new Error('请先在用户设置中配置您的LLM API令牌，然后才能使用AI分析功能')
-    }
-    
-    if (!llmConfigStatus.isActive) {
-      throw new Error('您已配置LLM，但还未激活任何配置。请进入用户设置激活一个LLM配置')
+    // 只在手动刷新时才检查LLM配置
+    if (isManual) {
+      const llmConfigStatus = await checkUserLlmConfig()
+      if (!llmConfigStatus.hasConfig) {
+        throw new Error('请先在用户设置中配置您的LLM API令牌，然后才能使用AI分析功能')
+      }
+      
+      if (!llmConfigStatus.isActive) {
+        throw new Error('您已配置LLM，但还未激活任何配置。请进入用户设置激活一个LLM配置')
+      }
     }
     
     // 发送API请求，只有手动刷新时才加force_refresh
@@ -111,7 +138,7 @@ async function refreshAnalysis(isManual = false) {
     
     if (response.data.success) {
       analysis.value = {
-        timestamp: new Date().toISOString(),
+        timestamp: response.data.cache_info?.created_at || new Date().toISOString(),  // 使用后端返回的分析时间
         analysisDate: response.data.analysis_date || '未知日期',  // 添加分析基准日期
         cacheInfo: response.data.cache_info || null,  // 添加缓存信息
         mood: response.data.mood || '谨慎乐观',
@@ -130,34 +157,23 @@ async function refreshAnalysis(isManual = false) {
     }
   } catch (err) {
     console.error('获取市场分析失败:', err)
-    if (err.response?.status === 401) {
-      error.value = '登录已过期，请重新登录'
-    } else if (err.message.includes('请先登录')) {
-      error.value = err.message
-    } else if (err.message.includes('请先在用户设置中配置')) {
-      error.value = err.message
-    } else {
-      error.value = err.response?.data?.detail || err.message || '网络连接失败'
-    }
     
-    // 如果API失败，提供一个示例数据（只在有认证的情况下）
-    if (!analysis.value && isAuthenticated.value) {
-      const today = new Date().toISOString().split('T')[0]  // 当前日期作为示例
-      analysis.value = {
-        timestamp: new Date().toISOString(),
-        analysisDate: today,  // 添加示例分析日期
-        mood: '谨慎乐观',
-        summary: '当前市场处于调整阶段，主要指数表现分化。科技板块相对活跃，传统行业表现平稳。整体而言，市场情绪趋于理性，投资者更加注重基本面分析。',
-        keyPoints: [
-          '沪深300指数今日微幅上涨0.3%，成交量环比增长15%',
-          '新能源、半导体板块领涨，房地产、银行板块调整',
-          '北向资金净流入25亿元，显示外资持续看好A股',
-          '市场波动率下降，投资者情绪逐步回暖'
-        ],
-        outlook: '短期内市场可能维持震荡格局，建议关注业绩确定性强的优质个股。中长期来看，随着政策面的持续发力，市场有望迎来新的上涨机会。',
-        riskLevel: 'medium',
-        riskNote: '当前市场风险可控，但仍需关注海外市场波动及政策变化带来的影响。建议投资者保持适度仓位，做好风险管理。'
+    // 只在手动刷新时才显示错误信息
+    if (isManual) {
+      if (err.response?.status === 401) {
+        error.value = '登录已过期，请重新登录'
+      } else if (err.message.includes('请先登录')) {
+        error.value = err.message
+      } else if (err.message.includes('请先在用户设置中配置')) {
+        error.value = err.message
+      } else if (err.message.includes('还未激活')) {
+        error.value = err.message
+      } else {
+        error.value = err.response?.data?.detail || err.message || '网络连接失败'
       }
+    } else {
+      // 自动加载失败时，不显示错误，静默失败
+      console.log('自动加载失败，无历史数据')
     }
   } finally {
     loading.value = false
@@ -223,8 +239,11 @@ function getCacheIcon(fromCache) {
 }
 
 // 自动加载时调用（不加force_refresh）
-onMounted(() => {
-  refreshAnalysis(false)
+onMounted(async () => {
+  // 先检查LLM配置状态
+  await checkLlmConfigStatus()
+  // 然后加载最新报告（不需要LLM配置，从数据库读取）
+  await refreshAnalysis(false)
 })
 </script>
 
