@@ -353,7 +353,7 @@ const adminTabs = computed(() => {
     { id: 'strategy-execution-analysis', name: '策略执行分析' },
     { id: 'ranking', name: '评分' },
     { id: 'spectrum', name: '阴阳谱' },
-    { id: 'securities', name: '证券账户' },
+    { id: 'securities', name: '账户工作台' },
     { id: 'user-profile', name: '用户配置' },  // 新增用户配置
     // AI analysis moved to AIAnalysisHistory (history tab)
   ]
