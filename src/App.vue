@@ -342,6 +342,7 @@ const chartSymbol = computed(() =>
 // 动态标签 - 管理员只显示管理功能，普通用户显示业务功能
 const adminTabs = computed(() => {
   const baseTabs = [
+    { id: 'ranking', name: '金榜' },
     { id: 'watchlist', name: '自选股' },
     { id: 'strategies', name: '策略配置' },
     { id: 'worker-monitor', name: '🤖 Worker监控' },  // 新增
@@ -351,7 +352,6 @@ const adminTabs = computed(() => {
     { id: 'minute-chart', name: '📊 分钟K线' },  // 新增分钟K线图
     { id: 'history', name: 'AI分析回溯' },
     { id: 'strategy-execution-analysis', name: '策略执行分析' },
-    { id: 'ranking', name: '评分' },
     { id: 'spectrum', name: '阴阳谱' },
     { id: 'securities', name: '账户工作台' },
     { id: 'user-profile', name: '用户配置' },  // 新增用户配置
