@@ -861,7 +861,6 @@ export default {
         id: '',
         broker: '',
         account_id: '',
-        password: '',
         account_type: 'simulated',
         initial_cash: 1000000
       })
@@ -875,14 +874,15 @@ export default {
         id: account.id,
         broker: account.broker,
         account_id: account.account_id,
-        password: '' // 不显示现有密码
+        account_type: account.account_type || 'simulated',  // 使用原有的账户类型
+        initial_cash: account.initial_cash || 1000000  // 使用原有的初始资金
       })
       showAddAccountModal.value = true
     }
     
     // 保存账户
     const saveAccount = async () => {
-      // 真实账户必须填写券商、账户ID和密码
+      // 真实账户必须填写券商和账户ID
       if (currentAccount.account_type === 'real') {
         if (!currentAccount.broker) {
           alert('请选择券商')
@@ -890,10 +890,6 @@ export default {
         }
         if (!currentAccount.account_id) {
           alert('请输入账户ID')
-          return
-        }
-        if (!currentAccount.password) {
-          alert('请输入密码')
           return
         }
       }
