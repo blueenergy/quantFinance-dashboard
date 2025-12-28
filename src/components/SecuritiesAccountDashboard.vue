@@ -1,10 +1,7 @@
 <template>
   <v-card>
     <v-card-title>
-      <div class="d-flex justify-space-between align-center w-100">
-        <span>账户工作台</span>
-        <v-btn size="small" @click="openSecuritySettings">账户与安全设置</v-btn>
-      </div>
+      <span>账户工作台</span>
     </v-card-title>
     
     <!-- 账户切换器 -->
@@ -56,7 +53,7 @@
     
     <v-card-text v-else>
       <v-alert type="info" border="left">
-        您还没有添加证券账户，请先在<a href="#" @click.prevent="openSecuritySettings">账户设置</a>中添加。
+        您还没有添加证券账户，请先在顶部菜单的“用户管理”中添加证券账户。
       </v-alert>
     </v-card-text>
     
@@ -185,16 +182,12 @@
         </v-row>
       </v-card-text>
     </v-card>
-
-    <!-- 账户与安全设置对话框 -->
-    <AccountSecuritySettings ref="accountSecuritySettings" />
   </v-card>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { getTraderAccount, getTraderPositions, getSecuritiesAccounts, getTradeSignals } from '../api/trader'
-import AccountSecuritySettings from './AccountSecuritySettings.vue'
 
 // 证券账户列表
 const securitiesAccounts = ref([])
@@ -228,9 +221,6 @@ const positionHeaders = [
   { title: '所属券商', key: 'broker' },
   { title: '账户号', key: 'account_id' }
 ]
-
-// 账户与安全设置对话框引用
-const accountSecuritySettings = ref(null)
 
 // 账户选项（用于v-select）
 const accountOptions = computed(() => {
@@ -475,13 +465,6 @@ async function refreshData() {
     loadOverview(),
     loadPositions()
   ])
-}
-
-// 打开账户与安全设置对话框
-function openSecuritySettings() {
-  if (accountSecuritySettings.value) {
-    accountSecuritySettings.value.openDialog()
-  }
 }
 
 onMounted(async () => {
