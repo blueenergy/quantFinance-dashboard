@@ -131,6 +131,61 @@
               </label>
             </div>
           </div>
+          
+          <!-- API Token 管理 -->
+          <div class="security-section">
+            <h4>🔑 API Token 管理</h4>
+            <p class="section-description">用于 quantTrader 远程连接</p>
+            
+            <div v-if="apiToken" class="token-display">
+              <div class="token-header">
+                <span class="token-label">当前 Token:</span>
+                <button @click="copyToken" class="copy-btn" :class="{ copied: tokenCopied }">
+                  {{ tokenCopied ? '✓ 已复制' : '📋 复制' }}
+                </button>
+              </div>
+              <div class="token-value" :class="{ revealed: tokenRevealed }">
+                <code v-if="tokenRevealed">{{ apiToken }}</code>
+                <code v-else>{{ maskedToken }}</code>
+                <button @click="toggleTokenVisibility" class="reveal-btn">
+                  {{ tokenRevealed ? '👁️ 隐藏' : '👁️ 显示' }}
+                </button>
+              </div>
+              <div class="token-info">
+                <span class="token-expires">⏰ 过期时间: {{ tokenExpires || '7天后' }}</span>
+              </div>
+            </div>
+            
+            <div v-else class="no-token">
+              <p>⚠️ 您还没有生成 API Token</p>
+            </div>
+            
+            <div class="token-actions">
+              <button @click="generateNewToken" class="save-btn" :disabled="tokenGenerating">
+                {{ tokenGenerating ? '⏳ 生成中...' : (apiToken ? '🔄 重新生成' : '✨ 生成 Token') }}
+              </button>
+              <button v-if="apiToken" @click="revokeToken" class="delete-btn" :disabled="tokenGenerating">
+                🗑️ 撤销
+              </button>
+            </div>
+            
+            <div v-if="tokenError" class="error-message">{{ tokenError }}</div>
+            <div v-if="tokenSuccess" class="success-message">{{ tokenSuccess }}</div>
+            
+            <div class="token-usage-hint">
+              <h5>📝 使用方法:</h5>
+              <ol>
+                <li>点击「生成 Token」按钮</li>
+                <li>复制生成的 Token</li>
+                <li>在 quantTrader 配置文件中填写:
+                  <pre>{
+  "api_base_url": "{{ apiBaseUrl }}",
+  "api_token": "your_copied_token_here"
+}</pre>
+                </li>
+              </ol>
+            </div>
+          </div>
         </div>
 
         <!-- AI服务配置标签页 -->
@@ -397,7 +452,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import axios from 'axios'
 
 // Rely on Vite proxy configuration instead of setting baseURL
@@ -437,6 +492,26 @@ export default {
     // 安全设置
     const securitySettings = reactive({
       two_factor_enabled: false
+    })
+    
+    // API Token 管理
+    const apiToken = ref(localStorage.getItem('access_token') || '')
+    const tokenRevealed = ref(false)
+    const tokenCopied = ref(false)
+    const tokenGenerating = ref(false)
+    const tokenError = ref('')
+    const tokenSuccess = ref('')
+    const tokenExpires = ref('')
+    
+    const apiBaseUrl = computed(() => {
+      return window.location.origin + '/api'
+    })
+    
+    const maskedToken = computed(() => {
+      if (!apiToken.value) return ''
+      const len = apiToken.value.length
+      if (len <= 20) return '*'.repeat(len)
+      return apiToken.value.substring(0, 10) + '...' + '*'.repeat(20) + '...' + apiToken.value.substring(len - 10)
     })
     
     // AI配置 - 支持多配置
@@ -567,6 +642,12 @@ export default {
       } catch (error) {
         console.error('加载安全设置失败:', error)
       }
+      
+      // 加载 API Token
+      apiToken.value = localStorage.getItem('access_token') || ''
+      if (apiToken.value) {
+        calculateTokenExpiry()
+      }
     }
     
     // 修改密码
@@ -611,6 +692,118 @@ export default {
         securitySettings.two_factor_enabled = !securitySettings.two_factor_enabled
         alert('更新设置失败')
       }
+    }
+    
+    // API Token 方法
+    const toggleTokenVisibility = () => {
+      tokenRevealed.value = !tokenRevealed.value
+    }
+    
+    const copyToken = async () => {
+      if (!apiToken.value) return
+      
+      try {
+        await navigator.clipboard.writeText(apiToken.value)
+        tokenCopied.value = true
+        tokenSuccess.value = 'Token 已复制到剪贴板'
+        
+        setTimeout(() => {
+          tokenCopied.value = false
+          tokenSuccess.value = ''
+        }, 2000)
+      } catch (err) {
+        // 备用方案：使用 textarea
+        const textarea = document.createElement('textarea')
+        textarea.value = apiToken.value
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+        
+        tokenCopied.value = true
+        tokenSuccess.value = 'Token 已复制到剪贴板'
+        
+        setTimeout(() => {
+          tokenCopied.value = false
+          tokenSuccess.value = ''
+        }, 2000)
+      }
+    }
+    
+    const generateNewToken = async () => {
+      if (apiToken.value && !confirm('重新生成会撤销当前 Token，所有使用旧 Token 的连接将失效。确定继续？')) {
+        return
+      }
+      
+      tokenError.value = ''
+      tokenSuccess.value = ''
+      tokenGenerating.value = true
+      
+      try {
+        // 重新登录获取新 token（或调用专门的 refresh token API）
+        const response = await axios.post('/api/auth/token/refresh')
+        
+        if (response.data.access_token) {
+          apiToken.value = response.data.access_token
+          localStorage.setItem('access_token', response.data.access_token)
+          tokenSuccess.value = '✓ Token 生成成功！请立即复制保存'
+          tokenRevealed.value = true
+          calculateTokenExpiry()
+          
+          // 30秒后自动隐藏
+          setTimeout(() => {
+            tokenRevealed.value = false
+          }, 30000)
+        }
+      } catch (err) {
+        // 如果没有 refresh endpoint，提示用户重新登录
+        if (err.response?.status === 404) {
+          tokenError.value = '请重新登录以获取新 Token'
+          
+          setTimeout(() => {
+            // logout logic can be added here if needed
+          }, 2000)
+        } else {
+          tokenError.value = err.response?.data?.detail || '生成 Token 失败'
+        }
+      } finally {
+        tokenGenerating.value = false
+      }
+    }
+    
+    const revokeToken = async () => {
+      if (!confirm('撤销 Token 后，所有使用该 Token 的连接将立即失效。确定继续？')) {
+        return
+      }
+      
+      tokenError.value = ''
+      tokenSuccess.value = ''
+      tokenGenerating.value = true
+      
+      try {
+        await axios.post('/api/auth/token/revoke')
+        apiToken.value = ''
+        tokenSuccess.value = 'Token 已撤销'
+      } catch (err) {
+        // 如果没有 revoke endpoint，只清空本地
+        if (err.response?.status === 404) {
+          apiToken.value = ''
+          tokenSuccess.value = 'Token 已从本地清除（服务端不支持撤销）'
+        } else {
+          tokenError.value = err.response?.data?.detail || '撤销失败'
+        }
+      } finally {
+        tokenGenerating.value = false
+      }
+    }
+    
+    const calculateTokenExpiry = () => {
+      // 这里可以解析 JWT 的 exp 字段，或者使用默认值
+      // 简单处理：显示默认过期时间
+      const expiryDays = 7 // 从 .env 中的 JWT_ACCESS_EXPIRE_MINUTES 计算
+      const expiryDate = new Date()
+      expiryDate.setDate(expiryDate.getDate() + expiryDays)
+      tokenExpires.value = expiryDate.toLocaleString('zh-CN')
     }
     
     // 加载AI配置
@@ -1031,6 +1224,21 @@ export default {
       securitySettings,
       toggleTwoFactor,
       loadSecuritySettings,
+      
+      // API Token 管理
+      apiToken,
+      tokenRevealed,
+      tokenCopied,
+      tokenGenerating,
+      tokenError,
+      tokenSuccess,
+      tokenExpires,
+      apiBaseUrl,
+      maskedToken,
+      toggleTokenVisibility,
+      copyToken,
+      generateNewToken,
+      revokeToken,
       
       // AI配置
       aiConfigs,
@@ -1638,5 +1846,170 @@ export default {
 
 .verification-notice p {
   margin: 0 0 10px 0;
+}
+
+/* API Token Styles */
+.section-description {
+  font-size: 12px;
+  color: #666;
+  margin: 0 0 16px 0;
+}
+
+.token-display {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.token-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.token-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+
+.copy-btn {
+  padding: 4px 12px;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.copy-btn:hover {
+  background: #2980b9;
+}
+
+.copy-btn.copied {
+  background: #27ae60;
+}
+
+.token-value {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.token-value code {
+  flex: 1;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  color: #333;
+  word-break: break-all;
+  padding: 4px;
+}
+
+.token-value.revealed code {
+  color: #e74c3c;
+  font-weight: 500;
+}
+
+.reveal-btn {
+  padding: 4px 8px;
+  background: #95a5a6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reveal-btn:hover {
+  background: #7f8c8d;
+}
+
+.token-info {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #666;
+}
+
+.no-token {
+  padding: 16px;
+  text-align: center;
+  background: #fff3cd;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.no-token p {
+  margin: 0;
+  color: #856404;
+  font-size: 13px;
+}
+
+.token-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.token-usage-hint {
+  margin-top: 16px;
+  padding: 12px;
+  background: #e3f2fd;
+  border-radius: 8px;
+  border-left: 4px solid #2196f3;
+}
+
+.token-usage-hint h5 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: #1976d2;
+}
+
+.token-usage-hint ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12px;
+  color: #555;
+}
+
+.token-usage-hint ol li {
+  margin-bottom: 6px;
+}
+
+.token-usage-hint pre {
+  margin: 8px 0 0 0;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  font-size: 11px;
+  overflow-x: auto;
+}
+
+.error-message {
+  padding: 8px 12px;
+  background: #f8d7da;
+  color: #721c24;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.success-message {
+  padding: 8px 12px;
+  background: #d4edda;
+  color: #155724;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-top: 8px;
 }
 </style>
