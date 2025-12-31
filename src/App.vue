@@ -249,6 +249,16 @@
               <div class="skeleton skeleton-table">用户配置加载中...</div>
             </template>
           </Suspense>
+          
+          <!-- Backtest Manager Tab -->
+          <Suspense v-if="activeTab === 'backtest'">
+            <template #default>
+              <BacktestManager />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">回测管理加载中...</div>
+            </template>
+          </Suspense>
         </div>
       </div>
     </div>
@@ -278,6 +288,7 @@ const WorkerMonitor = defineAsyncComponent(() => import('./components/WorkerMoni
 const StrategyExecutionAnalysis = defineAsyncComponent(() => import('./components/StrategyExecutionAnalysis.vue'))
 const SecuritiesAccountDashboard = defineAsyncComponent(() => import('./components/SecuritiesAccountDashboard.vue'))
 const UserProfile = defineAsyncComponent(() => import('./components/UserProfile.vue'))
+const BacktestManager = defineAsyncComponent(() => import('./components/BacktestManager.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
@@ -345,6 +356,7 @@ const adminTabs = computed(() => {
     { id: 'ranking', name: '金榜' },
     { id: 'watchlist', name: '自选股' },
     { id: 'strategies', name: '策略配置' },
+    { id: 'backtest', name: '📊 回测管理' },  // 新增回测管理
     { id: 'worker-monitor', name: '🤖 Worker监控' },  // 新增
     { id: 'trade-executions', name: '交易执行' },
     { id: 'trading-manual', name: '手动交易' },  // 新增手动交易管理
