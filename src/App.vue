@@ -350,6 +350,12 @@ const chartSymbol = computed(() =>
   watchlist.value.length > 0 ? watchlist.value[currentIndex.value] : ''
 )
 
+// 监听activeTab变化，保存到localStorage
+watch(activeTab, (newTab) => {
+  localStorage.setItem('activeTab', newTab)
+  console.log('已保存当前tab:', newTab)
+})
+
 // 动态标签 - 管理员只显示管理功能，普通用户显示业务功能
 const adminTabs = computed(() => {
   const baseTabs = [
@@ -566,13 +572,21 @@ onMounted(async () => {
     return
   }
 
-  // Token有效，根据用户角色设置默认界面
-  if (user.value?.is_admin) {
+  // Token有效，优先恢复上次的tab，否则根据用户角色设置默认界面
+  const savedTab = localStorage.getItem('activeTab')
+  if (savedTab && adminTabs.value.some(tab => tab.id === savedTab)) {
+    // 恢复上次的tab
+    activeTab.value = savedTab
+    console.log('恢复上次浏览的页面:', savedTab)
+  } else if (user.value?.is_admin) {
     activeTab.value = 'admin'
     console.log('管理员自动跳转到系统管理页面')
   } else {
     activeTab.value = 'watchlist'
-    // 将初始数据加载推迟到首屏渲染后，避免阻塞
+  }
+  
+  // 将初始数据加载推迟到首屏渲染后，避免阻塞
+  if (!user.value?.is_admin && activeTab.value === 'watchlist') {
     if ('requestIdleCallback' in window) {
       requestIdleCallback(() => fetchData())
     } else {
