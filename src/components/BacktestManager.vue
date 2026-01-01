@@ -339,11 +339,23 @@ export default {
     const availableStrategies = ref([])
     
     const showCreateModal = ref(false)
+    
+    // 计算默认日期：过去一年
+    const getDefaultDates = () => {
+      const endDate = new Date()
+      const startDate = new Date()
+      startDate.setFullYear(startDate.getFullYear() - 1)
+      
+      return {
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0]
+      }
+    }
+    
     const newTask = ref({
       symbol: '',
       strategy_key: '',
-      start_date: '',
-      end_date: '',
+      ...getDefaultDates(),
       initial_cash: 1000000,
       strategy_params: {}
     })
