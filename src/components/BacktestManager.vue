@@ -122,12 +122,13 @@
             <label>策略 *</label>
             <select v-model="newTask.strategy_key">
               <option value="">请选择策略</option>
-              <option value="turtle">海龟策略</option>
-              <option value="grid">网格策略</option>
-              <option value="hidden_dragon">潜龙低吸</option>
-              <option value="single_yang">单阳不破</option>
-              <option value="mean_reversion">均值回归</option>
-              <option value="momentum">动量策略</option>
+              <option 
+                v-for="strategy in availableStrategies" 
+                :key="strategy.key" 
+                :value="strategy.key"
+              >
+                {{ strategy.name }}
+              </option>
             </select>
           </div>
 
