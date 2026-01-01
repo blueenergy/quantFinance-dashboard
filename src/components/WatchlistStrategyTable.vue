@@ -39,6 +39,7 @@
                 color="primary"
                 density="compact"
                 hide-details
+                :disabled="strategyMeta[stratKey]?.vip_only && userServiceLevel !== 'vip'"
                 @change="toggleStrategy(item, stratKey)"
               />
               <v-btn 
@@ -64,9 +65,7 @@
               <!-- Strategy info icon -->
               <v-tooltip v-if="item.strategy_key" location="top">
                 <template #activator="{ props }">
-                  <v-icon v-bind="props" size="small" color="info" style="cursor: pointer;">
-                    mdi-information
-                  </v-icon>
+                  <v-icon v-bind="props" size="small" color="info" style="cursor: pointer;" :icon="mdiInformation" />
                 </template>
                 <div style="max-width: 400px;">
                   <div style="font-weight: bold; margin-bottom: 4px;">
@@ -98,7 +97,16 @@
                 style="min-width: 150px;"
               >
                 <template #item="{ item: option, props }">
-                  <v-list-item v-bind="props" :title="option.raw.name">
+                  <v-list-item v-bind="props">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <span>{{ option.raw.name }}</span>
+                      <span
+                        v-if="strategyMeta[option.raw.key]?.vip_only"
+                        style="color: #e65100; font-size: 11px; font-weight: 600;"
+                      >
+                        VIP 专属
+                      </span>
+                    </div>
                     <template #subtitle>
                       <div style="font-size: 11px; color: #666;">
                         {{ strategyMeta[option.raw.key]?.summary || '' }}
@@ -124,6 +132,7 @@
               color="primary"
               density="compact"
               hide-details
+              :disabled="strategyMeta[item.strategy_key]?.vip_only && userServiceLevel !== 'vip'"
               @change="toggleStrategyDetailed(item)"
             />
             <span v-else style="color: #999;">-</span>
@@ -136,8 +145,16 @@
       <v-card>
         <v-card-title>
           <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <span>编辑参数 - {{ editingRow?.symbol }} - {{ strategyMeta[editingStrategy]?.name }}</span>
-            <!-- Strategy info button -->
+            <span>
+              编辑参数 - {{ editingRow?.symbol }} - {{ strategyMeta[editingStrategy]?.name }}
+              <span
+                v-if="strategyMeta[editingStrategy]?.vip_only"
+                style="margin-left: 8px; color: #e65100; font-weight: 600; font-size: 13px;"
+              >
+                VIP 专属
+              </span>
+            </span>
+             <!-- Strategy info button -->
             <v-dialog max-width="600">
               <template #activator="{ props }">
                 <v-btn v-bind="props" size="small" variant="outlined" color="info">
@@ -148,7 +165,14 @@
               <template #default="{ isActive }">
                 <v-card>
                   <v-card-title>
-                    {{ strategyMeta[editingStrategy]?.name }} - 策略详情
+                    {{ strategyMeta[editingStrategy]?.name }}
+                    <span
+                      v-if="strategyMeta[editingStrategy]?.vip_only"
+                      style="margin-left: 8px; color: #e65100; font-weight: 600; font-size: 13px;"
+                    >
+                      VIP 专属
+                    </span>
+                    - 策略详情
                   </v-card-title>
                   <v-card-text>
                     <div style="line-height: 1.8;">
@@ -329,10 +353,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch} from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { VExpansionPanels, VExpansionPanel, VExpansionPanelTitle, VExpansionPanelText } from 'vuetify/components'
 import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies, API_BASE, authHeaders} from '../api/user'
-import { mdiViewColumn, mdiViewList, mdiCog } from '@mdi/js'
+import { mdiViewColumn, mdiViewList, mdiCog, mdiInformation } from '@mdi/js'
 
 // ============================================================================
 // State Management
@@ -343,6 +367,9 @@ const strategyOptions = ref([])
 const strategyMeta = ref({})
 const strategyTemplates = ref({})
 const availableStrategyKeys = ref([])
+
+// User metadata
+const userServiceLevel = ref('free')
 
 // View state
 const viewMode = ref('detailed')  // 'compact' | 'detailed'
@@ -455,13 +482,17 @@ function hasStrategyConfig(strategies) {
 // ============================================================================
 
 async function loadData() {
-  const [wl, stratResp, avail, stocksResp, templatesResp] = await Promise.all([
+  const [wl, stratResp, avail, stocksResp, templatesResp, profileResp] = await Promise.all([
     getWatchlist(),
     getWatchlistStrategies(),
     getAvailableStrategies(),
     fetch(`${API_BASE}/user/watchlist-stocks`, { headers: authHeaders() }).then(r => r.json()),
-    fetch(`${API_BASE}/strategy/templates`).then(r => r.json())
+    fetch(`${API_BASE}/strategy/templates`).then(r => r.json()),
+    fetch(`${API_BASE}/user/profile`, { headers: authHeaders() }).then(r => r.json()).catch(() => null),
   ])
+  
+  // Set user service level (default free)
+  userServiceLevel.value = profileResp?.user?.service_level || 'free'
   
   // Filter to only show strategies with allow_live=true
   const liveStrategies = avail.filter(s => s.allow_live === true)
@@ -471,7 +502,12 @@ async function loadData() {
   console.log('Strategy options:', liveStrategies.map(s => s.key))
   
   // Initialize strategy metadata
-  strategyOptions.value = liveStrategies.map(s => ({ key: s.key, name: s.name }))
+  strategyOptions.value = liveStrategies.map(s => ({
+    key: s.key,
+    name: s.vip_only ? `${s.name} (VIP)` : s.name,
+    vip_only: !!s.vip_only,
+    min_service_level: s.min_service_level || null,
+  }))
   strategyMeta.value = Object.fromEntries(liveStrategies.map(s => [s.key, s]))
   availableStrategyKeys.value = liveStrategies.map(s => s.key)
   strategyTemplates.value = templatesResp?.ok ? templatesResp.templates || {} : {}
