@@ -7,9 +7,13 @@
           <label>策略类型</label>
           <select v-model="filters.strategy" @change="loadAnalysisHistory">
             <option value="">全部</option>
-            <option value="AsymmetricSingleYang">单阳不破</option>
-            <option value="AsymmetricHiddenDragon">潜龙低吸</option>
-            <option value="GridTradingStrategy">网格策略</option>
+            <option 
+              v-for="strategy in availableStrategies" 
+              :key="strategy.key" 
+              :value="strategy.key"
+            >
+              {{ strategy.name }}
+            </option>
           </select>
         </div>
         
@@ -137,6 +141,8 @@
 import { ref, onMounted } from 'vue'
 import { getDeepAnalysisHistory } from '../api/analysis'
 
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+
 // 响应式数据
 const loading = ref(false)
 const error = ref('')
@@ -145,6 +151,9 @@ const selectedRecord = ref(null)
 const currentPage = ref(1)
 const totalPages = ref(1)
 const totalRecords = ref(0)
+
+// 策略列表
+const availableStrategies = ref([])
 
 // 筛选器
 const filters = ref({
@@ -161,6 +170,24 @@ const summary = ref({
   success_rate: 0,
   avg_interval: 0
 })
+
+// 加载策略列表
+async function loadStrategyList() {
+  try {
+    const token = localStorage.getItem('access_token')
+    const response = await fetch(`${API_BASE}/strategy/strategies`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    
+    if (!response.ok) throw new Error('Failed to load strategies')
+    const strategiesData = await response.json()
+    availableStrategies.value = strategiesData.strategies || []
+    
+    console.log('策略列表加载成功:', availableStrategies.value.length, '个策略')
+  } catch (error) {
+    console.error('Error loading strategy list:', error)
+  }
+}
 
 // 加载分析历史
 async function loadAnalysisHistory() {
@@ -308,7 +335,12 @@ function goToPage(page) {
   }
 }
 
-onMounted(loadAnalysisHistory)
+onMounted(async () => {
+  await Promise.all([
+    loadStrategyList(),
+    loadAnalysisHistory()
+  ])
+})
 </script>
 
 <style scoped>
