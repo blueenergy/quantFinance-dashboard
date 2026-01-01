@@ -26,8 +26,12 @@ export async function setWatchlistStrategy(payload) {
     headers: authHeaders(),
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`Failed set strategy: ${res.status}`);
-  return res.json();
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = data?.detail || data?.message || `设置策略失败：${res.status}`;
+    throw new Error(message);
+  }
+  return data;
 }
 
 export async function getAvailableStrategies() {

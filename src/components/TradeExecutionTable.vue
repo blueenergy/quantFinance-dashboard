@@ -196,7 +196,7 @@
             {{ item.quantity || item.size || '-' }}
           </template>
           <template #item.strategy="{ item }">
-            {{ item.strategy_name || item.strategy || '-' }}
+            {{ getStrategyName(item.strategy_name || item.strategy) || '-' }}
           </template>
         </v-data-table>
 
@@ -228,10 +228,12 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import * as tradeApi from '../api/tradeExecution.js';
 
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+
 // Reactive data
 const trades = ref([]);
 const stats = ref(null);
-const strategies = ref([]);
+const strategies = ref([]); // Will be loaded from global strategy API
 const viewMode = ref('executions');
 const searchSymbol = ref('');
 const selectedStrategy = ref('');
@@ -302,9 +304,12 @@ const filteredTrades = computed(() => {
   
   // Filter by strategy
   if (selectedStrategy.value) {
-    result = result.filter(trade => 
-      (trade.strategy_name || trade.strategy) === selectedStrategy.value
-    );
+    result = result.filter(trade => {
+      const tradeStrategy = trade.strategy_name || trade.strategy;
+      // Check both strategy key and Chinese name
+      return tradeStrategy === selectedStrategy.value || 
+             getStrategyName(tradeStrategy) === selectedStrategy.value;
+    });
   }
   
   // Filter by date
@@ -331,7 +336,12 @@ const filteredSummaryRows = computed(() => {
   }
 
   if (selectedStrategy.value) {
-    result = result.filter(row => row.strategy === selectedStrategy.value);
+    result = result.filter(row => {
+      const rowStrategy = row.strategy;
+      // Check both strategy key and Chinese name
+      return rowStrategy === selectedStrategy.value || 
+             getStrategyName(rowStrategy) === selectedStrategy.value;
+    });
   }
 
   return result;
@@ -379,10 +389,49 @@ const summaryPnlStats = computed(() => {
 
 const strategyOptions = computed(() => {
   return ['', ...strategies.value].map(strategy => ({
-    title: strategy || '所有策略',
+    title: getStrategyName(strategy) || strategy || '所有策略',
     value: strategy
   }));
 });
+
+// Function to get strategy Chinese name
+function getStrategyName(strategyKey) {
+  if (!strategyKey) return strategyKey;
+  
+  // Manual trading special case
+  if (strategyKey === 'manual') return '手动交易';
+  
+  // Try to find in available strategies list
+  const strategyObj = availableStrategies.value?.find(s => s.key === strategyKey);
+  if (strategyObj) {
+    return strategyObj.name || strategyObj.key;
+  }
+  
+  // Fallback to key if not found
+  return strategyKey;
+}
+
+// Available strategies from API for name lookup
+const availableStrategies = ref([]);
+
+// Load available strategy metadata for name lookup
+async function loadStrategyMetadata() {
+  try {
+    const token = localStorage.getItem('access_token')
+    const response = await fetch(`${API_BASE}/strategy/strategies`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    
+    if (!response.ok) throw new Error('Failed to load strategy metadata')
+    const strategiesData = await response.json()
+    availableStrategies.value = strategiesData.strategies || []
+    
+    console.log('策略元数据加载成功:', availableStrategies.value.length, '个策略')
+  } catch (error) {
+    console.error('Failed to load strategy metadata:', error);
+    availableStrategies.value = [];
+  }
+}
 
 // Methods
 function formatDate(timestamp) {
@@ -489,12 +538,40 @@ async function loadSummary() {
 
 async function loadStrategies() {
   try {
-    const response = await tradeApi.getTradeStrategies();
-    // Fix: Access response.strategies directly as that's what the backend returns
-    strategies.value = response.strategies || [];
+    // Load available strategies from the global strategy API
+    const token = localStorage.getItem('access_token')
+    const response = await fetch(`${API_BASE}/strategy/strategies`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    
+    if (!response.ok) throw new Error('Failed to load strategies')
+    const strategiesData = await response.json()
+    
+    // Extract just the strategy keys
+    strategies.value = strategiesData.strategies?.map(s => s.key) || []
+    
+    // Add manual trading option
+    if (!strategies.value.includes('manual')) {
+      strategies.value.push('manual')
+    }
+    
+    console.log('交易执行页面策略列表加载成功:', strategies.value.length, '个策略')
   } catch (error) {
-    console.error('Failed to load strategies:', error);
-    strategies.value = [];
+    console.error('Failed to load strategies from global API, falling back to trade strategies:', error);
+    
+    // Fallback to original trade strategies API
+    try {
+      const response = await tradeApi.getTradeStrategies();
+      strategies.value = response.strategies || [];
+      
+      // Add manual trading option
+      if (!strategies.value.includes('manual')) {
+        strategies.value.push('manual')
+      }
+    } catch (fallbackError) {
+      console.error('Failed to load strategies from both APIs:', fallbackError);
+      strategies.value = [];
+    }
   }
 }
 
@@ -569,6 +646,7 @@ onMounted(() => {
   loadTrades();
   loadStats();
   loadStrategies();
+  loadStrategyMetadata();
 });
 </script>
 
