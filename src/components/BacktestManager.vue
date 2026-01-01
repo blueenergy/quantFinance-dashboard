@@ -1,5 +1,10 @@
 <template>
-  <div class="backtest-manager">
+  <div 
+    class="backtest-manager" 
+    @mouseenter="isUserInteracting = false"
+    @mousemove="handleUserActivity"
+    @click="handleUserActivity"
+  >
     <div class="header">
       <h2>📊 回测管理</h2>
       <button class="create-btn" @click="showCreateModal = true">
@@ -119,6 +124,8 @@
               <option value="">请选择策略</option>
               <option value="turtle">海龟策略</option>
               <option value="grid">网格策略</option>
+              <option value="hidden_dragon">潜龙低吸</option>
+              <option value="single_yang">单阳不破</option>
               <option value="mean_reversion">均值回归</option>
               <option value="momentum">动量策略</option>
             </select>
@@ -155,13 +162,16 @@
             />
           </div>
 
-          <div class="form-group">
-            <label>策略参数 (JSON)</label>
-            <textarea 
-              v-model="strategyParamsText"
-              rows="4"
-              placeholder='例如: {"period": 20, "atr_period": 20}'
-            ></textarea>
+          <!-- 使用统一的策略参数编辑器 -->
+          <div v-if="newTask.strategy_key && strategyMeta[newTask.strategy_key]" class="strategy-params-section">
+            <StrategyParamsEditor
+              :strategy-key="newTask.strategy_key"
+              :strategy-info="strategyMeta[newTask.strategy_key]"
+              :presets="strategyTemplates[newTask.strategy_key] || []"
+              :initial-params="newTask.strategy_params"
+              :show-json-preview="false"
+              @update:params="(params) => newTask.strategy_params = params"
+            />
           </div>
 
           <div v-if="createError" class="error-message">
@@ -279,6 +289,16 @@
               />
               <div v-else class="empty">暂无净值数据</div>
             </div>
+
+            <!-- 操作区域 -->
+            <div class="result-actions">
+              <button class="deploy-btn" @click="deployToLive(selectedTask)">
+                🚀 部署到实盘
+              </button>
+              <button class="close-btn" @click="showResultModal = false">
+                关闭
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -287,15 +307,17 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, onUnmounted, watch } from 'vue'
 import EquityCurveChart from './EquityCurveChart.vue'
 import MetricsRadarChart from './MetricsRadarChart.vue'
+import StrategyParamsEditor from './StrategyParamsEditor.vue'
 
 export default {
   name: 'BacktestManager',
   components: {
     EquityCurveChart,
-    MetricsRadarChart
+    MetricsRadarChart,
+    StrategyParamsEditor
   },
   setup() {
     const API_BASE = import.meta.env.VITE_API_BASE || '/api'
@@ -304,6 +326,17 @@ export default {
     const tasks = ref([])
     const loading = ref(false)
     const statusFilter = ref('')
+    
+    // 自动刷新相关
+    const autoRefreshEnabled = ref(true)
+    const refreshInterval = ref(null)
+    const REFRESH_INTERVAL_MS = 10000 // 10秒
+    const isUserInteracting = ref(false) // 用户是否正在交互
+    
+    // 策略元数据（从API获取）
+    const strategyMeta = ref({})
+    const strategyTemplates = ref({})
+    const availableStrategies = ref([])
     
     const showCreateModal = ref(false)
     const newTask = ref({
@@ -372,12 +405,112 @@ export default {
         if (!response.ok) throw new Error('Failed to load tasks')
         
         tasks.value = await response.json()
+        
+        // 检查是否有运行中的任务，决定是否启动自动刷新
+        const hasRunningTasks = tasks.value.some(task => 
+          ['pending', 'claimed', 'running'].includes(task.status)
+        )
+        
+        if (hasRunningTasks && autoRefreshEnabled.value && !refreshInterval.value) {
+          console.log('检测到运行中的任务，启动自动刷新')
+          startAutoRefresh()
+        } else if (!hasRunningTasks && refreshInterval.value) {
+          console.log('所有任务已完成，停止自动刷新')
+          stopAutoRefresh()
+        }
       } catch (error) {
         console.error('Error loading tasks:', error)
         alert('加载任务列表失败')
       } finally {
         loading.value = false
       }
+    }
+
+    // 加载策略元数据
+    const loadStrategyMeta = async () => {
+      try {
+        const token = localStorage.getItem('access_token')
+        
+        // 加载策略列表
+        const strategiesRes = await fetch(`${API_BASE}/strategy/strategies`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        
+        if (!strategiesRes.ok) throw new Error('Failed to load strategies')
+        const strategiesData = await strategiesRes.json()
+        const strategies = strategiesData.strategies || []
+        
+        // 加载策略模板
+        const templatesRes = await fetch(`${API_BASE}/strategy/templates`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        
+        if (!templatesRes.ok) throw new Error('Failed to load templates')
+        const templatesData = await templatesRes.json()
+        
+        // 处理数据
+        availableStrategies.value = strategies
+        strategyMeta.value = Object.fromEntries(
+          strategies.map(s => [s.key, s])
+        )
+        strategyTemplates.value = templatesData.templates || {}
+        
+        console.log('策略元数据加载成功:', strategies.length, '个策略')
+        console.log('策略模板数据:', strategyTemplates.value)
+      } catch (error) {
+        console.error('Error loading strategy metadata:', error)
+        // 不阻塞界面，使用空数据
+      }
+    }
+
+    // 启动自动刷新
+    const startAutoRefresh = () => {
+      if (refreshInterval.value) return
+      
+      refreshInterval.value = setInterval(() => {
+        // 只有在用户不在交互时才刷新
+        if (!isUserInteracting.value && !showCreateModal.value && !showResultModal.value) {
+          console.log('自动刷新任务列表...')
+          loadTasks()
+        } else {
+          console.log('用户正在交互，跳过此次刷新')
+        }
+      }, REFRESH_INTERVAL_MS)
+    }
+
+    // 停止自动刷新
+    const stopAutoRefresh = () => {
+      if (refreshInterval.value) {
+        clearInterval(refreshInterval.value)
+        refreshInterval.value = null
+      }
+    }
+
+    // 监听策略选择变化，自动填充默认参数
+    watch(() => newTask.value.strategy_key, (newStrategy) => {
+      if (newStrategy && strategyMeta.value[newStrategy]) {
+        // 从策略元数据获取默认参数
+        const defaultParams = strategyMeta.value[newStrategy].default_params || {}
+        strategyParamsText.value = JSON.stringify(defaultParams, null, 2)
+        newTask.value.strategy_params = { ...defaultParams }
+        console.log(`已加载 ${newStrategy} 策略的默认参数:`, defaultParams)
+      } else if (!newStrategy) {
+        // 清空参数
+        strategyParamsText.value = '{}'
+        newTask.value.strategy_params = {}
+      }
+    })
+
+    // 处理用户活动
+    let activityTimer = null
+    const handleUserActivity = () => {
+      isUserInteracting.value = true
+      
+      // 3秒内没有活动则认为用户停止交互
+      if (activityTimer) clearTimeout(activityTimer)
+      activityTimer = setTimeout(() => {
+        isUserInteracting.value = false
+      }, 3000)
     }
 
     const createTask = async () => {
@@ -396,12 +529,10 @@ export default {
         createError.value = '股票代码格式不正确'
         return
       }
-
-      // Parse strategy params
-      try {
-        newTask.value.strategy_params = JSON.parse(strategyParamsText.value)
-      } catch (e) {
-        createError.value = '策略参数JSON格式错误'
+      
+      // 验证策略参数（已由 StrategyParamsEditor 组件设置）
+      if (!newTask.value.strategy_params || Object.keys(newTask.value.strategy_params).length === 0) {
+        createError.value = '请配置策略参数'
         return
       }
 
@@ -414,6 +545,8 @@ export default {
           ...newTask.value,
           symbol: normalizedSymbol.value
         }
+        
+        console.log('[DEBUG] Creating backtest task with params:', taskData.strategy_params)
         
         const response = await fetch(`${API_BASE}/backtest/tasks`, {
           method: 'POST',
@@ -479,8 +612,15 @@ export default {
         
         result.value = await response.json()
         
+        // 合并回测结果中的参数到 selectedTask，确保部署时可以获取到参数
+        if (result.value.strategy_params) {
+          selectedTask.value.strategy_params = result.value.strategy_params
+        }
+        
         // 调试日志：查看后端返回的数据
         console.log('=== 回测结果调试信息 ===');
+        console.log('Strategy Params:', result.value.strategy_params);
+        console.log('Selected Task Params:', selectedTask.value.strategy_params);
         console.log('Metrics:', result.value.metrics);
         console.log('Total Return:', result.value.metrics.total_return);
         console.log('Equity Curve Length:', result.value.equity_curve?.length);
@@ -585,9 +725,60 @@ export default {
       return finalValue - initialCash
     }
 
+    // 部署到实盘
+    const deployToLive = async (task) => {
+      if (!task) return
+      
+      const confirmed = confirm(
+        `确定要将此回测配置部署到实盘吗？\n\n` +
+        `股票：${task.symbol}\n` +
+        `策略：${task.strategy_key}\n` +
+        `参数：${JSON.stringify(task.strategy_params, null, 2)}`
+      )
+      
+      if (!confirmed) return
+      
+      try {
+        const token = localStorage.getItem('access_token')
+        
+        // 调用策略配置 API
+        const response = await fetch(`${API_BASE}/user/watchlist/strategy`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            symbol: task.symbol,
+            strategy: task.strategy_key,  // 后端API期望的字段名是 'strategy'
+            enabled: true,
+            params: task.strategy_params
+          })
+        })
+        
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.detail || '部署失败')
+        }
+        
+        alert('✅ 部署成功！策略已配置到实盘')
+        showResultModal.value = false
+      } catch (error) {
+        console.error('Deploy to live error:', error)
+        alert(`❌ 部署失败：${error.message}`)
+      }
+    }
+
     // Lifecycle
-    onMounted(() => {
-      loadTasks()
+    onMounted(async () => {
+      await Promise.all([
+        loadStrategyMeta(),
+        loadTasks()
+      ])
+    })
+
+    onUnmounted(() => {
+      stopAutoRefresh()
     })
 
     return {
@@ -604,19 +795,26 @@ export default {
       selectedTask,
       result,
       loadingResult,
+      isUserInteracting,
+      strategyMeta,
+      strategyTemplates,
+      availableStrategies,
       normalizeSymbol,
       loadTasks,
+      loadStrategyMeta,
       createTask,
       selectTask,
       viewResult,
       cancelTask,
       deleteTask,
+      handleUserActivity,
       getStatusText,
       formatDate,
       formatDateTime,
       formatCurrency,
       formatPercent,
-      calculateTotalProfit
+      calculateTotalProfit,
+      deployToLive
     }
   }
 }
@@ -945,6 +1143,12 @@ export default {
   font-size: 12px;
 }
 
+.strategy-params-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1101,5 +1305,31 @@ export default {
   text-align: center;
   padding: 40px;
   color: #909399;
+}
+
+.result-actions {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.deploy-btn {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.deploy-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 </style>
