@@ -86,9 +86,12 @@ class AuthService {
       if (response.ok) {
         const contentType = response.headers.get('content-type')
         if (contentType && contentType.includes('application/json')) {
-          const userData = await response.json()
+          const data = await response.json()
+          // 后端返回的格式是 { success: true, user: {...} }
+          const userData = data.user || data
           this.user.value = userData
           localStorage.setItem('user_info', JSON.stringify(userData))
+          console.log('Token验证成功，用户信息:', userData)
           return true
         }
       }
