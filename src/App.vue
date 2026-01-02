@@ -361,19 +361,18 @@ const adminTabs = computed(() => {
   const baseTabs = [
     { id: 'ranking', name: '金榜' },
     { id: 'watchlist', name: '自选股' },
-    { id: 'strategies', name: '策略配置' },
-    { id: 'backtest', name: '📊 回测管理' },  // 新增回测管理
-    { id: 'worker-monitor', name: '🤖 Worker监控' },  // 新增
-    { id: 'trade-executions', name: '交易执行' },
-    { id: 'trading-manual', name: '手动交易' },  // 新增手动交易管理
+    { id: 'backtest', name: '📊 回测管理' },
+    { id: 'strategies', name: '实盘交易' },
+    { id: 'worker-monitor', name: '🤖 Worker监控' }, 
+    { id: 'trade-executions', name: '交易记录' },
+    { id: 'trading-manual', name: '人工干预' }, 
     { id: 'chart', name: '日K线图' },
-    { id: 'minute-chart', name: '📊 分钟K线' },  // 新增分钟K线图
+    { id: 'minute-chart', name: '📊 分钟K线' }, 
     { id: 'history', name: 'AI分析回溯' },
     { id: 'strategy-execution-analysis', name: '策略执行分析' },
     { id: 'spectrum', name: '阴阳谱' },
     { id: 'securities', name: '账户工作台' },
-    { id: 'user-profile', name: '用户配置' },  // 新增用户配置
-    // AI analysis moved to AIAnalysisHistory (history tab)
+    { id: 'user-profile', name: '用户配置' },
   ]
   if (user.value?.is_admin) {
     baseTabs.push({ id: 'admin', name: '管理后台' })
