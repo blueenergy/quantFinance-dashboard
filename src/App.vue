@@ -574,10 +574,19 @@ onMounted(async () => {
 
   // Token有效，优先恢复上次的tab，否则根据用户角色设置默认界面
   const savedTab = localStorage.getItem('activeTab')
+  console.log('尝试恢复tab:', savedTab, '用户:', user.value?.username, '是否管理员:', user.value?.is_admin)
+  
   if (savedTab && adminTabs.value.some(tab => tab.id === savedTab)) {
-    // 恢复上次的tab
-    activeTab.value = savedTab
-    console.log('恢复上次浏览的页面:', savedTab)
+    // 检查管理员tab的访问权限
+    if (savedTab === 'admin' && !user.value?.is_admin) {
+      // 如果不是管理员，不能访问管理后台
+      console.log('非管理员用户尝试访问管理后台，跳转到自选股')
+      activeTab.value = 'watchlist'
+    } else {
+      // 恢复上次的tab
+      activeTab.value = savedTab
+      console.log('恢复上次浏览的页面:', savedTab)
+    }
   } else if (user.value?.is_admin) {
     activeTab.value = 'admin'
     console.log('管理员自动跳转到系统管理页面')

@@ -39,7 +39,7 @@
                 color="primary"
                 density="compact"
                 hide-details
-                :disabled="strategyMeta[stratKey]?.vip_only && userServiceLevel !== 'vip'"
+                :disabled="!strategyMeta[stratKey]?.can_use"
                 @change="toggleStrategy(item, stratKey)"
               />
               <v-btn 
@@ -51,6 +51,13 @@
               >
                 <v-icon :icon="mdiCog"></v-icon>
               </v-btn>
+              <!-- 显示VIP标记和升级提示 -->
+              <v-tooltip v-if="strategyMeta[stratKey]?.vip_only && !strategyMeta[stratKey]?.can_use" location="top">
+                <template #activator="{ props }">
+                  <v-icon v-bind="props" size="small" color="warning" :icon="mdiLock" />
+                </template>
+                <span>VIP专属策略，请升级服务等级</span>
+              </v-tooltip>
             </div>
           </template>
         </v-data-table>
@@ -97,14 +104,15 @@
                 style="min-width: 150px;"
               >
                 <template #item="{ item: option, props }">
-                  <v-list-item v-bind="props">
+                  <v-list-item v-bind="props" :disabled="!option.raw.can_use">
                     <div style="display: flex; align-items: center; gap: 6px;">
                       <span>{{ option.raw.name }}</span>
+                      <v-icon v-if="option.raw.vip_only && !option.raw.can_use" size="small" color="warning" :icon="mdiLock" />
                       <span
-                        v-if="strategyMeta[option.raw.key]?.vip_only"
+                        v-if="strategyMeta[option.raw.key]?.vip_only && !option.raw.can_use"
                         style="color: #e65100; font-size: 11px; font-weight: 600;"
                       >
-                        VIP 专属
+                        (需升级)
                       </span>
                     </div>
                     <template #subtitle>
@@ -125,17 +133,26 @@
             <span v-else style="color: #999;">-</span>
           </template>
           <template #item.enabled="{ item }">
-            <v-switch
-              v-if="item.strategy_key"
-              v-model="item.enabled"
-              :label="item.enabled ? '已激活' : '未激活'"
-              color="primary"
-              density="compact"
-              hide-details
-              :disabled="strategyMeta[item.strategy_key]?.vip_only && userServiceLevel !== 'vip'"
-              @change="toggleStrategyDetailed(item)"
-            />
-            <span v-else style="color: #999;">-</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <v-switch
+                v-if="item.strategy_key"
+                v-model="item.enabled"
+                :label="item.enabled ? '已激活' : '未激活'"
+                color="primary"
+                density="compact"
+                hide-details
+                :disabled="!strategyMeta[item.strategy_key]?.can_use"
+                @change="toggleStrategyDetailed(item)"
+              />
+              <span v-else style="color: #999;">-</span>
+              <!-- 显示VIP标记和升级提示 -->
+              <v-tooltip v-if="item.strategy_key && strategyMeta[item.strategy_key]?.vip_only && !strategyMeta[item.strategy_key]?.can_use" location="top">
+                <template #activator="{ props }">
+                  <v-icon v-bind="props" size="small" color="warning" :icon="mdiLock" />
+                </template>
+                <span>VIP专属策略，请升级服务等级</span>
+              </v-tooltip>
+            </div>
           </template>
         </v-data-table>
       </v-card-text>
@@ -356,7 +373,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { VExpansionPanels, VExpansionPanel, VExpansionPanelTitle, VExpansionPanelText } from 'vuetify/components'
 import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies, API_BASE, authHeaders} from '../api/user'
-import { mdiViewColumn, mdiViewList, mdiCog, mdiInformation } from '@mdi/js'
+import { mdiViewColumn, mdiViewList, mdiCog, mdiInformation, mdiLock } from '@mdi/js'
 
 // ============================================================================
 // State Management
@@ -507,6 +524,7 @@ async function loadData() {
     name: s.vip_only ? `${s.name} (VIP)` : s.name,
     vip_only: !!s.vip_only,
     min_service_level: s.min_service_level || null,
+    can_use: s.can_use !== false,  // 使用后端返回的 can_use 字段
   }))
   strategyMeta.value = Object.fromEntries(liveStrategies.map(s => [s.key, s]))
   availableStrategyKeys.value = liveStrategies.map(s => s.key)

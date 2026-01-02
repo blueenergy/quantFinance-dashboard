@@ -7,7 +7,7 @@
         <button 
           v-for="tab in tabs" 
           :key="tab.id"
-          @click="activeTab = tab.id"
+          @click="switchTab(tab.id)"
           :class="['nav-btn', { active: activeTab === tab.id }]"
         >
           {{ tab.icon }} {{ tab.name }}
@@ -109,7 +109,7 @@
 
     <!-- 权限管理 -->
     <div v-if="activeTab === 'permissions'" class="permissions-section">
-      <PermissionManagement />
+      <PermissionManagement :current-user="currentUser" />
     </div>
 
     <!-- 登录日志 -->
@@ -249,6 +249,17 @@ export default {
     }
   },
   async mounted() {
+    // 恢复上次的管理后台内部标签页
+    const savedAdminTab = localStorage.getItem('adminDashboardTab')
+    if (savedAdminTab && this.tabs.some(tab => tab.id === savedAdminTab)) {
+      this.activeTab = savedAdminTab
+      console.log('[AdminDashboard] 恢复管理后台标签页:', savedAdminTab)
+    } else {
+      // 如果没有保存的标签页，保存当前默认值
+      localStorage.setItem('adminDashboardTab', this.activeTab)
+      console.log('[AdminDashboard] 首次访问，保存默认标签页:', this.activeTab)
+    }
+    
     // 并行加载初始数据以降低首屏等待时间
     await Promise.all([
       this.loadStatistics(),
@@ -257,6 +268,12 @@ export default {
     ])
   },
   methods: {
+    // 切换标签页
+    switchTab(tabId) {
+      this.activeTab = tabId
+      localStorage.setItem('adminDashboardTab', tabId)
+      console.log('[AdminDashboard] 切换标签页:', tabId, '已保存到localStorage')
+    },
     // 通用 GET 请求助手：成功返回 data.data 部分，失败抛出错误
     async apiGet(url, params = {}) {
       const response = await axios.get(url, { params })

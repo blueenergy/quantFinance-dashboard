@@ -462,12 +462,16 @@
 <script>
 import { ref, reactive, onMounted, computed } from 'vue'
 import axios from 'axios'
+import UpgradeRequest from './UpgradeRequest.vue'
 
 // Rely on Vite proxy configuration instead of setting baseURL
 // Vite will proxy /api/* requests to http://localhost:3001
 
 export default {
   name: 'UserProfile',
+  components: {
+    UpgradeRequest
+  },
   setup() {
     // 标签页管理
     const activeTab = ref('personal')
@@ -484,7 +488,8 @@ export default {
       username: '',
       email: '',
       full_name: '',
-      email_verified: false
+      email_verified: false,
+      is_admin: false
     })
     
     // 邮箱编辑状态
@@ -566,6 +571,9 @@ export default {
         loadAIConfig()
       } else if (tabKey === 'securities') {
         loadSecuritiesAccounts()
+      } else if (tabKey === 'permissions') {
+        // 确保加载最新的用户信息（包括 is_admin）
+        loadProfile()
       }
     }
     
@@ -579,6 +587,7 @@ export default {
           profile.email = user.email
           profile.full_name = user.full_name
           profile.email_verified = user.email_verified || false
+          profile.is_admin = user.is_admin || false
         }
       } catch (error) {
         console.error('加载用户资料失败:', error)

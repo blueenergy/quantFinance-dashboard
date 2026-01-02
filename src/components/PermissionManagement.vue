@@ -101,7 +101,13 @@ export default {
   components: {
     UpgradeRequest
   },
-  setup() {
+  props: {
+    currentUser: {
+      type: Object,
+      required: true
+    }
+  },
+  setup(props) {
     const username = ref('')
     const selectedUserLevel = ref('free')
     const selectedStrategy = ref('')
@@ -110,7 +116,6 @@ export default {
     const serviceLevels = ref({})
     const userPermissionResult = ref('')
     const strategyPermissionResult = ref('')
-    const currentUser = ref({})
     
     // 获取所有策略权限
     const loadStrategies = async () => {
@@ -266,40 +271,9 @@ export default {
       return levelNames[level] || level
     }
     
-    // 获取当前用户信息
-    const getCurrentUser = async () => {
-      try {
-        const token = localStorage.getItem('access_token')
-        if (!token) {
-          console.error('No access token found')
-          return
-        }
-        
-        const headers = { 'Content-Type': 'application/json' }
-        headers['Authorization'] = `Bearer ${token}`
-        
-        const response = await fetch(`${API_BASE}/user/profile`, {
-          headers
-        })
-        
-        if (response.ok) {
-          const data = await response.json()
-          currentUser.value = data.user || {}
-        } else {
-          console.error('Failed to get user profile:', response.status)
-          // 如果获取用户信息失败，使用本地存储的信息
-          currentUser.value = { username: 'unknown' }
-        }
-      } catch (error) {
-        console.error('Error getting user profile:', error)
-        currentUser.value = { username: 'unknown' }
-      }
-    }
-    
     onMounted(async () => {
       await loadStrategies()
       await loadServiceLevels()
-      await getCurrentUser()
     })
     
     return {
@@ -311,7 +285,7 @@ export default {
       serviceLevels,
       userPermissionResult,
       strategyPermissionResult,
-      currentUser,
+      currentUser: props.currentUser,
       updateUserPermission,
       updateStrategyPermission,
       getServiceLevelName
