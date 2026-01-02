@@ -107,6 +107,11 @@
       <Pagination v-if="usersPagination" :page="usersPagination.page" :total-pages="usersPagination.total_pages" @change="loadUsers" />
     </div>
 
+    <!-- 权限管理 -->
+    <div v-if="activeTab === 'permissions'" class="permissions-section">
+      <PermissionManagement />
+    </div>
+
     <!-- 登录日志 -->
     <div v-if="activeTab === 'logs'" class="logs-section">
       <div class="section-header">
@@ -173,6 +178,7 @@ import AIUserAnalysisTable from './AIUserAnalysisTable.vue'
 import UserDetailModal from './UserDetailModal.vue'
 import DataCollectionMonitor from './DataCollectionMonitor.vue'
 import WorkerNodesMonitor from './WorkerNodesMonitor.vue'
+import PermissionManagement from './PermissionManagement.vue'
 import WorkerGroupsMonitor from './WorkerGroupsMonitor.vue'
 
 export default {
@@ -187,6 +193,7 @@ export default {
     UserDetailModal,
     DataCollectionMonitor,
     WorkerNodesMonitor,
+    PermissionManagement,
     WorkerGroupsMonitor
   },
   props: {
@@ -205,6 +212,7 @@ export default {
         { id: 'worker-nodes', name: 'Worker节点', icon: '🖥️' },
         { id: 'worker-groups', name: 'Worker组', icon: '📦' },
         { id: 'users', name: '用户管理', icon: '👥' },
+        { id: 'permissions', name: '权限管理', icon: '🔐' },
         { id: 'logs', name: '登录日志', icon: '📋' },
         { id: 'admin-logs', name: '管理员日志', icon: '⚙️' },
         { id: 'ai-logs', name: 'AI分析日志', icon: '🧠' }
@@ -659,6 +667,11 @@ export default {
   overflow: hidden;
   margin-bottom: 40px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+/* 权限管理样式 */
+.permissions-section {
+  margin-bottom: 40px;
 }
 
 table {
