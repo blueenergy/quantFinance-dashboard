@@ -345,6 +345,14 @@
             </small>
           </div>
         </div>
+        
+        <!-- 服务升级标签页 -->
+        <div v-if="activeTab === 'permissions'" class="tab-panel">
+          <h3>🚀 服务升级</h3>
+          <div class="upgrade-section">
+            <UpgradeRequest :current-user="profile" />
+          </div>
+        </div>
       </div>
     </div>
 
@@ -467,7 +475,8 @@ export default {
       { key: 'personal', title: '个人资料' },
       { key: 'security', title: '安全设置' },
       { key: 'ai', title: 'AI服务' },
-      { key: 'securities', title: '证券账户' }
+      { key: 'securities', title: '证券账户' },
+      { key: 'permissions', title: '服务升级' }
     ]
     
     // 个人资料
