@@ -184,6 +184,7 @@ export default {
   beforeUnmount() {
     this.disconnectWebSocket()
     if (this.pollInterval) clearInterval(this.pollInterval)
+    if (this.messagesRefreshInterval) clearInterval(this.messagesRefreshInterval)
   },
   methods: {
     async loadActiveSymbols() {
@@ -197,11 +198,9 @@ export default {
         const data = await response.json()
         this.activeSymbols = data.symbols || []
 
-        // Auto-select first symbol if available
         if (this.activeSymbols.length > 0 && !this.selectedSymbol) {
           this.selectedSymbol = this.activeSymbols[0]
-          this.connectWebSocket()
-          this.loadStats()
+          this.switchSymbol()
         }
       } catch (error) {
         console.error('Failed to load active symbols:', error)
@@ -218,7 +217,6 @@ export default {
         this.loadStats()
         this.loadMessages()
         
-        // Refresh messages every 5 seconds
         if (this.messagesRefreshInterval) clearInterval(this.messagesRefreshInterval)
         this.messagesRefreshInterval = setInterval(() => {
           this.loadMessages()
@@ -250,20 +248,17 @@ export default {
               this.currentLog = data
               this.isUpdating = true
 
-              // Add to history
               if (data.timestamp) {
                 this.logHistory.unshift({
                   ...data,
                   timestamp: data.timestamp
                 })
 
-                // Keep only last 50 entries
                 if (this.logHistory.length > 50) {
                   this.logHistory.pop()
                 }
               }
 
-              // Reset update indicator
               setTimeout(() => {
                 this.isUpdating = false
               }, 500)
@@ -308,7 +303,7 @@ export default {
     setupPolling() {
       this.pollInterval = setInterval(() => {
         this.loadActiveSymbols()
-      }, 30000) // Refresh active symbols every 30 seconds
+      }, 30000)
     },
 
     async loadStats() {
@@ -348,9 +343,7 @@ export default {
         if (match) {
           return `${match[1]}:${match[2]}`
         }
-      } catch (e) {
-        // Ignore
-      }
+      } catch (e) {}
       return dateStr
     },
 
