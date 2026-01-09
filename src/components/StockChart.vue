@@ -44,6 +44,7 @@ const props = defineProps({
   symbol: String,
   stockName: String,
   moneyFlowRecords: Array, // 新增
+  signalDates: Array,      // 新增：信号日期列表
   prevStock: Function,
   nextStock: Function,
   hasPrev: Boolean,
@@ -145,7 +146,7 @@ const scoreLine = kline.map(r => {
   }
 }
 
-watch(() => [props.records, kType.value], () => {
+watch(() => [props.records, kType.value, props.signalDates], () => {
   drawChart()
 })
 
@@ -310,7 +311,36 @@ function drawChart() {
           name: 'K线',
           data: kline.map(r => [r.open, r.close, r.low, r.high]),
           xAxisIndex: 0,
-          yAxisIndex: 0
+          yAxisIndex: 0,
+          markPoint: {
+            data: (props.signalDates || []).map(d => {
+              const normalized = normalizeDate(d)
+              const idx = dates.indexOf(normalized)
+              if (idx !== -1) {
+                return {
+                  name: '信号',
+                  coord: [normalized, kline[idx].high],
+                  value: 'BUY',
+                  itemStyle: { color: '#f44336' },
+                  label: {
+                    show: true,
+                    position: 'top',
+                    formatter: 'B',
+                    fontSize: 14,
+                    fontWeight: 'bold',
+                    backgroundColor: '#f44336',
+                    padding: [4, 6],
+                    borderRadius: 4,
+                    color: '#fff'
+                  },
+                  symbol: 'arrow',
+                  symbolSize: 15,
+                  symbolOffset: [0, -10]
+                }
+              }
+              return null
+            }).filter(Boolean)
+          }
         },
         {
           type: 'bar',
@@ -374,7 +404,7 @@ function drawChart() {
               })
               .filter(Boolean)
           }
-        }
+        },
       ]
     }
     
@@ -384,7 +414,6 @@ function drawChart() {
     error.value = `绘制失败: ${err.message}`
   }
 }
-
 
 onMounted(async () => {
   // 安全访问 moneyFlowRecords
@@ -418,7 +447,17 @@ onMounted(async () => {
     // 找到第一个大于等于3个月前的日期
     const startIdx = dates.findIndex(d => d >= threeMonthsAgoStr)
     
-    startDate.value = startIdx >= 0 ? dates[startIdx] : dates[0]
+    let defaultStart = startIdx >= 0 ? dates[startIdx] : dates[0]
+    
+    // 如果有信号日期，确保起始日期不晚于信号日期
+    if (props.signalDates && props.signalDates.length > 0) {
+      const sDate = normalizeDate(props.signalDates[0])
+      if (sDate < defaultStart) {
+        defaultStart = sDate
+      }
+    }
+    
+    startDate.value = defaultStart
     endDate.value = dates[dates.length - 1]
     
     console.log('设置的日期范围:', startDate.value, '到', endDate.value)

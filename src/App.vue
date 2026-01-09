@@ -101,6 +101,7 @@
               :stockName="stockName"
               :records="chartRecords"
               :moneyFlowRecords="moneyFlowRecords"
+              :signalDates="signalDates"
               :prevStock="prevStock"
               :nextStock="nextStock"
               :hasPrev="hasPrev"
@@ -269,6 +270,16 @@
               <div class="skeleton skeleton-table">实时日志加载中...</div>
             </template>
           </Suspense>
+
+          <!-- Strategy Stock Pool Tab -->
+          <Suspense v-if="activeTab === 'strategy-pool'">
+            <template #default>
+              <StrategyStockPool @view-chart="selectStockForChart" />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">策略股池加载中...</div>
+            </template>
+          </Suspense>
         </div>
       </div>
     </div>
@@ -300,6 +311,7 @@ const SecuritiesAccountDashboard = defineAsyncComponent(() => import('./componen
 const UserProfile = defineAsyncComponent(() => import('./components/UserProfile.vue'))
 const BacktestManager = defineAsyncComponent(() => import('./components/BacktestManager.vue'))
 const LiveStrategyLogs = defineAsyncComponent(() => import('./components/LiveStrategyLogs.vue'))
+const StrategyStockPool = defineAsyncComponent(() => import('./components/StrategyStockPool.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
@@ -360,6 +372,7 @@ const stockName = ref('')
 const chartSymbol = computed(() => 
   watchlist.value.length > 0 ? watchlist.value[currentIndex.value] : ''
 )
+const signalDates = ref([]) // 用于在图表上标记信号日期
 
 // 监听activeTab变化，保存到localStorage
 watch(activeTab, (newTab) => {
@@ -371,6 +384,7 @@ watch(activeTab, (newTab) => {
 const adminTabs = computed(() => {
   const baseTabs = [
     { id: 'live-logs', name: '🚀 实时日志' },
+    { id: 'strategy-pool', name: '🎯 策略股池' },
     { id: 'ranking', name: '金榜' },
     { id: 'watchlist', name: '自选股' },
     { id: 'backtest', name: '📊 回测管理' },
@@ -452,13 +466,26 @@ async function loadStockData(symbol) {
     // 计算最近90天的日期范围，减少初次加载数据量
     const end = new Date()
     const start = new Date()
-    start.setDate(end.getDate() - 89)
+    start.setDate(end.getDate() - 120) // 增加到120天，更稳妥一点
+    
+    // 如果有特定的信号日期，确保范围包含它
+    if (signalDates.value.length > 0) {
+      const sDate = signalDates.value[0]
+      // 20251107 -> 2025-11-07
+      const sDateStr = sDate.length === 8 ? `${sDate.slice(0,4)}-${sDate.slice(4,6)}-${sDate.slice(6,8)}` : sDate
+      const sigDate = new Date(sDateStr)
+      if (sigDate < start) {
+        // 如果信号日期更早，将起始日期设为信号日期前一个月
+        start.setTime(sigDate.getTime() - (30 * 24 * 60 * 60 * 1000))
+      }
+    }
+
     const toYmd = (d) => d.toISOString().slice(0,10).replace(/-/g, '')
     const startDate = toYmd(start)
     const endDate = toYmd(end)
 
     // 并行获取K线与资金流数据，并添加请求超时避免长时间阻塞
-    const klineUrl = `/api/records/?limit=300&sort=-trade_date&symbol=${symbol}&start_date=${startDate}&end_date=${endDate}`
+    const klineUrl = `/api/records/?limit=500&sort=-trade_date&symbol=${symbol}&start_date=${startDate}&end_date=${endDate}`
     const klineReq = axios.get(klineUrl, { timeout: 10000 })
     const moneyFlowReq = fetchMoneyFlowRecords(symbol)
 
@@ -517,16 +544,41 @@ watch(chartSymbol, (newSymbol) => {
 }, { immediate: true })
 
 // 原有的 selectStockForChart 方法也可以简化
-async function selectStockForChart(stockSymbol) {
+async function selectStockForChart(stockData) {
+  let stockSymbol = ''
+  let signalDate = null
+  
+  if (typeof stockData === 'string') {
+    stockSymbol = stockData
+  } else if (stockData && stockData.symbol) {
+    stockSymbol = stockData.symbol
+    signalDate = stockData.signalDate
+  }
+
+  if (!stockSymbol) return
+
+  // 设置信号日期，以便后续 loadStockData 使用正确的日期范围
+  if (signalDate) {
+    signalDates.value = [signalDate]
+  } else {
+    signalDates.value = []
+  }
+
   // 找到该股票在 watchlist 中的索引
   const index = watchlist.value.indexOf(stockSymbol)
   if (index !== -1) {
-    currentIndex.value = index
+    // 如果已经在列表中，且是当前股票，watcher可能不触发，手动调一下
+    if (currentIndex.value === index) {
+      loadStockData(stockSymbol)
+    } else {
+      currentIndex.value = index
+    }
   } else {
     // 如果不在自选股中，添加到列表
     watchlist.value.push(stockSymbol)
     currentIndex.value = watchlist.value.length - 1
   }
+  
   activeTab.value = 'chart'
 }
 
