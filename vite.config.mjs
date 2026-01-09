@@ -9,6 +9,11 @@ export default defineConfig({
     compression({ algorithm: 'gzip', ext: '.gz', deleteOriginFile: false }),
     compression({ algorithm: 'brotliCompress', ext: '.br', deleteOriginFile: false })
   ],
+  test: {
+    environment: 'happy-dom',
+    globals: true,
+    setupFiles: ['./tests/setup.js']
+  },
   build: {
     rollupOptions: {
       output: {
