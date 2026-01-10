@@ -102,12 +102,16 @@
               :records="chartRecords"
               :moneyFlowRecords="moneyFlowRecords"
               :signalDates="signalDates"
+              :tradeMarkers="tradeMarkers"
               :prevStock="prevStock"
               :nextStock="nextStock"
               :hasPrev="hasPrev"
               :hasNext="hasNext"
               :watchlist="watchlist"
               :currentIndex="currentIndex"
+              :strategyFrom="currentStrategy"
+              :presetFrom="currentPreset"
+              @go-back="goBackToStrategyPool"
                 />
               </template>
               <template #fallback>
@@ -292,7 +296,7 @@ import UserAvatar from './components/UserAvatar.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
 import WatchListData from './components/WatchListData.vue'
 // Lazy-load heavy views/components to avoid loading them for normal users
-import { defineAsyncComponent, ref, onMounted, computed,watch } from 'vue'
+import { defineAsyncComponent, ref, onMounted, computed, watch, nextTick } from 'vue'
 const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
 const MinuteKlineChart = defineAsyncComponent(() => import('./components/MinuteKlineChart.vue'))
 // StockAnalysis component removed: AI analysis moved to AIAnalysisHistory
@@ -373,6 +377,9 @@ const chartSymbol = computed(() =>
   watchlist.value.length > 0 ? watchlist.value[currentIndex.value] : ''
 )
 const signalDates = ref([]) // 用于在图表上标记信号日期
+const currentStrategy = ref('') // 当前查看股票的策略
+const currentPreset = ref('') // 当前查看股票的preset
+const tradeMarkers = ref([]) // 交易标记点（买入+卖出）
 
 // 监听activeTab变化，保存到localStorage
 watch(activeTab, (newTab) => {
@@ -410,6 +417,35 @@ const adminTabs = computed(() => {
 function formatDate(dateStr) {
   if (!dateStr) return ''
   return dateStr.substring(0, 10)
+}
+
+function normalizeDateForComparison(dateStr) {
+  // Convert various date formats to consistent YYYYMMDD format
+  if (!dateStr) return ''
+  
+  // If already in YYYYMMDD format (8 digits), return as is
+  if (/^\d{8}$/.test(dateStr)) {
+    return dateStr
+  }
+  
+  // If in YYYY-MM-DD format, convert to YYYYMMDD
+  if (dateStr.includes('-')) {
+    return dateStr.replace(/-/g, '')
+  }
+  
+  // If in other formats, try to parse and convert
+  try {
+    const date = new Date(dateStr)
+    if (isNaN(date.getTime())) {
+      return dateStr // Return original if can't parse
+    }
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}${month}${day}`
+  } catch (e) {
+    return dateStr // Return original if parsing fails
+  }
 }
 
 async function fetchData() {
@@ -488,12 +524,95 @@ async function loadStockData(symbol) {
     const klineUrl = `/api/records/?limit=500&sort=-trade_date&symbol=${symbol}&start_date=${startDate}&end_date=${endDate}`
     const klineReq = axios.get(klineUrl, { timeout: 10000 })
     const moneyFlowReq = fetchMoneyFlowRecords(symbol)
+    
+    // 获取交易历史（买入+卖出）- 支持所有策略
+    let tradeHistoryReq = Promise.resolve({ data: { trades: [] } })
+    if (symbol) {
+      console.log('准备获取交易历史，symbol:', symbol, 'currentStrategy:', currentStrategy.value);
+      let tradeUrl = `/api/strategy-pool/trade-history?symbol=${symbol}`
+      // 如果有策略信息，限制到特定策略
+      if (currentStrategy.value) {
+        tradeUrl += `&strategy=${currentStrategy.value}`
+        if (currentPreset.value) {
+          tradeUrl += `&preset=${currentPreset.value}`
+        }
+      } else {
+        console.log('未选择策略，获取所有策略的交易历史。');
+      }
+      
+      console.log('正在请求交易历史:', tradeUrl);
+      tradeHistoryReq = axios.get(tradeUrl, { timeout: 5000 })
+        .then(response => {
+          console.log('交易历史API响应:', response.data);
+          console.log('完整的响应对象:', response);
+          return response.data; // Return response.data (the server response body)
+        })
+        .catch(err => {
+          console.warn('获取交易历史失败:', err)
+          // Return a server response-like object with data field
+          return { 
+            success: false,
+            data: {
+              symbol: symbol,
+              strategy: currentStrategy.value,
+              preset: currentPreset.value,
+              count: 0,
+              trades: [] 
+            }
+          };
+        })
+    } else {
+      console.log('股票代码为空，跳过获取交易历史。');
+    }
 
-    const [klineRes, moneyFlowRes] = await Promise.all([klineReq, moneyFlowReq])
-    chartRecords.value = klineRes.data
-
-
-    // 获取资金流数据
+    const [klineRes, moneyFlowRes, tradeHistoryRes] = await Promise.all([klineReq, moneyFlowReq, tradeHistoryReq])
+    
+    // 处理交易历史标记
+    const trades = tradeHistoryRes.data.trades || []
+    tradeMarkers.value = trades.map(tr => ({
+      date: normalizeDateForComparison(tr.datetime.split(' ')[0]),  // Normalize date format for comparison
+      action: tr.action,  // BUY or SELL
+      price: tr.price,
+      pnl: tr.pnl || 0
+    }))
+    
+    console.log(`股票 ${symbol} 交易历史: 共 ${trades.length} 条记录`)
+    
+    // 计算包含所有交易日期的完整日期范围
+    const allTradeDates = trades.map(tr => normalizeDateForComparison(tr.datetime.split(' ')[0]))
+    let adjustedStartDate = normalizeDateForComparison(startDate)
+    let adjustedEndDate = normalizeDateForComparison(endDate)
+    
+    // 调整开始日期以包含最早的交易日期
+    if (allTradeDates.length > 0) {
+      const earliestTradeDate = allTradeDates.reduce((earliest, current) => {
+        return current < earliest ? current : earliest
+      }, adjustedEndDate) // Initialize with endDate as default
+      if (earliestTradeDate < adjustedStartDate) {
+        adjustedStartDate = earliestTradeDate
+      }
+    }
+    
+    // 调整结束日期以包含最晚的交易日期
+    if (allTradeDates.length > 0) {
+      const latestTradeDate = allTradeDates.reduce((latest, current) => {
+        return current > latest ? current : latest
+      }, adjustedStartDate) // Initialize with startDate as default
+      if (latestTradeDate > adjustedEndDate) {
+        adjustedEndDate = latestTradeDate
+      }
+    }
+    
+    // 如果日期范围被调整，重新获取K线数据
+    if (adjustedStartDate !== normalizeDateForComparison(startDate) || adjustedEndDate !== normalizeDateForComparison(endDate)) {
+      console.log(`调整日期范围以包含交易记录: ${adjustedStartDate} 到 ${adjustedEndDate}`)
+      const adjustedKlineUrl = `/api/records/?limit=500&sort=-trade_date&symbol=${symbol}&start_date=${adjustedStartDate}&end_date=${adjustedEndDate}`
+      const adjustedKlineRes = await axios.get(adjustedKlineUrl, { timeout: 10000 })
+      chartRecords.value = adjustedKlineRes.data
+    } else {
+      chartRecords.value = klineRes.data
+    }
+    
     moneyFlowRecords.value = moneyFlowRes
 
     // 检查是否有股票名称字段
@@ -523,6 +642,51 @@ async function loadStockData(symbol) {
   }
 }
 
+// 新增：返回来源标签页功能（支持策略股池及其他来源）
+function goBackToStrategyPool(context) {
+  // 检查是否有保存的来源信息
+  if (window.currentSourceInfo) {
+    const sourceInfo = window.currentSourceInfo;
+    
+    // 切换到来源标签页
+    activeTab.value = sourceInfo.tab;
+    
+    // 如果来源是策略股池且有策略信息，触发恢复事件
+    if (sourceInfo.tab === 'strategy-pool' && sourceInfo.strategy) {
+      // 使用 nextTick 确保组件已渲染后再触发事件
+      nextTick(() => {
+        // 创建一个自定义事件来传递策略、预设信息
+        const event = new CustomEvent('restore-strategy-context', {
+          detail: {
+            strategy: sourceInfo.strategy,
+            preset: sourceInfo.preset,
+            date: context?.date  // Date may be undefined, StrategyStockPool will handle appropriately
+          }
+        });
+        window.dispatchEvent(event);
+      });
+    }
+  } else {
+    // 如果没有来源信息，尝试根据 context 判断是否回到策略股池
+    if (context && context.strategy) {
+      activeTab.value = 'strategy-pool';
+      
+      // 使用 nextTick 确保组件已渲染后再触发事件
+      nextTick(() => {
+        // 创建一个自定义事件来传递策略、预设和日期信息
+        const event = new CustomEvent('restore-strategy-context', {
+          detail: {
+            strategy: context.strategy,
+            preset: context.preset,
+            date: context.date  // Date may be undefined, StrategyStockPool will handle appropriately
+          }
+        });
+        window.dispatchEvent(event);
+      });
+    }
+  }
+}
+
 // 按钮方法
 function prevStock() {
   if (hasPrev.value) {
@@ -543,19 +707,35 @@ watch(chartSymbol, (newSymbol) => {
   }
 }, { immediate: true })
 
-// 原有的 selectStockForChart 方法也可以简化
+// 扩展 selectStockForChart 方法以支持从不同来源跳转并能返回
 async function selectStockForChart(stockData) {
   let stockSymbol = ''
   let signalDate = null
+  let strategy = ''
+  let preset = ''
+  let sourceTab = activeTab.value  // 记录当前标签页作为来源
   
   if (typeof stockData === 'string') {
     stockSymbol = stockData
   } else if (stockData && stockData.symbol) {
     stockSymbol = stockData.symbol
     signalDate = stockData.signalDate
+    strategy = stockData.strategy || ''
+    preset = stockData.preset || ''
   }
 
   if (!stockSymbol) return
+
+  // 保存策略信息，用于后续获取交易历史
+  currentStrategy.value = strategy
+  currentPreset.value = preset
+  
+  // 保存来源标签页，用于返回
+  const sourceInfo = {
+    tab: sourceTab,
+    strategy: strategy,
+    preset: preset
+  }
 
   // 设置信号日期，以便后续 loadStockData 使用正确的日期范围
   if (signalDate) {
@@ -580,6 +760,9 @@ async function selectStockForChart(stockData) {
   }
   
   activeTab.value = 'chart'
+  
+  // 保存来源信息到全局变量，供goBackToSource使用
+  window.currentSourceInfo = sourceInfo
 }
 
 function handleLoginSuccess(authData) {

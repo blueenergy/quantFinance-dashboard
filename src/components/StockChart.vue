@@ -10,6 +10,10 @@
       <span style="margin-left: 20px; color: #666; font-size: 12px;">
         {{ props.symbol ? `${props.symbol}${props.stockName ? ` - ${props.stockName}` : ''} | ` : '' }}数据量: {{ records?.length || 0 }} 条
       </span>
+      <!-- 返回按钮 -->
+      <button @click="goBack" style="margin-left: 20px; background-color: #6a5acd; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
+        ← 返回之前页面
+      </button>
     </div>
     <div style="margin-bottom: 10px;">
       <label>起始日期：</label>
@@ -39,18 +43,24 @@ import { ref, onMounted, watch } from 'vue'
 // Lazy-load ECharts to reduce initial bundle size
 let echarts
 
+const emit = defineEmits(['go-back'])
+
 const props = defineProps({
   records: Array,
   symbol: String,
   stockName: String,
   moneyFlowRecords: Array, // 新增
   signalDates: Array,      // 新增：信号日期列表
+  tradeMarkers: Array,     // 新增：交易标记（买入+卖出）
   prevStock: Function,
   nextStock: Function,
   hasPrev: Boolean,
   hasNext: Boolean,
   watchlist: Array,   
-  currentIndex: Number
+  currentIndex: Number,
+  strategyFrom: String, // 策略来源
+  presetFrom: String,   // 参数风格来源
+  dateFrom: String      // 日期来源
 })
 
 const chart = ref(null)
@@ -146,7 +156,7 @@ const scoreLine = kline.map(r => {
   }
 }
 
-watch(() => [props.records, kType.value, props.signalDates], () => {
+watch(() => [props.records, kType.value, props.signalDates, props.tradeMarkers], () => {
   drawChart()
 })
 
@@ -170,6 +180,12 @@ function drawChart() {
   
   try {
   const { dates, kline, bigMoneyBars, scoreLine } = getKlineData()
+  
+  // DEBUGGING: Log tradeMarkers data
+  console.log('--- Debugging Trade Markers ---');
+  console.log('Received tradeMarkers:', JSON.stringify(props.tradeMarkers, null, 2));
+  // console.log('Chart dates:', JSON.stringify(dates, null, 2)); // Log all dates if needed for deep debug
+
   // 规范化 scoreLine：统一进行四舍五入，避免在多个地方重复计算
   const normalizedScoreLine = scoreLine.map(point => {
     if (!point) return null
@@ -230,12 +246,17 @@ function drawChart() {
           }
 
           if (klineData && klineData.data) {
-            const [open, close, low, high] = klineData.data
-            tooltip += `<div style="border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 5px;">`
-            tooltip += `开盘: <span style="color: #666666;">${open}</span><br/>`
-            tooltip += `收盘: <span style="color: #666666;">${close}</span><br/>`
-            tooltip += `最低: <span style="color: #666666;">${low}</span><br/>`
-            tooltip += `最高: <span style="color: #666666;">${high}</span></div>`
+            // Backend returns: [unknown, open, close, low, high]
+            // Discard first element and extract OCLH
+            const dataArray = Array.isArray(klineData.data) ? klineData.data : klineData.value
+            if (dataArray && dataArray.length >= 5) {
+              const [, open, close, low, high] = dataArray  // Skip first element
+              tooltip += `<div style="border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 5px;">`
+              tooltip += `开盘: <span style="color: #666666;">${open.toFixed(2)}</span><br/>`
+              tooltip += `最高: <span style="color: #666666;">${high.toFixed(2)}</span><br/>`
+              tooltip += `最低: <span style="color: #666666;">${low.toFixed(2)}</span><br/>`
+              tooltip += `收盘: <span style="color: #666666;">${close.toFixed(2)}</span></div>`
+            }
           }
           if (scoreData && scoreData.data) {
             const cs = scoreData.data.composite_score;
@@ -309,37 +330,88 @@ function drawChart() {
         {
           type: 'candlestick',
           name: 'K线',
+          // ECharts candlestick format: [open, close, low, high]
           data: kline.map(r => [r.open, r.close, r.low, r.high]),
           xAxisIndex: 0,
           yAxisIndex: 0,
           markPoint: {
-            data: (props.signalDates || []).map(d => {
-              const normalized = normalizeDate(d)
-              const idx = dates.indexOf(normalized)
-              if (idx !== -1) {
-                return {
-                  name: '信号',
-                  coord: [normalized, kline[idx].high],
-                  value: 'BUY',
-                  itemStyle: { color: '#f44336' },
-                  label: {
-                    show: true,
-                    position: 'top',
-                    formatter: 'B',
-                    fontSize: 14,
-                    fontWeight: 'bold',
-                    backgroundColor: '#f44336',
-                    padding: [4, 6],
-                    borderRadius: 4,
-                    color: '#fff'
-                  },
-                  symbol: 'arrow',
-                  symbolSize: 15,
-                  symbolOffset: [0, -10]
+            data: [
+              // 原有的信号日期标记（BUY信号）
+              ...(props.signalDates || []).map(d => {
+                const normalized = normalizeDate(d)
+                const idx = dates.indexOf(normalized)
+                if (idx !== -1) {
+                  return {
+                    name: '信号',
+                    coord: [normalized, kline[idx].high],
+                    value: 'BUY',
+                    itemStyle: { color: '#f44336' },
+                    label: {
+                      show: true,
+                      position: 'top',
+                      formatter: 'B',
+                      fontSize: 14,
+                      fontWeight: 'bold',
+                      backgroundColor: '#f44336',
+                      padding: [4, 6],
+                      borderRadius: 4,
+                      color: '#fff'
+                    },
+                    symbol: 'arrow',
+                    symbolSize: 15,
+                    symbolOffset: [0, -10]
+                  }
                 }
-              }
-              return null
-            }).filter(Boolean)
+                return null
+              }).filter(Boolean),
+              // 新增：交易历史标记（买入+卖出）
+              ...(props.tradeMarkers || []).map(tr => {
+                const normalized = normalizeDate(tr.date)
+                // 尝试精确匹配日期
+                let idx = dates.indexOf(normalized)
+                
+                // 如果精确匹配失败，尝试模糊匹配（允许格式差异）
+                if (idx === -1) {
+                  // 移除分隔符进行比较，例如将 '2024-01-01' 和 '20240101' 都标准化为相同格式
+                  const normalizedNoSep = normalized.replace(/[-]/g, '')
+                  idx = dates.findIndex(date => {
+                    const dateNoSep = date.replace(/[-]/g, '')
+                    return dateNoSep === normalizedNoSep
+                  })
+                }
+
+                // DEBUGGING: Log each marker processing
+                console.log(`Processing marker: action=${tr.action}, date=${tr.date}, normalizedDate=${normalized}, foundIndex=${idx}`);
+                
+                if (idx !== -1) {
+                  const isBuy = tr.action.toUpperCase() === 'BUY'
+                  return {
+                    name: isBuy ? '买入' : '卖出',
+                    coord: [normalized, isBuy ? kline[idx].low : kline[idx].high],
+                    value: tr.action,
+                    itemStyle: { 
+                      color: isBuy ? '#4CAF50' : '#FF5722'  // 绿色买入，红色卖出
+                    },
+                    label: {
+                      show: true,
+                      position: isBuy ? 'bottom' : 'top',
+                      formatter: isBuy ? 'B' : 'S',
+                      fontSize: 12,
+                      fontWeight: 'bold',
+                      backgroundColor: isBuy ? '#4CAF50' : '#FF5722',
+                      padding: [3, 5],
+                      borderRadius: 3,
+                      color: '#fff'
+                    },
+                    symbol: isBuy ? 'pin' : 'arrow', // Sell symbol: arrow
+                    symbolSize: isBuy ? 10 : 8,     // Sell symbol size
+                    symbolRotate: isBuy ? 0 : 180,   // Point arrow down for Sell
+                    symbolOffset: isBuy ? [0, 10] : [0, -8] // Adjust offset for Sell
+                  }
+                }
+                return null
+              }).filter(Boolean)
+            ]
           }
         },
         {
@@ -488,6 +560,15 @@ function normalizeDate(d) {
     }
   }
   return d
+}
+
+// 返回来源的方法
+function goBack() {
+  emit('go-back', {
+    strategy: props.strategyFrom,
+    preset: props.presetFrom,
+    date: props.dateFrom  // May be undefined if not coming from strategy pool
+  })
 }
 
 // 监听 symbol 变化，当 symbol 有值时重新绘制
