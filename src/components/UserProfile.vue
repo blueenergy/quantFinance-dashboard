@@ -489,7 +489,8 @@ export default {
       email: '',
       full_name: '',
       email_verified: false,
-      is_admin: false
+      is_admin: false,
+      service_level: 'free'
     })
     
     // 邮箱编辑状态
@@ -588,6 +589,7 @@ export default {
           profile.full_name = user.full_name
           profile.email_verified = user.email_verified || false
           profile.is_admin = user.is_admin || false
+          profile.service_level = user.service_level || 'free'
         }
       } catch (error) {
         console.error('加载用户资料失败:', error)
