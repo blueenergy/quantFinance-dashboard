@@ -156,4 +156,49 @@ describe('StrategyStockPool', () => {
     expect(wrapper.vm.error).toBeTruthy()
     expect(wrapper.vm.stocks).toHaveLength(0)
   })
+
+  it('should fetch params when preset changes and update currentParams', async () => {
+    const presets = ['dragon_default', 'dragon_aggressive']
+
+    mockAxiosGet.mockImplementation((url) => {
+      if (url.includes('presets') && url.includes('hidden_dragon')) {
+        return Promise.resolve({ data: { success: true, presets } })
+      }
+
+      if (url.includes('params') && url.includes('hidden_dragon') && url.includes('preset=dragon_default')) {
+        return Promise.resolve({ data: { success: true, found: true, params: { a: 1 } } })
+      }
+      if (url.includes('params') && url.includes('hidden_dragon') && url.includes('preset=dragon_aggressive')) {
+        return Promise.resolve({ data: { success: true, found: true, params: { a: 9 } } })
+      }
+
+      if (url.includes('dates') && url.includes('hidden_dragon')) {
+        return Promise.resolve({ data: { success: true, dates: ['20260109'] } })
+      }
+      if (url.includes('stocks') && url.includes('hidden_dragon')) {
+        return Promise.resolve({ data: { success: true, stocks: [] } })
+      }
+
+      return Promise.reject(new Error('Unexpected API call: ' + url))
+    })
+
+    wrapper = mount(StrategyStockPool)
+    await flushPromises()
+
+    // Initial preset should be first available and params should be loaded.
+    expect(wrapper.vm.selectedPreset).toBe('dragon_default')
+    expect(wrapper.vm.currentParams).toEqual({ a: 1 })
+
+    // Change preset
+    wrapper.vm.selectedPreset = 'dragon_aggressive'
+    await flushPromises()
+
+    expect(wrapper.vm.currentParams).toEqual({ a: 9 })
+
+    const paramsCalls = mockAxiosGet.mock.calls
+      .map(call => call[0])
+      .filter(u => String(u).includes('/api/strategy-pool/params'))
+
+    expect(paramsCalls.some(u => String(u).includes('preset=dragon_aggressive'))).toBe(true)
+  })
 })
