@@ -235,12 +235,14 @@ const chartLoading = ref(false)
 const chartError = ref(null)
 const isFullscreen = ref(false)
 
-// 图表模态框方法
+// 查看图表：交给 App.vue 统一跳转（将从策略股池跳到回测模块展示）
 const viewChart = (stock) => {
-  selectedStock.value = stock
-  showChartModal.value = true
-  chartLoading.value = false
-  chartError.value = null
+  emit('view-chart', {
+    symbol: stock.symbol,
+    signalDate: stock.date,
+    strategy: stock.strategy || selectedStrategy.value,
+    preset: stock.preset || selectedPreset.value
+  })
 }
 
 const closeChartModal = () => {

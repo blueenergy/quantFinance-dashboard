@@ -155,6 +155,10 @@ const props = defineProps({
     type: Object,
     default: () => ({})
   },
+  preferredPreset: {
+    type: String,
+    default: ''
+  },
   showJsonPreview: {
     type: Boolean,
     default: false
@@ -164,7 +168,7 @@ const props = defineProps({
 const emit = defineEmits(['update:params'])
 
 // Destructure props for template access
-const { strategyKey, strategyInfo, presets, initialParams, showJsonPreview } = toRefs(props)
+const { strategyKey, strategyInfo, presets, initialParams, preferredPreset, showJsonPreview } = toRefs(props)
 
 // Local state
 const localParams = ref({ ...props.initialParams })
@@ -242,6 +246,25 @@ onMounted(() => {
   console.log('- strategyKey:', strategyKey.value)
   console.log('- presets:', presets.value)
   console.log('- initialParams:', initialParams.value)
+  console.log('- preferredPreset:', preferredPreset.value)
+
+  // Prefer an explicitly provided preset (e.g., from strategy-pool selection)
+  if (preferredPreset.value) {
+    const match = presets.value.find(p => p.preset === preferredPreset.value)
+    if (match) {
+      console.log('Auto-loading preferred preset:', match)
+      loadPreset(match)
+      return
+    }
+  }
+
+  // If initial params are provided, keep them as-is (do not override with default preset)
+  if (initialParams.value && Object.keys(initialParams.value).length > 0) {
+    localParams.value = { ...initialParams.value }
+    selectedPresetIndex.value = null
+    console.log('Using provided initialParams; skip auto-loading default preset')
+    return
+  }
   
   // Auto-load default preset on mount if available
   if (defaultPreset.value) {
