@@ -759,6 +759,22 @@ async function selectStockForChart(stockData) {
     currentIndex.value = watchlist.value.length - 1
   }
   
+  // From strategy pool: reuse backtest result UI instead of K-line.
+  if (sourceTab === 'strategy-pool') {
+    activeTab.value = 'backtest'
+    await nextTick()
+    const event = new CustomEvent('open-backtest-from-strategy-pool', {
+      detail: {
+        symbol: stockSymbol,
+        signalDate,
+        strategy,
+        preset,
+      }
+    })
+    window.dispatchEvent(event)
+    return
+  }
+  
   activeTab.value = 'chart'
   
   // 保存来源信息到全局变量，供goBackToSource使用

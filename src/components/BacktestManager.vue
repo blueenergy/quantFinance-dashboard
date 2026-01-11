@@ -170,6 +170,7 @@
               :strategy-info="strategyMeta[newTask.strategy_key]"
               :presets="strategyTemplates[newTask.strategy_key] || []"
               :initial-params="newTask.strategy_params"
+              :preferred-preset="createPreferredPreset"
               :show-json-preview="false"
               @update:params="(params) => newTask.strategy_params = params"
             />
@@ -198,7 +199,8 @@
         </div>
         
         <div class="modal-body">
-          <div v-if="loadingResult" class="loading">加载结果中...</div>
+          <div v-if="loadingResult" class="loading">{{ loadingResultMessage }}</div>
+          <div v-else-if="resultError" class="error-message">{{ resultError }}</div>
           
           <div v-else-if="result" class="result-content">
             <!-- 关键指标雷达图 -->
@@ -293,6 +295,9 @@
 
             <!-- 操作区域 -->
             <div class="result-actions">
+              <button class="create-btn" @click="openCreateNewBacktestFromResult">
+                ➕ 创建新的回测
+              </button>
               <button class="deploy-btn" @click="deployToLive(selectedTask)">
                 🚀 部署到实盘
               </button>
@@ -364,11 +369,19 @@ export default {
     const creating = ref(false)
     const createError = ref('')
     const normalizedSymbol = ref('')
+    const createPreferredPreset = ref('')
+
+    // Used to seed params without being overwritten by default params watcher
+    const skipDefaultParamsOnce = ref(false)
     
     const showResultModal = ref(false)
     const selectedTask = ref(null)
     const result = ref(null)
     const loadingResult = ref(false)
+    const loadingResultMessage = ref('加载结果中...')
+    const resultError = ref('')
+
+    const poolOpenListenerAttached = ref(false)
 
     // Methods
     const normalizeSymbol = () => {
@@ -501,6 +514,10 @@ export default {
 
     // 监听策略选择变化，自动填充默认参数
     watch(() => newTask.value.strategy_key, (newStrategy) => {
+      if (skipDefaultParamsOnce.value) {
+        skipDefaultParamsOnce.value = false
+        return
+      }
       if (newStrategy && strategyMeta.value[newStrategy]) {
         // 从策略元数据获取默认参数
         const defaultParams = strategyMeta.value[newStrategy].default_params || {}
@@ -513,6 +530,61 @@ export default {
         newTask.value.strategy_params = {}
       }
     })
+
+    const parseAnyDate = (v) => {
+      if (!v) return null
+      if (v instanceof Date) return isNaN(v.getTime()) ? null : v
+      if (typeof v === 'string') {
+        const trimmed = v.trim()
+        if (!trimmed) return null
+        // Support YYYYMMDD
+        const dt1 = parseYmd(trimmed)
+        if (dt1) return dt1
+        // Support ISO-like date strings
+        const dt2 = new Date(trimmed)
+        return isNaN(dt2.getTime()) ? null : dt2
+      }
+      return null
+    }
+
+    const openCreateNewBacktestFromResult = () => {
+      createError.value = ''
+
+      const symbol = selectedTask.value?.symbol || result.value?.symbol || ''
+      const strategyKey = selectedTask.value?.strategy_key || result.value?.strategy_key || ''
+      const params = selectedTask.value?.strategy_params || result.value?.strategy_params || {}
+      const initialCash = selectedTask.value?.initial_cash || 1000000
+
+      createPreferredPreset.value = selectedTask.value?.preset || ''
+
+      // Prefer task dates; fallback to last equity point; else default to past year.
+      let endDt = parseAnyDate(selectedTask.value?.end_date)
+      if (!endDt && result.value?.equity_curve?.length) {
+        const last = result.value.equity_curve[result.value.equity_curve.length - 1]
+        endDt = parseAnyDate(last?.date)
+      }
+      if (!endDt) endDt = new Date()
+
+      let startDt = parseAnyDate(selectedTask.value?.start_date)
+      if (!startDt) {
+        startDt = new Date(endDt)
+        startDt.setFullYear(startDt.getFullYear() - 1)
+      }
+
+      skipDefaultParamsOnce.value = true
+      newTask.value = {
+        symbol: symbol,
+        strategy_key: strategyKey,
+        start_date: yyyymmdd(startDt),
+        end_date: yyyymmdd(endDt),
+        initial_cash: initialCash,
+        strategy_params: { ...params }
+      }
+
+      normalizeSymbol()
+      showResultModal.value = false
+      showCreateModal.value = true
+    }
 
     // 处理用户活动
     let activityTimer = null
@@ -611,6 +683,8 @@ export default {
       
       showResultModal.value = true
       loadingResult.value = true
+      loadingResultMessage.value = '加载结果中...'
+      resultError.value = ''
       result.value = null
       
       try {
@@ -621,7 +695,11 @@ export default {
           }
         })
         
-        if (!response.ok) throw new Error('Failed to load result')
+        if (!response.ok) {
+          const errBody = await response.json().catch(() => null)
+          const detail = errBody?.detail || 'Failed to load result'
+          throw new Error(detail)
+        }
         
         result.value = await response.json()
         
@@ -648,10 +726,90 @@ export default {
         console.log('=========================');
       } catch (error) {
         console.error('Error loading result:', error)
-        alert('加载结果失败')
-        showResultModal.value = false
+        // Keep modal open; caller may be polling for completion.
+        resultError.value = error.message || '加载结果失败'
       } finally {
         loadingResult.value = false
+      }
+    }
+
+    const normalizeSymbolStr = (sym) => {
+      if (!sym) return ''
+      let s = String(sym).trim().toUpperCase()
+      if (!s) return ''
+      if (s.includes('.')) return s
+      if (s.startsWith('6')) return s + '.SH'
+      if (s.startsWith('0') || s.startsWith('3')) return s + '.SZ'
+      if (s.startsWith('8') || s.startsWith('4')) return s + '.BJ'
+      return s
+    }
+
+    const yyyymmdd = (d) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}${month}${day}`
+    }
+
+    const parseYmd = (ymd) => {
+      if (!ymd || !/^\d{8}$/.test(ymd)) return null
+      const y = Number(ymd.slice(0, 4))
+      const m = Number(ymd.slice(4, 6)) - 1
+      const d = Number(ymd.slice(6, 8))
+      const dt = new Date(y, m, d)
+      return isNaN(dt.getTime()) ? null : dt
+    }
+
+    const openExistingBacktestFromStrategyPool = async ({ symbol, strategy, preset, signalDate }) => {
+      resultError.value = ''
+      showResultModal.value = true
+      loadingResult.value = true
+      loadingResultMessage.value = '加载回测结果...'
+      result.value = null
+
+      try {
+        const token = localStorage.getItem('access_token')
+        const normSymbol = normalizeSymbolStr(symbol)
+        if (!normSymbol) throw new Error('股票代码为空')
+        if (!strategy) throw new Error('策略为空')
+
+        // 1) Fetch existing backtest-style result from strategy pool trade history
+        let url = `${API_BASE}/strategy-pool/backtest-result?symbol=${encodeURIComponent(normSymbol)}&strategy=${encodeURIComponent(strategy)}`
+        if (preset) url += `&preset=${encodeURIComponent(preset)}`
+        if (signalDate) url += `&end_date=${encodeURIComponent(signalDate)}`
+
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+        if (!res.ok) {
+          const err = await res.json().catch(() => null)
+          throw new Error(err?.detail || '加载回测结果失败')
+        }
+        const body = await res.json()
+        result.value = body
+
+        // Prefer exact params_used from stored result; fallback to template params.
+        let strategyParams = body?.strategy_params
+        if (!strategyParams || Object.keys(strategyParams).length === 0) {
+          let paramsUrl = `${API_BASE}/strategy-pool/params?strategy=${encodeURIComponent(strategy)}`
+          if (preset) paramsUrl += `&preset=${encodeURIComponent(preset)}`
+          const paramsRes = await fetch(paramsUrl, { headers: { 'Authorization': `Bearer ${token}` } })
+          const paramsBody = await paramsRes.json().catch(() => null)
+          strategyParams = paramsBody?.params || {}
+        }
+
+        // Build a BacktestManager-like selectedTask object for deployToLive()/prefill
+        selectedTask.value = {
+          symbol: normSymbol,
+          strategy_key: strategy,
+          strategy_params: strategyParams,
+          initial_cash: 1000000,
+          status: 'completed',
+          preset: preset || ''
+        }
+        loadingResult.value = false
+      } catch (e) {
+        console.error('[BacktestManager] openExistingBacktestFromStrategyPool failed:', e)
+        loadingResult.value = false
+        resultError.value = e?.message || '加载回测结果失败'
       }
     }
 
@@ -783,7 +941,22 @@ export default {
     }
 
     // Lifecycle
+    const onOpenFromPool = (event) => {
+      const detail = event?.detail || {}
+      openExistingBacktestFromStrategyPool({
+        symbol: detail.symbol,
+        strategy: detail.strategy,
+        preset: detail.preset,
+        signalDate: detail.signalDate,
+      })
+    }
+
     onMounted(async () => {
+      if (!poolOpenListenerAttached.value) {
+        window.addEventListener('open-backtest-from-strategy-pool', onOpenFromPool)
+        poolOpenListenerAttached.value = true
+      }
+
       await Promise.all([
         loadStrategyMeta(),
         loadTasks()
@@ -792,6 +965,10 @@ export default {
 
     onUnmounted(() => {
       stopAutoRefresh()
+      if (poolOpenListenerAttached.value) {
+        window.removeEventListener('open-backtest-from-strategy-pool', onOpenFromPool)
+        poolOpenListenerAttached.value = false
+      }
     })
 
     return {
@@ -804,10 +981,13 @@ export default {
       creating,
       createError,
       normalizedSymbol,
+      createPreferredPreset,
       showResultModal,
       selectedTask,
       result,
       loadingResult,
+      loadingResultMessage,
+      resultError,
       isUserInteracting,
       strategyMeta,
       strategyTemplates,
@@ -827,7 +1007,8 @@ export default {
       formatCurrency,
       formatPercent,
       calculateTotalProfit,
-      deployToLive
+      deployToLive,
+      openCreateNewBacktestFromResult
     }
   }
 }
