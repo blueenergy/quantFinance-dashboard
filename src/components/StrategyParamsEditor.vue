@@ -165,7 +165,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:params'])
+const emit = defineEmits(['update:params', 'update:preset'])
 
 // Destructure props for template access
 const { strategyKey, strategyInfo, presets, initialParams, preferredPreset, showJsonPreview } = toRefs(props)
@@ -229,6 +229,7 @@ function loadPreset(preset) {
   selectedPresetIndex.value = presets.value.findIndex(p => p.preset === preset.preset)
   // Extract values from params_with_desc structure (params field removed in Plan B)
   localParams.value = extractParams(preset.params_with_desc || {})
+  emit('update:preset', preset?.preset || '')
   console.log('Preset loaded, selectedIndex:', selectedPresetIndex.value, 'params:', localParams.value)
 }
 
