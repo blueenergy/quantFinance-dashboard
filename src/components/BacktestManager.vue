@@ -46,8 +46,14 @@
         >
           <div class="task-header">
             <div class="task-title">
-              <span class="symbol">{{ task.symbol }}</span>
-              <span class="strategy">{{ task.strategy_key }}</span>
+              <div class="symbol-block">
+                <div class="symbol">{{ task.symbol }}</div>
+                <div v-if="task.stock_name" class="stock-name">{{ task.stock_name }}</div>
+              </div>
+              <span class="strategy">
+                {{ task.strategy_key }}
+                <template v-if="getTaskPresetName(task)"> ({{ getTaskPresetName(task) }})</template>
+              </span>
             </div>
             <span class="status-badge" :class="`status-${task.status}`">
               {{ getStatusText(task.status) }}
@@ -83,6 +89,13 @@
               @click="cancelTask(task.task_id)"
             >
               ❌ 取消
+            </button>
+            <button
+              v-if="['failed', 'cancelled'].includes(task.status)"
+              class="cancel-btn"
+              @click="resetTask(task.task_id)"
+            >
+              ♻️ 重试
             </button>
             <button 
               v-if="['completed', 'failed', 'cancelled'].includes(task.status)"
@@ -173,6 +186,7 @@
               :preferred-preset="createPreferredPreset"
               :show-json-preview="false"
               @update:params="(params) => newTask.strategy_params = params"
+              @update:preset="(p) => newTask.preset = p"
             />
           </div>
 
@@ -203,6 +217,25 @@
           <div v-else-if="resultError" class="error-message">{{ resultError }}</div>
           
           <div v-else-if="result" class="result-content">
+            <!-- 策略与参数（本次回测使用） -->
+            <div class="metrics-section">
+              <h4>🧠 策略与参数</h4>
+              <div class="task-details">
+                <div class="detail-item">
+                  <span class="label">策略:</span>
+                  <span class="value">{{ displayStrategyKey || '-' }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="label">回测区间:</span>
+                  <span class="value">{{ displayBacktestRange || '-' }}</span>
+                </div>
+              </div>
+
+              <div class="params-block">
+                <pre class="params-pre">{{ displayStrategyParamsJson }}</pre>
+              </div>
+            </div>
+
             <!-- 关键指标雷达图 -->
             <div class="metrics-section">
               <MetricsRadarChart :metrics="result.metrics" />
@@ -363,6 +396,7 @@ export default {
       strategy_key: '',
       ...getDefaultDates(),
       initial_cash: 1000000,
+      preset: '',
       strategy_params: {}
     })
     const strategyParamsText = ref('{}')
@@ -380,6 +414,92 @@ export default {
     const loadingResult = ref(false)
     const loadingResultMessage = ref('加载结果中...')
     const resultError = ref('')
+
+    const displayStrategyKey = computed(() => {
+      return (
+        selectedTask.value?.strategy_key ||
+        result.value?.strategy_key ||
+        result.value?.strategy ||
+        ''
+      )
+    })
+
+    const displayStrategyParams = computed(() => {
+      const params = selectedTask.value?.strategy_params ?? result.value?.strategy_params
+      if (!params || typeof params !== 'object' || Array.isArray(params)) return {}
+      return params
+    })
+
+    const displayStrategyParamsJson = computed(() => {
+      const params = displayStrategyParams.value
+      if (!params || Object.keys(params).length === 0) return '（无参数）'
+      try {
+        return JSON.stringify(params, null, 2)
+      } catch (e) {
+        return String(params)
+      }
+    })
+
+    const extractParamsFromWithDesc = (paramsWithDesc) => {
+      const out = {}
+      if (!paramsWithDesc || typeof paramsWithDesc !== 'object') return out
+      for (const [key, cfg] of Object.entries(paramsWithDesc)) {
+        if (cfg && typeof cfg === 'object' && 'value' in cfg) out[key] = cfg.value
+      }
+      return out
+    }
+
+    const shallowEqualObject = (a, b) => {
+      if (a === b) return true
+      if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false
+      const aKeys = Object.keys(a)
+      const bKeys = Object.keys(b)
+      if (aKeys.length !== bKeys.length) return false
+      for (const k of aKeys) {
+        if (a[k] !== b[k]) return false
+      }
+      return true
+    }
+
+    const getTaskPresetName = (task) => {
+      if (!task) return ''
+      if (task.preset) return task.preset
+
+      const strategyKey = task.strategy_key
+      const presets = strategyTemplates.value?.[strategyKey]
+      const taskParams = task.strategy_params
+      if (!strategyKey || !Array.isArray(presets) || !taskParams || typeof taskParams !== 'object') return ''
+
+      for (const p of presets) {
+        const presetParams = extractParamsFromWithDesc(p?.params_with_desc)
+        if (shallowEqualObject(taskParams, presetParams)) return p?.preset || ''
+      }
+      return ''
+    }
+
+    const displayBacktestStartYmd = computed(() => {
+      const v =
+        selectedTask.value?.start_date ||
+        result.value?.start_date ||
+        result.value?.equity_curve?.[0]?.date ||
+        ''
+      return typeof v === 'string' ? v : ''
+    })
+
+    const displayBacktestEndYmd = computed(() => {
+      const curve = result.value?.equity_curve
+      const lastCurveDate = Array.isArray(curve) && curve.length > 0 ? curve[curve.length - 1]?.date : ''
+      const v = selectedTask.value?.end_date || result.value?.end_date || lastCurveDate || ''
+      return typeof v === 'string' ? v : ''
+    })
+
+    const displayBacktestRange = computed(() => {
+      const start = displayBacktestStartYmd.value
+      const end = displayBacktestEndYmd.value
+      if (!start && !end) return ''
+      if (start && end) return `${formatDate(start)} ~ ${formatDate(end)}`
+      return start ? formatDate(start) : formatDate(end)
+    })
 
     const poolOpenListenerAttached = ref(false)
 
@@ -557,13 +677,8 @@ export default {
 
       createPreferredPreset.value = selectedTask.value?.preset || ''
 
-      // Prefer task dates; fallback to last equity point; else default to past year.
-      let endDt = parseAnyDate(selectedTask.value?.end_date)
-      if (!endDt && result.value?.equity_curve?.length) {
-        const last = result.value.equity_curve[result.value.equity_curve.length - 1]
-        endDt = parseAnyDate(last?.date)
-      }
-      if (!endDt) endDt = new Date()
+      // Always default end date to today (do not copy from prior run)
+      const endDt = new Date()
 
       let startDt = parseAnyDate(selectedTask.value?.start_date)
       if (!startDt) {
@@ -578,6 +693,7 @@ export default {
         start_date: yyyymmdd(startDt),
         end_date: yyyymmdd(endDt),
         initial_cash: initialCash,
+        preset: createPreferredPreset.value || selectedTask.value?.preset || '',
         strategy_params: { ...params }
       }
 
@@ -664,6 +780,7 @@ export default {
         start_date: '',
         end_date: '',
         initial_cash: 1000000,
+        preset: '',
         strategy_params: {}
       }
       strategyParamsText.value = '{}'
@@ -805,6 +922,16 @@ export default {
           status: 'completed',
           preset: preset || ''
         }
+
+        // Populate date range for display/prefill, using returned result when possible.
+        if (Array.isArray(body?.equity_curve) && body.equity_curve.length > 0) {
+          const start = body.equity_curve[0]?.date
+          const end = body.equity_curve[body.equity_curve.length - 1]?.date
+          if (start) selectedTask.value.start_date = start
+          if (end) selectedTask.value.end_date = end
+        } else if (signalDate) {
+          selectedTask.value.end_date = signalDate
+        }
         loadingResult.value = false
       } catch (e) {
         console.error('[BacktestManager] openExistingBacktestFromStrategyPool failed:', e)
@@ -831,6 +958,31 @@ export default {
       } catch (error) {
         console.error('Error cancelling task:', error)
         alert('取消任务失败')
+      }
+    }
+
+    const resetTask = async (taskId) => {
+      if (!confirm('确定要将该任务重置为等待状态再试一次吗？')) return
+
+      try {
+        const token = localStorage.getItem('access_token')
+        const response = await fetch(`${API_BASE}/backtest/tasks/${taskId}/reset`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (!response.ok) {
+          const errBody = await response.json().catch(() => null)
+          const detail = errBody?.detail || 'Failed to reset task'
+          throw new Error(detail)
+        }
+
+        await loadTasks()
+      } catch (error) {
+        console.error('Error resetting task:', error)
+        alert(`重置任务失败：${error.message || error}`)
       }
     }
 
@@ -985,6 +1137,10 @@ export default {
       showResultModal,
       selectedTask,
       result,
+      displayStrategyKey,
+      displayStrategyParamsJson,
+      displayBacktestRange,
+      getTaskPresetName,
       loadingResult,
       loadingResultMessage,
       resultError,
@@ -999,6 +1155,7 @@ export default {
       selectTask,
       viewResult,
       cancelTask,
+      resetTask,
       deleteTask,
       handleUserActivity,
       getStatusText,
@@ -1131,16 +1288,28 @@ export default {
   align-items: center;
 }
 
+.symbol-block {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.stock-name {
+  font-size: 14px;
+  font-weight: normal;
+  color: #606266;
+}
+
 .symbol {
-  font-size: 18px;
-  font-weight: bold;
+  font-size: 12px;
+  font-weight: 600;
   color: #303133;
 }
 
 .strategy {
-  font-size: 14px;
-  color: #606266;
-  background: #f4f4f5;
+  font-size: 12px;
+  font-weight: 700;
+  color: #303133;
   padding: 2px 8px;
   border-radius: 4px;
 }
