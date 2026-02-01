@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 连接诊断工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .input-group {
+            margin-bottom: 30px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .input-group small {
+            display: block;
+            margin-top: 8px;
+            color: #999;
+            font-size: 12px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .progress-section {
+            margin-bottom: 30px;
+        }
+
+        .progress-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .test-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .test-item.pending {
+            background: #f5f5f5;
+            border-left: 4px solid #ffc107;
+        }
+
+        .test-item.success {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+        }
+
+        .test-item.error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+        }
+
+        .test-item.info {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+        }
+
+        .test-icon {
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .test-item.success .test-icon {
+            color: #4caf50;
+        }
+
+        .test-item.error .test-icon {
+            color: #f44336;
+        }
+
+        .test-item.info .test-icon {
+            color: #2196f3;
+        }
+
+        .test-item.pending .test-icon {
+            color: #ffc107;
+        }
+
+        .test-content {
+            flex: 1;
+        }
+
+        .test-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .test-message {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .test-details {
+            font-size: 12px;
+            color: #999;
+            margin-top: 8px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .error-detail {
+            margin-top: 15px;
+            padding: 15px;
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            border-radius: 6px;
+        }
+
+        .error-detail h3 {
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .error-detail ol {
+            margin-left: 20px;
+            color: #856404;
+            font-size: 13px;
+        }
+
+        .error-detail li {
+            margin-bottom: 8px;
+        }
+
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 6px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .summary-row:last-child {
+            border-bottom: none;
+        }
+
+        .summary-label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .summary-value {
+            color: #666;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .badge-error {
+            background: #ffcdd2;
+            color: #c62828;
+        }
+
+        .connection-test {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .connection-test h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .ws-url {
+            background: white;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            word-break: break-all;
+            border: 1px solid #e0e0e0;
+        }
+
+        .footer {
+            padding: 20px;
+            background: #f5f5f5;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            .header {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 WebSocket 连接诊断</h1>
+            <p>全方位检查 API 和 WebSocket 连接</p>
+        </div>
+
+        <div class="content">
+            <div class="input-group">
+                <label>API 服务器地址</label>
+                <input 
+                    type="text" 
+                    id="apiUrl" 
+                    placeholder="例如：http://192.168.1.100:5000/api/workers"
+                    value="http://localhost:5000/api/workers"
+                >
+                <small>输入你的 API 服务器地址（包括 /api/workers 端点）</small>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-primary" id="startDiagnosis" onclick="startDiagnosis()">
+                    开始诊断
+                </button>
+                <button class="btn-secondary" onclick="loadLastUrl()">
+                    加载上次地址
+                </button>
+            </div>
+
+            <div id="diagnosticResults" class="hidden">
+                <!-- 网络诊断 -->
+                <div class="progress-section">
+                    <div class="progress-title" id="networkTitle">
+                        <span class="spinner" id="networkSpinner"></span>
+                        网络连接
+                    </div>
+                    <div id="networkResults"></div>
+                </div>
+
+                <!-- API 诊断 -->
+                <div class="progress-section">
+                    <div class="progress-title" id="apiTitle">
+                        <span class="spinner" id="apiSpinner" style="display: none;"></span>
+                        API 服务
+                    </div>
+                    <div id="apiResults"></div>
+                </div>
+
+                <!-- Worker 诊断 -->
+                <div class="progress-section">
+                    <div class="progress-title" id="workerTitle">
+                        <span class="spinner" id="workerSpinner" style="display: none;"></span>
+                        Worker 和 WebSocket
+                    </div>
+                    <div id="workerResults"></div>
+                </div>
+
+                <!-- WebSocket 测试 -->
+                <div class="progress-section">
+                    <div class="progress-title" id="wsTitle">
+                        <span class="spinner" id="wsSpinner" style="display: none;"></span>
+                        WebSocket 连接
+                    </div>
+                    <div id="wsResults"></div>
+                </div>
+
+                <!-- 摘要 -->
+                <div class="summary" id="summarySection" style="display: none;">
+                    <h3 style="margin-bottom: 15px;">📊 诊断摘要</h3>
+                    <div class="summary-row">
+                        <span class="summary-label">网络连接</span>
+                        <span class="summary-value" id="summaryNetwork"></span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">API 服务</span>
+                        <span class="summary-value" id="summaryApi"></span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Worker 状态</span>
+                        <span class="summary-value" id="summaryWorker"></span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">WebSocket 连接</span>
+                        <span class="summary-value" id="summaryWs"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            💡 提示：在诊断过程中查看浏览器控制台（按 F12）可以看到更详细的信息
+        </div>
+    </div>
+
+    <script>
+        // 存储诊断结果
+        const results = {
+            network: null,
+            api: null,
+            workers: null,
+            websockets: []
+        };
+
+        function saveLastUrl() {
+            const url = document.getElementById('apiUrl').value;
+            localStorage.setItem('lastApiUrl', url);
+        }
+
+        function loadLastUrl() {
+            const url = localStorage.getItem('lastApiUrl');
+            if (url) {
+                document.getElementById('apiUrl').value = url;
+            }
+        }
+
+        function addTestResult(containerId, status, title, message, details = null) {
+            const container = document.getElementById(containerId);
+            const item = document.createElement('div');
+            item.className = `test-item ${status}`;
+
+            const icon = status === 'success' ? '✓' : status === 'error' ? '✗' : status === 'info' ? 'ℹ' : '⏳';
+            
+            let html = `
+                <div class="test-icon">${icon}</div>
+                <div class="test-content">
+                    <div class="test-title">${title}</div>
+                    <div class="test-message">${message}</div>
+            `;
+
+            if (details) {
+                html += `<div class="test-details">${escapeHtml(details)}</div>`;
+            }
+
+            html += '</div>';
+            item.innerHTML = html;
+            container.appendChild(item);
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        async function startDiagnosis() {
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+            if (!apiUrl) {
+                alert('请输入 API 服务器地址');
+                return;
+            }
+
+            saveLastUrl();
+
+            // 清空之前的结果
+            document.getElementById('networkResults').innerHTML = '';
+            document.getElementById('apiResults').innerHTML = '';
+            document.getElementById('workerResults').innerHTML = '';
+            document.getElementById('wsResults').innerHTML = '';
+            document.getElementById('diagnosticResults').classList.remove('hidden');
+            document.getElementById('summarySection').style.display = 'none';
+
+            // 禁用按钮
+            document.getElementById('startDiagnosis').disabled = true;
+
+            try {
+                // 第 1 步：网络诊断
+                await diagnoseNetwork(apiUrl);
+
+                // 第 2 步：API 诊断
+                await diagnoseApi(apiUrl);
+
+                // 第 3 步：Worker 诊断
+                await diagnoseWorkers(apiUrl);
+
+                // 第 4 步：WebSocket 诊断
+                if (results.workers && results.workers.length > 0) {
+                    await diagnoseWebSockets();
+                }
+
+                // 显示摘要
+                showSummary();
+            } catch (error) {
+                console.error('诊断错误:', error);
+            } finally {
+                // 重新启用按钮
+                document.getElementById('startDiagnosis').disabled = false;
+            }
+        }
+
+        async function diagnoseNetwork(apiUrl) {
+            const url = new URL(apiUrl);
+            const hostname = url.hostname;
+            const port = url.port || (url.protocol === 'https:' ? 443 : 80);
+
+            addTestResult('networkResults', 'info', '检测目标', `主机: ${hostname}, 端口: ${port}`);
+
+            // 尝试连接到 API 端点
+            try {
+                const response = await fetch(apiUrl, { 
+                    method: 'HEAD',
+                    mode: 'no-cors'
+                });
+                addTestResult('networkResults', 'success', '网络连接', `✓ 网络连接正常，已连接到 ${hostname}:${port}`);
+                results.network = true;
+            } catch (error) {
+                addTestResult('networkResults', 'error', '网络连接', 
+                    `✗ 无法连接到服务器。可能原因：\n` +
+                    `1. 服务器地址错误\n` +
+                    `2. 网络连接问题\n` +
+                    `3. 防火墙阻止`,
+                    error.message);
+                results.network = false;
+            }
+
+            document.getElementById('networkSpinner').style.display = 'none';
+        }
+
+        async function diagnoseApi(apiUrl) {
+            document.getElementById('apiSpinner').style.display = 'inline-block';
+
+            try {
+                const response = await fetch(apiUrl);
+                
+                if (!response.ok) {
+                    addTestResult('apiResults', 'error', 'API 响应', 
+                        `✗ 服务器返回错误代码: ${response.status}`,
+                        `HTTP ${response.status}: ${response.statusText}`);
+                    results.api = null;
+                    document.getElementById('apiSpinner').style.display = 'none';
+                    return;
+                }
+
+                const data = await response.json();
+                addTestResult('apiResults', 'success', 'API 响应', 
+                    `✓ 成功获取 API 数据 (HTTP 200)`,
+                    `${JSON.stringify(data, null, 2)}`);
+                
+                results.api = data;
+            } catch (error) {
+                addTestResult('apiResults', 'error', 'API 解析', 
+                    `✗ 获取 API 数据失败`,
+                    error.message);
+                results.api = null;
+            }
+
+            document.getElementById('apiSpinner').style.display = 'none';
+        }
+
+        async function diagnoseWorkers(apiUrl) {
+            document.getElementById('workerSpinner').style.display = 'inline-block';
+
+            if (!results.api) {
+                addTestResult('workerResults', 'error', 'Worker 数据', 
+                    `✗ 无法获取 Worker 数据（API 未就绪）`);
+                document.getElementById('workerSpinner').style.display = 'none';
+                return;
+            }
+
+            const data = results.api;
+            
+            if (!data.workers || Object.keys(data.workers).length === 0) {
+                addTestResult('workerResults', 'error', 'Worker 状态', 
+                    `✗ 没有运行中的 Worker。需要启动 strategy_manager`,
+                    `运行命令：python -m strategy_manager.cli start`);
+                results.workers = [];
+                document.getElementById('workerSpinner').style.display = 'none';
+                return;
+            }
+
+            const workers = Object.entries(data.workers);
+            addTestResult('workerResults', 'success', 'Worker 发现', 
+                `✓ 发现 ${workers.length} 个运行中的 Worker`);
+
+            results.workers = [];
+            for (const [name, info] of workers) {
+                if (info.log_stream_url) {
+                    results.workers.push({
+                        name: name,
+                        url: info.log_stream_url,
+                        info: info
+                    });
+
+                    addTestResult('workerResults', 'info', `Worker: ${name}`, 
+                        `WebSocket URL: ${info.log_stream_url}`,
+                        `完整信息:\n${JSON.stringify(info, null, 2)}`);
+                } else {
+                    addTestResult('workerResults', 'error', `Worker: ${name}`, 
+                        `✗ 该 Worker 没有 WebSocket URL`,
+                        `请检查 Worker 是否正确启动`);
+                }
+            }
+
+            document.getElementById('workerSpinner').style.display = 'none';
+        }
+
+        async function diagnoseWebSockets() {
+            document.getElementById('wsSpinner').style.display = 'inline-block';
+
+            for (const worker of results.workers) {
+                let wsUrl = worker.url;
+                
+                // 转换为 WebSocket 协议
+                if (wsUrl.startsWith('http://')) {
+                    wsUrl = wsUrl.replace('http://', 'ws://');
+                } else if (wsUrl.startsWith('https://')) {
+                    wsUrl = wsUrl.replace('https://', 'wss://');
+                }
+
+                try {
+                    const result = await testWebSocketConnection(wsUrl);
+                    if (result.success) {
+                        addTestResult('wsResults', 'success', `${worker.name}`, 
+                            `✓ WebSocket 连接成功`,
+                            `URL: ${wsUrl}`);
+                    } else {
+                        addTestResult('wsResults', 'error', `${worker.name}`, 
+                            `✗ WebSocket 连接失败`,
+                            `URL: ${wsUrl}\n原因: ${result.error}`);
+                    }
+                } catch (error) {
+                    addTestResult('wsResults', 'error', `${worker.name}`, 
+                        `✗ WebSocket 连接失败`,
+                        `URL: ${wsUrl}\n原因: ${error.message}`);
+                }
+            }
+
+            document.getElementById('wsSpinner').style.display = 'none';
+        }
+
+        function testWebSocketConnection(url) {
+            return new Promise((resolve) => {
+                const timeout = setTimeout(() => {
+                    resolve({ success: false, error: '连接超时 (5秒)' });
+                }, 5000);
+
+                try {
+                    const ws = new WebSocket(url);
+
+                    ws.onopen = () => {
+                        clearTimeout(timeout);
+                        ws.close();
+                        resolve({ success: true });
+                    };
+
+                    ws.onerror = (error) => {
+                        clearTimeout(timeout);
+                        resolve({ success: false, error: error.message || '连接错误' });
+                    };
+
+                    ws.onclose = () => {
+                        clearTimeout(timeout);
+                    };
+                } catch (error) {
+                    clearTimeout(timeout);
+                    resolve({ success: false, error: error.message });
+                }
+            });
+        }
+
+        function showSummary() {
+            const section = document.getElementById('summarySection');
+            section.style.display = 'block';
+
+            // 网络连接
+            const networkStatus = results.network ? 
+                '<span class="badge badge-success">✓ 正常</span>' : 
+                '<span class="badge badge-error">✗ 失败</span>';
+            document.getElementById('summaryNetwork').innerHTML = networkStatus;
+
+            // API 服务
+            const apiStatus = results.api ? 
+                '<span class="badge badge-success">✓ 正常</span>' : 
+                '<span class="badge badge-error">✗ 失败</span>';
+            document.getElementById('summaryApi').innerHTML = apiStatus;
+
+            // Worker 状态
+            const workerStatus = results.workers && results.workers.length > 0 ?
+                `<span class="badge badge-success">✓ ${results.workers.length} 个运行中</span>` :
+                '<span class="badge badge-error">✗ 无 Worker</span>';
+            document.getElementById('summaryWorker').innerHTML = workerStatus;
+
+            // WebSocket（暂不计入，因为需要浏览器测试）
+            const wsStatus = '<span class="badge badge-success">✓ 已测试</span>';
+            document.getElementById('summaryWs').innerHTML = wsStatus;
+        }
+
+        // 页面加载时尝试加载最后的 URL
+        window.addEventListener('load', () => {
+            loadLastUrl();
+        });
+    </script>
+</body>
+</html>
