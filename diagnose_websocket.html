@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 连接诊断工具</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .input-section {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-diagnose {
+            background: #667eea;
+            color: white;
+        }
+        .btn-diagnose:hover {
+            background: #5568d3;
+        }
+        .btn-clear {
+            background: #f0f0f0;
+            color: #333;
+        }
+        .btn-clear:hover {
+            background: #e0e0e0;
+        }
+        .diagnostics {
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .check-item {
+            padding: 15px;
+            margin-bottom: 12px;
+            border-left: 4px solid #ddd;
+            border-radius: 4px;
+            background: white;
+        }
+        .check-item.success {
+            border-left-color: #4caf50;
+            background: #f1f8e9;
+        }
+        .check-item.error {
+            border-left-color: #f44336;
+            background: #ffebee;
+        }
+        .check-item.warning {
+            border-left-color: #ff9800;
+            background: #fff3e0;
+        }
+        .check-item.info {
+            border-left-color: #2196f3;
+            background: #e3f2fd;
+        }
+        .check-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .check-status {
+            font-size: 12px;
+            color: #666;
+        }
+        .check-item.success .check-status { color: #2e7d32; }
+        .check-item.error .check-status { color: #c62828; }
+        .check-item.warning .check-status { color: #e65100; }
+        .check-item.info .check-status { color: #1565c0; }
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 12px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            margin-top: 8px;
+        }
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #ccc;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 WebSocket 连接诊断工具</h1>
+        
+        <div class="input-section">
+            <div class="form-group">
+                <label for="apiUrl">API 服务器地址</label>
+                <input type="text" id="apiUrl" placeholder="http://192.168.1.100:5000/api/workers"
+                       value="http://localhost:5000/api/workers">
+            </div>
+            <div class="button-group">
+                <button class="btn-diagnose" onclick="runDiagnostics()">🚀 开始诊断</button>
+                <button class="btn-clear" onclick="clearResults()">🗑️ 清除结果</button>
+            </div>
+        </div>
+
+        <div id="diagnostics" class="diagnostics" style="display: none;">
+            <h2 style="margin-bottom: 20px; color: #333;">诊断结果</h2>
+            <div id="results"></div>
+        </div>
+    </div>
+
+    <script>
+        async function runDiagnostics() {
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+            
+            if (!apiUrl) {
+                alert('请输入 API 服务器地址');
+                return;
+            }
+
+            const diagnostics = document.getElementById('diagnostics');
+            const results = document.getElementById('results');
+            
+            diagnostics.style.display = 'block';
+            results.innerHTML = '';
+
+            // 检查 1: API 可访问性
+            await checkApiAccessibility(apiUrl, results);
+
+            // 检查 2: API 返回格式
+            await checkApiResponse(apiUrl, results);
+
+            // 检查 3: WebSocket URLs
+            await checkWebSocketUrls(apiUrl, results);
+
+            // 检查 4: 浏览器支持
+            checkBrowserSupport(results);
+
+            // 检查 5: 网络配置
+            checkNetworkConfig(results);
+        }
+
+        async function checkApiAccessibility(apiUrl, results) {
+            addResult(results, 'info', '检查 API 可访问性', '正在连接...');
+            
+            try {
+                const response = await fetch(apiUrl, { method: 'HEAD' });
+                const statusOk = response.ok || response.status === 405; // 405 说明服务器在线
+                
+                if (statusOk || response.status < 500) {
+                    updateResult(results, 0, 'success', '✅ API 服务器可访问',
+                        `HTTP ${response.status} - 服务器响应正常`);
+                } else {
+                    updateResult(results, 0, 'error', '❌ API 服务器无响应',
+                        `HTTP ${response.status} - 服务器返回错误`);
+                }
+            } catch (error) {
+                updateResult(results, 0, 'error', '❌ 无法连接到 API 服务器',
+                    `错误: ${error.message}<br><br>
+                     <strong>可能原因：</strong><br>
+                     • 服务器地址错误<br>
+                     • 防火墙阻止<br>
+                     • 网络不通<br><br>
+                     <strong>解决步骤：</strong><br>
+                     1. 检查服务器 IP 是否正确<br>
+                     2. 尝试 ping 服务器: <code>ping 192.168.1.100</code><br>
+                     3. 检查防火墙: <code>sudo firewall-cmd --add-port=5000/tcp --permanent</code>`);
+            }
+        }
+
+        async function checkApiResponse(apiUrl, results) {
+            addResult(results, 'info', '检查 API 响应格式', '正在获取...');
+            
+            try {
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+                
+                if (data.workers && typeof data.workers === 'object') {
+                    const workerCount = Object.keys(data.workers).length;
+                    updateResult(results, 1, 'success', '✅ API 响应格式正确',
+                        `找到 ${workerCount} 个 Worker<br>
+                         <div class="code-block">${JSON.stringify(data, null, 2).substring(0, 300)}...</div>`);
+                } else {
+                    updateResult(results, 1, 'warning', '⚠️ API 响应可能有问题',
+                        `收到的数据: <div class="code-block">${JSON.stringify(data, null, 2).substring(0, 200)}</div>`);
+                }
+            } catch (error) {
+                updateResult(results, 1, 'error', '❌ 无法解析 API 响应',
+                    `错误: ${error.message}`);
+            }
+        }
+
+        async function checkWebSocketUrls(apiUrl, results) {
+            addResult(results, 'info', '检查 WebSocket URLs', '正在获取...');
+            
+            try {
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+                const workers = data.workers || {};
+                
+                let wsUrls = [];
+                let wsCount = 0;
+                
+                for (const [key, worker] of Object.entries(workers)) {
+                    if (worker.log_stream_url) {
+                        wsUrls.push(worker.log_stream_url);
+                        wsCount++;
+                    }
+                }
+                
+                if (wsCount > 0) {
+                    let urlsHtml = wsUrls.slice(0, 3).map(url => 
+                        `<div class="code-block">${url}</div>`
+                    ).join('');
+                    
+                    if (wsUrls.length > 3) {
+                        urlsHtml += `<div style="color: #666; font-size: 12px; margin-top: 5px;">+ ${wsUrls.length - 3} 更多...</div>`;
+                    }
+                    
+                    updateResult(results, 2, 'success', `✅ 找到 ${wsCount} 个 WebSocket URLs`,
+                        `<strong>示例：</strong>${urlsHtml}`);
+                } else {
+                    updateResult(results, 2, 'warning', '⚠️ 未找到 WebSocket URLs',
+                        '可能原因：Worker 还未启动<br>请确保 quant-strategy-manager 正在运行');
+                }
+            } catch (error) {
+                updateResult(results, 2, 'error', '❌ 无法获取 WebSocket URLs',
+                    `错误: ${error.message}`);
+            }
+        }
+
+        function checkBrowserSupport(results) {
+            if (window.WebSocket) {
+                addResult(results, 'success', '✅ 浏览器支持 WebSocket',
+                    '此浏览器完全支持 WebSocket 协议');
+            } else {
+                addResult(results, 'error', '❌ 浏览器不支持 WebSocket',
+                    '请使用现代浏览器（Chrome, Firefox, Safari 等）');
+            }
+        }
+
+        function checkNetworkConfig(results) {
+            const protocol = window.location.protocol;
+            const isHttps = protocol === 'https:';
+            
+            if (isHttps) {
+                addResult(results, 'warning', '⚠️ 页面使用 HTTPS',
+                    'WebSocket 应该使用 wss:// 而不是 ws://<br>' +
+                    '如果连接失败，检查 API 服务器是否支持 wss://');
+            } else {
+                addResult(results, 'success', '✅ 页面使用 HTTP',
+                    'WebSocket 可以安全使用 ws://');
+            }
+        }
+
+        function addResult(results, status, title, message) {
+            const div = document.createElement('div');
+            div.className = `check-item ${status}`;
+            div.innerHTML = `
+                <div class="check-title">${title}</div>
+                <div class="check-status">${message}</div>
+            `;
+            results.appendChild(div);
+        }
+
+        function updateResult(results, index, status, title, message) {
+            const items = results.querySelectorAll('.check-item');
+            if (items[index]) {
+                items[index].className = `check-item ${status}`;
+                items[index].innerHTML = `
+                    <div class="check-title">${title}</div>
+                    <div class="check-status">${message}</div>
+                `;
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('diagnostics').style.display = 'none';
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // 页面加载时保存 URL
+        window.addEventListener('DOMContentLoaded', () => {
+            const apiUrl = localStorage.getItem('lastApiUrl');
+            if (apiUrl) {
+                document.getElementById('apiUrl').value = apiUrl;
+            }
+        });
+
+        // 修改 URL 时保存
+        document.getElementById('apiUrl').addEventListener('change', (e) => {
+            localStorage.setItem('lastApiUrl', e.target.value);
+        });
+    </script>
+</body>
+</html>

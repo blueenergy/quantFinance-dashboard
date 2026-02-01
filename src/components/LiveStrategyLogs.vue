@@ -1,7 +1,7 @@
 <template>
   <div class="live-logs-container">
     <div class="header">
-      <h2>🚀 Live Strategy Execution</h2>
+      <h2>🚀 Live Strategy Logs</h2>
       <div class="symbol-selector">
         <label for="symbol-input">Select Symbol:</label>
         <select v-model="selectedSymbol" @change="switchSymbol" id="symbol-input">
@@ -14,54 +14,24 @@
     </div>
 
     <div v-if="selectedSymbol" class="logs-section">
-      <!-- Metrics Cards -->
-      <div class="metrics-grid">
-        <div class="metric-card">
-          <div class="metric-label">Call Count</div>
-          <div class="metric-value">{{ currentLog.call_count || 0 }}</div>
-          <div class="metric-unit">executions</div>
-        </div>
-
-        <div class="metric-card">
-          <div class="metric-label">Data Bars</div>
-          <div class="metric-value">{{ currentLog.data_bars || 0 }}</div>
-          <div class="metric-unit">bars</div>
-        </div>
-
-        <div class="metric-card">
-          <div class="metric-label">Latest Bar</div>
-          <div class="metric-value">{{ formatTime(currentLog.latest_bar) }}</div>
-          <div class="metric-unit">{{ currentLog.mode === 'live' ? 'LIVE 🟢' : 'BACKTEST' }}</div>
-        </div>
-
-        <div class="metric-card">
-          <div class="metric-label">Current Price</div>
-          <div class="metric-value">¥{{ formatPrice(currentLog.price) }}</div>
-          <div class="metric-unit">{{ currentLog.strategy }}</div>
-        </div>
-      </div>
-
       <!-- Live Log Stream -->
       <div class="log-stream-section">
         <div class="stream-header">
-          <h3>📊 Live Execution Stream</h3>
+          <h3>📊 Live Log Stream</h3>
           <span class="update-indicator" :class="{ 'updating': isUpdating }">
-            {{ isUpdating ? '🔄 Updating...' : '✓ Connected' }}
+            {{ isUpdating ? '🔄 Receiving...' : '✓ Connected' }}
           </span>
         </div>
 
-        <div class="log-stream">
+        <div class="log-stream" ref="logStream">
           <div
             v-for="(entry, index) in logHistory"
             :key="`${entry.timestamp}-${index}`"
             class="log-entry"
-            :class="{ 'latest': index === 0 }"
           >
             <span class="entry-time">{{ formatDateTime(entry.timestamp) }}</span>
-            <span class="entry-calls">{{ entry.call_count }}x</span>
-            <span class="entry-bars">{{ entry.data_bars }} bars</span>
-            <span class="entry-price">¥{{ formatPrice(entry.price) }}</span>
-            <span class="entry-bar-time">{{ formatTime(entry.latest_bar) }}</span>
+            <span class="entry-level" :class="`level-${entry.level}`">{{ entry.level }}</span>
+            <span class="entry-message">{{ entry.message }}</span>
           </div>
 
           <div v-if="logHistory.length === 0" class="empty-state">
@@ -70,76 +40,8 @@
         </div>
       </div>
 
-      <!-- Statistics -->
-      <div class="stats-section" v-if="stats">
-        <h3>📈 Statistics</h3>
-        <div class="stats-grid">
-          <div class="stat-item">
-            <span class="stat-label">Total Logs:</span>
-            <span class="stat-value">{{ stats.total_logs || 0 }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Avg Calls:</span>
-            <span class="stat-value">{{ (stats.avg_call_count || 0).toFixed(0) }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Max Calls:</span>
-            <span class="stat-value">{{ stats.max_call_count || 0 }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Avg Bars:</span>
-            <span class="stat-value">{{ (stats.avg_data_bars || 0).toFixed(0) }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Strategy Messages/Alerts Section (NEW) -->
-      <div class="messages-section">
-        <div class="messages-header">
-          <h3>💬 Strategy Messages & Analysis</h3>
-          <div class="message-filters">
-            <button
-              v-for="filter in messageFilters"
-              :key="filter"
-              :class="['filter-btn', { active: selectedMessageFilter === filter }]"
-              @click="selectedMessageFilter = filter"
-            >
-              {{ filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1) }}
-            </button>
-          </div>
-        </div>
-
-        <div class="messages-stream">
-          <div
-            v-for="(msg, index) in filteredMessages"
-            :key="`${msg.timestamp}-${index}`"
-            :class="['message-item', `msg-${msg.message_type}`]"
-          >
-            <div class="message-header">
-              <span class="msg-type-badge" :class="`badge-${msg.message_type}`">
-                {{ getMessageIcon(msg.message_type) }} {{ msg.message_type }}
-              </span>
-              <span class="msg-time">{{ formatDateTime(msg.timestamp) }}</span>
-              <span class="msg-bar">Bar #{{ msg.bar_index }}</span>
-            </div>
-            <div class="message-content">
-              <p class="message-text">{{ msg.message }}</p>
-              <div v-if="msg.data && Object.keys(msg.data).length > 0" class="message-data">
-                <span v-for="(val, key) in msg.data" :key="key" class="data-item">
-                  <strong>{{ key }}:</strong> {{ formatValue(val) }}
-                </span>
-              </div>
-            </div>
-            <div class="message-footer">
-              <span class="msg-price">Price: ¥{{ formatPrice(msg.current_price) }}</span>
-            </div>
-          </div>
-
-          <div v-if="filteredMessages.length === 0" class="empty-messages">
-            No messages yet for this symbol 🤐
-          </div>
-        </div>
-      </div>
+      <!-- Other sections can be kept or removed as needed -->
+      
     </div>
 
     <div v-else class="empty-placeholder">
@@ -174,7 +76,17 @@ export default {
       maxReconnectAttempts: 5,
       pollInterval: null,
       messagesRefreshInterval: null,
-      API_BASE: import.meta.env.VITE_API_BASE || '/api'
+      API_BASE: import.meta.env.VITE_API_BASE || '/api',
+      
+      // Direct WebSocket connection settings
+      useDirectWebSocket: true,  // 设置为 true 使用直接 WebSocket 连接
+      workerWebSocketUrl: null,  // Worker 的 WebSocket URL
+      
+      // 获取 Worker 信息的 API - 三种方式设置（优先级从高到低）：
+      // 1. .env 文件: VITE_WORKER_API=http://remote-server:5000/api/workers
+      // 2. 代码硬编码: apiWorkerUrl: 'http://192.168.1.100:5000/api/workers'
+      // 3. 后端代理（默认）: '/api/workers'
+      apiWorkerUrl: this.getWorkerApiUrl()
     }
   },
   mounted() {
@@ -187,6 +99,28 @@ export default {
     if (this.messagesRefreshInterval) clearInterval(this.messagesRefreshInterval)
   },
   methods: {
+    getWorkerApiUrl() {
+      // 三种方式设置 Worker API URL（优先级从高到低）
+      
+      // 方式 1: 环境变量 .env 文件
+      if (import.meta.env.VITE_WORKER_API) {
+        console.log('✅ Using VITE_WORKER_API from .env:', import.meta.env.VITE_WORKER_API)
+        return import.meta.env.VITE_WORKER_API
+      }
+      
+      // 方式 2: 代码硬编码（如果没有 .env 文件，修改这里）
+      // 例如: 'http://192.168.1.100:5000/api/workers'
+      const hardcodedUrl = null  // 改为你的 URL 字符串来硬编码
+      if (hardcodedUrl) {
+        console.log('✅ Using hardcoded Worker API URL:', hardcodedUrl)
+        return hardcodedUrl
+      }
+      
+      // 方式 3: 后端 API 代理（默认，不需要额外配置）
+      console.log('ℹ️  Using backend API proxy: /api/workers')
+      return '/api/workers'
+    },
+
     async loadActiveSymbols() {
       try {
         const response = await fetch(`${this.API_BASE}/live-logs/symbols`, {
@@ -213,7 +147,15 @@ export default {
         this.logHistory = []
         this.currentLog = {}
         this.strateggyMessages = []
-        this.connectWebSocket()
+        
+        if (this.useDirectWebSocket) {
+          // 直接连接 Worker 的 WebSocket
+          this.fetchWorkerWebSocketUrl()
+        } else {
+          // 使用后端 API 代理
+          this.connectWebSocket()
+        }
+        
         this.loadStats()
         this.loadMessages()
         
@@ -221,6 +163,112 @@ export default {
         this.messagesRefreshInterval = setInterval(() => {
           this.loadMessages()
         }, 5000)
+      }
+    },
+
+    async fetchWorkerWebSocketUrl() {
+      try {
+        // 从 API 获取所有 Workers 的信息，找到匹配当前 symbol 的 Worker
+        const response = await fetch(this.apiWorkerUrl, {
+          headers: this.getAuthHeaders()
+        })
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+        const data = await response.json()
+        const workers = data.workers || {}
+        
+        // 查找匹配当前 symbol 的 Worker
+        let foundWorker = null
+        for (const [key, worker] of Object.entries(workers)) {
+          if (worker.stats && worker.stats.symbol === this.selectedSymbol) {
+            foundWorker = worker
+            break
+          }
+        }
+
+        if (foundWorker && foundWorker.log_stream_url) {
+          this.workerWebSocketUrl = foundWorker.log_stream_url
+          console.log(`Found Worker WebSocket URL for ${this.selectedSymbol}: ${this.workerWebSocketUrl}`)
+          this.connectDirectWebSocket()
+        } else {
+          console.warn(`No Worker found for symbol ${this.selectedSymbol}`)
+          // 降级到后端 API 代理
+          this.useDirectWebSocket = false
+          this.connectWebSocket()
+        }
+      } catch (error) {
+        console.error('Failed to fetch Worker WebSocket URL:', error)
+        // 降级到后端 API 代理
+        this.useDirectWebSocket = false
+        this.connectWebSocket()
+      }
+    },
+
+    connectDirectWebSocket() {
+      if (!this.workerWebSocketUrl) return
+
+      try {
+        this.ws = new WebSocket(this.workerWebSocketUrl)
+
+        this.ws.onopen = () => {
+          console.log(`✅ Direct WebSocket connected: ${this.workerWebSocketUrl}`)
+          this.isConnected = true
+          this.reconnectAttempts = 0
+        }
+
+        this.ws.onmessage = (event) => {
+          try {
+            const logData = JSON.parse(event.data)
+            
+            // 处理来自 quant-strategy-manager 的日志格式
+            const logEntry = {
+              timestamp: new Date(logData.timestamp).getTime() / 1000,
+              level: logData.level,
+              message: logData.message,
+              logger: logData.logger_name,
+              module: logData.module
+            }
+
+            this.logHistory.push(logEntry)
+            this.isUpdating = true
+
+            // 保持历史记录在合理的大小
+            if (this.logHistory.length > 200) {
+              this.logHistory.shift()
+            }
+
+            // 自动滚动到底部
+            const streamEl = this.$refs.logStream
+            if (streamEl) {
+              const isScrolledToBottom = streamEl.scrollHeight - streamEl.clientHeight <= streamEl.scrollTop + 20
+              if (isScrolledToBottom) {
+                this.$nextTick(() => {
+                  this.scrollToBottom()
+                })
+              }
+            }
+
+            setTimeout(() => {
+              this.isUpdating = false
+            }, 300)
+          } catch (error) {
+            console.error('Failed to parse log message:', error)
+          }
+        }
+
+        this.ws.onerror = (error) => {
+          console.error('❌ Direct WebSocket error:', error)
+          this.isConnected = false
+        }
+
+        this.ws.onclose = () => {
+          console.log(`Direct WebSocket disconnected`)
+          this.isConnected = false
+          this.attemptReconnect()
+        }
+      } catch (error) {
+        console.error('Failed to connect to direct WebSocket:', error)
       }
     },
 
@@ -241,30 +289,38 @@ export default {
 
         this.ws.onmessage = (event) => {
           try {
-            const message = JSON.parse(event.data)
+            const message = JSON.parse(event.data);
 
-            if (message.type === 'init' || message.type === 'update') {
-              const data = message.data || {}
-              this.currentLog = data
-              this.isUpdating = true
+            // Handle historical logs, replacing current history
+            if (message.type === 'history') {
+              this.logHistory = message.data || [];
+              this.scrollToBottom();
+            }
+            
+            // Handle a new streamed log entry by appending it
+            if (message.type === 'stream') {
+              this.logHistory.push(message.data);
+              this.isUpdating = true;
 
-              if (data.timestamp) {
-                this.logHistory.unshift({
-                  ...data,
-                  timestamp: data.timestamp
-                })
-
-                if (this.logHistory.length > 50) {
-                  this.logHistory.pop()
-                }
+              // Keep the history to a reasonable size
+              if (this.logHistory.length > 200) {
+                this.logHistory.shift(); // Remove the oldest entry
+              }
+              
+              // Scroll to bottom only if user is already near the bottom
+              const streamEl = this.$refs.logStream;
+              const isScrolledToBottom = streamEl.scrollHeight - streamEl.clientHeight <= streamEl.scrollTop + 20;
+              if (isScrolledToBottom) {
+                this.$nextTick(() => {
+                  this.scrollToBottom();
+                });
               }
 
-              setTimeout(() => {
-                this.isUpdating = false
-              }, 500)
+              setTimeout(() => { this.isUpdating = false; }, 300);
             }
+
           } catch (error) {
-            console.error('Failed to parse WebSocket message:', error)
+            console.error('Failed to parse WebSocket message:', error);
           }
         }
 
@@ -393,6 +449,12 @@ export default {
         return val.toFixed(2)
       }
       return String(val)
+    },
+    scrollToBottom() {
+      const streamEl = this.$refs.logStream;
+      if (streamEl) {
+        streamEl.scrollTop = streamEl.scrollHeight;
+      }
     }
   },
   computed: {
@@ -510,456 +572,105 @@ export default {
 }
 
 .log-stream-section {
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-top: 20px;
 }
 
 .stream-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
-  border-bottom: 2px solid #f0f0f0;
-  background: #fafafa;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #eee;
 }
 
 .stream-header h3 {
   margin: 0;
   color: #333;
-  font-size: 16px;
 }
 
 .update-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background-color: #e8f5e9;
   color: #4CAF50;
-  font-weight: 600;
+  transition: all 0.3s ease;
 }
 
 .update-indicator.updating {
+  background-color: #ffecb3;
   color: #FF9800;
-  animation: pulse 1s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
 }
 
 .log-stream {
-  max-height: 400px;
+  background: #0d1117; /* Dark background for logs */
+  color: #c9d1d9;
+  padding: 15px;
+  border-radius: 8px;
+  height: 60vh; /* Taller log view */
   overflow-y: auto;
-  display: flex;
-  flex-direction: column-reverse;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 13px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+  scroll-behavior: smooth;
 }
 
 .log-entry {
-  display: grid;
-  grid-template-columns: 120px 80px 100px 100px 1fr;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 20px;
-  border-bottom: 1px solid #f0f0f0;
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
-  color: #666;
-  transition: all 0.2s ease;
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .log-entry:hover {
-  background-color: #f9f9f9;
+  background-color: #161b22;
 }
 
-.log-entry.latest {
-  background-color: #e3f2fd;
-  font-weight: 600;
-  border-left: 3px solid #2196F3;
-}
-
-.entry-time {
-  color: #999;
-}
-
-.entry-calls {
-  color: #2196F3;
+.log-entry .entry-time {
+  color: #8b949e;
   font-weight: 600;
 }
 
-.entry-bars {
-  color: #4CAF50;
+.log-entry .entry-level {
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  text-transform: uppercase;
 }
 
-.entry-price {
-  color: #FF9800;
-  font-weight: 600;
-}
+.log-entry .entry-level.level-INFO { background-color: #2196F3; color: white; }
+.log-entry .entry-level.level-WARNING { background-color: #FFC107; color: #333; }
+.log-entry .entry-level.level-ERROR { background-color: #F44336; color: white; }
+.log-entry .entry-level.level-DEBUG { background-color: #9C27B0; color: white; }
 
-.entry-bar-time {
-  color: #666;
+
+.log-entry .entry-message {
+  flex-grow: 1;
 }
 
 .empty-state {
-  padding: 40px;
-  text-align: center;
-  color: #999;
-  font-size: 14px;
-}
-
-.stats-section {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.stats-section h3 {
-  margin-top: 0;
-  margin-bottom: 15px;
-  color: #333;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 15px;
-}
-
-.stat-item {
   display: flex;
-  flex-direction: column;
-  padding: 12px;
-  background: #f5f5f5;
-  border-radius: 6px;
-  border-left: 3px solid #2196F3;
-}
-
-.stat-label {
-  font-size: 11px;
-  color: #999;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: bold;
-  color: #2196F3;
-}
-
-.empty-placeholder {
-  display: flex;
-  align-items: center;
   justify-content: center;
-  min-height: 400px;
-  background: white;
-  border-radius: 8px;
-}
-
-.placeholder-content {
-  text-align: center;
-  color: #999;
-}
-
-.placeholder-content .icon {
-  font-size: 48px;
-  margin-bottom: 10px;
-}
-
-.placeholder-content p {
-  margin: 10px 0;
-  font-size: 14px;
-}
-
-.placeholder-content .loading {
-  font-size: 12px;
-  color: #2196F3;
-  margin-top: 15px;
-}
-
-/* Scrollbar styling */
-.log-stream::-webkit-scrollbar {
-  width: 6px;
-}
-
-.log-stream::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.log-stream::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-.log-stream::-webkit-scrollbar-thumb:hover {
-  background: #a0a0a0;
-}
-
-@media (max-width: 768px) {
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
-  }
-
-  .metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .log-entry {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-
-  .entry-time,
-  .entry-calls,
-  .entry-bars,
-  .entry-price,
-  .entry-bar-time {
-    display: inline;
-  }
-
-  .entry-time::after {
-    content: ' | ';
-    margin: 0 4px;
-    color: #ddd;
-  }
-}
-
-/* Messages Section Styles */
-.messages-section {
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.messages-header {
-  padding: 15px 20px;
-  border-bottom: 2px solid #f0f0f0;
-  background: #fafafa;
-}
-
-.messages-header h3 {
-  margin: 0 0 12px 0;
-  color: #333;
-  font-size: 16px;
-}
-
-.message-filters {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.filter-btn {
-  padding: 6px 12px;
-  border: 1px solid #ddd;
-  background: white;
-  border-radius: 20px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: #666;
-}
-
-.filter-btn:hover {
-  border-color: #2196F3;
-  color: #2196F3;
-}
-
-.filter-btn.active {
-  background: #2196F3;
-  color: white;
-  border-color: #2196F3;
-}
-
-.messages-stream {
-  max-height: 500px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-.message-item {
-  padding: 15px 20px;
-  border-bottom: 1px solid #f0f0f0;
-  transition: all 0.2s ease;
-}
-
-.message-item:hover {
-  background-color: #f9f9f9;
-}
-
-.message-item.msg-buy {
-  border-left: 4px solid #4CAF50;
-  background-color: #f1f8f5;
-}
-
-.message-item.msg-sell {
-  border-left: 4px solid #f44336;
-  background-color: #fef5f5;
-}
-
-.message-item.msg-signal {
-  border-left: 4px solid #FF9800;
-  background-color: #fff8f1;
-}
-
-.message-item.msg-analysis {
-  border-left: 4px solid #2196F3;
-  background-color: #f0f7ff;
-}
-
-.message-item.msg-alert,
-.message-item.msg-warning {
-  border-left: 4px solid #FFC107;
-  background-color: #fffbf0;
-}
-
-.message-item.msg-error {
-  border-left: 4px solid #f44336;
-  background-color: #ffebee;
-}
-
-.message-header {
-  display: flex;
-  gap: 12px;
   align-items: center;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
+  height: 100%;
+  color: #8b949e;
+  font-style: italic;
 }
 
-.msg-type-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  background: white;
-  border: 1px solid #ddd;
+/* Remove old metric cards and log history display */
+.metrics-grid,
+.log-stream .log-entry .entry-calls,
+.log-stream .log-entry .entry-bars,
+.log-stream .log-entry .entry-price,
+.log-stream .log-entry .entry-bar-time {
+  display: none;
 }
 
-.badge-buy {
-  color: #4CAF50;
-  border-color: #4CAF50;
-}
-
-.badge-sell {
-  color: #f44336;
-  border-color: #f44336;
-}
-
-.badge-signal {
-  color: #FF9800;
-  border-color: #FF9800;
-}
-
-.badge-analysis {
-  color: #2196F3;
-  border-color: #2196F3;
-}
-
-.badge-alert,
-.badge-warning {
-  color: #FFC107;
-  border-color: #FFC107;
-}
-
-.badge-error {
-  color: #f44336;
-  border-color: #f44336;
-}
-
-.msg-time {
-  font-size: 12px;
-  color: #999;
-}
-
-.msg-bar {
-  font-size: 11px;
-  color: #2196F3;
-  font-weight: 600;
-}
-
-.message-content {
-  margin: 8px 0;
-}
-
-.message-text {
-  margin: 0;
-  font-size: 14px;
-  color: #333;
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-.message-data {
-  display: flex;
-  gap: 15px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.data-item {
-  font-size: 12px;
-  color: #666;
-  font-family: 'Courier New', monospace;
-}
-
-.data-item strong {
-  color: #333;
-}
-
-.message-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  font-size: 11px;
-  color: #999;
-}
-
-.msg-price {
-  font-weight: 600;
-  color: #2196F3;
-}
-
-.empty-messages {
-  padding: 40px 20px;
-  text-align: center;
-  color: #999;
-  font-size: 14px;
-}
-
-.messages-stream::-webkit-scrollbar {
-  width: 6px;
-}
-
-.messages-stream::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.messages-stream::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-.messages-stream::-webkit-scrollbar-thumb:hover {
-  background: #a0a0a0;
-}
 </style>
