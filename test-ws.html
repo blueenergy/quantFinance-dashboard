@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket 测试</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        #logs { 
+            border: 1px solid #ccc; 
+            height: 400px; 
+            overflow-y: auto; 
+            padding: 10px;
+            background: #f5f5f5;
+        }
+        .log { margin: 5px 0; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket 连接测试</h1>
+    <p>WebSocket URL: <span id="wsUrl"></span></p>
+    <p>状态: <span id="status">未连接</span></p>
+    <button onclick="connect()">连接</button>
+    <button onclick="disconnect()">断开</button>
+    <div id="logs"></div>
+
+    <script>
+        let ws = null;
+        const params = new URLSearchParams(window.location.search);
+        const wsUrl = params.get('ws') || 'ws://180.184.30.225/ws/33895';
+        
+        document.getElementById('wsUrl').textContent = wsUrl;
+
+        function addLog(message, isError = false) {
+            const div = document.createElement('div');
+            div.className = 'log ' + (isError ? 'error' : 'success');
+            div.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            document.getElementById('logs').appendChild(div);
+            document.getElementById('logs').scrollTop = document.getElementById('logs').scrollHeight;
+        }
+
+        function connect() {
+            document.getElementById('status').textContent = '连接中...';
+            addLog('尝试连接: ' + wsUrl);
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    document.getElementById('status').textContent = '✅ 已连接';
+                    addLog('✅ WebSocket 连接成功！');
+                };
+                
+                ws.onmessage = (event) => {
+                    addLog('📨 收到消息: ' + event.data);
+                };
+                
+                ws.onerror = (error) => {
+                    document.getElementById('status').textContent = '❌ 错误';
+                    addLog('❌ WebSocket 错误: ' + error, true);
+                    console.error('WebSocket error:', error);
+                };
+                
+                ws.onclose = (event) => {
+                    document.getElementById('status').textContent = '已断开';
+                    addLog('⚠️ WebSocket 关闭 (code: ' + event.code + ', reason: ' + event.reason + ')');
+                };
+            } catch (error) {
+                document.getElementById('status').textContent = '❌ 连接失败';
+                addLog('❌ 异常: ' + error.message, true);
+            }
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        // 自动连接
+        window.onload = () => {
+            connect();
+        };
+    </script>
+</body>
+</html>
