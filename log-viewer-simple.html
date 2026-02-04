@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>策略日志查看器</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+    .header {
+      background: #252526;
+      padding: 12px 20px;
+      border-bottom: 1px solid #3e3e42;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      font-size: 18px;
+      font-weight: 500;
+    }
+    .status {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      font-size: 13px;
+    }
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .status-connected { background: #0e639c; color: #fff; }
+    .status-connecting { background: #866518; color: #fff; }
+    .status-error { background: #a1260d; color: #fff; }
+    .status-disconnected { background: #3e3e42; color: #cccccc; }
+    
+    .toolbar {
+      background: #2d2d30;
+      padding: 8px 20px;
+      border-bottom: 1px solid #3e3e42;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .btn {
+      padding: 6px 14px;
+      background: #0e639c;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn:hover { background: #1177bb; }
+    .btn-secondary {
+      background: #3e3e42;
+      color: #cccccc;
+    }
+    .btn-secondary:hover { background: #4e4e52; }
+    
+    #logs {
+      height: calc(100vh - 120px);
+      overflow-y: auto;
+      padding: 10px 20px;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .log-entry {
+      padding: 4px 0;
+      display: flex;
+      gap: 12px;
+    }
+    .log-time {
+      color: #858585;
+      flex-shrink: 0;
+    }
+    .log-level {
+      flex-shrink: 0;
+      font-weight: 600;
+      width: 50px;
+    }
+    .log-message { flex: 1; }
+    
+    .level-INFO { color: #4ec9b0; }
+    .level-DEBUG { color: #858585; }
+    .level-WARNING { color: #dcdcaa; }
+    .level-ERROR { color: #f48771; }
+    .level-CRITICAL { color: #f14c4c; }
+    
+    .history-badge {
+      color: #858585;
+      font-size: 11px;
+      margin-left: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 策略日志查看器 - <span id="symbol"></span></h1>
+    <div class="status">
+      <div>
+        <span id="status" class="status-badge status-disconnected">未连接</span>
+      </div>
+      <div>连接时长: <span id="duration">00:00</span></div>
+      <div>消息数: <span id="msgCount">0</span></div>
+      <div>历史: <span id="historyCount">0</span></div>
+    </div>
+  </div>
+  
+  <div class="toolbar">
+    <button class="btn" onclick="reconnect()">🔄 重连</button>
+    <button class="btn btn-secondary" onclick="clearLogs()">🗑️ 清空</button>
+    <button class="btn btn-secondary" onclick="disconnect()">⏸️ 断开</button>
+    <label style="color: #cccccc; margin-left: auto;">
+      <input type="checkbox" id="autoScroll" checked> 自动滚动
+    </label>
+  </div>
+  
+  <div id="logs"></div>
+
+  <script>
+    let ws = null;
+    let messageCount = 0;
+    let historyCount = 0;
+    let receivingHistory = true;
+    let connectionStartTime = null;
+    let durationInterval = null;
+    let historyTimeout = null;
+
+    // 从 URL 获取参数
+    const params = new URLSearchParams(window.location.search);
+    const wsUrl = params.get('ws') || '';
+    const symbol = params.get('symbol') || '未知';
+    
+    document.getElementById('symbol').textContent = symbol;
+
+    function updateStatus(status) {
+      const statusEl = document.getElementById('status');
+      statusEl.className = 'status-badge status-' + status;
+      const statusText = {
+        'connected': '✅ 已连接',
+        'connecting': '⏳ 连接中',
+        'error': '❌ 错误',
+        'disconnected': '⏸️ 已断开'
+      };
+      statusEl.textContent = statusText[status] || status;
+    }
+
+    function addLog(level, message, timestamp = null, isHistory = false) {
+      const div = document.createElement('div');
+      div.className = 'log-entry';
+      
+      const time = timestamp ? new Date(timestamp) : new Date();
+      const timeStr = time.toLocaleTimeString('zh-CN', { hour12: false });
+      
+      div.innerHTML = `
+        <span class="log-time">${timeStr}</span>
+        <span class="log-level level-${level}">${level}</span>
+        <span class="log-message">${escapeHtml(message)}${isHistory ? '<span class="history-badge">📜</span>' : ''}</span>
+      `;
+      
+      document.getElementById('logs').appendChild(div);
+      
+      if (document.getElementById('autoScroll').checked) {
+        const logsEl = document.getElementById('logs');
+        logsEl.scrollTop = logsEl.scrollHeight;
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function connect() {
+      updateStatus('connecting');
+      connectionStartTime = Date.now();
+      
+      durationInterval = setInterval(() => {
+        if (connectionStartTime) {
+          const duration = Math.floor((Date.now() - connectionStartTime) / 1000);
+          const minutes = String(Math.floor(duration / 60)).padStart(2, '0');
+          const seconds = String(duration % 60).padStart(2, '0');
+          document.getElementById('duration').textContent = `${minutes}:${seconds}`;
+        }
+      }, 1000);
+      
+      try {
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = () => {
+          updateStatus('connected');
+          receivingHistory = true;
+          addLog('INFO', '✅ WebSocket 连接成功');
+        };
+        
+        ws.onmessage = (event) => {
+          messageCount++;
+          document.getElementById('msgCount').textContent = messageCount;
+          
+          try {
+            const data = JSON.parse(event.data);
+            const isHistory = receivingHistory;
+            
+            addLog(
+              data.level || 'INFO',
+              data.message || event.data,
+              data.timestamp,
+              isHistory
+            );
+            
+            if (isHistory) {
+              historyCount++;
+              document.getElementById('historyCount').textContent = historyCount;
+              
+              clearTimeout(historyTimeout);
+              historyTimeout = setTimeout(() => {
+                receivingHistory = false;
+                if (historyCount > 0) {
+                  addLog('INFO', `📜 已加载 ${historyCount} 条历史日志`);
+                }
+              }, 500);
+            }
+          } catch (e) {
+            addLog('INFO', event.data);
+          }
+        };
+        
+        ws.onerror = (error) => {
+          updateStatus('error');
+          addLog('ERROR', '❌ WebSocket 连接错误');
+        };
+        
+        ws.onclose = () => {
+          updateStatus('disconnected');
+          addLog('WARNING', '⚠️ WebSocket 连接已关闭');
+          if (durationInterval) {
+            clearInterval(durationInterval);
+          }
+        };
+      } catch (error) {
+        updateStatus('error');
+        addLog('ERROR', `连接失败: ${error.message}`);
+      }
+    }
+
+    function disconnect() {
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    }
+
+    function reconnect() {
+      addLog('INFO', '🔄 重新连接...');
+      disconnect();
+      setTimeout(connect, 500);
+    }
+
+    function clearLogs() {
+      document.getElementById('logs').innerHTML = '';
+      messageCount = 0;
+      historyCount = 0;
+      document.getElementById('msgCount').textContent = '0';
+      document.getElementById('historyCount').textContent = '0';
+    }
+
+    // 页面加载时自动连接
+    if (wsUrl) {
+      connect();
+    } else {
+      updateStatus('error');
+      addLog('ERROR', '❌ 未提供 WebSocket URL');
+    }
+  </script>
+</body>
+</html>
