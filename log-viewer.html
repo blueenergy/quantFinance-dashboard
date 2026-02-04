@@ -136,8 +136,14 @@
 
     // 从 URL 获取参数
     const params = new URLSearchParams(window.location.search);
-    const wsUrl = params.get('ws') || '';
+    let wsUrl = params.get('ws') || '';
     const symbol = params.get('symbol') || '未知';
+    
+    // 🔒 如果当前页面是 HTTPS，自动将 ws:// 转换为 wss://
+    if (window.location.protocol === 'https:' && wsUrl.startsWith('ws://')) {
+      wsUrl = wsUrl.replace('ws://', 'wss://');
+      console.log('📡 HTTPS detected, using secure WebSocket (wss://)');
+    }
     
     document.getElementById('symbol').textContent = symbol;
 
