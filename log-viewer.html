@@ -215,6 +215,33 @@
           try {
             const data = JSON.parse(event.data);
             const isHistory = receivingHistory;
+            const message = data.message || event.data;
+            
+            // 🎯 严格过滤：检查日志是否属于当前股票
+            // 日志格式: "2026-02-04 16:44:29,858 INFO scripts.single_stream_hidden_dragon.300058.SZ: ..."
+            // 提取所有股票代码
+            const stockCodePattern = /\d{6}\.(SZ|SH|BJ)/g;
+            const codesInMessage = message.match(stockCodePattern);
+            
+            if (codesInMessage && codesInMessage.length > 0) {
+              // 提取 logger name 中的股票代码（更优先）
+              const loggerPattern = /scripts\.\w+\.(\d{6}\.(SZ|SH|BJ))/;
+              const loggerMatch = message.match(loggerPattern);
+              
+              if (loggerMatch) {
+                // 如果 logger name 中有股票代码，只检查 logger
+                const loggerSymbol = loggerMatch[1];
+                if (loggerSymbol !== symbol) {
+                  // 不是当前股票的日志，跳过
+                  return;
+                }
+              } else {
+                // 没有 logger 股票代码，检查消息中是否包含当前股票
+                if (!codesInMessage.includes(symbol)) {
+                  return;
+                }
+              }
+            }
             
             addLog(
               data.level || 'INFO',
