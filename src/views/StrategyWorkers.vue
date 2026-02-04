@@ -202,7 +202,7 @@ export default {
         }
         
         // 打开日志查看器页面
-        const url = `/log-viewer.html?ws=${encodeURIComponent(wsUrl)}&symbol=${worker.stats.symbol}`
+        const url = `/log-viewer-simple.html?ws=${encodeURIComponent(wsUrl)}&symbol=${worker.stats.symbol}`
         window.open(url, '_blank', 'width=1400,height=900')
       }
     },
