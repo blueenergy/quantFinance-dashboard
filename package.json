@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "test": "vitest --run",
-    "build": "vite build",
+    "build": "vite build && cp log-viewer-simple.html dist/",
     "preview": "vite preview",
     "start": "vite preview --port 5173 --host 0.0.0.0"
   },
