@@ -124,10 +124,13 @@
 </template>
 
 <script>
+import { authService } from '../services/auth.js'
+
 export default {
   name: 'StrategyWorkers',
   data() {
     return {
+      authService,  // 添加到 data 中以便在模板中使用
       loading: false,
       workers: [],
       totalWorkers: 0,
@@ -155,10 +158,13 @@ export default {
     async refreshWorkers() {
       this.loading = true
       try {
-        // 使用环境变量中的 API 地址
         const apiUrl = import.meta.env.VITE_WORKER_API || '/api/strategy/workers'
         
-        const response = await fetch(apiUrl)
+        // 从 localStorage 获取 token
+        const token = localStorage.getItem('access_token')
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+        
+        const response = await fetch(apiUrl, { headers })
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`)
         }
@@ -213,47 +219,70 @@ export default {
       const logUrl = `${baseUrl}/workers/${worker.key}/logs?tail=1000`
       
       try {
-        // 先用 HEAD 请求检查日志是否存在（不下载内容）
-        const headResponse = await fetch(logUrl, { method: 'HEAD' })
+        // 获取 token
+        const token = localStorage.getItem('access_token')
+        if (!token) {
+          alert('❌ 请先登录')
+          return
+        }
         
-        if (headResponse.ok) {
-          // 日志存在，打开新标签页
-          console.log(`Opening history logs: ${logUrl}`)
-          window.open(logUrl, '_blank')
-        } else if (headResponse.status === 404) {
-          // 获取详细错误信息
-          const errorResponse = await fetch(logUrl)
-          let errorMessage = '日志文件尚未生成'
+        console.log('📋 准备打开历史日志:', logUrl)
+        console.log('🔑 使用 token:', token.substring(0, 20) + '...')
+        
+        // 使用 axios 检查日志是否存在（会自动带上 Authorization header）
+        const axios = (await import('axios')).default
+        
+        try {
+          const response = await axios.get(logUrl, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            },
+            validateStatus: (status) => status < 500  // 不要在 4xx 时抛出异常
+          })
           
-          try {
-            const errorData = await errorResponse.json()
-            errorMessage = errorData.detail || errorMessage
-          } catch (e) {
-            // JSON 解析失败，使用默认消息
+          if (response.status === 200) {
+            // 日志存在，构建带 token 的 URL（通过 query 参数或新标签页）
+            console.log('✅ 日志可用，打开新标签页')
+            
+            // 方案1: 直接在新标签页打开（浏览器会自动带上 cookie，但不会带 token）
+            // 所以我们需要用另一种方式
+            
+            // 方案2: 创建一个临时页面来显示日志内容
+            const logWindow = window.open('', '_blank')
+            logWindow.document.write(`
+              <html>
+                <head><title>历史日志 - ${worker.key}</title></head>
+                <body style="margin:0;padding:20px;font-family:monospace;background:#1e1e1e;color:#d4d4d4;">
+                  <pre style="white-space:pre-wrap;word-wrap:break-word;">${response.data}</pre>
+                </body>
+              </html>
+            `)
+            logWindow.document.close()
+          } else if (response.status === 404) {
+            // 日志文件不存在
+            const errorMessage = response.data?.detail || '日志文件尚未生成'
+            alert(
+              `📂 历史日志暂不可用\n\n` +
+              `${errorMessage}\n\n` +
+              `💡 建议：请先使用「实时日志」功能`
+            )
+          } else if (response.status === 401 || response.status === 403) {
+            // 认证/授权失败
+            alert(`❌ 认证失败 (HTTP ${response.status})\n\n请重新登录`)
+          } else {
+            alert(`❌ 获取日志失败 (HTTP ${response.status})\n\n${response.data?.detail || '请稍后重试'}`)
           }
-          
-          alert(
-            `📂 历史日志暂不可用\n\n` +
-            `${errorMessage}\n\n` +
-            `💡 建议：请先使用「实时日志」功能`
-          )
-        } else {
-          alert(`❌ 获取日志失败 (HTTP ${headResponse.status})\n\n请稍后重试或联系管理员`)
+        } catch (axiosError) {
+          console.error('Axios request failed:', axiosError)
+          alert(`❌ 请求失败: ${axiosError.message}\n\n请检查网络连接`)
         }
       } catch (error) {
-        console.error('Error checking log availability:', error)
-        
-        // 如果是网络错误，尝试直接打开（可能是 CORS 问题）
-        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-          console.log('CORS or network error, trying direct open...')
-          window.open(logUrl, '_blank')
-        } else {
-          alert(
-            `❌ 无法连接到日志服务器\n\n` +
-            `错误: ${error.message}\n\n` +
-            `请检查网络连接或稍后重试`
-          )
-        }
+        console.error('Error opening history logs:', error)
+        alert(
+          `❌ 无法打开历史日志\n\n` +
+          `错误: ${error.message}\n\n` +
+          `请检查网络连接或稍后重试`
+        )
       }
     }
   }
