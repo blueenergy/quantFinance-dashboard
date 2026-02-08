@@ -275,15 +275,6 @@
             </template>
           </Suspense>
 
-          <!-- Live Strategy Logs Tab -->
-          <Suspense v-if="activeTab === 'live-logs'">
-            <template #default>
-              <LiveStrategyLogs />
-            </template>
-            <template #fallback>
-              <div class="skeleton skeleton-table">实时日志加载中...</div>
-            </template>
-          </Suspense>
 
           <!-- Strategy Stock Pool Tab -->
           <Suspense v-if="activeTab === 'strategy-pool'">
@@ -325,7 +316,6 @@ const StrategyExecutionAnalysis = defineAsyncComponent(() => import('./component
 const SecuritiesAccountDashboard = defineAsyncComponent(() => import('./components/SecuritiesAccountDashboard.vue'))
 const UserProfile = defineAsyncComponent(() => import('./components/UserProfile.vue'))
 const BacktestManager = defineAsyncComponent(() => import('./components/BacktestManager.vue'))
-const LiveStrategyLogs = defineAsyncComponent(() => import('./components/LiveStrategyLogs.vue'))
 const StrategyStockPool = defineAsyncComponent(() => import('./components/StrategyStockPool.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
@@ -401,7 +391,6 @@ watch(activeTab, (newTab) => {
 // 动态标签 - 管理员只显示管理功能，普通用户显示业务功能
 const adminTabs = computed(() => {
   const baseTabs = [
-    { id: 'live-logs', name: '🚀 实时日志' },
     { id: 'strategy-pool', name: '🎯 策略股池' },
     { id: 'ranking', name: '金榜' },
     { id: 'watchlist', name: '自选股' },
