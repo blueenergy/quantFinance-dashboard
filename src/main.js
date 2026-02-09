@@ -12,7 +12,7 @@ import { createVuetify } from 'vuetify';
 import {
 	VApp, VRow, VCol, VSelect, VTextField, VBtn, VBtnToggle, VIcon, VChip, VCard, VCardText, VCardTitle, VCardActions,
 	VDialog, VDataTable, VTextarea, VSpacer, VSwitch, VContainer, VListItem, VList, VTabs, VTab, VWindow, VWindowItem,
-	VPagination, VForm, VListItemTitle, VListItemSubtitle,
+	VPagination, VForm, VListItemTitle, VListItemSubtitle, VMenu,
 	// Add missing components for StrategyParamsEditor
 	VTable, VTooltip, VAlert, VChipGroup,
 	// Add components for LimitUpLadder
@@ -26,7 +26,7 @@ const vuetify = createVuetify({
 	components: {
 		VApp, VRow, VCol, VSelect, VTextField, VBtn, VBtnToggle, VIcon, VChip, VCard, VCardText, VCardTitle, VCardActions,
 		VDialog, VDataTable, VTextarea, VSpacer, VSwitch, VContainer, VListItem, VList, VTabs, VTab, VWindow, VWindowItem,
-		VPagination, VForm, VListItemTitle, VListItemSubtitle,
+		VPagination, VForm, VListItemTitle, VListItemSubtitle, VMenu,
 		VTable, VTooltip, VAlert, VChipGroup,
 		VProgressLinear, VProgressCircular, VOverlay, VExpandTransition
 	},
