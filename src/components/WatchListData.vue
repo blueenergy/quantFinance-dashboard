@@ -1581,6 +1581,11 @@ onMounted(async () => {
   --v-field-border-opacity: 0.6;
 }
 
+.stock-input-wrapper {
+  position: relative;
+  z-index: 10;
+}
+
 .custom-stock-input :deep(input) {
   color: #ffffff !important;
   font-weight: 500;
@@ -1595,6 +1600,8 @@ onMounted(async () => {
   backdrop-filter: blur(10px);
   border: 1px solid rgba(138, 43, 226, 0.3);
   border-radius: 8px;
+  z-index: 9999 !important; /* Ensure it floats above everything */
+  margin-top: 5px;
 }
 
 .stock-search-list {
