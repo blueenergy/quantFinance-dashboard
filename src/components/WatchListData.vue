@@ -272,24 +272,8 @@ function handleStockInput(val) {
     return
   }
   
-  // 6位数字自动补全后缀
-  if (/^\d{6}$/.test(val)) {
-    let suffix = ''
-    if (val.startsWith('6') || val.startsWith('9')) {
-      suffix = '.SH'
-    } else if (val.startsWith('0') || val.startsWith('2') || val.startsWith('3')) {
-      suffix = '.SZ'
-    } else if (val.startsWith('4') || val.startsWith('8')) {
-      suffix = '.BJ'
-    }
-    
-    if (suffix && !val.includes('.')) {
-      // 自动补全
-      inputSymbol.value = val + suffix
-      // 补全后不继续搜索，或者可以选择继续搜索
-      return
-    }
-  }
+  // 移除自动补全后缀逻辑，避免无法修改代码的问题
+  // 用户反馈：从右往左删的时候，自动补回去很难受
 
   // 必须输入2位以上才搜索
   if (val.length < 2) {
