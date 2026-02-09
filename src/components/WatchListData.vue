@@ -21,11 +21,50 @@
       </div>
       
       <div class="add-stock">
-        <input 
-          v-model="inputSymbol" 
-          placeholder="添加股票代码 (如 000001)" 
-          @keyup.enter="addStock"
-        />
+        <div class="stock-input-wrapper">
+          <v-text-field 
+            id="watchlist-stock-input"
+            v-model="inputSymbol" 
+            label="股票代码/名称/拼音"
+            placeholder="如: 000001, 平安银行, PAYH"
+            variant="outlined"
+            density="compact"
+            hide-details
+            bg-color="rgba(30, 30, 63, 0.5)"
+            color="deep-purple-accent-1"
+            base-color="rgba(138, 43, 226, 0.5)"
+            class="custom-stock-input"
+            :loading="isSearchingStock"
+            @update:model-value="handleStockInput"
+            @focus="showStockMenu = !!stockSearchResults.length"
+            @keyup.enter="addStock"
+          />
+          <v-menu
+            v-model="showStockMenu"
+            activator="#watchlist-stock-input"
+            :close-on-content-click="false"
+            location="bottom start"
+            :open-on-click="false"
+            :open-on-focus="false"
+            :offset="5"
+            content-class="stock-search-menu"
+          >
+            <v-list v-if="stockSearchResults.length" density="compact" max-height="300" theme="dark" class="stock-search-list">
+              <v-list-item
+                v-for="item in stockSearchResults"
+                :key="item.value"
+                :title="item.title"
+                :subtitle="item.value"
+                @click="selectStock(item)"
+                class="stock-search-item"
+              >
+                <template #prepend>
+                  <v-chip size="x-small" label class="mr-2" color="primary">{{ item.value.split('.')[1] || 'Unknown' }}</v-chip>
+                </template>
+              </v-list-item>
+            </v-list>
+          </v-menu>
+        </div>
         <button @click="addStock" :disabled="loading">添加</button>
         <button @click="refreshAll" :disabled="loading" class="refresh-btn">
           {{ loading ? '刷新中...' : '🔄 刷新全部' }}
@@ -199,6 +238,7 @@ import { watchlistService } from '../services/watchlist.js'
 import { useAnalysisHistory } from '../composables/useAnalysisHistory'
 import { checkUserLlmConfig } from '../services/userService.js'
 import HistoryAnalysis from './HistoryAnalysis.vue'
+import { searchStocks } from '../api/stock'
 
 const emit = defineEmits(['select-chart'])
 const { isAuthenticated, currentUser } = useAuth()
@@ -216,6 +256,81 @@ const migrationComplete = ref(false)
 const showHistoryModal = ref(false)
 const historySymbol = ref('')
 const useRealtimeData = ref(true)  // 默认使用实时数据
+
+// 股票搜索相关
+const stockSearchResults = ref([])
+const isSearchingStock = ref(false)
+const showStockMenu = ref(false)
+let searchTimeout = null
+
+// 处理股票代码输入（防抖搜索）
+function handleStockInput(val) {
+  if (!val) {
+    stockSearchResults.value = []
+    showStockMenu.value = false
+    return
+  }
+  
+  // 6位数字自动补全后缀
+  if (/^\d{6}$/.test(val)) {
+    let suffix = ''
+    if (val.startsWith('6') || val.startsWith('9')) {
+      suffix = '.SH'
+    } else if (val.startsWith('0') || val.startsWith('2') || val.startsWith('3')) {
+      suffix = '.SZ'
+    } else if (val.startsWith('4') || val.startsWith('8')) {
+      suffix = '.BJ'
+    }
+    
+    if (suffix && !val.includes('.')) {
+      // 自动补全
+      inputSymbol.value = val + suffix
+      // 补全后不继续搜索，或者可以选择继续搜索
+      return
+    }
+  }
+
+  // 必须输入2位以上才搜索
+  if (val.length < 2) {
+    stockSearchResults.value = []
+    showStockMenu.value = false
+    return
+  }
+
+  isSearchingStock.value = true
+  
+  if (searchTimeout) clearTimeout(searchTimeout)
+  
+  searchTimeout = setTimeout(async () => {
+    try {
+      // 调用搜索API
+      const results = await searchStocks(val)
+      
+      // 转换结果格式以适应 v-list
+      stockSearchResults.value = results.map(item => ({
+        title: `${item.symbol} ${item.name}`,
+        value: item.symbol,
+        pinyin: item.pinyin
+      }))
+      
+      // 如果有结果，显示菜单
+      showStockMenu.value = !!stockSearchResults.value.length
+    } catch (e) {
+      console.error('搜索股票失败:', e)
+      stockSearchResults.value = []
+    } finally {
+      isSearchingStock.value = false
+    }
+  }, 300)
+}
+
+function selectStock(item) {
+  inputSymbol.value = item.value
+  showStockMenu.value = false
+  stockSearchResults.value = [] // 选中后清空搜索结果
+  // 也可以选择自动添加
+  // addStock()
+}
 
 
 // 计算没有数据的股票
@@ -1425,5 +1540,33 @@ onMounted(async () => {
   background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(14, 165, 233, 0.5);
+}
+
+.stock-input-wrapper {
+  min-width: 300px;
+}
+
+/* Customizing v-text-field for dark glassmorphism theme */
+.stock-input-wrapper :deep(.v-field__outline) {
+  --v-field-border-opacity: 0.5;
+}
+
+.stock-search-menu {
+  background: rgba(30, 30, 63, 0.95) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 8px;
+}
+
+.stock-search-list {
+  background: transparent !important;
+}
+
+.stock-search-item {
+  color: #e6e6fa !important;
+}
+
+.stock-search-item:hover {
+  background: rgba(138, 43, 226, 0.2) !important;
 }
 </style>
