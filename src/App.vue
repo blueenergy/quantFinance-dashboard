@@ -285,6 +285,16 @@
               <div class="skeleton skeleton-table">策略股池加载中...</div>
             </template>
           </Suspense>
+
+          <!-- Limit-Up Ladder Tab (连板天梯) -->
+          <Suspense v-if="activeTab === 'limit-up-ladder'">
+            <template #default>
+              <LimitUpLadder />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">连板天梯加载中...</div>
+            </template>
+          </Suspense>
         </div>
       </div>
     </div>
@@ -317,6 +327,7 @@ const SecuritiesAccountDashboard = defineAsyncComponent(() => import('./componen
 const UserProfile = defineAsyncComponent(() => import('./components/UserProfile.vue'))
 const BacktestManager = defineAsyncComponent(() => import('./components/BacktestManager.vue'))
 const StrategyStockPool = defineAsyncComponent(() => import('./components/StrategyStockPool.vue'))
+const LimitUpLadder = defineAsyncComponent(() => import('./views/LimitUpLadder.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
@@ -391,6 +402,7 @@ watch(activeTab, (newTab) => {
 // 动态标签 - 管理员只显示管理功能，普通用户显示业务功能
 const adminTabs = computed(() => {
   const baseTabs = [
+    { id: 'limit-up-ladder', name: '📊 连板天梯' },
     { id: 'strategy-pool', name: '🎯 策略股池' },
     { id: 'ranking', name: '金榜' },
     { id: 'watchlist', name: '自选股' },
