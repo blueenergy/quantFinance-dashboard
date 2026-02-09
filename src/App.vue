@@ -24,11 +24,8 @@
           <!-- AI公告栏 -->
           <MarketAnalysisBulletin />
           
-          <div class="search-section">
-            <div class="search-controls">
-              <input v-model="symbol" placeholder="输入股票代码 (如 600519)" />
-              <button @click="fetchData">查询</button>
-            </div>
+          <div class="search-section" v-if="false">
+            <!-- Legacy search section removed -->
           </div>
         </template>
 
@@ -62,36 +59,7 @@
             <WatchListData @select-chart="selectStockForChart" />
           </div>
 
-          <div v-if="activeTab === 'data'" class="data-view">
-            <table v-if="records.length" class="data-table">
-              <thead>
-                <tr>
-                  <th>股票代码</th>
-                  <th>日期</th>
-                  <th>开盘</th>
-                  <th>最高</th>
-                  <th>最低</th>
-                  <th>收盘</th>
-                  <th>成交量</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in records.slice(0, 20)" :key="row._id">
-                  <td>{{ row.symbol }}</td>
-                  <td>{{ formatDate(row.trade_date) }}</td>
-                  <td>{{ row.open }}</td>
-                  <td>{{ row.high }}</td>
-                  <td>{{ row.low }}</td>
-                  <td>{{ row.close }}</td>
-                  <td>{{ row.volume }}</td>
-                </tr>
-              </tbody>
-            </table>
-            <div v-else class="empty">暂无数据</div>
-            <div class="load-more" v-if="activeTab === 'data'">
-              <button class="tab-button" @click="loadMoreRecords">加载更多 (当前 {{ recordsLimit }} )</button>
-            </div>
-          </div>
+          <!-- Legacy data view removed -->
 
           <div v-if="activeTab === 'chart'" class="chart-view">
             <Suspense>
@@ -376,9 +344,6 @@ axios.interceptors.response.use(
 
 const { user, isAuthenticated, validateToken, logout } = useAuth()
 
-const symbol = ref('')
-const records = ref([])
-const recordsLimit = ref(100)
 const currentIndex = ref(0)
 const watchlist = ref([]) 
 const chartRecords = ref([])
@@ -461,28 +426,7 @@ function normalizeDateForComparison(dateStr) {
   }
 }
 
-async function fetchData() {
-  let url = `/api/records/?limit=${recordsLimit.value}&sort=-trade_date`
-  if (symbol.value) url += `&symbol=${symbol.value}`
-  try {
-    const res = await axios.get(url)
-    records.value = res.data
-  } catch (e) {
-    console.error('获取数据失败:', e)
-    records.value = []
-  }
-}
 
-function loadMoreRecords() {
-  // Increase limit and refetch; backend pagination unknown, so expand window size
-  recordsLimit.value = Math.min(recordsLimit.value + 200, 2000)
-  fetchData()
-}
-
-function selectStock(stockSymbol) {
-  symbol.value = stockSymbol
-  fetchData()
-}
 
 /**
  * Fetches money flow records for a given stock symbol from the API.
@@ -805,8 +749,7 @@ function handleLoginSuccess(authData) {
     console.log('管理员登录，跳转到系统管理页面')
   } else {
     activeTab.value = 'watchlist'
-    // 普通用户登录后立即加载数据
-    fetchData()
+    activeTab.value = 'watchlist'
   }
 }
 
@@ -869,14 +812,7 @@ onMounted(async () => {
     activeTab.value = 'watchlist'
   }
   
-  // 将初始数据加载推迟到首屏渲染后，避免阻塞
-  if (!user.value?.is_admin && activeTab.value === 'watchlist') {
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(() => fetchData())
-    } else {
-      setTimeout(() => fetchData(), 0)
-    }
-  }
+
 })
 
 // 新增代码：图表视图的股票选择逻辑
