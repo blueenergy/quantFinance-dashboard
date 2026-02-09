@@ -30,10 +30,11 @@
             variant="outlined"
             density="compact"
             hide-details
-            bg-color="rgba(30, 30, 63, 0.5)"
-            color="deep-purple-accent-1"
-            base-color="rgba(138, 43, 226, 0.5)"
+            bg-color="rgba(30, 30, 63, 0.7)"
+            color="white"
+            base-color="rgba(230, 230, 250, 0.8)"
             class="custom-stock-input"
+            theme="dark"
             :loading="isSearchingStock"
             @update:model-value="handleStockInput"
             @focus="showStockMenu = !!stockSearchResults.length"
@@ -423,11 +424,37 @@ function loadLocalWatchlist() {
 
 // 添加股票到自选
 async function addStock() {
-  const symbol = inputSymbol.value.trim().toUpperCase()
+  let symbol = inputSymbol.value.trim().toUpperCase()
   if (!symbol) return
+  
+  // 校验逻辑：防止输入拼音或无效代码被提交
+  // 1. 如果是6位数字，自动补全后缀
+  if (/^\d{6}$/.test(symbol)) {
+    if (symbol.startsWith('6') || symbol.startsWith('9')) {
+      symbol += '.SH'
+    } else if (symbol.startsWith('0') || symbol.startsWith('2') || symbol.startsWith('3')) {
+      symbol += '.SZ'
+    } else if (symbol.startsWith('4') || symbol.startsWith('8')) {
+      symbol += '.BJ'
+    }
+  }
+  
+  // 2. 校验是否符合股票代码格式 (6位数字.后缀)
+  if (!/^\d{6}\.(SZ|SH|BJ)$/.test(symbol)) {
+    // 如果不符合格式，尝试在搜索结果中查找匹配项
+    const match = stockSearchResults.value.find(item => item.value === symbol || item.pinyin === symbol)
+    if (match) {
+      symbol = match.value
+    } else {
+      // 没有任何匹配，认为是无效输入
+      alert('请输入有效的股票代码（如 000001 或 000001.SZ）')
+      return
+    }
+  }
   
   if (watchList.value.includes(symbol)) {
     alert('股票已在自选列表中')
+    inputSymbol.value = '' 
     return
   }
   
@@ -445,6 +472,9 @@ async function addStock() {
     }
     
     inputSymbol.value = ''
+    showStockMenu.value = false
+    stockSearchResults.value = []
+    
     // 立即获取新添加股票的数据
     await fetchStockData(symbol)
     
@@ -1548,7 +1578,16 @@ onMounted(async () => {
 
 /* Customizing v-text-field for dark glassmorphism theme */
 .stock-input-wrapper :deep(.v-field__outline) {
-  --v-field-border-opacity: 0.5;
+  --v-field-border-opacity: 0.6;
+}
+
+.custom-stock-input :deep(input) {
+  color: #ffffff !important;
+  font-weight: 500;
+}
+
+.custom-stock-input :deep(.v-label) {
+  color: rgba(230, 230, 250, 0.8) !important;
 }
 
 .stock-search-menu {
