@@ -50,10 +50,11 @@
           color="primary"
           class="ml-3"
           :loading="loading"
-          icon="🔄"
           variant="text"
+          size="small"
           @click="loadData"
         >
+          🔄
         </v-btn>
       </v-col>
     </v-row>
@@ -213,6 +214,22 @@
             </p>
           </v-card-text>
         </v-card>
+
+        <!-- 自选股分析 -->
+        <analysis-card 
+          type="watchlist" 
+          :analyze-api="watchlistAnalyzeApi" 
+          :get-latest-api="getLatestApi" 
+          class="mt-4" 
+        />
+        
+        <!-- 持仓分析 -->
+        <analysis-card 
+          type="positions" 
+          :analyze-api="positionsAnalyzeApi" 
+          :get-latest-api="getLatestApi" 
+          class="mt-4" 
+        />
       </v-col>
     </v-row>
 
@@ -226,7 +243,14 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getDailyLadder, getIndicators, getSectorRanking } from '../api/ladder'
+import { getWatchlistOpportunities, getPositionsOpportunities, getLatestPortfolioAnalysis } from '../api/portfolio'
 import LadderTierCard from '../components/LadderTierCard.vue'
+import AnalysisCard from '../components/AnalysisCard.vue'
+
+// API wrapper functions for the analysis cards
+const watchlistAnalyzeApi = () => getWatchlistOpportunities()
+const positionsAnalyzeApi = () => getPositionsOpportunities()
+const getLatestApi = (type) => getLatestPortfolioAnalysis(type)
 
 const loading = ref(false)
 const selectedDate = ref('')
