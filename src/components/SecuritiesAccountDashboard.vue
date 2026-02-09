@@ -1,7 +1,16 @@
 <template>
   <v-card>
-    <v-card-title>
+    <v-card-title class="d-flex justify-space-between align-center">
       <span>账户工作台</span>
+      <v-btn
+        v-if="securitiesAccounts.length > 0 && !isObservationMode"
+        color="primary"
+        variant="flat"
+        size="small"
+        @click="openTradeDialog(null, 'buy')"
+      >
+        💹 交易
+      </v-btn>
     </v-card-title>
     
     <!-- 账户切换器 -->
@@ -131,6 +140,29 @@
           <template #item.frozen_qty="{ item }">
             {{ item.raw.frozen_qty || item.raw.frozen_quantity || 0 }}
           </template>
+          
+          <!-- 操作列 -->
+          <template #item.actions="{ item }">
+            <div class="d-flex gap-1">
+              <v-btn
+                color="info"
+                variant="text"
+                size="x-small"
+                @click="openHistoryDialog(item.raw)"
+              >
+                明细
+              </v-btn>
+              <v-btn
+                v-if="!isObservationMode"
+                color="primary"
+                variant="tonal"
+                size="x-small"
+                @click="openTradeDialog(item.raw, 'sell')"
+              >
+                交易
+              </v-btn>
+            </div>
+          </template>
         </v-data-table>
       </v-card-text>
     </v-card>
@@ -182,12 +214,91 @@
         </v-row>
       </v-card-text>
     </v-card>
+    
+    <!-- 交易对话框 -->
+    <TradeDialog
+      v-model="tradeDialogVisible"
+      :prefill-symbol="tradeDialogSymbol"
+      :prefill-name="tradeDialogName"
+      :prefill-action="tradeDialogAction"
+      :prefill-available-qty="tradeDialogAvailableQty"
+      :prefill-current-price="tradeDialogCurrentPrice"
+      :available-cash="overview.available_cash"
+      :positions="enrichedPositions"
+      @success="onTradeSuccess"
+    />
+    
+    <!-- 交易历史对话框 -->
+    <v-dialog v-model="historyDialogVisible" max-width="800px" scrollable>
+      <v-card>
+        <v-card-title class="d-flex justify-space-between align-center">
+          <span>{{ historyDialogStock }} 交易明细</span>
+          <v-btn icon size="small" variant="text" @click="historyDialogVisible = false">
+            ✕
+          </v-btn>
+        </v-card-title>
+        
+        <hr class="divider" />
+        
+        <v-card-text>
+          <v-progress-linear v-if="historyLoading" indeterminate color="primary" />
+          
+          <v-alert v-else-if="historyError" type="error" variant="tonal">
+            {{ historyError }}
+          </v-alert>
+          
+          <v-alert v-else-if="tradeHistory.length === 0" type="info" variant="tonal">
+            暂无交易记录
+          </v-alert>
+          
+          <v-data-table
+            v-else
+            :items="tradeHistory"
+            :headers="historyHeaders"
+            density="compact"
+            class="elevation-0"
+            :items-per-page="-1"
+          >
+            <template #item.action="{ item }">
+              <v-chip
+                :color="item.action === 'buy' ? 'success' : 'error'"
+                size="small"
+                variant="flat"
+              >
+                {{ item.action === 'buy' ? '买入' : '卖出' }}
+              </v-chip>
+            </template>
+            <template #item.filled_price="{ item }">
+              ¥{{ parseFloat(item.filled_price || 0).toFixed(2) }}
+            </template>
+            <template #item.amount="{ item }">
+              ¥{{ parseFloat(item.amount || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}
+            </template>
+            <template #item.datetime="{ item }">
+              {{ item.datetime || item.date || '-' }}
+            </template>
+          </v-data-table>
+        </v-card-text>
+        
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="historyDialogVisible = false">关闭</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+    
+    <!-- 成功提示 -->
+    <v-snackbar v-model="snackbar" color="success" :timeout="3000">
+      {{ snackbarMessage }}
+    </v-snackbar>
   </v-card>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { getTraderAccount, getTraderPositions, getSecuritiesAccounts, getTradeSignals } from '../api/trader'
+import { getTradeExecutionsBySymbol } from '../api/trading'
+import TradeDialog from './TradeDialog.vue'
 
 // 证券账户列表
 const securitiesAccounts = ref([])
@@ -219,7 +330,8 @@ const positionHeaders = [
   { title: '浮盈', key: 'profit_loss' },
   { title: '浮盈比例', key: 'profit_loss_ratio' },
   { title: '所属券商', key: 'broker' },
-  { title: '账户号', key: 'account_id' }
+  { title: '账户号', key: 'account_id' },
+  { title: '操作', key: 'actions', sortable: false, width: '80px' }
 ]
 
 // 账户选项（用于v-select）
@@ -475,6 +587,88 @@ onMounted(async () => {
     await refreshData()
   }
 })
+
+// ========== 交易对话框相关 ==========
+const tradeDialogVisible = ref(false)
+const tradeDialogSymbol = ref('')
+const tradeDialogName = ref('')
+const tradeDialogAction = ref('buy')
+const tradeDialogAvailableQty = ref(0)
+const tradeDialogCurrentPrice = ref(0)
+const snackbar = ref(false)
+const snackbarMessage = ref('')
+
+/**
+ * 打开交易对话框
+ * @param {Object|null} position - 持仓数据（卖出时传入）
+ * @param {string} action - 'buy' | 'sell'
+ */
+function openTradeDialog(position, action = 'buy') {
+  if (position) {
+    // 从持仓表格点击卖出
+    tradeDialogSymbol.value = position.symbol || ''
+    tradeDialogName.value = position.stock_name || position.name || ''
+    tradeDialogAvailableQty.value = position.available_qty || 0
+    tradeDialogCurrentPrice.value = position.current_price || 0
+  } else {
+    // 点击顶部交易按钮
+    tradeDialogSymbol.value = ''
+    tradeDialogName.value = ''
+    tradeDialogAvailableQty.value = 0
+    tradeDialogCurrentPrice.value = 0
+  }
+  tradeDialogAction.value = action
+  tradeDialogVisible.value = true
+}
+
+/**
+ * 交易成功回调
+ */
+function onTradeSuccess(result) {
+  snackbarMessage.value = `委托已提交: ${result.order_id}`
+  snackbar.value = true
+  // 刷新数据
+  refreshData()
+}
+
+// ========== 交易历史对话框相关 ==========
+const historyDialogVisible = ref(false)
+const historyDialogStock = ref('')
+const historyDialogSymbol = ref('')
+const historyLoading = ref(false)
+const historyError = ref('')
+const tradeHistory = ref([])
+
+const historyHeaders = [
+  { title: '时间', key: 'datetime', width: '160px' },
+  { title: '方向', key: 'action', width: '80px' },
+  { title: '数量', key: 'filled_qty' },
+  { title: '成交价', key: 'filled_price' },
+  { title: '成交金额', key: 'amount' },
+  { title: '策略', key: 'strategy' },
+  { title: '状态', key: 'status' }
+]
+
+/**
+ * 打开交易历史对话框
+ */
+async function openHistoryDialog(position) {
+  historyDialogStock.value = position.stock_name || position.symbol || ''
+  historyDialogSymbol.value = position.symbol || ''
+  historyDialogVisible.value = true
+  historyLoading.value = true
+  historyError.value = ''
+  tradeHistory.value = []
+
+  try {
+    const data = await getTradeExecutionsBySymbol(position.symbol)
+    tradeHistory.value = Array.isArray(data) ? data : (data.executions || [])
+  } catch (e) {
+    historyError.value = e.message || '获取交易记录失败'
+  } finally {
+    historyLoading.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -506,5 +700,13 @@ onMounted(async () => {
 }
 .ml-2 {
   margin-left: 8px;
+}
+.divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 0;
+}
+.gap-1 {
+  gap: 4px;
 }
 </style>
