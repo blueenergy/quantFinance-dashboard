@@ -61,7 +61,7 @@
     </v-card-text>
     
     <v-card-text v-else>
-      <v-alert type="info" border="left">
+      <v-alert type="info" border="start" variant="tonal" density="compact" class="mb-4">
         您还没有添加证券账户，请先在顶部菜单的“用户管理”中添加证券账户。
       </v-alert>
     </v-card-text>
@@ -197,14 +197,14 @@
                 <v-alert 
                   v-if="largestPositionRatio > 0.2" 
                   type="warning"
-                  border="left"
+                  border="start"
                 >
                   警告：最大持仓占比过高 ({{ formatPercent(largestPositionRatio) }} > 20%)，请注意风险分散
                 </v-alert>
                 <v-alert 
                   v-else 
                   type="success"
-                  border="left"
+                  border="start"
                 >
                   持仓分布合理 (最大持仓占比: {{ formatPercent(largestPositionRatio) }})
                 </v-alert>
