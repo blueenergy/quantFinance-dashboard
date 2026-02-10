@@ -38,13 +38,14 @@ export async function getSecuritiesAccounts() {
 }
 
 // 获取交易信号（用于观察模式模拟盈亏计算）
-export async function getTradeSignals(securitiesAccountId = null, status = null) {
+export async function getTradeSignals(securitiesAccountId = null, status = null, symbol = null) {
   let url = `${API_BASE}/trade-signals/`;
   const params = new URLSearchParams();
   if (securitiesAccountId) params.append('securities_account_id', securitiesAccountId);
   if (status) params.append('status', status);
+  if (symbol) params.append('symbol', symbol);
   if (params.toString()) url += `?${params.toString()}`;
-  
+
   const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) throw new Error(`Failed to get trade signals: ${res.status}`);
   const data = await res.json();
