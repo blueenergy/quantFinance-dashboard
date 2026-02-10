@@ -261,21 +261,36 @@
           >
             <template #item.action="{ item }">
               <v-chip
-                :color="item.action === 'buy' ? 'success' : 'error'"
+                :color="(item.action || item.side || '').toLowerCase() === 'buy' ? 'success' : 'error'"
                 size="small"
                 variant="flat"
               >
-                {{ item.action === 'buy' ? '买入' : '卖出' }}
+                {{ (item.action || item.side || '').toLowerCase() === 'buy' ? '买入' : '卖出' }}
               </v-chip>
             </template>
             <template #item.filled_price="{ item }">
-              ¥{{ parseFloat(item.filled_price || 0).toFixed(2) }}
+              ¥{{ parseFloat(item.filled_price || item.price || 0).toFixed(2) }}
+            </template>
+            <template #item.filled_qty="{ item }">
+              {{ item.filled_size || item.filled_qty || item.size || item.quantity || 0 }}
             </template>
             <template #item.amount="{ item }">
-              ¥{{ parseFloat(item.amount || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}
+              ¥{{ (parseFloat(item.filled_price || item.price || 0) * parseFloat(item.filled_size || item.filled_qty || item.size || item.quantity || 0)).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }}
             </template>
             <template #item.datetime="{ item }">
-              {{ item.datetime || item.date || '-' }}
+              {{ item.datetime || item.date || (item.timestamp ? new Date(item.timestamp * 1000).toLocaleString('zh-CN') : '-') }}
+            </template>
+            <template #item.strategy="{ item }">
+              {{ item.strategy_name || item.strategy || '-' }}
+            </template>
+            <template #item.status="{ item }">
+              <v-chip
+                :color="(item.status || '').toLowerCase() === 'filled' ? 'success' : 'grey'"
+                size="small"
+                variant="tonal"
+              >
+                {{ {'filled': '已成交', 'partial_filled': '部分成交', 'rejected': '已拒绝', 'failed': '失败', 'pending': '待执行'}[(item.status || '').toLowerCase()] || '已成交' }}
+              </v-chip>
             </template>
           </v-data-table>
         </v-card-text>
@@ -661,10 +676,28 @@ async function openHistoryDialog(position) {
   tradeHistory.value = []
 
   try {
-    const data = await getTradeExecutionsBySymbol(position.symbol)
-    tradeHistory.value = Array.isArray(data) ? data : (data.executions || [])
+    if (isObservationMode.value) {
+      // 观察模式：获取交易信号记录作为历史
+      // API 支持传入 symbol 筛选 (需要在 api/trader.js 中支持)
+      const signals = await getTradeSignals(selectedAccountId.value, null, position.symbol)
+      
+      tradeHistory.value = signals.map(sig => ({
+        datetime: sig.created_at || new Date(sig.timestamp * 1000).toLocaleString(),
+        action: sig.action,
+        filled_qty: sig.size,
+        filled_price: sig.price || '市价',
+        amount: (sig.price || position.current_price || 0) * sig.size,
+        strategy: sig.strategy || 'Manual',
+        status: sig.status
+      }))
+    } else {
+      // 实盘模式：获取真实成交记录
+      const data = await getTradeExecutionsBySymbol(position.symbol)
+      tradeHistory.value = Array.isArray(data) ? data : (data.data || [])
+    }
   } catch (e) {
     historyError.value = e.message || '获取交易记录失败'
+    console.error('Fetch history failed:', e)
   } finally {
     historyLoading.value = false
   }
