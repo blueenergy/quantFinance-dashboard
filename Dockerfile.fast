@@ -1,0 +1,48 @@
+# Hyper-Optimized Dockerfile for China Network
+# Base Image: node:20-alpine (Pre-installed Node.js = No Downloads)
+# -----------------------------------------------------------------------------
+
+########## Build Stage ##########
+FROM node:20-alpine AS build
+
+# 1. Use Aliyun Mirror for Alpine Packages (Fastest in China)
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
+WORKDIR /app
+
+# 2. Copy manifests
+COPY package*.json ./
+
+# 3. NPM Install with Taobao Mirror (Fastest Registry)
+RUN npm config set registry https://registry.npmmirror.com && \
+    if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+# 4. Copy source & Build
+COPY . .
+ARG VITE_API_BASE=/api
+ENV VITE_API_BASE=$VITE_API_BASE
+RUN echo "Building with VITE_API_BASE=$VITE_API_BASE" && npm run build
+
+########## Runtime Stage ##########
+FROM nginx:alpine AS runtime
+
+# 1. Use Aliyun Mirror again
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
+# 2. Install minimal dependencies (envsubst)
+RUN apk add --no-cache bash gettext
+
+# 3. Config
+ENV BACKEND_URL=http://backend:3001
+COPY --from=build /app/dist /usr/share/nginx/html
+RUN mkdir -p /etc/nginx/templates
+COPY nginx.template.conf /etc/nginx/templates/default.conf.template
+
+# 4. Entrypoint
+COPY docker-entrypoint.sh /docker-entrypoint.d/10-envsubst.sh
+RUN chmod +x /docker-entrypoint.d/10-envsubst.sh
+
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget -q -O - http://localhost/ || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]
