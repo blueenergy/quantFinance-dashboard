@@ -128,7 +128,9 @@
                     <button @click="analyzeStock(stock.symbol)" class="analyze-btn" :disabled="analyzingStock === stock.symbol">
                       {{ analyzingStock === stock.symbol ? '分析中...' : '🤖 AI分析' }}
                     </button>
-                    <button @click="deepAnalyzeStock(stock.symbol)" class="deep-analyze-btn">🔬 深度分析</button>
+                    <button @click="deepAnalyzeStock(stock.symbol)" class="deep-analyze-btn" :disabled="deepAnalyzingStock === stock.symbol">
+                      {{ deepAnalyzingStock === stock.symbol ? '提交中...' : '🔬 深度分析' }}
+                    </button>
                     <button @click="openHistoryModal(stock.symbol)" class="history-btn">🕑 历史分析</button>
                     <button @click="removeStock(stock.symbol)" class="remove-btn">移除</button>
                   </div>
@@ -250,6 +252,7 @@ const watchList = ref([])
 const stocksData = ref([])
 const loading = ref(false)
 const analyzingStock = ref('')
+const deepAnalyzingStock = ref('')
 const analysisResults = ref({})
 const showAnalysisModal = ref(false)
 const currentAnalysis = ref({ symbol: '', data: null, timestamp: null })
@@ -683,9 +686,49 @@ async function analyzeStock(symbol) {
 }
 
 // 深度分析股票
-function deepAnalyzeStock(symbol) {
-  alert(`深度分析功能开发中：${symbol}`)
-  // TODO: 调用后端深度分析API，弹窗展示结果
+async function deepAnalyzeStock(symbol) {
+  if (!isAuthenticated?.value) {
+    alert('请先登录后再进行深度分析')
+    return
+  }
+  
+  try {
+    deepAnalyzingStock.value = symbol
+    const token = localStorage.getItem('access_token')
+    
+    // 调用后端 Producer 接口
+    const response = await axios.post('/api/analyze/deep-analysis', {
+      symbol: symbol,
+      priority: 1
+    }, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (response.data && response.data.success) {
+      const remaining = response.data.quota_remaining
+      alert(`✅ 深度分析任务已提交！\n\n剩余配额: ${remaining}\n排队位置: ${response.data.position_in_queue}\n\nAI正在进行深度思考（约需1-3分钟），请稍候点击"历史分析"查看结果。`)
+    } else {
+      alert(`提交失败: ${response.data.message || '未知错误'}`)
+    }
+    
+  } catch (error) {
+    console.error('深度分析请求失败:', error)
+    const status = error.response?.status
+    const detail = error.response?.data?.detail
+    
+    if (status === 403) {
+      alert(`🚫 提交失败: ${detail || '配额不足或权限不够'}`)
+    } else if (status === 401) {
+      alert('登录已过期，请重新登录')
+    } else {
+      alert(`❌ 系统错误: ${detail || error.message || '请稍后重试'}`)
+    }
+  } finally {
+    deepAnalyzingStock.value = ''
+  }
 }
 
 // 显示分析结果
