@@ -40,12 +40,24 @@
           v-for="stock in displayedStocks" 
           :key="stock.symbol" 
           class="stock-item d-flex align-center justify-space-between py-2"
+          @click="$emit('show-reasoning', stock)"
+          style="cursor: pointer"
         >
-          <div class="stock-info">
+          <div class="stock-info d-flex align-center">
             <span class="stock-name font-weight-medium">{{ stock.name }}</span>
             <span class="stock-symbol text-grey ml-2">{{ stock.symbol }}</span>
             <v-chip v-if="stock.streak >= 4" size="x-small" color="red" class="ml-2">
               {{ stock.streak }}连板
+            </v-chip>
+            <!-- Analysis Tag -->
+            <v-chip 
+              v-if="stock.analysis && stock.analysis.tag" 
+              size="x-small" 
+              color="purple-lighten-2" 
+              class="ml-2"
+              variant="flat"
+            >
+              🤖 {{ stock.analysis.tag }}
             </v-chip>
           </div>
           <div class="stock-meta d-flex align-center">
