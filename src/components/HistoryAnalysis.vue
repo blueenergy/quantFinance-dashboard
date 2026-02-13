@@ -1,10 +1,15 @@
 <template>
   <div v-if="history && history.length > 0" class="history-section">
-    <h4 style="margin-top:24px;">🕑 历史AI分析</h4>
-    <div v-for="(item, idx) in history" :key="item.timestamp || item.id || idx" class="history-card">
+    <h4 style="margin-top:24px;">
+      🕑 历史AI分析 
+      <span v-if="unreadCount > 0" class="unread-badge">({{ unreadCount }} NEW)</span>
+    </h4>
+    <div v-for="(item, idx) in history" :key="item.timestamp || item.id || idx" 
+         class="history-card" :class="{ 'unread': item.is_read === false }">
       <div class="history-header">
         <span class="stock-code">
           {{ item.symbol }}<span v-if="item.stock_name"> - {{ item.stock_name }}</span>
+          <span v-if="item.is_read === false" class="new-tag">NEW</span>
         </span>
         <span class="history-date">{{ formatDateTime(item.created_at || item.timestamp) }}</span>
         <span class="history-model">🧠 模型: <b>{{ item.model || 'unknown' }}</b></span>
@@ -68,9 +73,54 @@
 </template>
 
 <script setup>
+import { reactive, watch, ref, onMounted } from 'vue'
+import axios from 'axios' 
+
 const props = defineProps({
   history: Array
 })
+
+const unreadCount = ref(0)
+// Removed unused store import
+
+// Watch history to mark read
+watch(() => props.history, async (newVal) => {
+  if (newVal && newVal.length > 0) {
+    // 1. Count unread
+    const unread = newVal.filter(h => h.is_read === false)
+    unreadCount.value = unread.length
+    
+    // 2. Mark as read immediately (WeChat style: once viewed/loaded, mark read)
+    // Or maybe debounce?
+    if (unread.length > 0) {
+       const ids = unread.map(h => h._id || h.id)
+       try {
+           // We need to call the mark-read API.
+           // Assuming authentication header is handled by axios interceptor
+           // If not, we might need token.
+           // Let's assume standard axios setup.
+           // NOTE: We should wait a bit or do it silently.
+           await markRead(ids)
+           // Update local state to remove badge after successful mark
+           // setTimeout(() => {
+           //    unreadCount.value = 0
+           //    newVal.forEach(h => h.is_read = true) 
+           // }, 2000)
+       } catch (e) {
+           console.error("Failed to mark read", e)
+       }
+    }
+  }
+}, { immediate: true })
+
+async function markRead(ids) {
+    // Call backend
+    const token = localStorage.getItem('token') // Simplified
+    await axios.post(`${import.meta.env.VITE_API_URL || '/api'}/analyze/mark-read`, ids, {
+        headers: { Authorization: `Bearer ${token}` }
+    })
+}
+
 function formatDateTime(timestamp) {
   if (!timestamp) return ''
   const date = new Date(timestamp)
@@ -83,7 +133,6 @@ function formatDateTime(timestamp) {
   })
 }
 
-import { reactive } from 'vue'
 const thinkingStates = reactive({})
 const maximizingStates = reactive({})
 
@@ -116,13 +165,41 @@ function toggleMaximize(item) {
   font-size: 15px;
   margin-bottom: 10px;
 }
+.unread-badge {
+    color: #f87171;
+    font-size: 12px;
+    margin-left: 8px;
+    animation: flash 2s infinite;
+}
+@keyframes flash {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
 .history-card {
   background: #1e1e1e;
   border: 1px solid #333;
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 12px;
+  position: relative;
+  transition: border-color 0.3s;
 }
+.history-card.unread {
+    border-left: 3px solid #f87171;
+    background: linear-gradient(90deg, rgba(248, 113, 113, 0.05), transparent);
+}
+.new-tag {
+    background: #f87171;
+    color: white;
+    font-size: 10px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
 .history-header {
   display: flex;
   justify-content: space-between;
