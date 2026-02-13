@@ -128,6 +128,7 @@
               color="red-darken-2"
               :stocks="tiers['4+']"
               :sector-aggregation="getSectorAggregation('4+')"
+              @show-reasoning="handleShowReasoning"
             />
             
             <!-- 三板 -->
@@ -138,6 +139,7 @@
               color="orange-darken-1"
               :stocks="tiers['3']"
               :sector-aggregation="getSectorAggregation('3')"
+              @show-reasoning="handleShowReasoning"
             />
             
             <!-- 二板 -->
@@ -148,6 +150,7 @@
               color="green-darken-1"
               :stocks="tiers['2']"
               :sector-aggregation="getSectorAggregation('2')"
+              @show-reasoning="handleShowReasoning"
             />
             
             <!-- 首板 -->
@@ -159,6 +162,7 @@
               :stocks="tiers['1']"
               :sector-aggregation="getSectorAggregation('1')"
               :collapsed="true"
+              @show-reasoning="handleShowReasoning"
             />
 
             <!-- 无数据 -->
@@ -237,12 +241,59 @@
     <v-overlay :model-value="loading" class="align-center justify-center" contained>
       <v-progress-circular indeterminate size="64" color="primary" />
     </v-overlay>
+
+    <!-- 归因详情弹窗 -->
+    <v-dialog v-model="showReasoningDialog" max-width="600">
+      <v-card v-if="selectedStockReasoning">
+        <v-card-title class="d-flex align-center bg-primary text-white">
+          <span>🤖 智能归因：{{ selectedStockReasoning.name }} ({{ selectedStockReasoning.symbol }})</span>
+          <v-spacer></v-spacer>
+          <v-btn icon variant="text" @click="showReasoningDialog = false">✕</v-btn>
+        </v-card-title>
+        <v-card-text class="pa-4">
+          <!-- 核心结论 -->
+          <div class="mb-4">
+            <div class="text-subtitle-1 font-weight-bold mb-1">💡 核心驱动</div>
+            <v-chip color="purple-lighten-2" class="mr-2">{{ selectedStockReasoning.reasoning.tag }}</v-chip>
+            <span class="text-body-1">{{ selectedStockReasoning.reasoning.reason }}</span>
+          </div>
+
+          <!-- 详细分析 -->
+          <v-alert type="info" variant="tonal" class="mb-4">
+            <div class="text-subtitle-2 font-weight-bold mb-1">详细分析</div>
+            {{ selectedStockReasoning.reasoning.analysis }}
+          </v-alert>
+
+          <!-- 新闻上下文 -->
+          <div v-if="selectedStockReasoning.news_context && selectedStockReasoning.news_context.length">
+            <div class="text-subtitle-1 font-weight-bold mb-2">📰 相关新闻上下文</div>
+            <v-list density="compact" lines="two">
+              <v-list-item 
+                v-for="(news, i) in selectedStockReasoning.news_context" 
+                :key="i"
+                :subtitle="formatTime(news.datetime)"
+              >
+                <template v-slot:title>
+                  <span class="text-caption font-weight-medium">{{ news.title }}</span>
+                </template>
+              </v-list-item>
+            </v-list>
+          </div>
+        </v-card-text>
+      </v-card>
+      <v-card v-else>
+        <v-card-text class="text-center pa-5">
+          <v-progress-circular indeterminate color="primary" />
+          <div class="mt-2">正在分析...</div>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { getDailyLadder, getIndicators, getSectorRanking } from '../api/ladder'
+import { getDailyLadder, getIndicators, getSectorRanking, getReasoningDetail } from '../api/ladder'
 import { getWatchlistOpportunities, getPositionsOpportunities, getLatestPortfolioAnalysis } from '../api/portfolio'
 import LadderTierCard from '../components/LadderTierCard.vue'
 import AnalysisCard from '../components/AnalysisCard.vue'
@@ -266,6 +317,43 @@ const autoRefresh = ref(false)
 const countdown = ref(60)
 let refreshTimer = null
 let countdownTimer = null
+
+// Reasoning Dialog State
+const showReasoningDialog = ref(false)
+const selectedStockReasoning = ref(null)
+
+// Format time utility
+function formatTime(val) {
+   if (!val) return ''
+   return new Date(val).toLocaleString()
+}
+
+// Handle click on stock to show reasoning
+async function handleShowReasoning(stock) {
+  showReasoningDialog.value = true
+  selectedStockReasoning.value = null // Show loading
+  
+  try {
+    const res = await getReasoningDetail(stock.symbol, selectedDate.value ? selectedDate.value.replace(/-/g, '') : null)
+    if (res.success) {
+      selectedStockReasoning.value = res.data
+    } else {
+      // If no detail found, show basic info from stock object if available
+       selectedStockReasoning.value = {
+          name: stock.name,
+          symbol: stock.symbol,
+          reasoning: stock.analysis || { tag: '未知', reason: '暂无详细分析', analysis: res.error }
+       }
+    }
+  } catch (e) {
+    console.error(e)
+    selectedStockReasoning.value = {
+        name: stock.name,
+        symbol: stock.symbol,
+        reasoning: { tag: 'Error', reason: '加载失败', analysis: e.message }
+     }
+  }
+}
 
 // 计算最大板块分数（用于进度条）
 const maxSectorScore = computed(() => {

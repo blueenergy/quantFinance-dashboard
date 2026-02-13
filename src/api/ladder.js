@@ -76,3 +76,17 @@ export async function getLadderHistory(startDate, endDate) {
     if (!res.ok) throw new Error(`Failed to get ladder history: ${res.status}`);
     return await res.json();
 }
+
+/**
+ * 获取个股归因详情
+ * @param {string} symbol - 股票代码
+ * @param {string} date - 日期 YYYYMMDD，可选
+ */
+export async function getReasoningDetail(symbol, date = null) {
+    let url = `${API_BASE}/ladder/reasoning/${symbol}`;
+    if (date) url += `?date=${date}`;
+
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Failed to get reasoning detail: ${res.status}`);
+    return await res.json();
+}
