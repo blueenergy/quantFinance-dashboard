@@ -21,7 +21,9 @@
       <div class="main-content">
         <!-- 普通用户显示：AI公告栏和搜索功能 -->
         <template v-if="!user?.is_admin">
-          <!-- AI公告栏 -->
+          <!-- 全球市场联动分析 (盘前) -->
+          <GlobalMarketBrief />
+          <!-- AI公告栏 (盘中/盘后) -->
           <MarketAnalysisBulletin />
           
           <div class="search-section" v-if="false">
@@ -281,6 +283,7 @@ const MinuteKlineChart = defineAsyncComponent(() => import('./components/MinuteK
 // StockAnalysis component removed: AI analysis moved to AIAnalysisHistory
 const AIAnalysisHistory = defineAsyncComponent(() => import('./components/AIAnalysisHistory.vue'))
 const MarketAnalysisBulletin = defineAsyncComponent(() => import('./components/MarketAnalysisBulletin.vue'))
+const GlobalMarketBrief = defineAsyncComponent(() => import('./components/GlobalMarketBrief.vue'))
 const AdminDashboard = defineAsyncComponent(() => import('./components/AdminDashboard.vue'))
 const StockRanking = defineAsyncComponent(() => import('./components/StockRanking.vue'))
 const MarketSpectrum = defineAsyncComponent(() => import('./components/MarketSpectrum.vue'))
