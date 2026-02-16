@@ -17,6 +17,7 @@
       
       <div v-else-if="error" class="error">
         <p>❌ {{ error }}</p>
+        <p class="error-tip">请联系系统管理员检查后台服务运行状态</p>
       </div>
       
       <div v-else-if="analysis" class="analysis-content">
@@ -59,7 +60,7 @@
       <div v-else class="no-data">
         <p>
           📈 暂无分析数据<br>
-          <small>系统将在交易日的预定时间自动生成最新的大盘分析，请稍后查看</small>
+          <small>系统将在交易日的预定时间(10:00/11:30/15:30)自动生成大盘分析<br>如长时间未显示，请联系管理员检查后台服务</small>
         </p>
       </div>
     </div>
@@ -78,7 +79,7 @@ const error = ref('')
 const analysis = ref(null)
 
 // 获取大盘分析
-async function refreshAnalysis(isManual = false) {
+async function fetchAnalysis() {
   loading.value = true
   error.value = ''
   
@@ -88,22 +89,12 @@ async function refreshAnalysis(isManual = false) {
       throw new Error('请先登录后再获取分析')
     }
     
-    // 只在手动刷新时才检查LLM配置
-    if (isManual) {
-      const llmConfigStatus = await checkUserLlmConfig()
-      if (!llmConfigStatus.hasConfig) {
-        throw new Error('请先在用户设置中配置您的LLM API令牌，然后才能使用AI分析功能')
-      }
-      
-      if (!llmConfigStatus.isActive) {
-        throw new Error('您已配置LLM，但还未激活任何配置。请进入用户设置激活一个LLM配置')
-      }
-    }
     
-    // 发送API请求，只有手动刷新时才加force_refresh
+
+    
+    // 发送API请求
     const response = await request.post('/analyze-market', {
-      type: 'daily_overview',
-      ...(isManual ? { force_refresh: true } : {})
+      type: 'daily_overview'
     })
     
     if (response.success) {
@@ -127,23 +118,9 @@ async function refreshAnalysis(isManual = false) {
     }
   } catch (err) {
     console.error('获取市场分析失败:', err)
-    
-    // 只在手动刷新时才显示错误信息
-    if (isManual) {
-      if (err.response?.status === 401) {
-        error.value = '登录已过期，请重新登录'
-      } else if (err.message.includes('请先登录')) {
-        error.value = err.message
-      } else if (err.message.includes('请先在用户设置中配置')) {
-        error.value = err.message
-      } else if (err.message.includes('还未激活')) {
-        error.value = err.message
-      } else {
-        error.value = err.response?.data?.detail || err.message || '网络连接失败'
-      }
-    } else {
-      // 自动加载失败时，不显示错误，静默失败
-      console.log('自动加载失败，无历史数据')
+    // 自动加载失败时，不显示错误，静默失败，除非是严重的连接问题
+    if (!err.response && !err.message.includes('登录')) {
+        error.value = '无法连接到分析服务'
     }
   } finally {
     loading.value = false
@@ -208,9 +185,9 @@ function getCacheIcon(fromCache) {
   return fromCache ? '💾' : '🔄'
 }
 
-// 自动加载时调用（不加force_refresh）
-onMounted(async () => {
-  await refreshAnalysis(false)
+// 自动加载时调用
+onMounted(() => {
+  fetchAnalysis()
 })
 </script>
 
