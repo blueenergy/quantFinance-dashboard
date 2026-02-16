@@ -61,40 +61,131 @@
             <h4>📉 市场数据快照 <span class="snap-time" v-if="marketDate">({{ marketDate }} 收盘)</span><span class="snap-time" v-else-if="analysisTimestamp">({{ formatTime(analysisTimestamp) }})</span></h4>
             <v-chip size="x-small" color="grey" variant="outlined">快照数据</v-chip>
           </div>
-          
-          
-          <div class="market-indices">
-            <!-- 纳斯达克 -->
-            <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^IXIC')?.change_pct)">
-              <span class="m-name">纳斯达克</span>
-              <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^IXIC')?.price) }}</span>
-              <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^IXIC')?.change_pct) }}</span>
-            </div>
-            <!-- A50 (FXI) -->
-            <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, 'FXI')?.change_pct)">
-              <span class="m-name">中国大盘ETF(FXI)</span>
-              <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, 'FXI')?.price) }}</span>
-              <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, 'FXI')?.change_pct) }}</span>
-            </div>
-             <!-- A50 (2823.HK) -->
-            <div class="market-item" :class="getChangeClass(getMarketItem(marketData.china_concepts, '2823.HK')?.change_pct)">
-              <span class="m-name">A50 ETF(港)</span>
-              <span class="m-price">{{ formatNumber(getMarketItem(marketData.china_concepts, '2823.HK')?.price) }}</span>
-              <span class="m-change">{{ formatPercent(getMarketItem(marketData.china_concepts, '2823.HK')?.change_pct) }}</span>
-            </div>
-            <!-- 黄金 -->
-            <div class="market-item" :class="getChangeClass(getMarketItem(marketData.commodities, 'GC=F')?.change_pct)">
-              <span class="m-name">黄金</span>
-              <span class="m-price">{{ formatNumber(getMarketItem(marketData.commodities, 'GC=F')?.price) }}</span>
-              <span class="m-change">{{ formatPercent(getMarketItem(marketData.commodities, 'GC=F')?.change_pct) }}</span>
-            </div>
-            <!-- 离岸人民币 -->
-            <div class="market-item" :class="getChangeClass(getMarketItem(marketData.forex, 'CNH=X')?.change_pct)">
-              <span class="m-name">离岸人民币</span>
-              <span class="m-price">{{ formatNumber(getMarketItem(marketData.forex, 'CNH=X')?.price) }}</span>
-              <span class="m-change">{{ formatPercent(getMarketItem(marketData.forex, 'CNH=X')?.change_pct) }}</span>
-            </div>
-          </div>
+
+          <v-tabs
+            v-model="activeMarketTab"
+            bg-color="transparent"
+            color="primary"
+            density="compact"
+            class="market-tabs mb-3"
+            show-arrows
+          >
+            <v-tab value="indices">🇺🇸 核心指数</v-tab>
+            <v-tab value="china">🇨🇳 中国资产</v-tab>
+            <v-tab value="tech">🤖 科技巨头</v-tab>
+            <v-tab value="commodities">🪙 商品外汇</v-tab>
+            <v-tab value="other">📉 债券加密</v-tab>
+          </v-tabs>
+
+          <v-window v-model="activeMarketTab">
+            <!-- 1. 核心指数 -->
+            <v-window-item value="indices">
+              <div class="market-indices">
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^IXIC')?.change_pct)">
+                  <span class="m-name">纳斯达克</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^IXIC')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^IXIC')?.change_pct) }}</span>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^GSPC')?.change_pct)">
+                  <span class="m-name">标普500</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^GSPC')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^GSPC')?.change_pct) }}</span>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^DJI')?.change_pct)">
+                  <span class="m-name">道琼斯</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^DJI')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^DJI')?.change_pct) }}</span>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^RUT')?.change_pct)">
+                  <span class="m-name">罗素2000</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^RUT')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^RUT')?.change_pct) }}</span>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^VIX')?.change_pct)">
+                  <span class="m-name">恐慌指数(VIX)</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^VIX')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^VIX')?.change_pct) }}</span>
+                </div>
+              </div>
+            </v-window-item>
+
+            <!-- 2. 中国资产 -->
+            <v-window-item value="china">
+              <div class="market-indices">
+                <div class="market-item" v-for="(symbol, index) in ['FXI', '2823.HK', 'PGJ', 'BABA', 'PDD', 'JD', 'NIO']" :key="index"
+                     :class="getChangeClass(getMarketItem(marketData.china_concepts, symbol)?.change_pct)">
+                  <span class="m-name">{{ getMarketItem(marketData.china_concepts, symbol)?.name || symbol }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.china_concepts, symbol)?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.china_concepts, symbol)?.change_pct) }}</span>
+                </div>
+              </div>
+            </v-window-item>
+
+            <!-- 3. 科技巨头 -->
+            <v-window-item value="tech">
+              <div class="market-indices">
+                <div class="market-item" v-for="(symbol, index) in ['NVDA', 'TSLA', 'AAPL', 'MSFT', 'GOOG', 'META', 'AMZN', 'AMD', 'INTC']" :key="index"
+                     :class="getChangeClass(getMarketItem(marketData.tech_giants, symbol)?.change_pct)">
+                  <span class="m-name">{{ getMarketItem(marketData.tech_giants, symbol)?.name || symbol }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.tech_giants, symbol)?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.tech_giants, symbol)?.change_pct) }}</span>
+                </div>
+              </div>
+            </v-window-item>
+
+            <!-- 4. 商品外汇 -->
+            <v-window-item value="commodities">
+              <div class="market-indices">
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.commodities, 'GC=F')?.change_pct)">
+                  <span class="m-name">黄金</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.commodities, 'GC=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.commodities, 'GC=F')?.change_pct) }}</span>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.commodities, 'SI=F')?.change_pct)">
+                  <span class="m-name">白银</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.commodities, 'SI=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.commodities, 'SI=F')?.change_pct) }}</span>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.commodities, 'CL=F')?.change_pct)">
+                  <span class="m-name">原油</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.commodities, 'CL=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.commodities, 'CL=F')?.change_pct) }}</span>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.forex, 'CNH=X')?.change_pct)">
+                  <span class="m-name">离岸人民币</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.forex, 'CNH=X')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.forex, 'CNH=X')?.change_pct) }}</span>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.forex, 'DX-Y.NYB')?.change_pct)">
+                  <span class="m-name">美元指数</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.forex, 'DX-Y.NYB')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.forex, 'DX-Y.NYB')?.change_pct) }}</span>
+                </div>
+              </div>
+            </v-window-item>
+            
+            <!-- 5. 债券加密 -->
+            <v-window-item value="other">
+               <div class="market-indices">
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.bonds, '^TNX')?.change_pct)">
+                  <span class="m-name">10年美债</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.bonds, '^TNX')?.price) }}%</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.bonds, '^TNX')?.change_pct) }}</span>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.crypto, 'BTC-USD')?.change_pct)">
+                  <span class="m-name">比特币</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.crypto, 'BTC-USD')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.crypto, 'BTC-USD')?.change_pct) }}</span>
+                </div>
+                 <div class="market-item" :class="getChangeClass(getMarketItem(marketData.crypto, 'ETH-USD')?.change_pct)">
+                  <span class="m-name">以太坊</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.crypto, 'ETH-USD')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.crypto, 'ETH-USD')?.change_pct) }}</span>
+                </div>
+               </div>
+            </v-window-item>
+
+          </v-window>
         </div>
 
         <!-- 三步骤分析展示 -->
@@ -185,6 +276,7 @@ import axios from 'axios'
 const loading = ref(false)
 const error = ref('')
 const analysisResult = ref(null)
+const activeMarketTab = ref('indices')
 
 // 提取数据
 // 后端现在直接返回 { categories: { indices: {...}, ... } }
@@ -657,6 +749,14 @@ onMounted(() => {
 .text-up { color: #f56565; }
 .text-down { color: #48bb78; }
 .text-neutral { color: #a0aec0; }
+
+.market-tabs {
+  border-bottom: 1px solid #edf2f7;
+  margin-left: -16px;
+  margin-right: -16px;
+  padding-left: 16px;
+  padding-right: 16px; 
+}
 
 .watchdog-alert {
   animation: fadeIn 0.5s ease-in-out;
