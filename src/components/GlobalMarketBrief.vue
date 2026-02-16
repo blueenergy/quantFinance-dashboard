@@ -3,8 +3,8 @@
     <div class="card-header">
       <div class="header-main">
         <h3>🌍 隔夜全球市场联动分析</h3>
-        <span v-if="analysis?.timestamp" class="header-time">
-          ({{ formatDateTime(analysis.timestamp) }} 分析)
+        <span v-if="analysisTimestamp" class="header-time">
+          ({{ formatDateTime(analysisTimestamp) }} 分析)
         </span>
       </div>
       <div v-if="brief" class="sentiment-indicator" :class="getSentimentClass(brief.sentiment_score)">
@@ -15,7 +15,7 @@
 
     <div class="card-content">
       <div v-if="loading" class="loading-state">
-        <v-progress-circular indeterminate color="primary"></ v-progress-circular>
+        <v-progress-circular indeterminate color="primary"></v-progress-circular>
         <p>正在同步全球市场数据与AI分析...</p>
       </div>
 
@@ -26,6 +26,49 @@
       </div>
 
       <div v-else-if="brief" class="brief-body">
+        
+        <!-- 新增：市场数据仪表盘 (数据快照) -->
+        <div v-if="marketData" class="market-dashboard">
+          <div class="dashboard-header">
+            <h4>📉 市场数据快照 <span class="snap-time" v-if="marketDate">({{ marketDate }} 收盘)</span><span class="snap-time" v-else-if="analysisTimestamp">({{ formatTime(analysisTimestamp) }})</span></h4>
+            <v-chip size="x-small" color="grey" variant="outlined">快照数据</v-chip>
+          </div>
+          
+          
+          <div class="market-indices">
+            <!-- 纳斯达克 -->
+            <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^IXIC')?.change_pct)">
+              <span class="m-name">纳斯达克</span>
+              <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^IXIC')?.price) }}</span>
+              <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^IXIC')?.change_pct) }}</span>
+            </div>
+            <!-- A50 (FXI) -->
+            <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, 'FXI')?.change_pct)">
+              <span class="m-name">中国大盘ETF(FXI)</span>
+              <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, 'FXI')?.price) }}</span>
+              <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, 'FXI')?.change_pct) }}</span>
+            </div>
+             <!-- A50 (2823.HK) -->
+            <div class="market-item" :class="getChangeClass(getMarketItem(marketData.china_concepts, '2823.HK')?.change_pct)">
+              <span class="m-name">A50 ETF(港)</span>
+              <span class="m-price">{{ formatNumber(getMarketItem(marketData.china_concepts, '2823.HK')?.price) }}</span>
+              <span class="m-change">{{ formatPercent(getMarketItem(marketData.china_concepts, '2823.HK')?.change_pct) }}</span>
+            </div>
+            <!-- 黄金 -->
+            <div class="market-item" :class="getChangeClass(getMarketItem(marketData.commodities, 'GC=F')?.change_pct)">
+              <span class="m-name">黄金</span>
+              <span class="m-price">{{ formatNumber(getMarketItem(marketData.commodities, 'GC=F')?.price) }}</span>
+              <span class="m-change">{{ formatPercent(getMarketItem(marketData.commodities, 'GC=F')?.change_pct) }}</span>
+            </div>
+            <!-- 离岸人民币 -->
+            <div class="market-item" :class="getChangeClass(getMarketItem(marketData.forex, 'CNH=X')?.change_pct)">
+              <span class="m-name">离岸人民币</span>
+              <span class="m-price">{{ formatNumber(getMarketItem(marketData.forex, 'CNH=X')?.price) }}</span>
+              <span class="m-change">{{ formatPercent(getMarketItem(marketData.forex, 'CNH=X')?.change_pct) }}</span>
+            </div>
+          </div>
+        </div>
+
         <!-- 三步骤分析展示 -->
         
         <!-- Step 1: 国外市场分析 -->
@@ -113,9 +156,27 @@ import axios from 'axios'
 
 const loading = ref(false)
 const error = ref('')
-const analysis = ref(null)
+const analysisResult = ref(null)
 
-const brief = computed(() => analysis.value?.analysis || null)
+// 提取数据
+// 后端现在直接返回 { categories: { indices: {...}, ... } }
+const brief = computed(() => analysisResult.value?.analysis || null)
+const marketData = computed(() => {
+  const data = analysisResult.value?.market_data
+  // 如果后端返回的就是 categories 字典，直接用
+  return data?.categories || data || null
+})
+const analysisTimestamp = computed(() => analysisResult.value?.analyzed_at || analysisResult.value?.timestamp)
+
+// 获取市场数据的实际交易日期 (取纳指或第一条数据的日期)
+const marketDate = computed(() => {
+  if (!marketData.value?.indices) return null
+  const ixic = marketData.value.indices['^IXIC']
+  if (ixic?.date) return ixic.date
+  // Fallback to any item
+  const firstKey = Object.keys(marketData.value.indices)[0]
+  return marketData.value.indices[firstKey]?.date || null
+})
 
 async function fetchGlobalAnalysis() {
   loading.value = true
@@ -123,16 +184,14 @@ async function fetchGlobalAnalysis() {
   try {
     const response = await axios.get('/api/global-analysis')
     if (response.data.success) {
-      analysis.value = response.data.data
+      analysisResult.value = response.data.data
     } else {
-      // Don't show error if it's just "no data today" for quiet UI
       if (!response.data.error.includes('今日尚无')) {
         error.value = response.data.error
       }
     }
   } catch (err) {
     console.error('Failed to fetch global analysis:', err)
-    // Silent fail on auto-load
   } finally {
     loading.value = false
   }
@@ -142,6 +201,42 @@ function formatDateTime(ts) {
   if (!ts) return ''
   const date = new Date(ts)
   return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+function formatTime(ts) {
+  if (!ts) return ''
+  const date = new Date(ts)
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
+// 现在的 collection 是一个 dict，直接取值
+function getMarketItem(collection, symbol) {
+  if (!collection) return null
+  return collection[symbol]
+}
+
+function formatNumber(num) {
+  if (num === undefined || num === null) return '--'
+  return Number(num).toLocaleString(undefined, { maximumFractionDigits: 2 })
+}
+
+function formatPercent(num) {
+  if (num === undefined || num === null) return '--'
+  const val = Number(num)
+  return (val > 0 ? '+' : '') + val.toFixed(2) + '%'
+}
+
+function getChangeClass(change, inverse = false) {
+  if (change === undefined || change === null) return ''
+  const val = Number(change)
+  if (val === 0) return 'text-neutral'
+  
+  if (inverse) {
+    // For pairs like CNH, up is depreciation (bad for assets usually), but context dependent.
+    // Let's stick to standard: Up = Red (China style), Down = Green
+    return val > 0 ? 'text-up' : 'text-down'
+  }
+  return val > 0 ? 'text-up' : 'text-down'
 }
 
 function getSentimentClass(score) {
@@ -394,39 +489,70 @@ onMounted(() => {
   margin: 0;
 }
 
-/* 兼容旧版样式保留 */
-.legacy-format .summary-section {
-  margin-bottom: 16px;
+/* 市场数据仪表盘样式 */
+.market-dashboard {
+  background: #f8f9fa;
+  border-bottom: 1px solid #e1e8ed;
+  padding: 12px 16px;
+  margin: -16px -20px 16px -20px; /* 撑满卡片宽度 */
 }
 
-.legacy-format .main-summary {
-  font-size: 15px;
-  font-weight: 500;
-  color: #2d3748;
-  line-height: 1.5;
-  padding-bottom: 12px;
-  border-bottom: 1px dashed #edf2f7;
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
 }
 
-.legacy-format .events-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
+.dashboard-header h4 {
+  margin: 0;
+  font-size: 12px;
+  color: #718096;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.legacy-format .suggestion-box {
-  background: #ebf8ff;
-  border: 1px solid #bee3f8;
-  color: #2a4365;
-  padding: 12px;
-  border-radius: 8px;
+.snap-time {
+  font-weight: normal;
+  margin-left: 6px;
+  font-size: 11px;
+}
+
+.market-indices {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.market-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 80px;
+}
+
+.m-name {
+  font-size: 10px;
+  color: #718096;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.m-price {
   font-size: 13px;
-  margin-bottom: 12px;
+  font-weight: 600;
+  font-family: 'Roboto Mono', monospace;
+  color: #2d3748;
+  line-height: 1.2;
 }
 
-.legacy-format .suggestion-box h4 {
-  margin: 0 0 6px 0;
-  font-size: 14px;
+.m-change {
+  font-size: 11px;
+  font-weight: 500;
 }
+
+.text-up { color: #f56565; }
+.text-down { color: #48bb78; }
+.text-neutral { color: #a0aec0; }
 </style>
