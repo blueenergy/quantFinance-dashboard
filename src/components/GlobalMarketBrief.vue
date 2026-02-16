@@ -25,6 +25,34 @@
         </v-alert>
       </div>
 
+      <!-- Watchdog Alert -->
+      <div v-if="watchdogAlert" class="watchdog-alert">
+        <v-alert
+          density="compact"
+          type="warning"
+          variant="tonal"
+          icon="mdi-alert-circle-outline"
+          class="mb-2"
+        >
+          <div class="d-flex justify-space-between align-center">
+            <span style="font-size: 13px">
+              <strong>市场剧烈波动</strong>: {{ watchdogAlert.name }} 
+              {{ watchdogAlert.direction === 'up' ? '上涨' : '下跌' }} {{ watchdogAlert.diffPct }}% 
+              (现价 {{ formatNumber(watchdogAlert.currentPrice) }})，分析可能过时。
+            </span>
+            <v-btn
+              size="x-small"
+              color="warning"
+              variant="flat"
+              @click="$emit('refresh')"
+              :loading="loading"
+            >
+              刷新分析
+            </v-btn>
+          </div>
+        </v-alert>
+      </div>
+
       <div v-else-if="brief" class="brief-body">
         
         <!-- 新增：市场数据仪表盘 (数据快照) -->
@@ -167,8 +195,6 @@ const marketData = computed(() => {
   return data?.categories || data || null
 })
 const analysisTimestamp = computed(() => analysisResult.value?.analyzed_at || analysisResult.value?.timestamp)
-
-// 获取市场数据的实际交易日期 (取纳指或第一条数据的日期)
 const marketDate = computed(() => {
   if (!marketData.value?.indices) return null
   const ixic = marketData.value.indices['^IXIC']
@@ -176,6 +202,82 @@ const marketDate = computed(() => {
   // Fallback to any item
   const firstKey = Object.keys(marketData.value.indices)[0]
   return marketData.value.indices[firstKey]?.date || null
+})
+
+// --- Watchdog Logic Start ---
+const watchdogAlert = ref(null) // { symbol: 'FXI', diffPct: 1.2, currentPrice: 38.5 }
+let watchdogTimer = null
+
+// 监控列表：需要监控的符号
+const WATCH_SYMBOLS = ['^IXIC', 'FXI', 'GC=F']
+
+async function runWatchdog() {
+  if (!marketData.value) return
+  
+  try {
+    const symbols = WATCH_SYMBOLS.join(',')
+    const res = await axios.get(`/api/market-quotes?symbols=${symbols}`)
+    if (res.data.success) {
+      const quotes = res.data.data
+      
+      // 检查偏差
+      for (const sym of WATCH_SYMBOLS) {
+        // 找到快照价格
+        let snapshotItem = null
+        if (marketData.value.indices && marketData.value.indices[sym]) snapshotItem = marketData.value.indices[sym]
+        else if (marketData.value.commodities && marketData.value.commodities[sym]) snapshotItem = marketData.value.commodities[sym]
+        
+        if (snapshotItem && quotes[sym]) {
+          const snapPrice = snapshotItem.price
+          const currPrice = quotes[sym].price
+          const diff = Math.abs(currPrice - snapPrice)
+          const pct = (diff / snapPrice) * 100
+          
+          // 阈值：1%
+          if (pct > 1.0) {
+            watchdogAlert.value = {
+              symbol: sym,
+              name: snapshotItem.name,
+              diffPct: pct.toFixed(1),
+              currentPrice: currPrice,
+              direction: currPrice > snapPrice ? 'up' : 'down'
+            }
+            return // 只有有一个告警就够了
+          }
+        }
+      }
+      // 如果没有偏差，清除告警
+      watchdogAlert.value = null
+    }
+  } catch (e) {
+    console.error("Watchdog check failed:", e)
+  }
+}
+
+function startWatchdog() {
+  stopWatchdog()
+  // Run immediately then interval
+  runWatchdog()
+  watchdogTimer = setInterval(runWatchdog, 60 * 1000) // 60s
+}
+
+function stopWatchdog() {
+  if (watchdogTimer) clearInterval(watchdogTimer)
+  watchdogTimer = null
+}
+// --- Watchdog Logic End ---
+
+// Hook into lifecycle
+onMounted(() => {
+  fetchGlobalAnalysis().then(() => {
+    // Start watchdog if analysis exists
+    if (analysisResult.value) startWatchdog()
+  })
+})
+
+import { onUnmounted } from 'vue'
+onUnmounted(() => {
+  stopWatchdog()
 })
 
 async function fetchGlobalAnalysis() {
@@ -555,4 +657,13 @@ onMounted(() => {
 .text-up { color: #f56565; }
 .text-down { color: #48bb78; }
 .text-neutral { color: #a0aec0; }
+
+.watchdog-alert {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 </style>
