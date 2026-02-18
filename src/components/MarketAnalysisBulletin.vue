@@ -6,6 +6,7 @@
         <span v-if="analysis?.analysisDate" class="header-date">
           ({{ analysis.analysisDate }})
         </span>
+        <span v-if="isPostMarket" class="post-market-badge">收盘复盘</span>
       </h3>
     </div>
     
@@ -68,7 +69,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import request from '../utils/request'
 import { useAuth } from '../services/auth.js'
 
@@ -140,6 +141,13 @@ function formatDateTime(timestamp) {
     minute: '2-digit'
   })
 }
+
+// 判断是否为收盘复盘 (15:00 以后)
+const isPostMarket = computed(() => {
+  if (!analysis.value?.timestamp) return false
+  const date = new Date(analysis.value.timestamp)
+  return date.getHours() >= 15
+})
 
 // 获取市场情绪样式类
 function getMoodClass(mood) {
@@ -409,5 +417,15 @@ onMounted(() => {
   color: #666;
   padding: 60px 20px;
   font-size: 16px;
+}
+
+.post-market-badge {
+  background: rgba(255, 255, 255, 0.25);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-left: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  font-weight: 500;
 }
 </style>
