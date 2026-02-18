@@ -264,6 +264,56 @@
             {{ selectedStockReasoning.reasoning.analysis }}
           </v-alert>
 
+          <!-- 思考过程 (CoT) -->
+          <div v-if="selectedStockReasoning.reasoning.thought_process_raw" class="mb-4">
+            <div class="d-flex align-center mb-2">
+              <v-btn
+                variant="tonal"
+                size="small"
+                color="primary"
+                prepend-icon="mdi-brain"
+                @click="showThinking = !showThinking"
+                class="mr-2"
+              >
+                {{ showThinking ? '隐藏' : '查看' }} AI 思考过程
+              </v-btn>
+              
+              <v-fade-transition>
+                <v-btn
+                  v-if="showThinking"
+                  variant="text"
+                  size="small"
+                  color="primary"
+                  prepend-icon="mdi-fullscreen"
+                  @click="isThinkingMaximized = true"
+                >
+                  全屏
+                </v-btn>
+              </v-fade-transition>
+            </div>
+            
+            <v-expand-transition>
+              <div 
+                v-if="showThinking" 
+                class="thinking-box"
+                :class="{ 'maximized': isThinkingMaximized }"
+              >
+                <div v-if="isThinkingMaximized" class="thinking-box-header text-right pa-2">
+                   <span class="text-subtitle-2 ml-4 float-left mt-1 text-grey">🧠 AI 思考过程</span>
+                   <v-btn size="small" color="red" variant="text" prepend-icon="mdi-close" @click="isThinkingMaximized = false">
+                     关闭全屏
+                   </v-btn>
+                </div>
+                <div class="pa-3">
+                    <pre>{{ selectedStockReasoning.reasoning.thought_process_raw }}</pre>
+                </div>
+              </div>
+            </v-expand-transition>
+            
+            <!-- 遮罩层 (全屏时显示) -->
+            <div v-if="isThinkingMaximized" class="thinking-overlay" @click="isThinkingMaximized = false"></div>
+          </div>
+
           <!-- 新闻上下文 -->
           <div v-if="selectedStockReasoning.news_context && selectedStockReasoning.news_context.length">
             <div class="text-subtitle-1 font-weight-bold mb-2">📰 相关新闻上下文</div>
@@ -321,6 +371,8 @@ let countdownTimer = null
 
 // Reasoning Dialog State
 const showReasoningDialog = ref(false)
+const showThinking = ref(false)
+const isThinkingMaximized = ref(false)
 const selectedStockReasoning = ref(null)
 
 // Format time utility
@@ -332,6 +384,8 @@ function formatTime(val) {
 // Handle click on stock to show reasoning
 async function handleShowReasoning(stock) {
   showReasoningDialog.value = true
+  showThinking.value = false 
+  isThinkingMaximized.value = false
   selectedStockReasoning.value = null // Show loading
   
   try {
@@ -542,5 +596,59 @@ onUnmounted(() => {
 
 .sector-item:last-child {
   border-bottom: none;
+}
+
+/* 思考过程样式 (参考 HistoryAnalysis.vue) */
+.thinking-box {
+  margin-top: 8px;
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.thinking-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: 'Fira Code', monospace, Consolas;
+  font-size: 13px;
+  color: #d4d4d4; /* 清晰的浅灰色字体 */
+  line-height: 1.5;
+}
+
+/* 全屏模式 */
+.thinking-box.maximized {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90vw;
+  max-width: 1200px;
+  height: 85vh;
+  max-height: none;
+  z-index: 2500; /* 高于 dialog (通常是 2400) */
+  box-shadow: 0 0 50px rgba(0,0,0,0.9);
+  border: 1px solid #4ade80; /* 全屏时用绿色边框高亮 */
+  background-color: #1e1e1e; /* 确保背景不透明 */
+}
+
+.thinking-box-header {
+  position: sticky;
+  top: 0;
+  background: #1e1e1e;
+  border-bottom: 1px solid #333;
+  z-index: 10;
+}
+
+.thinking-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.7);
+  z-index: 2490;
 }
 </style>
