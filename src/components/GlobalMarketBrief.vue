@@ -6,6 +6,15 @@
         <span v-if="analysisTimestamp" class="header-time">
           ({{ formatDateTime(analysisTimestamp) }} 分析)
         </span>
+        <v-btn 
+          :icon="mdiRefresh" 
+          variant="text" 
+          size="x-small" 
+          color="grey" 
+          :loading="refreshing"
+          @click="refreshAnalysis"
+          class="ml-1"
+        ></v-btn>
       </div>
       <div v-if="brief" class="sentiment-indicator" :class="getSentimentClass(brief.sentiment_score)">
         <span class="score">{{ brief.sentiment_score }}</span>
@@ -31,7 +40,6 @@
           density="compact"
           type="warning"
           variant="tonal"
-          icon="mdi-alert-circle-outline"
           class="mb-2"
         >
           <div class="d-flex justify-space-between align-center">
@@ -44,8 +52,8 @@
               size="x-small"
               color="warning"
               variant="flat"
-              @click="$emit('refresh')"
-              :loading="loading"
+              @click="refreshAnalysis"
+              :loading="refreshing"
             >
               刷新分析
             </v-btn>
@@ -272,6 +280,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import { mdiRefresh } from '@mdi/js'
 
 const loading = ref(false)
 const error = ref('')
@@ -301,7 +310,7 @@ const watchdogAlert = ref(null) // { symbol: 'FXI', diffPct: 1.2, currentPrice: 
 let watchdogTimer = null
 
 // 监控列表：需要监控的符号
-const WATCH_SYMBOLS = ['^IXIC', 'FXI', 'GC=F']
+const WATCH_SYMBOLS = ['^IXIC', 'FXI', 'GC=F', '^RUT']
 
 async function runWatchdog() {
   if (!marketData.value) return
@@ -449,6 +458,40 @@ function getStrengthColor(strength) {
 onMounted(() => {
   fetchGlobalAnalysis()
 })
+
+const refreshing = ref(false)
+
+async function refreshAnalysis() {
+  if (refreshing.value) return
+  
+  refreshing.value = true
+  try {
+    // 1. Trigger backend analysis
+    const res = await axios.post('/api/analyze-global')
+    
+    if (res.data.success) {
+      // 2. Clear current analysis temporarily or show loading state
+      // loading.value = true -- maybe not, just keep showing old one with a loading indicator
+      
+      // 3. Wait a bit for the async task to be picked up (optional)
+      // Since it's async, we can't wait for completion here easily without polling.
+      // We'll just reload the current data after a short delay in case it was a fast update or just to confirm "pending" status if we had that.
+      // But mainly we want to tell user it's started.
+      
+      // For better UX, we could use a snackbar, but here we'll just reload data after 2 seconds
+      setTimeout(() => {
+        fetchGlobalAnalysis()
+        refreshing.value = false
+      }, 2000)
+    } else {
+      console.error('Trigger analysis failed:', res.data.error)
+      refreshing.value = false
+    }
+  } catch (e) {
+    console.error('Trigger analysis error:', e)
+    refreshing.value = false
+  }
+}
 </script>
 
 <style scoped>
