@@ -311,6 +311,7 @@ const indicators = ref(null)
 const sectorRanking = ref([])
 const mainlines = ref([])
 const displayDate = ref('')
+const currentLadderDate = ref('')
 const fallbackNote = ref('')
 const lastUpdatedTime = ref('')
 const autoRefresh = ref(false)
@@ -334,7 +335,10 @@ async function handleShowReasoning(stock) {
   selectedStockReasoning.value = null // Show loading
   
   try {
-    const res = await getReasoningDetail(stock.symbol, selectedDate.value ? selectedDate.value.replace(/-/g, '') : null)
+    // Use the actual date from the ladder data, not the selected date (which might be null or holiday)
+    const targetDate = currentLadderDate.value || (selectedDate.value ? selectedDate.value.replace(/-/g, '') : null)
+    
+    const res = await getReasoningDetail(stock.symbol, targetDate)
     if (res.success) {
       selectedStockReasoning.value = res.data
     } else {
@@ -407,8 +411,11 @@ async function loadData() {
     if (ladderRes.success) {
       tiers.value = ladderRes.tiers || {}
       sectorAggregation.value = ladderRes.sector_aggregation || {}
+      tiers.value = ladderRes.tiers || {}
+      sectorAggregation.value = ladderRes.sector_aggregation || {}
       displayDate.value = ladderRes.display_date || ''
-      
+      currentLadderDate.value = ladderRes.date || ''
+            
       // 如果是回退数据，显示提示
       if (ladderRes.is_fallback && ladderRes.fallback_note) {
         fallbackNote.value = ladderRes.fallback_note
