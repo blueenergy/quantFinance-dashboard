@@ -192,7 +192,19 @@
                 @click="handleShowReasoning(stock)"
               >
                 <span class="mr-1 text-white font-weight-bold">{{ stock.name }}</span>
-                <span class="text-caption text-grey-lighten-1">{{ stock.symbol.split('.')[0] }}</span>
+                <span class="text-caption text-grey-lighten-1 mr-1">{{ stock.symbol.split('.')[0] }}</span>
+                
+                <!-- Sustainability Tag -->
+                <v-chip
+                  v-if="stock.analysis && stock.analysis.sustainability"
+                  size="x-small"
+                  :color="getSustainabilityColor(stock.analysis.sustainability)"
+                  class="ml-1 px-1"
+                  variant="flat"
+                  style="height: 16px; font-size: 10px;"
+                >
+                  回封: {{ getSustainabilityText(stock.analysis.sustainability) }}
+                </v-chip>
               </v-chip>
             </v-chip-group>
           </v-card-text>
@@ -471,6 +483,24 @@ function getSentimentClass(score) {
   if (score >= 50) return 'sentiment-neutral'
   if (score >= 35) return 'sentiment-cautious'
   return 'sentiment-panic'
+}
+
+// 获取回封/反包概率颜色
+function getSustainabilityColor(text) {
+  if (!text) return 'grey'
+  if (text.includes('强') || text.includes('高')) return 'red-accent-2'
+  if (text.includes('中')) return 'orange-accent-2'
+  return 'blue-grey'
+}
+
+// 获取回封/反包概率文本
+function getSustainabilityText(text) {
+  if (!text) return ''
+  // Extract key words: High, Medium, Low
+  if (text.includes('强') || text.includes('高')) return '高'
+  if (text.includes('中')) return '中'
+  if (text.includes('弱') || text.includes('低')) return '低'
+  return text.substring(0, 2)
 }
 
 // 加载数据
