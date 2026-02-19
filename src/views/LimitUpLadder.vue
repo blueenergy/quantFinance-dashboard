@@ -173,6 +173,32 @@
         </v-card>
       </v-col>
 
+      <!-- 炸板股区域 -->
+      <v-col cols="12" md="8" v-if="brokenLimitUps && brokenLimitUps.length > 0">
+        <v-card class="mb-4" style="border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(30, 30, 40, 0.6);">
+          <v-card-title class="text-subtitle-1 font-weight-bold text-grey-lighten-1">
+            💥 炸板 / 开板 ({{ brokenLimitUps.length }})
+          </v-card-title>
+          <v-card-text>
+            <v-chip-group column>
+              <v-chip
+                v-for="stock in brokenLimitUps"
+                :key="stock.symbol"
+                variant="flat"
+                color="grey-darken-3"
+                size="small"
+                class="mr-2 mb-2"
+                style="border: 1px solid #555"
+                @click="handleShowReasoning(stock)"
+              >
+                <span class="mr-1 text-white font-weight-bold">{{ stock.name }}</span>
+                <span class="text-caption text-grey-lighten-1">{{ stock.symbol.split('.')[0] }}</span>
+              </v-chip>
+            </v-chip-group>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
       <!-- 右侧：板块排名 -->
       <v-col cols="12" md="4">
         <v-card class="mb-4">
@@ -355,7 +381,9 @@ const getLatestApi = (type) => getLatestPortfolioAnalysis(type)
 
 const loading = ref(false)
 const selectedDate = ref('')
+const tiles = ref({})
 const tiers = ref({})
+const brokenLimitUps = ref([])
 const sectorAggregation = ref({})
 const indicators = ref(null)
 const sectorRanking = ref([])
@@ -465,8 +493,7 @@ async function loadData() {
     if (ladderRes.success) {
       tiers.value = ladderRes.tiers || {}
       sectorAggregation.value = ladderRes.sector_aggregation || {}
-      tiers.value = ladderRes.tiers || {}
-      sectorAggregation.value = ladderRes.sector_aggregation || {}
+      brokenLimitUps.value = ladderRes.broken_limit_ups || []
       displayDate.value = ladderRes.display_date || ''
       currentLadderDate.value = ladderRes.date || ''
             
