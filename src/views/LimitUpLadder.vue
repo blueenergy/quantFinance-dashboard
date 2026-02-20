@@ -352,8 +352,8 @@
             <div v-if="isThinkingMaximized" class="thinking-overlay" @click="isThinkingMaximized = false"></div>
           </div>
 
-          <!-- 新闻上下文 -->
-          <div v-if="selectedStockReasoning.news_context && selectedStockReasoning.news_context.length">
+            <!-- 新闻上下文 -->
+          <div v-if="selectedStockReasoning.news_context && selectedStockReasoning.news_context.length" class="mb-4">
             <div class="text-subtitle-1 font-weight-bold mb-2">📰 相关新闻上下文</div>
             <v-list density="compact" lines="two">
               <v-list-item 
@@ -366,6 +366,34 @@
                 </template>
               </v-list-item>
             </v-list>
+          </div>
+          
+          <v-divider class="my-4"></v-divider>
+          
+          <!-- 用户反馈 -->
+          <div>
+            <div class="text-subtitle-1 font-weight-bold mb-2">✍️ 纠错反馈</div>
+            <p class="text-caption text-grey mb-2">如果您认为AI归因有误（如非主流逻辑、未识别暗线等），请提出纠错建议，系统将结合您的提示进行深度重新推理。</p>
+            <v-textarea
+              v-model="userFeedback"
+              label="例如：该股并非汽车零部件，而是受卫星导航板块带动..."
+              variant="outlined"
+              rows="3"
+              auto-grow
+              hide-details
+              class="mb-3"
+            ></v-textarea>
+            <div class="d-flex justify-end">
+              <v-btn 
+                color="primary" 
+                :loading="submittingFeedback" 
+                :disabled="!userFeedback.trim()"
+                @click="submitFeedback"
+                prepend-icon="mdi-send"
+              >
+                提交反馈并重算
+              </v-btn>
+            </div>
           </div>
         </v-card-text>
       </v-card>
@@ -381,7 +409,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { getDailyLadder, getIndicators, getSectorRanking, getReasoningDetail } from '../api/ladder'
+import { getDailyLadder, getIndicators, getSectorRanking, getReasoningDetail, submitReasoningFeedback } from '../api/ladder'
 import { getWatchlistOpportunities, getPositionsOpportunities, getLatestPortfolioAnalysis } from '../api/portfolio'
 import LadderTierCard from '../components/LadderTierCard.vue'
 import AnalysisCard from '../components/AnalysisCard.vue'
@@ -414,6 +442,8 @@ const showReasoningDialog = ref(false)
 const showThinking = ref(false)
 const isThinkingMaximized = ref(false)
 const selectedStockReasoning = ref(null)
+const userFeedback = ref('')
+const submittingFeedback = ref(false)
 
 // Format time utility
 function formatTime(val) {
@@ -426,6 +456,7 @@ async function handleShowReasoning(stock) {
   showReasoningDialog.value = true
   showThinking.value = false 
   isThinkingMaximized.value = false
+  userFeedback.value = ''
   selectedStockReasoning.value = null // Show loading
   
   try {
@@ -450,6 +481,33 @@ async function handleShowReasoning(stock) {
         symbol: stock.symbol,
         reasoning: { tag: 'Error', reason: '加载失败', analysis: e.message }
      }
+  }
+}
+
+async function submitFeedback() {
+  if (!userFeedback.value.trim() || !selectedStockReasoning.value) return;
+  submittingFeedback.value = true;
+  
+  try {
+    const symbol = selectedStockReasoning.value.symbol;
+    const isBroken = selectedStockReasoning.value.reasoning.stock_status === 'broken';
+    const targetDate = currentLadderDate.value || (selectedDate.value ? selectedDate.value.replace(/-/g, '') : null);
+    
+    await submitReasoningFeedback(symbol, targetDate, userFeedback.value, isBroken);
+    
+    alert('纠错反馈已提交！AI正在重新构建推理逻辑，约5-10秒后请重新打开查询。');
+    showReasoningDialog.value = false;
+    
+    // Optionally trigger a reload of the main screen after a delay
+    setTimeout(() => {
+        loadData();
+    }, 10000);
+    
+  } catch(e) {
+    console.error('Failed to submit feedback:', e);
+    alert('提交反馈失败：' + e.message);
+  } finally {
+    submittingFeedback.value = false;
   }
 }
 

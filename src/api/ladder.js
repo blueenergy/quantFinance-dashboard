@@ -90,3 +90,28 @@ export async function getReasoningDetail(symbol, date = null) {
     if (!res.ok) throw new Error(`Failed to get reasoning detail: ${res.status}`);
     return await res.json();
 }
+
+/**
+ * 提交涨停/炸板股票的归因反馈
+ * @param {string} symbol - 股票代码
+ * @param {string} date - 日期 YYYYMMDD
+ * @param {string} feedback - 用户的文本反馈
+ * @param {boolean} isBroken - 是否为炸板股票
+ */
+export async function submitReasoningFeedback(symbol, date, feedback, isBroken = false) {
+    const url = `${API_BASE}/ladder/reasoning/${symbol}/feedback`;
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+            date: date,
+            feedback: feedback,
+            is_broken: isBroken
+        })
+    });
+
+    if (!res.ok) throw new Error(`Failed to submit feedback: ${res.status}`);
+    return await res.json();
+}
+
