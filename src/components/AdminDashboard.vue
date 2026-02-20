@@ -84,6 +84,11 @@
       <WorkerGroupsMonitor />
     </div>
 
+    <!-- 系统定时任务管理 -->
+    <div v-if="activeTab === 'sys-tasks'" class="sys-tasks-section">
+      <ScheduleManagement />
+    </div>
+
     <!-- 用户管理 -->
     <div v-if="activeTab === 'users'" class="users-section">
       <div class="section-header">
@@ -180,6 +185,7 @@ import DataCollectionMonitor from './DataCollectionMonitor.vue'
 import WorkerNodesMonitor from './WorkerNodesMonitor.vue'
 import PermissionManagement from './PermissionManagement.vue'
 import WorkerGroupsMonitor from './WorkerGroupsMonitor.vue'
+import ScheduleManagement from './ScheduleManagement.vue'
 
 export default {
   name: 'AdminDashboard',
@@ -194,7 +200,8 @@ export default {
     DataCollectionMonitor,
     WorkerNodesMonitor,
     PermissionManagement,
-    WorkerGroupsMonitor
+    WorkerGroupsMonitor,
+    ScheduleManagement
   },
   props: {
     currentUser: Object
@@ -211,6 +218,7 @@ export default {
         { id: 'data-collection', name: '数据采集', icon: '📡' },
         { id: 'worker-nodes', name: 'Worker节点', icon: '🖥️' },
         { id: 'worker-groups', name: 'Worker组', icon: '📦' },
+        { id: 'sys-tasks', name: '后台任务调度', icon: '⏱️' },
         { id: 'users', name: '用户管理', icon: '👥' },
         { id: 'permissions', name: '权限管理', icon: '🔐' },
         { id: 'logs', name: '登录日志', icon: '📋' },
