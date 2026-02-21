@@ -119,9 +119,16 @@ async function fetchAnalysis() {
     }
   } catch (err) {
     console.error('获取市场分析失败:', err)
-    // 自动加载失败时，不显示错误，静默失败，除非是严重的连接问题
-    if (!err.response && !err.message.includes('登录')) {
-        error.value = '无法连接到分析服务'
+    
+    // 如果 err.response 存在，说明服务器响应了错误（如 4xx/5xx）
+    if (err.response && err.response.data && err.response.data.error) {
+      error.value = err.response.data.error
+    } else if (err.message && !err.message.includes('登录')) {
+      error.value = err.message || '无法连接到分析服务'
+    } else if (!isAuthenticated.value) {
+      error.value = '请先登录'
+    } else {
+      error.value = '无法连接到分析服务'
     }
   } finally {
     loading.value = false
