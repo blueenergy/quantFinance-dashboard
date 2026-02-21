@@ -355,14 +355,34 @@
             <!-- 新闻上下文 -->
           <div v-if="selectedStockReasoning.news_context && selectedStockReasoning.news_context.length" class="mb-4">
             <div class="text-subtitle-1 font-weight-bold mb-2">📰 相关新闻上下文</div>
-            <v-list density="compact" lines="two">
+            <v-list density="compact" class="pa-0">
               <v-list-item 
                 v-for="(news, i) in selectedStockReasoning.news_context" 
                 :key="i"
-                :subtitle="formatTime(news.datetime)"
+                class="pa-0 min-height-0"
               >
                 <template v-slot:title>
-                  <span class="text-caption font-weight-medium">{{ news.title }}</span>
+                  <div class="d-flex align-center py-0" style="min-height: 24px;">
+                    <span class="text-caption text-grey mr-2" style="min-width: 38px; font-size: 0.75rem !important;">
+                      {{ formatTime(news.datetime) }}
+                    </span>
+                    <a 
+                      v-if="news.url"
+                      :href="news.url"
+                      target="_blank"
+                      class="text-caption font-weight-medium text-truncate text-primary text-decoration-none custom-link"
+                      style="max-width: calc(100% - 46px);"
+                    >
+                      <v-tooltip activator="parent" location="top">
+                        【{{ formatSource(news.source) }}】{{ news.is_announcement ? '公告原件 (PDF)' : '查看原文' }}: {{ news.url }}
+                      </v-tooltip>
+                      <v-icon size="x-small" class="mr-1" color="primary">
+                        {{ news.is_announcement ? 'mdi-file-pdf-box' : 'mdi-open-in-new' }}
+                      </v-icon>
+                      {{ news.title }}
+                    </a>
+                    <span v-else class="text-caption font-weight-medium text-truncate" style="max-width: calc(100% - 46px);">{{ news.title }}</span>
+                  </div>
                 </template>
               </v-list-item>
             </v-list>
@@ -448,7 +468,19 @@ const submittingFeedback = ref(false)
 // Format time utility
 function formatTime(val) {
    if (!val) return ''
-   return new Date(val).toLocaleString()
+   // If it contains a date part (e.g., 2026-02-21 08:30:00), just show the time
+   if (val.includes(' ')) return val.split(' ')[1].slice(0, 5)
+   return val
+}
+
+function formatSource(source) {
+  const mapping = {
+    'cninfo_announcement': '巨潮公告',
+    'sina_search': '新浪财经',
+    'eastmoney_guba': '东方财富股吧',
+    'tushare_major': 'Tushare新闻'
+  }
+  return mapping[source] || source
 }
 
 // Handle click on stock to show reasoning
@@ -765,5 +797,18 @@ onUnmounted(() => {
   height: 100vh;
   background: rgba(0,0,0,0.7);
   z-index: 2490;
+}
+
+.custom-link {
+  transition: all 0.2s ease;
+}
+
+.custom-link:hover {
+  text-decoration: underline !important;
+  opacity: 0.8;
+}
+
+.min-height-0 {
+  min-height: 0 !important;
 }
 </style>
