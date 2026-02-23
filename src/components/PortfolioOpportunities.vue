@@ -61,7 +61,7 @@
           <!-- 加载中 -->
           <div v-if="loading" class="text-center py-8">
             <v-progress-circular indeterminate color="primary" size="48" />
-            <p class="text-grey mt-4">正在分析 {{ watchlistCount + positionsCount }} 只股票...</p>
+            <p class="text-grey mt-4">{{ statusText || '正在分析...' }}</p>
           </div>
 
           <!-- 分析结果 -->
@@ -194,7 +194,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { getPortfolioOpportunities, getLatestPortfolioAnalysis } from '../api/portfolio'
+import { getPortfolioOpportunities, getLatestPortfolioAnalysis, pollPortfolioTask } from '../api/portfolio'
 
 const dialog = ref(false)
 const loading = ref(false)
@@ -207,6 +207,7 @@ const positionsCount = ref(0)
 const provider = ref('')
 const model = ref('')
 const latestAnalysisTime = ref(null)
+const statusText = ref('')
 
 // 计算时间差
 const timeAgo = computed(() => {
@@ -259,26 +260,46 @@ async function loadLatestAnalysis() {
 async function analyze() {
   loading.value = true
   error.value = ''
+  statusText.value = '正在提交分析任务...'
   
   try {
-    const res = await getPortfolioOpportunities()
+    // 1. 提交异步任务
+    const submitRes = await getPortfolioOpportunities()
     
-    if (res.success) {
-      analysis.value = res.analysis
-      ladderDate.value = res.ladder_date
-      watchlistCount.value = res.watchlist_count || 0
-      positionsCount.value = res.positions_count || 0
-      provider.value = res.provider || ''
-      model.value = res.model || ''
-      latestAnalysisTime.value = res.created_at
+    if (!submitRes.success) {
+      error.value = submitRes.error || '提交分析任务失败'
+      return
+    }
+    
+    watchlistCount.value = submitRes.watchlist_count || 0
+    positionsCount.value = submitRes.positions_count || 0
+    statusText.value = '分析任务已提交，等待处理...'
+    
+    // 2. 轮询任务结果
+    const result = await pollPortfolioTask(submitRes.task_id, (progress) => {
+      if (progress.status === 'processing') {
+        statusText.value = '正在进行 AI 分析...'
+      } else if (progress.status === 'pending') {
+        statusText.value = '任务排队中...'
+      }
+    })
+    
+    // 3. 处理最终结果
+    if (result.status === 'completed' && result.success) {
+      analysis.value = result.analysis
+      model.value = result.model || ''
+      latestAnalysisTime.value = result.created_at
       analyzed.value = true
+    } else if (result.status === 'failed') {
+      error.value = result.error || '分析失败'
     } else {
-      error.value = res.error || '分析失败'
+      error.value = '分析结果异常'
     }
   } catch (e) {
     error.value = e.message || '请求失败'
   } finally {
     loading.value = false
+    statusText.value = ''
   }
 }
 

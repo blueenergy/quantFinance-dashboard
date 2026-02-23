@@ -68,3 +68,42 @@ export async function getLatestPortfolioAnalysis(type = null) {
     if (!res.ok) throw new Error(`Failed to get latest analysis: ${res.status}`);
     return await res.json();
 }
+
+/**
+ * 查询组合分析任务状态
+ * @param {string} taskId - 任务ID
+ */
+export async function getPortfolioTaskStatus(taskId) {
+    const url = `${API_BASE}/analyze/portfolio-task/${taskId}`;
+
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: authHeaders()
+    });
+    if (!res.ok) throw new Error(`Failed to get task status: ${res.status}`);
+    return await res.json();
+}
+
+/**
+ * 轮询组合分析任务，直到完成或失败
+ * @param {string} taskId - 任务ID
+ * @param {Function} onProgress - 进度回调 (status) => void
+ * @param {number} intervalMs - 轮询间隔（毫秒），默认 3000
+ * @param {number} maxAttempts - 最大轮询次数，默认 60（约 3 分钟）
+ * @returns {Promise<Object>} 最终的任务结果
+ */
+export async function pollPortfolioTask(taskId, onProgress = null, intervalMs = 3000, maxAttempts = 60) {
+    for (let i = 0; i < maxAttempts; i++) {
+        const result = await getPortfolioTaskStatus(taskId);
+        
+        if (onProgress) onProgress(result);
+        
+        if (result.status === 'completed' || result.status === 'failed') {
+            return result;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+    
+    throw new Error('分析超时，请稍后查看结果');
+}

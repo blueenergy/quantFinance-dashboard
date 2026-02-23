@@ -125,9 +125,6 @@
               <td>
                   <div class="action-btn-group">
                     <button @click="selectChart(stock.symbol)" class="chart-btn">📈 K线</button>
-                    <button @click="analyzeStock(stock.symbol)" class="analyze-btn" :disabled="analyzingStock === stock.symbol">
-                      {{ analyzingStock === stock.symbol ? '分析中...' : '🤖 AI分析' }}
-                    </button>
                     <button @click="deepAnalyzeStock(stock.symbol)" class="deep-analyze-btn" :disabled="deepAnalyzingStock === stock.symbol">
                       {{ deepAnalyzingStock === stock.symbol ? '提交中...' : '🔬 深度分析' }}
                     </button>
@@ -148,9 +145,6 @@
               <td colspan="5" class="no-data">暂无数据</td>
               <td>
                 <button @click="selectChart(symbol)" class="chart-btn">📈 K线</button>
-                <button @click="analyzeStock(symbol)" class="analyze-btn" :disabled="analyzingStock === symbol">
-                  {{ analyzingStock === symbol ? '分析中...' : '🤖 AI分析' }}
-                </button>
                 <button @click="openHistoryModal(symbol)" class="history-btn">🕑 历史分析</button>
                 <button @click="removeStock(symbol)" class="remove-btn">移除</button>
               </td>
@@ -160,55 +154,7 @@
       </div>
     </div>
 
-    <!-- AI分析结果模态框 -->
-    <div v-if="showAnalysisModal" class="modal-overlay" @click="closeAnalysisModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>🤖 {{ currentAnalysis.symbol }} AI分析报告</h3>
-          <button @click="closeAnalysisModal" class="close-btn">×</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="currentAnalysis.data">
-            <div class="analysis-section">
-              <h4>📈 技术面分析</h4>
-              <p>{{ currentAnalysis.data.analysis?.technical_analysis || currentAnalysis.data.technical_analysis || '暂无技术分析' }}</p>
-            </div>
-            
-            <div class="analysis-section">
-              <h4>� 短期走势预测</h4>
-              <p>{{ currentAnalysis.data.analysis?.short_term_forecast || currentAnalysis.data.short_term_forecast || '暂无走势预测' }}</p>
-            </div>
-            
-            <div class="analysis-section">
-              <h4>💡 投资建议</h4>
-              <p>{{ formatInvestmentAdvice(currentAnalysis.data.analysis?.investment_advice || currentAnalysis.data.investment_advice) }}</p>
-            </div>
-            
-            <div class="analysis-section">
-              <h4>🎯 关键要点</h4>
-              <ul v-if="getKeyPoints(currentAnalysis.data).length > 0">
-                <li v-for="point in getKeyPoints(currentAnalysis.data)" :key="point">{{ point }}</li>
-              </ul>
-              <p v-else>暂无关键要点</p>
-            </div>
-            
-            <div class="analysis-section risk-section">
-              <h4>⚠️ 风险评估</h4>
-              <p>
-                风险等级：{{ formatRiskLevel(currentAnalysis.data.analysis?.risk_level || currentAnalysis.data.risk_level) }} | 
-                置信度：{{ currentAnalysis.data.analysis?.confidence_score || currentAnalysis.data.confidence_score || '未知' }}%
-              </p>
-            </div>
-            
-            <div class="analysis-meta">
-              <span>📅 分析时间: {{ formatDateTime(currentAnalysis.timestamp) }}</span>
-              <span>🤖 AI模型: {{ currentAnalysis.data.model || 'qwen3-30b' }}</span>
-              <span>📊 股票代码: {{ currentAnalysis.symbol }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+
 
     <!-- 历史分析弹窗 -->
     <div v-if="showHistoryModal" class="modal-overlay" @click="closeHistoryModal">
@@ -227,9 +173,6 @@
         </div>
       </div>
     </div>
-
-    <!-- 历史分析区域（子组件） -->
-    <HistoryAnalysis :history="analysisHistory[currentAnalysis.symbol]?.slice(1)" />
   </div>
 </template>
 
@@ -239,7 +182,7 @@ import axios from 'axios'
 import { useAuth } from '../services/auth.js'
 import { watchlistService } from '../services/watchlist.js'
 import { useAnalysisHistory } from '../composables/useAnalysisHistory'
-import { checkUserLlmConfig } from '../services/userService.js'
+// checkUserLlmConfig import removed - old AI analysis feature deprecated
 import HistoryAnalysis from './HistoryAnalysis.vue'
 import { searchStocks } from '../api/stock'
 
@@ -251,11 +194,7 @@ const inputSymbol = ref('')
 const watchList = ref([])
 const stocksData = ref([])
 const loading = ref(false)
-const analyzingStock = ref('')
 const deepAnalyzingStock = ref('')
-const analysisResults = ref({})
-const showAnalysisModal = ref(false)
-const currentAnalysis = ref({ symbol: '', data: null, timestamp: null })
 const migrationComplete = ref(false)
 const showHistoryModal = ref(false)
 const historySymbol = ref('')
@@ -588,103 +527,6 @@ function selectChart(symbol) {
   emit('select-chart', symbol)
 }
 
-// AI分析股票
-async function analyzeStock(symbol) {
-  try {
-    // 检查是否已登录
-    if (!isAuthenticated?.value) {
-      alert('请先登录后再进行AI分析')
-      return
-    }
-    
-    // 检查用户是否已配置LLM
-    const llmConfigStatus = await checkUserLlmConfig()
-    if (!llmConfigStatus.hasConfig) {
-      alert('请先在用户设置中配置您的LLM API令牌，然后才能使用AI分析功能')
-      return
-    }
-    
-    if (!llmConfigStatus.isActive) {
-      alert('您已配置LLM，但还未激活任何配置。请进入用户设置激活一个LLM配置')
-      return
-    }
-
-    analyzingStock.value = symbol
-    console.log(`开始分析股票: ${symbol}`)
-    
-    // 获取token
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      alert('登录已过期，请重新登录')
-      return
-    }
-    
-    console.log('发送AI分析请求...')
-    
-    // 不传递 provider 和 model，让后端从用户激活的配置中读取
-    const response = await axios.post('/api/analyze-stock', {
-      symbol: symbol
-      // 删除了 provider 和 model 参数，使用用户配置
-    }, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: 60000  // 60秒超时
-    })
-    
-    console.log('AI分析响应:', response.status, response.data)
-    console.log('响应数据结构详情:', JSON.stringify(response.data, null, 2))
-    
-    if (response.data && response.data.success) {
-      analysisResults.value[symbol] = response.data
-      
-      // 显示分析结果弹窗
-      showAnalysisResult(symbol, response.data)
-    } else {
-      const errorMsg = response.data?.error || '分析失败，请稍后重试'
-      console.error('AI分析失败:', response.data)
-      alert(`AI分析失败: ${errorMsg}`)
-    }
-  } catch (error) {
-    console.error(`AI分析股票 ${symbol} 失败:`, error)
-    
-    let errorMessage = '网络错误，请检查连接'
-    
-    if (error.response) {
-      const status = error.response.status
-      const detail = error.response.data?.detail || error.response.data?.message
-      
-      console.error('错误响应:', {
-        status: status,
-        data: error.response.data,
-        headers: error.response.headers
-      })
-      
-      if (status === 401) {
-        errorMessage = '登录已过期，请重新登录'
-        // 清除认证信息
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('user_info')
-      } else if (status === 404) {
-        errorMessage = `未找到股票 ${symbol} 的数据，请确认股票代码是否正确`
-      } else if (status === 500) {
-        errorMessage = detail || '服务器内部错误，可能是LLM服务问题'
-      } else if (detail) {
-        errorMessage = detail
-      }
-    } else if (error.code === 'ECONNABORTED') {
-      errorMessage = 'AI分析超时，请稍后重试'
-    } else if (error.message) {
-      errorMessage = error.message
-    }
-    
-    alert(`AI分析失败: ${errorMessage}`)
-  } finally {
-    analyzingStock.value = ''
-  }
-}
-
 // 深度分析股票
 async function deepAnalyzeStock(symbol) {
   if (!isAuthenticated?.value) {
@@ -731,65 +573,7 @@ async function deepAnalyzeStock(symbol) {
   }
 }
 
-// 显示分析结果
-function showAnalysisResult(symbol, result) {
-  const entry = {
-    symbol: symbol,
-    data: result,
-    timestamp: new Date().toISOString()
-  }
-  currentAnalysis.value = entry
-  showAnalysisModal.value = true
-  // 分析成功后自动存入后端数据库
-  if (isAuthenticated?.value) {
-    const token = localStorage.getItem('access_token')
-    const base = result?.analysis ? result.analysis : (result || {})
-    const analysisPayload = { ...base }
-    if (!analysisPayload.symbol) analysisPayload.symbol = symbol
-    const resolvedName = getStockName(symbol)
-    if (!analysisPayload.stock_name) analysisPayload.stock_name = resolvedName
-    
-    // 从后端返回的结果中获取 provider 和 model
-    const usedProvider = result.provider || 'unknown'
-    const usedModel = result.model || 'unknown'
-    
-    console.log('分析历史存储请求:', {
-      symbol,
-      analysis_result: { analysis: analysisPayload },
-      provider: usedProvider,
-      model: usedModel,
-      timestamp: entry.timestamp
-    })
-    axios.post('/api/analysis-history', {
-      symbol,
-      stock_name: resolvedName,
-      analysis_result: {
-        analysis: analysisPayload,
-        provider: usedProvider,
-        model: usedModel
-      },
-      provider: usedProvider,
-      model: usedModel,
-      timestamp: entry.timestamp
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).catch(e => { console.warn('存储分析历史失败', e) })
-  }
 
-  // Emit a global event so the AIAnalysisHistory component can refresh
-  try {
-    const evt = new CustomEvent('ai-analysis:updated', { detail: { symbol } })
-    window.dispatchEvent(evt)
-  } catch (e) {
-    console.warn('派发 ai-analysis:updated 事件失败:', e)
-  }
-}
-
-// 关闭分析结果模态框
-function closeAnalysisModal() {
-  showAnalysisModal.value = false
-  currentAnalysis.value = { symbol: '', data: null, timestamp: null }
-}
 
 // 打开历史分析模态框
 function openHistoryModal(symbol) {
@@ -810,51 +594,6 @@ function openHistoryModal(symbol) {
 function closeHistoryModal() {
   showHistoryModal.value = false
   historySymbol.value = ''
-}
-
-// 格式化日期时间
-function formatDateTime(timestamp) {
-  if (!timestamp) return ''
-  const date = new Date(timestamp)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-// 格式化投资建议
-function formatInvestmentAdvice(advice) {
-  if (!advice) return '暂无投资建议';
-  return advice;
-}
-
-// 格式化风险等级
-function formatRiskLevel(riskLevel) {
-  if (!riskLevel) return '未知';
-  const levels = {
-    'low': '低风险',
-    'medium': '中等风险', 
-    'high': '高风险',
-    'very_high': '极高风险'
-  };
-  return levels[riskLevel.toLowerCase()] || riskLevel;
-}
-
-// 获取关键要点
-function getKeyPoints(data) {
-  // 尝试从多个可能的字段获取关键要点
-  const points = data.analysis?.key_points || data.key_points || [];
-  if (typeof points === 'string') {
-    // 如果是字符串，尝试按换行或分号分割
-    return points.split(/[;\n]/).filter(p => p.trim());
-  }
-  if (Array.isArray(points)) {
-    return points;
-  }
-  return [];
 }
 
 // 获取股票名称
