@@ -144,9 +144,11 @@
               <td class="stock-name">{{ getStockName(symbol) || symbol }}</td>
               <td colspan="5" class="no-data">暂无数据</td>
               <td>
-                <button @click="selectChart(symbol)" class="chart-btn">📈 K线</button>
-                <button @click="openHistoryModal(symbol)" class="history-btn">🕑 历史分析</button>
-                <button @click="removeStock(symbol)" class="remove-btn">移除</button>
+                <div class="action-btn-group">
+                  <button @click="selectChart(symbol)" class="chart-btn">📈 K线</button>
+                  <button @click="openHistoryModal(symbol)" class="history-btn">🕑 历史分析</button>
+                  <button @click="removeStock(symbol)" class="remove-btn">移除</button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -822,15 +824,14 @@ onMounted(async () => {
 
 .action-btn-group {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   justify-content: flex-start;
   align-items: center;
-  max-width: 260px;
 }
 .action-btn-group button {
   margin-right: 0;
-  margin-bottom: 4px;
+  white-space: nowrap;
 }
 
 .watchlist-header {
