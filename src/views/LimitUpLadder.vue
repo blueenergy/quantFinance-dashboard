@@ -171,11 +171,9 @@
             </v-alert>
           </v-card-text>
         </v-card>
-      </v-col>
 
-      <!-- 炸板股区域 -->
-      <v-col cols="12" md="8" v-if="brokenLimitUps && brokenLimitUps.length > 0">
-        <v-card class="mb-4" style="border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(30, 30, 40, 0.6);">
+        <!-- 炸板股区域 -->
+        <v-card v-if="brokenLimitUps && brokenLimitUps.length > 0" class="mb-4" style="border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(30, 30, 40, 0.6);">
           <v-card-title class="text-subtitle-1 font-weight-bold text-grey-lighten-1">
             💥 炸板 / 开板 ({{ brokenLimitUps.length }})
           </v-card-title>
