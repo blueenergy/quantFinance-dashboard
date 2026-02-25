@@ -44,7 +44,8 @@
           variant="outlined"
           hide-details
           style="max-width: 150px"
-          @change="loadData"
+          @update:model-value="loadData"
+          @click="openDatePicker"
         />
         <v-btn
           color="primary"
@@ -463,6 +464,19 @@ const selectedStockReasoning = ref(null)
 const userFeedback = ref('')
 const submittingFeedback = ref(false)
 
+// Open Native Date Picker (Polyfill for Vuetify)
+function openDatePicker(e) {
+  try {
+    // find the native input element inside the component
+    const input = e.currentTarget.querySelector('input[type="date"]')
+    if (input && typeof input.showPicker === 'function') {
+      input.showPicker()
+    }
+  } catch(err) {
+    console.warn("Browser does not support showPicker natively", err)
+  }
+}
+
 // Format time utility
 function formatTime(val) {
    if (!val) return ''
@@ -619,15 +633,25 @@ async function loadData() {
       if (ladderRes.is_fallback && ladderRes.fallback_note) {
         fallbackNote.value = ladderRes.fallback_note
       }
+    } else {
+      tiers.value = {}
+      sectorAggregation.value = {}
+      brokenLimitUps.value = []
+      fallbackNote.value = ladderRes.error || `${dateParam} 暂无涨停数据`
     }
     
     if (indicatorRes.success) {
       indicators.value = indicatorRes.latest
+    } else {
+      indicators.value = null
     }
     
     if (sectorRes.success) {
       sectorRanking.value = sectorRes.ranking || []
       mainlines.value = sectorRes.mainlines || []
+    } else {
+      sectorRanking.value = []
+      mainlines.value = []
     }
     
   } catch (error) {
