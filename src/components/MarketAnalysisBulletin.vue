@@ -56,6 +56,12 @@
             风险等级：{{ getRiskText(analysis.riskLevel) }} | {{ analysis.riskNote }}
           </p>
         </div>
+
+        <!-- New Multi-Dim Industry Signals -->
+        <IndustrySignals 
+          v-if="analysis && analysis.industry_signals" 
+          :signals="analysis.industry_signals" 
+        />
       </div>
       
       <div v-else class="no-data">
@@ -72,6 +78,7 @@
 import { ref, onMounted, computed } from 'vue'
 import request from '../utils/request'
 import { useAuth } from '../services/auth.js'
+import IndustrySignals from './IndustrySignals.vue'
 
 const { user, isAuthenticated, authService } = useAuth()
 
@@ -112,7 +119,8 @@ async function fetchAnalysis() {
         ],
         outlook: response.outlook || '短期内市场可能延续震荡格局，建议关注结构性机会。',
         riskLevel: response.riskLevel || 'medium',
-        riskNote: response.riskNote || '注意控制仓位，分散投资风险。'
+        riskNote: response.riskNote || '注意控制仓位，分散投资风险。',
+        industry_signals: response.industry_signals || null
       }
     } else {
       throw new Error(response.error || '分析失败')
