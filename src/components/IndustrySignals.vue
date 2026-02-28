@@ -30,6 +30,25 @@
       </div>
     </div>
 
+    <!-- Panic Signals (The Crashes) -->
+    <div v-if="signals.panic?.length" class="signal-group panic">
+      <div class="group-title">💀 恐慌杀跌 (Panic)</div>
+      <div class="signal-cards">
+        <div v-for="s in signals.panic" :key="s.industry" class="signal-card panic-card">
+          <div class="card-left">
+            <span class="industry-name">{{ s.industry }}</span>
+            <span class="stats">今日跌停: <strong>{{ s.today_count }}</strong> 只</span>
+          </div>
+          <div class="card-right">
+            <div v-if="s.resonance?.active" class="resonance-tag" :class="{ positive: s.resonance.is_positive }">
+              <span class="res-icon">🎯</span>
+              <span class="res-text">{{ s.resonance.etf_name }} {{ s.resonance.pct_chg > 0 ? '+' : '' }}{{ s.resonance.pct_chg }}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Decay Signals (The Laggers) -->
     <div v-if="signals.decay?.length" class="signal-group decay">
       <div class="group-title">📉 衰退迹象 (Decay)</div>

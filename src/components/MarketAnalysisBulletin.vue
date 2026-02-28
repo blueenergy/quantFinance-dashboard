@@ -8,6 +8,12 @@
         </span>
         <span v-if="isPostMarket" class="post-market-badge">收盘复盘</span>
       </h3>
+      <div class="header-controls">
+        <input type="date" v-model="selectedDate" @change="handleDateChange" class="date-input" :disabled="loading" />
+        <button class="refresh-btn" @click="fetchAnalysis" :disabled="loading">
+          {{ loading ? '刷新中...' : '🔄 刷新' }}
+        </button>
+      </div>
     </div>
     
     <div class="bulletin-content">
@@ -85,11 +91,17 @@ const { user, isAuthenticated, authService } = useAuth()
 const loading = ref(false)
 const error = ref('')
 const analysis = ref(null)
+const selectedDate = ref(new Date().toISOString().split('T')[0])
+
+function handleDateChange() {
+  fetchAnalysis()
+}
 
 // 获取大盘分析
 async function fetchAnalysis() {
   loading.value = true
   error.value = ''
+  analysis.value = null
   
   try {
     // 检查是否已登录
@@ -102,7 +114,8 @@ async function fetchAnalysis() {
     
     // 发送API请求
     const response = await request.post('/analyze-market', {
-      type: 'daily_overview'
+      type: 'daily_overview',
+      date: selectedDate.value
     })
     
     if (response.success) {
@@ -131,10 +144,8 @@ async function fetchAnalysis() {
     // 如果 err.response 存在，说明服务器响应了错误（如 4xx/5xx）
     if (err.response && err.response.data && err.response.data.error) {
       error.value = err.response.data.error
-    } else if (err.message && !err.message.includes('登录')) {
-      error.value = err.message || '无法连接到分析服务'
-    } else if (!isAuthenticated.value) {
-      error.value = '请先登录'
+    } else if (err.message) {
+      error.value = err.message
     } else {
       error.value = '无法连接到分析服务'
     }
@@ -237,6 +248,29 @@ onMounted(() => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+
+.header-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.date-input {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  color: white;
+  padding: 6px 10px;
+  font-size: 14px;
+  outline: none;
+}
+
+.date-input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
 }
 
 .header-date {
