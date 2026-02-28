@@ -14,9 +14,9 @@ import {
 	VDialog, VDataTable, VTextarea, VSpacer, VSwitch, VContainer, VListItem, VList, VTabs, VTab, VWindow, VWindowItem,
 	VPagination, VForm, VListItemTitle, VListItemSubtitle, VMenu,
 	// Add missing components for StrategyParamsEditor
-	VTable, VTooltip, VAlert, VChipGroup,
+	VTable, VTooltip, VAlert, VChipGroup, VDivider,
 	// Add components for LimitUpLadder
-	VProgressLinear, VProgressCircular, VOverlay, VExpandTransition
+	VProgressLinear, VProgressCircular, VOverlay, VExpandTransition, VFadeTransition
 } from 'vuetify/components';
 import { Ripple } from 'vuetify/directives';
 // Use SVG icon set to avoid loading large icon font
@@ -27,8 +27,8 @@ const vuetify = createVuetify({
 		VApp, VRow, VCol, VSelect, VTextField, VBtn, VBtnToggle, VIcon, VChip, VCard, VCardText, VCardTitle, VCardActions,
 		VDialog, VDataTable, VTextarea, VSpacer, VSwitch, VContainer, VListItem, VList, VTabs, VTab, VWindow, VWindowItem,
 		VPagination, VForm, VListItemTitle, VListItemSubtitle, VMenu,
-		VTable, VTooltip, VAlert, VChipGroup,
-		VProgressLinear, VProgressCircular, VOverlay, VExpandTransition
+		VTable, VTooltip, VAlert, VChipGroup, VDivider,
+		VProgressLinear, VProgressCircular, VOverlay, VExpandTransition, VFadeTransition
 	},
 	directives: { Ripple },
 	icons: {
