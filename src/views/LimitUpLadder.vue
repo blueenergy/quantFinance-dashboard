@@ -86,8 +86,10 @@
       <v-col cols="6" md="3">
         <v-card class="indicator-card">
           <v-card-text class="text-center">
-            <div class="text-h3 font-weight-bold text-red">{{ indicators.total_limit_up }}</div>
-            <div class="text-caption text-grey">涨停总数</div>
+            <div class="text-h3 font-weight-bold text-red">
+              {{ indicators.total_limit_up }} / {{ indicators.total_limit_down }}
+            </div>
+            <div class="text-caption text-grey">涨跌停比</div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -106,6 +108,16 @@
             <div class="text-caption text-grey">首板→二板晋级率</div>
           </v-card-text>
         </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- 市场涨跌分布 (Market Spectrum) -->
+    <v-row v-if="indicators" class="mb-4">
+      <v-col cols="12">
+        <market-spectrum-chart 
+          :date="currentLadderDate || selectedDate" 
+          :indicators="indicators"
+        />
       </v-col>
     </v-row>
 
@@ -432,6 +444,7 @@ import { getDailyLadder, getIndicators, getSectorRanking, getReasoningDetail, su
 import { getWatchlistOpportunities, getPositionsOpportunities, getLatestPortfolioAnalysis } from '../api/portfolio'
 import LadderTierCard from '../components/LadderTierCard.vue'
 import AnalysisCard from '../components/AnalysisCard.vue'
+import MarketSpectrumChart from '../components/MarketSpectrumChart.vue'
 
 // API wrapper functions for the analysis cards
 const watchlistAnalyzeApi = () => getWatchlistOpportunities()

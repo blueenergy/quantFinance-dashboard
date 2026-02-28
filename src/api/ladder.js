@@ -115,3 +115,14 @@ export async function submitReasoningFeedback(symbol, date, feedback, isBroken =
     return await res.json();
 }
 
+
+/**
+ * 获取市场阴阳谱/分布数据
+ * @param {string} date - 日期 YYYYMMDD
+ */
+export async function getMarketSpectrum(date) {
+    const url = `${API_BASE}/market-spectrum?start_date=${date}&end_date=${date}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Failed to get market spectrum: ${res.status}`);
+    return await res.json();
+}
