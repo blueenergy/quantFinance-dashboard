@@ -3,7 +3,40 @@
     <div class="login-form">
       <h2>{{ isLogin ? '用户登录' : '用户注册' }}</h2>
       
-      <form @submit.prevent="handleSubmit">
+      <!-- 忘记密码模式 -->
+      <form v-if="isForgotPassword" @submit.prevent="handleForgotPassword">
+        <div class="form-group">
+          <label for="resetEmail">邮箱:</label>
+          <input
+            id="resetEmail"
+            v-model="forgotEmail"
+            type="email"
+            required
+            placeholder="请输入注册时使用的邮箱"
+          />
+        </div>
+
+        <div v-if="error" class="error-message">
+          {{ error }}
+        </div>
+
+        <div v-if="success" class="success-message">
+          {{ success }}
+        </div>
+
+        <button type="submit" :disabled="loading" class="submit-btn">
+          {{ loading ? '发送中...' : '发送重置邮件' }}
+        </button>
+
+        <div class="toggle-mode">
+          <p>
+            <a href="#" @click.prevent="backToLogin">返回登录</a>
+          </p>
+        </div>
+      </form>
+
+      <!-- 登录/注册模式 -->
+      <form v-else @submit.prevent="handleSubmit">
         <div class="form-group">
           <label for="username">用户名:</label>
           <input
@@ -47,6 +80,10 @@
           />
         </div>
 
+        <div v-if="isLogin" class="forgot-password-link">
+          <a href="#" @click.prevent="showForgotPassword">忘记密码？</a>
+        </div>
+
         <div v-if="!isLogin" class="form-group">
           <label for="confirmPassword">确认密码:</label>
           <input
@@ -67,7 +104,7 @@
         </button>
       </form>
 
-      <div class="toggle-mode">
+      <div v-if="!isForgotPassword" class="toggle-mode">
         <p>
           {{ isLogin ? '还没有账号？' : '已有账号？' }}
           <a href="#" @click.prevent="toggleMode">
@@ -87,9 +124,12 @@ export default {
   emits: ['login-success'],
   setup(props, { emit }) {
     const isLogin = ref(true)
+    const isForgotPassword = ref(false)
     const loading = ref(false)
     const error = ref('')
+    const success = ref('')
     const confirmPassword = ref('')
+    const forgotEmail = ref('')
 
     const formData = reactive({
       username: '',
@@ -105,11 +145,59 @@ export default {
       formData.password = ''
       confirmPassword.value = ''
       error.value = ''
+      success.value = ''
     }
 
     const toggleMode = () => {
       isLogin.value = !isLogin.value
       resetForm()
+    }
+
+    const showForgotPassword = () => {
+      isForgotPassword.value = true
+      error.value = ''
+      success.value = ''
+      forgotEmail.value = ''
+    }
+
+    const backToLogin = () => {
+      isForgotPassword.value = false
+      error.value = ''
+      success.value = ''
+    }
+
+    const handleForgotPassword = async () => {
+      if (!forgotEmail.value) {
+        error.value = '请输入邮箱地址'
+        return
+      }
+
+      loading.value = true
+      error.value = ''
+      success.value = ''
+
+      try {
+        const response = await fetch('/api/user/forgot-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ email: forgotEmail.value })
+        })
+
+        const data = await response.json()
+
+        if (response.ok) {
+          success.value = data.message || '如果该邮箱已注册，您将收到密码重置邮件'
+          forgotEmail.value = ''
+        } else {
+          error.value = data.detail || '发送失败，请重试'
+        }
+      } catch (err) {
+        error.value = '网络错误，请重试'
+      } finally {
+        loading.value = false
+      }
     }
 
     const validateForm = () => {
@@ -201,11 +289,17 @@ export default {
 
     return {
       isLogin,
+      isForgotPassword,
       loading,
       error,
+      success,
       formData,
       confirmPassword,
+      forgotEmail,
       toggleMode,
+      showForgotPassword,
+      backToLogin,
+      handleForgotPassword,
       handleSubmit
     }
   }
@@ -273,6 +367,32 @@ export default {
   background: #fdf2f2;
   border: 1px solid #f5c6cb;
   border-radius: 5px;
+}
+
+.success-message {
+  color: #27ae60;
+  font-size: 14px;
+  margin-bottom: 15px;
+  text-align: center;
+  padding: 10px;
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+  border-radius: 5px;
+}
+
+.forgot-password-link {
+  text-align: right;
+  margin-bottom: 15px;
+}
+
+.forgot-password-link a {
+  color: #667eea;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.forgot-password-link a:hover {
+  text-decoration: underline;
 }
 
 .submit-btn {
