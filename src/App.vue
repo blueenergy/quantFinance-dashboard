@@ -282,6 +282,16 @@
               <div class="skeleton skeleton-table">概念板块分析加载中...</div>
             </template>
           </Suspense>
+
+          <!-- Hot Stock Analysis Tab -->
+          <Suspense v-if="activeTab === 'hot-stock'">
+            <template #default>
+              <HotStockAnalysis />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">热股分析加载中...</div>
+            </template>
+          </Suspense>
         </div>
       </div>
     </div>
@@ -318,6 +328,7 @@ const BacktestManager = defineAsyncComponent(() => import('./components/Backtest
 const StrategyStockPool = defineAsyncComponent(() => import('./components/StrategyStockPool.vue'))
 const LimitUpLadder = defineAsyncComponent(() => import('./views/LimitUpLadder.vue'))
 const SectorConceptAnalysis = defineAsyncComponent(() => import('./components/SectorConceptAnalysis.vue'))
+const HotStockAnalysis = defineAsyncComponent(() => import('./components/HotStockAnalysis.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
@@ -395,6 +406,7 @@ const adminTabs = computed(() => {
   const baseTabs = [
     { id: 'limit-up-ladder', name: '📊 连板天梯' },
     { id: 'sector-concept', name: '📈 概念板块' },
+    { id: 'hot-stock', name: '🔥 热股分析' },
     { id: 'strategy-pool', name: '🎯 策略股池' },
     { id: 'ranking', name: '金榜' },
     { id: 'watchlist', name: '自选股' },
