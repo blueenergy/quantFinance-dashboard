@@ -1,8 +1,15 @@
 <template>
   <v-app id="app">
+    <!-- 重置密码页面 -->
+    <ResetPassword 
+      v-if="isResetPasswordMode" 
+      :token="resetToken"
+      @done="handleResetDone"
+    />
+    
     <!-- 未登录时显示登录表单 -->
     <LoginForm 
-      v-if="!isAuthenticated" 
+      v-else-if="!isAuthenticated" 
       @login-success="handleLoginSuccess"
     />
     
@@ -276,6 +283,7 @@ import LoginForm from './components/LoginForm.vue'
 import UserAvatar from './components/UserAvatar.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
 import WatchListData from './components/WatchListData.vue'
+import ResetPassword from './components/ResetPassword.vue'
 // Lazy-load heavy views/components to avoid loading them for normal users
 import { defineAsyncComponent, ref, onMounted, computed, watch, nextTick } from 'vue'
 const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
@@ -346,6 +354,10 @@ axios.interceptors.response.use(
 )
 
 const { user, isAuthenticated, validateToken, logout } = useAuth()
+
+// 密码重置相关状态
+const isResetPasswordMode = ref(false)
+const resetToken = ref('')
 
 const currentIndex = ref(0)
 const watchlist = ref([]) 
@@ -761,7 +773,24 @@ function handleLogout() {
   console.log('用户已登出')
 }
 
+function handleResetDone() {
+  // 密码重置完成，返回登录界面
+  isResetPasswordMode.value = false
+  resetToken.value = ''
+  // 清除URL中的token参数
+  window.history.replaceState({}, document.title, window.location.pathname)
+}
+
 onMounted(async () => {
+  // 检查是否是密码重置URL
+  const urlParams = new URLSearchParams(window.location.search)
+  const resetTokenParam = urlParams.get('token')
+  if (resetTokenParam && window.location.pathname === '/reset-password') {
+    isResetPasswordMode.value = true
+    resetToken.value = resetTokenParam
+    return // 不需要验证token，直接显示重置密码页面
+  }
+
   // 并行验证 Token 与获取自选股，减少等待时间
   if (!isAuthenticated.value) return
 
