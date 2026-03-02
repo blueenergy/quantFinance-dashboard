@@ -202,15 +202,7 @@
             </template>
           </Suspense>
 
-          <!-- Worker Monitor Tab -->
-          <Suspense v-if="activeTab === 'worker-monitor'">
-            <template #default>
-              <WorkerMonitor />
-            </template>
-            <template #fallback>
-              <div class="skeleton skeleton-table">Worker 监控面板加载中...</div>
-            </template>
-          </Suspense>
+
           
           <!-- Strategy Workers Tab (New) -->
           <Suspense v-if="activeTab === 'strategy-workers'">
@@ -319,7 +311,7 @@ const WatchlistStrategyTable = defineAsyncComponent(() => import('./components/W
 const TradeExecutionTable = defineAsyncComponent(() => import('./components/TradeExecutionTable.vue'))
 // 新增：手动交易管理组件
 const TradingManualPanel = defineAsyncComponent(() => import('./components/TradingManualPanel.vue'))
-const WorkerMonitor = defineAsyncComponent(() => import('./components/WorkerMonitor.vue'))
+
 const StrategyWorkers = defineAsyncComponent(() => import('./views/StrategyWorkers.vue'))
 const StrategyExecutionAnalysis = defineAsyncComponent(() => import('./components/StrategyExecutionAnalysis.vue'))
 const SecuritiesAccountDashboard = defineAsyncComponent(() => import('./components/SecuritiesAccountDashboard.vue'))
@@ -412,7 +404,7 @@ const adminTabs = computed(() => {
     { id: 'watchlist', name: '自选股' },
     { id: 'backtest', name: '📊 回测管理' },
     { id: 'strategies', name: '实盘交易' },
-    { id: 'worker-monitor', name: '🤖 Worker监控' },
+
     { id: 'strategy-workers', name: '🚀 策略Workers' },
     { id: 'trade-executions', name: '交易记录' },
     { id: 'trading-manual', name: '人工干预' }, 
