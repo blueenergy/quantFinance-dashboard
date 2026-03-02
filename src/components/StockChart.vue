@@ -82,7 +82,7 @@ const props = defineProps({
   dateFrom: String
 })
 
-const emit = defineEmits(['go-back'])
+const emit = defineEmits(['go-back', 'load-more'])
 
 // Refs
 const containerRef = ref(null)
@@ -159,6 +159,9 @@ async function initECharts() {
     // We use null for light theme to use ECharts default, 
     // but we'll customize colors in getBaseOption for 'soft' look
     chartInstance = echarts.init(chartRef.value, theme.value === 'dark' ? 'dark' : null)
+    
+    // Register datazoom event for infinite scrolling
+    chartInstance.on('datazoom', handleDataZoom)
   }
 }
 
@@ -189,12 +192,27 @@ function renderMinute() {
 function renderDaily() {
   if (!props.records.length) { chartInstance.clear(); return; }
   
+  // 1. Get current dataZoom state if it exists
+  let currentZoomStart = null;
+  let currentZoomEnd = null;
+  let previousDataLength = chartInstance.getOption()?.series?.[0]?.data?.length || 0;
+  
+  if (previousDataLength > 0 && isPaging) {
+    const option = chartInstance.getOption();
+    if (option && option.dataZoom && option.dataZoom.length > 0) {
+      currentZoomStart = option.dataZoom[0].start;
+      currentZoomEnd = option.dataZoom[0].end;
+    }
+  }
+  
+  // 2. Prepare and filter data
   let data = [...props.records].sort((a,b) => new Date(normalizeDate(a.trade_date)) - new Date(normalizeDate(b.trade_date)))
-  if (startDate.value) data = data.filter(r => normalizeDate(r.trade_date) >= startDate.value)
-  if (endDate.value) data = data.filter(r => normalizeDate(r.trade_date) <= endDate.value)
+  if (startDate.value) data = data.filter(r => normalizeDate(r.trade_date) >= normalizeDate(startDate.value))
+  if (endDate.value) data = data.filter(r => normalizeDate(r.trade_date) <= normalizeDate(endDate.value))
   
   const times = data.map(r => normalizeDate(r.trade_date))
   const option = getBaseOption(`${props.symbol} ${kType.value}`, times)
+  
   option.series = [{
     name: 'K线', type: 'candlestick', data: data.map(r => [r.open, r.close, r.low, r.high]),
     itemStyle: { 
@@ -204,6 +222,44 @@ function renderDaily() {
       borderColor0: theme.value === 'dark' ? '#26a69a' : '#22ab94' 
     }
   }]
+
+  // 3. Restore or calculate new dataZoom state
+  const newDataLength = data.length;
+  // Initialize dataZoom if it wasn't present
+  if (!option.dataZoom) option.dataZoom = [{ type: 'inside', start: 0, end: 100 }];
+
+  if (isPaging && previousDataLength > 0 && newDataLength > previousDataLength && currentZoomStart !== null) {
+      // Calculate how much new data was added relative to the total new dataset
+      // Because we fetched *older* data, these are prepended to the array.
+      const addedDataCount = newDataLength - previousDataLength;
+      
+      // Calculate the new percentage that corresponds to the old window
+      // The old 'start' (0%) is now at index `addedDataCount`
+      const newStartVal = (addedDataCount / newDataLength) * 100;
+      
+      // We know the old window showed N points out of previousDataLength
+      const oldVisiblePoints = previousDataLength * ((currentZoomEnd - currentZoomStart) / 100);
+      
+      // The new end should cover the same number of points starting from newStartVal
+      const newEndVal = newStartVal + ((oldVisiblePoints / newDataLength) * 100);
+      
+      option.dataZoom[0].start = newStartVal;
+      option.dataZoom[0].end = newEndVal;
+      
+      // We reset isPaging *after* we successfully render the new data
+      // so we don't accidentally fall into the 'default' zoom logic.
+      isPaging = false; 
+  } else if (!isPaging) {
+     // Default zoom for first load: show the most recent 100 points
+     if (newDataLength > 100) {
+         option.dataZoom[0].start = ((newDataLength - 100) / newDataLength) * 100;
+         option.dataZoom[0].end = 100;
+     } else {
+         option.dataZoom[0].start = 0;
+         option.dataZoom[0].end = 100;
+     }
+  }
+
   chartInstance.setOption(option, true)
 }
 
@@ -227,6 +283,33 @@ function getBaseOption(title, xData) {
     },
     dataZoom: [{ type: 'inside' }],
     animation: false
+  }
+}
+
+// --- Data Zoom / Infinite Scroll ---
+let isPaging = false
+function handleDataZoom(params) {
+  if (isPaging || kType.value === 'minute') return
+  
+  // Get the start percentage of the zoom scale
+  let start = 100
+  if (params.batch && params.batch.length > 0) {
+    start = params.batch[0].start
+  } else if (params.start !== undefined) {
+    start = params.start
+  }
+
+  // If scrolled to the left (start <= 1% is the threshold)
+  if (start <= 1 && props.records?.length > 0) {
+    // Collect all unique dates and sort them to find the earliest
+    const dates = props.records.map(r => normalizeDate(r.trade_date)).sort()
+    const earliestDate = dates[0]
+    
+    isPaging = true
+    emit('load-more', earliestDate)
+    
+    // Throttling to prevent multiple calls for the same event
+    setTimeout(() => { isPaging = false }, 2500)
   }
 }
 
@@ -263,7 +346,19 @@ onBeforeUnmount(() => {
 
 watch(() => kType.value, (t) => t === 'minute' ? fetchMinuteData() : drawChart())
 watch(() => props.symbol, () => kType.value === 'minute' ? fetchMinuteData() : drawChart())
-watch(() => props.records, drawChart, { deep: true })
+
+watch(() => props.records, (newRecs) => {
+  if (newRecs?.length > 0) {
+    // If our current startDate is later than the earliest record, 
+    // it means more historical data was loaded, so we should expand the view.
+    const dates = newRecs.map(r => normalizeDate(r.trade_date)).sort()
+    const earliest = dates[0]
+    if (!startDate.value || earliest < startDate.value) {
+      startDate.value = earliest
+    }
+  }
+  drawChart()
+}, { deep: true })
 
 const goBack = () => emit('go-back', { strategy: props.strategyFrom, preset: props.presetFrom })
 </script>
