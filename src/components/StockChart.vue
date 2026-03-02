@@ -1,580 +1,368 @@
 <template>
-  <div>
-    <div style="margin-bottom: 10px;">
-      <label>选择K线类型:</label>
-      <select v-model="kType" @change="drawChart">
-        <option value="day">日线</option>
-        <option value="week">周线</option>
-        <option value="month">月线</option>
-      </select>
-      <span style="margin-left: 20px; color: #666; font-size: 12px;">
-        {{ props.symbol ? `${props.symbol}${props.stockName ? ` - ${props.stockName}` : ''} | ` : '' }}数据量: {{ records?.length || 0 }} 条
-      </span>
-      <!-- 返回按钮 -->
-      <button @click="goBack" style="margin-left: 20px; background-color: #6a5acd; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
-        ← 返回之前页面
-      </button>
+  <div :class="['unified-chart-container', theme]" ref="containerRef">
+    <!-- Header: Info & Basic Controls -->
+    <div class="chart-header">
+      <div class="stock-info">
+        <span class="symbol-badge">{{ props.symbol }}</span>
+        <span class="stock-name">{{ props.stockName || '' }}</span>
+        <span class="data-count">{{ kType === 'minute' ? minuteBars.length + ' 条分时' : records?.length + ' 天数据' }}</span>
+      </div>
+      
+      <div class="header-actions">
+        <!-- Theme Toggle -->
+        <button @click="toggleTheme" class="btn-action theme-toggle" :title="theme === 'dark' ? '切换到亮色模式' : '切换到深色模式'">
+          {{ theme === 'dark' ? '☀️' : '🌙' }}
+        </button>
+        <button @click="goBack" class="btn-action">← 返回</button>
+      </div>
     </div>
-    <div style="margin-bottom: 10px;">
-      <label>起始日期：</label>
-      <input type="date" v-model="startDate" @change="drawChart" />
-      <label style="margin-left:10px;">结束日期：</label>
-      <input type="date" v-model="endDate" @change="drawChart" />
+
+    <!-- Toolbar: Interval & Date -->
+    <div class="chart-toolbar">
+      <div class="toolbar-group">
+        <div class="interval-selector">
+          <button 
+            v-for="opt in intervalOptions" 
+            :key="opt.value"
+            :class="['interval-btn', { active: kType === opt.value }]"
+            @click="kType = opt.value"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+      </div>
+
+      <div class="toolbar-group" v-if="kType !== 'minute'">
+        <input type="date" v-model="startDate" @change="drawChart" class="theme-input" />
+        <span class="sep">至</span>
+        <input type="date" v-model="endDate" @change="drawChart" class="theme-input" />
+      </div>
+
+      <div class="toolbar-group" v-else>
+        <input type="date" v-model="selectedMinuteDate" @change="fetchMinuteData" class="theme-input" />
+        <button @click="fetchMinuteData" :disabled="loading" class="btn-refresh">🔄</button>
+      </div>
+
+      <div class="toolbar-spacer"></div>
+
+      <div class="nav-controls">
+        <button @click="props.prevStock" :disabled="!props.hasPrev" class="btn-nav">▲</button>
+        <button @click="props.nextStock" :disabled="!props.hasNext" class="btn-nav">▼</button>
+      </div>
     </div>
-    <div ref="chart" style="width: 100%; height: 600px; border: 1px solid #ddd;"></div>
-    <div v-if="error" style="color: red; margin-top: 10px;">
-      错误: {{ error }}
-    </div>
-    <div style="margin-bottom: 10px;">
-      <button @click="props.prevStock" :disabled="!props.hasPrev">上一个</button>
-      <button @click="props.nextStock" :disabled="!props.hasNext" style="margin-left:10px;">下一个</button>
-      <span style="margin-left: 20px; color: #00ff00; font-weight: bold;">
-        当前股票: {{ props.symbol }}{{ props.stockName ? ` - ${props.stockName}` : '' }}
-      </span>
-    </div>
-    <div style="color: white; font-size: 12px; margin-bottom: 5px;">
-      DEBUG: watchlist长度: {{ props.watchlist?.length }} | currentIndex: {{ props.currentIndex }}
+
+    <!-- Main Chart -->
+    <div class="chart-main-wrapper" ref="chartWrapperRef">
+      <div ref="chartRef" class="chart-canvas"></div>
+      <div v-if="error" class="chart-overlay error">{{ error }}</div>
+      <div v-if="loading" class="chart-overlay loading"><div class="spinner"></div></div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
-// Lazy-load ECharts to reduce initial bundle size
-let echarts
-
-const emit = defineEmits(['go-back'])
+import { ref, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
+import axios from 'axios'
 
 const props = defineProps({
-  records: Array,
+  records: { type: Array, default: () => [] },
   symbol: String,
   stockName: String,
-  moneyFlowRecords: Array, // 新增
-  signalDates: Array,      // 新增：信号日期列表
-  tradeMarkers: Array,     // 新增：交易标记（买入+卖出）
+  moneyFlowRecords: { type: Array, default: () => [] },
+  signalDates: { type: Array, default: () => [] },
+  tradeMarkers: { type: Array, default: () => [] },
   prevStock: Function,
   nextStock: Function,
   hasPrev: Boolean,
   hasNext: Boolean,
-  watchlist: Array,   
+  watchlist: Array,
   currentIndex: Number,
-  strategyFrom: String, // 策略来源
-  presetFrom: String,   // 参数风格来源
-  dateFrom: String      // 日期来源
+  strategyFrom: String,
+  presetFrom: String,
+  dateFrom: String
 })
 
-const chart = ref(null)
+const emit = defineEmits(['go-back'])
+
+// Refs
+const containerRef = ref(null)
+const chartWrapperRef = ref(null)
+const chartRef = ref(null)
 const kType = ref('day')
+const loading = ref(false)
 const error = ref('')
 const startDate = ref('')
 const endDate = ref('')
+const selectedMinuteDate = ref('')
+const minuteBars = ref([])
+const tradeSignals = ref([])
+const theme = ref(localStorage.getItem('chart-theme') || 'dark')
 
+let echarts = null
 let chartInstance = null
+let resizeObserver = null
 
-function groupKline(data, type) {
-  if (type === 'day') return data
-  const grouped = {}
-  data.forEach(item => {
-    const date = new Date(item.trade_date)
-    let key = ''
-    if (type === 'week') {
-      const year = date.getFullYear()
-      const week = Math.ceil((date - new Date(year, 0, 1)) / 86400000 / 7)
-      key = `${year}-W${week}`
-    } else if (type === 'month') {
-      key = `${date.getFullYear()}-${date.getMonth() + 1}`
-    }
-    if (!grouped[key]) grouped[key] = []
-    grouped[key].push(item)
-  })
-  return Object.entries(grouped).map(([key, arr]) => ({
-    trade_date: key,
-    open: arr[0].open,
-    high: Math.max(...arr.map(i => i.high)),
-    low: Math.min(...arr.map(i => i.low)),
-    close: arr[arr.length - 1].close,
-    volume: arr.reduce((sum, i) => sum + i.volume, 0)
-  }))
+const intervalOptions = [
+  { label: '分时', value: 'minute' },
+  { label: '日线', value: 'day' },
+  { label: '周线', value: 'week' },
+  { label: '月线', value: 'month' }
+]
+
+// --- Utils ---
+const normalizeDate = (d) => {
+  if (!d) return ''
+  if (d.includes('T')) return d.split('T')[0]
+  if (d.length === 8 && !d.includes('-')) return `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`
+  return d
 }
 
-function getKlineData() {
-  const sorted = [...props.records].sort((a, b) => new Date(normalizeDate(a.trade_date)) - new Date(normalizeDate(b.trade_date)))
-  
-  // ✅ 核心修复：使用 normalizeDate 进行日期比较
-  let filtered = sorted
-  if (startDate.value) {
-    filtered = filtered.filter(r => normalizeDate(r.trade_date) >= startDate.value)
-  }
-  if (endDate.value) {
-    filtered = filtered.filter(r => normalizeDate(r.trade_date) <= endDate.value)
-  }
-  
- 
-  
-  const kline = groupKline(filtered, kType.value)
-  // money_flow 数据按日期映射
-  const moneyFlowMap = {}
-  if (props.moneyFlowRecords) {
-    props.moneyFlowRecords.forEach(mf => {
-      moneyFlowMap[normalizeDate(mf.trade_date)] = mf
+const toggleTheme = () => {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark'
+  localStorage.setItem('chart-theme', theme.value)
+  if (chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
+    nextTick(() => {
+      initECharts().then(() => drawChart())
     })
   }
-  // console.log('moneyFlowRecords:', props.moneyFlowRecords)
-  // console.log('moneyFlowRecords sample:', props.moneyFlowRecords && props.moneyFlowRecords.length > 0 ? props.moneyFlowRecords[0] : '无数据')
-  // console.log('kline sample:', props.records && props.records.length > 0 ? props.records[0] : '无数据')
-  // console.log('moneyFlowMap keys:', Object.keys(moneyFlowMap))
-  // console.log('moneyFlowMap:', moneyFlowMap)
-  // console.log('kline dates:', kline.map(r => normalizeDate(r.trade_date)))
-  // 计算大资金净买入金额
-  const bigMoneyBars = kline.map(r => {
-    const mf = moneyFlowMap[normalizeDate(r.trade_date)]
-    if (mf) {
-      const buy = (mf.buy_lg_amount || 0) + (mf.buy_elg_amount || 0)
-      const sell = (mf.sell_lg_amount || 0) + (mf.sell_elg_amount || 0)
-      return buy - sell
-    }
-    return 0
-  })
-  // 评分数据（如有），兼容 dict/number，默认用 balanced
-const scoreLine = kline.map(r => {
-  const cs = r.composite_score
-  if (cs === undefined || cs === null) return null
-  let value = null
-  if (typeof cs === 'object' && cs !== null) {
-    value = cs.balanced ?? null
-  } else {
-    value = cs
-  }
-  return { value, composite_score: cs }
-})
-  return {
-    dates: kline.map(r => normalizeDate(r.trade_date)), // ✅ 确保日期格式一致
-    prices: kline.map(r => r.close),
-    kline,
-    bigMoneyBars,
-    scoreLine
-  }
 }
 
-watch(() => [props.records, kType.value, props.signalDates, props.tradeMarkers], () => {
-  drawChart()
-})
-
-function drawChart() {
-  error.value = ''
-  
-  if (!chartInstance) {
-    error.value = '图表容器未找到'
-    return
-  }
-  
-  if (!props.symbol) {
-    error.value = '股票代码未指定'
-    return
-  }
-  
-  if (!props.records || props.records.length === 0) {
-    error.value = '暂无数据'
-    return
-  }
-  
+// --- Data Fetching ---
+async function fetchMinuteData() {
+  if (!props.symbol || !selectedMinuteDate.value) return
+  loading.value = true
   try {
-  const { dates, kline, bigMoneyBars, scoreLine } = getKlineData()
-  
-  // DEBUGGING: Log tradeMarkers data
-  console.log('--- Debugging Trade Markers ---');
-  console.log('Received tradeMarkers:', JSON.stringify(props.tradeMarkers, null, 2));
-  // console.log('Chart dates:', JSON.stringify(dates, null, 2)); // Log all dates if needed for deep debug
-
-  // 规范化 scoreLine：统一进行四舍五入，避免在多个地方重复计算
-  const normalizedScoreLine = scoreLine.map(point => {
-    if (!point) return null
-    if (point && typeof point.value === 'number') {
-      const rounded = Math.round(point.value)
-      return { ...point, value: rounded }
-    }
-    return point
-  })
-  const maxAbsBigMoney = Math.max(...bigMoneyBars.map(v => Math.abs(v)), 1)
-    
-    // ✅ 修复：从 K线数据中直接获取股票名称
-    let stockTitle = props.symbol || ''
-    
-    // 尝试从K线数据中获取股票名称
-    if (props.records && props.records.length > 0) {
-      const firstRecord = props.records[0]
-      const nameFields = ['name', 'stock_name', 'company_name', 'title']
-      
-      for (const field of nameFields) {
-        if (firstRecord[field]) {
-          stockTitle = `${props.symbol} - ${firstRecord[field]}`
-          break
-        }
-      }
-    }
-    
-    // 如果K线数据中没有名称，则使用传入的 stockName
-    if (stockTitle === props.symbol && props.stockName) {
-      stockTitle = `${props.symbol} - ${props.stockName}`
-    }
-    
-    // console.log("stockTitle", stockTitle)
-    
-    const option = {
-      title: { 
-        text: `${stockTitle} ${kType.value === 'day' ? '日线' : kType.value === 'week' ? '周线' : '月线'}K线图`,
-        left: 'center',
-        textStyle: {
-          color: '#00ff00',      // 亮绿色
-          fontWeight: 'bold',    // 加粗
-          fontSize: 16           // 可选：调整字体大小
-        }
-      },
-      tooltip: { 
-        trigger: 'axis',
-        formatter: function(params) {
-          let tooltip = ''
-          const klineData = params.find(p => p.seriesName === 'K线')
-          const volumeData = params.find(p => p.seriesName === '成交量')
-          const bigMoneyData = params.find(p => p.seriesName === '大资金净买入')
-          const scoreData = params.find(p => p.seriesName === '评分')
-
-          // ✅ 添加日期显示
-          const currentDate = params[0] ? params[0].axisValue : ''
-          if (currentDate) {
-            tooltip += `<div style="color: #666666; font-weight: bold; font-size: 14px; margin-bottom: 8px;">📅 ${currentDate}</div>`
-          }
-
-          if (klineData && klineData.data) {
-            // Backend returns: [unknown, open, close, low, high]
-            // Discard first element and extract OCLH
-            const dataArray = Array.isArray(klineData.data) ? klineData.data : klineData.value
-            if (dataArray && dataArray.length >= 5) {
-              const [, open, close, low, high] = dataArray  // Skip first element
-              tooltip += `<div style="border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 5px;">`
-              tooltip += `开盘: <span style="color: #666666;">${open.toFixed(2)}</span><br/>`
-              tooltip += `最高: <span style="color: #666666;">${high.toFixed(2)}</span><br/>`
-              tooltip += `最低: <span style="color: #666666;">${low.toFixed(2)}</span><br/>`
-              tooltip += `收盘: <span style="color: #666666;">${close.toFixed(2)}</span></div>`
-            }
-          }
-          if (scoreData && scoreData.data) {
-            const cs = scoreData.data.composite_score;
-            if (cs && typeof cs === 'object') {
-              tooltip += `<div style='color:#ffd700;font-weight:bold;'>评分(balanced): ${cs.balanced ?? '-'}<br>评分(aggressive): ${cs.aggressive ?? '-'}<br>评分(conservative): ${cs.conservative ?? '-'}</div>`;
-            } else if (cs !== undefined) {
-              tooltip += `<div style='color:#ffd700;font-weight:bold;'>评分: ${cs}</div>`;
-            }
-          }
-          if (volumeData) {
-            // 找到当前K线的成交金额
-            const idx = volumeData.dataIndex
-            const turnover = kline[idx] && kline[idx].turnover
-            const volume = volumeData.data
-            tooltip += `<br/><span style=\"color:#5470c6;\">●</span> 成交量: <b>${volume !== undefined && volume !== null ? volume.toLocaleString() : '-'}</b>`
-            if (turnover !== undefined) {
-              tooltip += `<br/><span style=\"color:#5470c6;\">●</span> 成交金额: <b>${turnover.toLocaleString()}</b>`
-            }
-          }
-          if (bigMoneyData) {
-            tooltip += `<div style="border-top: 1px solid #ccc; padding-top: 5px;">`
-            tooltip += `<span style="color:#e53935;">●</span> 大资金净买入: <b style="color: ${bigMoneyData.data >= 0 ? '#ff6b6b' : '#00ff00'};">${bigMoneyData.data.toLocaleString()}</b><br/>`
-            
-            // ✅ 修复资金流数据查找逻辑
-            const normalizedDate = normalizeDate(currentDate)
-            const mf = props.moneyFlowRecords && props.moneyFlowRecords.find(m => normalizeDate(m.trade_date) === normalizedDate)
-            
-            if (mf) {
-              const buyAmount = (mf.buy_lg_amount || 0) + (mf.buy_elg_amount || 0)
-              const sellAmount = (mf.sell_lg_amount || 0) + (mf.sell_elg_amount || 0)
-              tooltip += `买入(大+超大): <span style="color: #ff6b6b;">${buyAmount.toLocaleString()}</span><br/>`
-              tooltip += `卖出(大+超大): <span style="color: #00ff00;">${sellAmount.toLocaleString()}</span>`
-            }
-            tooltip += `</div>`
-          }
-          return tooltip
-        }
-      },
-      xAxis: [
-        { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false } },   // K线显示时间
-        { type: 'category', data: dates, gridIndex: 1, axisLabel: { show: false } },              // 成交量不显示
-        { type: 'category', data: dates, gridIndex: 2, axisLabel: { show: false } }               // 大资金净买入不显示
-      ],
-      yAxis: [
-        { type: 'value', name: '价格', gridIndex: 0 },
-        { type: 'value', name: '成交量', gridIndex: 1, nameTextStyle: { padding: [-90, 0, 0, -90] }, axisLabel: { formatter: v => v >= 10000 ? (v/10000).toFixed(1)+'万' : v } },
-        { type: 'value', name: '大资金净买入', gridIndex: 2, nameTextStyle: { padding: [-90, 0, 0, -90] }, axisLabel: { formatter: v => Math.abs(v) >= 10000 ? (v/10000).toFixed(2)+'亿' : v } },
-        { type: 'value', name: '评分', min: 0, max: 100, position: 'right', offset: 60, axisLine: { show: true, lineStyle: { color: '#ffd700' } }, axisLabel: { color: '#ffd700' } }
-      ],
-      grid: [
-        {
-          left: '10%',
-          right: '10%',
-          top: '10%',
-          height: '50%'      // K线
-        },
-        {
-          left: '10%',
-          right: '10%',
-          top: '62%',
-          height: '15%'      // 成交量
-        },
-        {
-          left: '10%',
-          right: '10%',
-          top: '80%',
-          height: '15%'      // 大资金净买入
-        }
-      ],
-      series: [
-        {
-          type: 'candlestick',
-          name: 'K线',
-          // ECharts candlestick format: [open, close, low, high]
-          data: kline.map(r => [r.open, r.close, r.low, r.high]),
-          xAxisIndex: 0,
-          yAxisIndex: 0,
-          markPoint: {
-            data: [
-              // 原有的信号日期标记（BUY信号）
-              ...(props.signalDates || []).map(d => {
-                const normalized = normalizeDate(d)
-                const idx = dates.indexOf(normalized)
-                if (idx !== -1) {
-                  return {
-                    name: '信号',
-                    coord: [normalized, kline[idx].high],
-                    value: 'BUY',
-                    itemStyle: { color: '#f44336' },
-                    label: {
-                      show: true,
-                      position: 'top',
-                      formatter: 'B',
-                      fontSize: 14,
-                      fontWeight: 'bold',
-                      backgroundColor: '#f44336',
-                      padding: [4, 6],
-                      borderRadius: 4,
-                      color: '#fff'
-                    },
-                    symbol: 'arrow',
-                    symbolSize: 15,
-                    symbolOffset: [0, -10]
-                  }
-                }
-                return null
-              }).filter(Boolean),
-              // 新增：交易历史标记（买入+卖出）
-              ...(props.tradeMarkers || []).map(tr => {
-                const normalized = normalizeDate(tr.date)
-                // 尝试精确匹配日期
-                let idx = dates.indexOf(normalized)
-                
-                // 如果精确匹配失败，尝试模糊匹配（允许格式差异）
-                if (idx === -1) {
-                  // 移除分隔符进行比较，例如将 '2024-01-01' 和 '20240101' 都标准化为相同格式
-                  const normalizedNoSep = normalized.replace(/[-]/g, '')
-                  idx = dates.findIndex(date => {
-                    const dateNoSep = date.replace(/[-]/g, '')
-                    return dateNoSep === normalizedNoSep
-                  })
-                }
-
-                // DEBUGGING: Log each marker processing
-                console.log(`Processing marker: action=${tr.action}, date=${tr.date}, normalizedDate=${normalized}, foundIndex=${idx}`);
-                
-                if (idx !== -1) {
-                  const isBuy = tr.action.toUpperCase() === 'BUY'
-                  return {
-                    name: isBuy ? '买入' : '卖出',
-                    coord: [normalized, isBuy ? kline[idx].low : kline[idx].high],
-                    value: tr.action,
-                    itemStyle: { 
-                      color: isBuy ? '#4CAF50' : '#FF5722'  // 绿色买入，红色卖出
-                    },
-                    label: {
-                      show: true,
-                      position: isBuy ? 'bottom' : 'top',
-                      formatter: isBuy ? 'B' : 'S',
-                      fontSize: 12,
-                      fontWeight: 'bold',
-                      backgroundColor: isBuy ? '#4CAF50' : '#FF5722',
-                      padding: [3, 5],
-                      borderRadius: 3,
-                      color: '#fff'
-                    },
-                    symbol: isBuy ? 'pin' : 'arrow', // Sell symbol: arrow
-                    symbolSize: isBuy ? 10 : 8,     // Sell symbol size
-                    symbolRotate: isBuy ? 0 : 180,   // Point arrow down for Sell
-                    symbolOffset: isBuy ? [0, 10] : [0, -8] // Adjust offset for Sell
-                  }
-                }
-                return null
-              }).filter(Boolean)
-            ]
-          }
-        },
-        {
-          type: 'bar',
-          name: '成交量',
-          data: kline.map(r => r.volume),
-          xAxisIndex: 1,
-          yAxisIndex: 1,
-          barWidth: 6,
-          itemStyle: {
-            color: function(params) {
-              const index = params.dataIndex
-              if (index > 0) {
-                const current = kline[index]
-                const previous = kline[index - 1]
-                return current.close >= previous.close ? '#ef5350' : '#26a69a'
-              }
-              return '#ef5350'
-            }
-          }
-        },
-        {
-          type: 'bar',
-          name: '大资金净买入',
-          data: bigMoneyBars,
-          xAxisIndex: 2,
-          yAxisIndex: 2,
-          barWidth: 6,
-          itemStyle: {
-            color: params => params.data >= 0 ? '#e53935' : '#26a69a'
-          },
-          z: 10
-        },
-        {
-          type: 'line',
-          name: '评分',
-          // 使用已规范化的数据（数值已完成 round），保持原有对象结构
-          data: normalizedScoreLine,
-          yAxisIndex: 3,
-          xAxisIndex: 0,
-          symbol: 'circle',
-          showSymbol: true,
-          symbolSize: 6,
-          lineStyle: { color: '#ffd700', width: 2 },
-          itemStyle: { color: '#ffd700' },
-          smooth: true,
-          z: 20,
-          markPoint: {
-            symbol: 'circle',
-            symbolSize: 10,
-            itemStyle: { color: '#ff5722' },
-            label: { show: false },
-            data: normalizedScoreLine
-              .map((point, idx) => {
-                if (point && typeof point.value === 'number') {
-                  return { coord: [dates[idx], point.value], value: point.value }
-                }
-                if (point && point.value !== null && point.value !== undefined) {
-                  return { coord: [dates[idx], point.value], value: point.value }
-                }
-                return null
-              })
-              .filter(Boolean)
-          }
-        },
-      ]
-    }
-    
-    chartInstance.setOption(option, true) // 第二个参数 true 表示重置
-  } catch (err) {
-    console.error('绘制图表时出错:', err)
-    error.value = `绘制失败: ${err.message}`
+    const dStr = selectedMinuteDate.value.replace(/-/g, '')
+    const [bRes, sRes] = await Promise.all([
+      axios.get('/api/minute-bars/', { params: { symbol: props.symbol, start_date: dStr, end_date: dStr, limit: 1000 } }),
+      axios.get('/api/trade-signals/', { params: { symbol: props.symbol, start_date: selectedMinuteDate.value, end_date: selectedMinuteDate.value } })
+    ])
+    minuteBars.value = bRes.data.data || []
+    tradeSignals.value = sRes.data.data || []
+    drawChart()
+  } catch (e) {
+    error.value = '加载失败'
+  } finally {
+    loading.value = false
   }
 }
 
-onMounted(async () => {
-  // 安全访问 moneyFlowRecords
-  if (props.moneyFlowRecords && props.moneyFlowRecords.length > 0) {
-    console.log('moneyFlowRecords第一条:', props.moneyFlowRecords[0])
-  } else {
-    console.log('moneyFlowRecords: 无数据或为空')
-  }
-
-  // 初始化图表实例
+// --- Chart Rendering ---
+async function initECharts() {
   if (!echarts) {
     const mod = await import('echarts')
     echarts = mod.default || mod
   }
-  chartInstance = echarts.init(chart.value)
+  if (!chartInstance && chartRef.value) {
+    // We use null for light theme to use ECharts default, 
+    // but we'll customize colors in getBaseOption for 'soft' look
+    chartInstance = echarts.init(chartRef.value, theme.value === 'dark' ? 'dark' : null)
+  }
+}
 
-  // ✅ 修复：设置默认日期范围为最近3个月
-  if (props.records && props.records.length > 0) {
-    const dates = props.records.map(r => normalizeDate(r.trade_date)).sort()
-    
-    // 计算3个月前的日期字符串
-    const today = new Date()
-    const threeMonthsAgo = new Date(today)
-    threeMonthsAgo.setMonth(today.getMonth() - 3)
-    const threeMonthsAgoStr = threeMonthsAgo.toISOString().split('T')[0] // 格式: 'YYYY-MM-DD'
-    
-    console.log('今天:', today.toISOString().split('T')[0])
-    console.log('3个月前:', threeMonthsAgoStr)
-    console.log('数据日期范围:', dates[0], '到', dates[dates.length - 1])
-    
-    // 找到第一个大于等于3个月前的日期
-    const startIdx = dates.findIndex(d => d >= threeMonthsAgoStr)
-    
-    let defaultStart = startIdx >= 0 ? dates[startIdx] : dates[0]
-    
-    // 如果有信号日期，确保起始日期不晚于信号日期
-    if (props.signalDates && props.signalDates.length > 0) {
-      const sDate = normalizeDate(props.signalDates[0])
-      if (sDate < defaultStart) {
-        defaultStart = sDate
-      }
+function drawChart() {
+  if (!chartInstance) return
+  if (kType.value === 'minute') renderMinute()
+  else renderDaily()
+}
+
+function renderMinute() {
+  if (!minuteBars.value.length) { chartInstance.clear(); return; }
+  const times = minuteBars.value.map(b => b.trade_date.slice(8, 12).replace(/(\d{2})(\d{2})/, '$1:$2'))
+  const data = minuteBars.value.map(b => [b.open, b.close, b.low, b.high])
+  
+  const option = getBaseOption(`${props.symbol} 分时`, times)
+  option.series = [{
+    name: 'K线', type: 'candlestick', data,
+    itemStyle: { 
+      color: theme.value === 'dark' ? '#ef5350' : '#eb4444', 
+      color0: theme.value === 'dark' ? '#26a69a' : '#22ab94', 
+      borderColor: theme.value === 'dark' ? '#ef5350' : '#eb4444', 
+      borderColor0: theme.value === 'dark' ? '#26a69a' : '#22ab94' 
     }
-    
-    startDate.value = defaultStart
+  }]
+  chartInstance.setOption(option, true)
+}
+
+function renderDaily() {
+  if (!props.records.length) { chartInstance.clear(); return; }
+  
+  let data = [...props.records].sort((a,b) => new Date(normalizeDate(a.trade_date)) - new Date(normalizeDate(b.trade_date)))
+  if (startDate.value) data = data.filter(r => normalizeDate(r.trade_date) >= startDate.value)
+  if (endDate.value) data = data.filter(r => normalizeDate(r.trade_date) <= endDate.value)
+  
+  const times = data.map(r => normalizeDate(r.trade_date))
+  const option = getBaseOption(`${props.symbol} ${kType.value}`, times)
+  option.series = [{
+    name: 'K线', type: 'candlestick', data: data.map(r => [r.open, r.close, r.low, r.high]),
+    itemStyle: { 
+      color: theme.value === 'dark' ? '#ef5350' : '#eb4444', 
+      color0: theme.value === 'dark' ? '#26a69a' : '#22ab94', 
+      borderColor: theme.value === 'dark' ? '#ef5350' : '#eb4444', 
+      borderColor0: theme.value === 'dark' ? '#26a69a' : '#22ab94' 
+    }
+  }]
+  chartInstance.setOption(option, true)
+}
+
+function getBaseOption(title, xData) {
+  const isDark = theme.value === 'dark'
+  return {
+    backgroundColor: 'transparent',
+    title: { text: title, left: 'center', textStyle: { color: isDark ? '#adbac7' : '#444d56', fontSize: 14 } },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    grid: { left: '50', right: '20', top: '40', bottom: '20' },
+    xAxis: { 
+      type: 'category', 
+      data: xData, 
+      axisLine: { lineStyle: { color: isDark ? '#444c56' : '#d1d5da' } }, 
+      axisLabel: { color: isDark ? '#768390' : '#586069', fontSize: 11 } 
+    },
+    yAxis: { 
+      scale: true, 
+      splitLine: { lineStyle: { color: isDark ? '#2d333b' : '#eaecef' } }, 
+      axisLabel: { color: isDark ? '#768390' : '#586069', fontSize: 11 } 
+    },
+    dataZoom: [{ type: 'inside' }],
+    animation: false
+  }
+}
+
+// --- Lifecycle ---
+onMounted(async () => {
+  if (props.records?.length) {
+    const dates = props.records.map(r => normalizeDate(r.trade_date)).sort()
     endDate.value = dates[dates.length - 1]
-    
-    console.log('设置的日期范围:', startDate.value, '到', endDate.value)
-    console.log('筛选后数据量:', dates.filter(d => d >= startDate.value && d <= endDate.value).length)
+    const s = new Date(endDate.value); s.setMonth(s.getMonth() - 2)
+    startDate.value = s.toISOString().split('T')[0]
+    selectedMinuteDate.value = (props.signalDates?.length) ? normalizeDate(props.signalDates[0]) : endDate.value
   }
 
-  // 只有当 symbol 存在时才绘制
-  if (props.symbol) {
-    drawChart()
+  resizeObserver = new ResizeObserver(async (entries) => {
+    for (let entry of entries) {
+      const { width, height } = entry.contentRect
+      if (width > 0 && height > 0) {
+        await initECharts()
+        chartInstance?.resize()
+        drawChart()
+      }
+    }
+  })
+  
+  if (chartWrapperRef.value) {
+    resizeObserver.observe(chartWrapperRef.value)
   }
 })
 
-// 新增：日期格式化函数
-function normalizeDate(d) {
-  if (!d) return ''
-  if (typeof d === 'string') {
-    if (d.length === 8 && !d.includes('-')) {
-      // money_flow 格式 '20250102' -> '2025-01-02'
-      return `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`
-    }
-    if (d.includes('T')) {
-      // K线格式 '2025-06-09T00:00:00' -> '2025-06-09'
-      return d.split('T')[0]
-    }
-    if (d.length === 10 && d.includes('-')) {
-      // 已经是 'YYYY-MM-DD'
-      return d
-    }
-  }
-  return d
-}
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  chartInstance?.dispose()
+})
 
-// 返回来源的方法
-function goBack() {
-  emit('go-back', {
-    strategy: props.strategyFrom,
-    preset: props.presetFrom,
-    date: props.dateFrom  // May be undefined if not coming from strategy pool
-  })
-}
+watch(() => kType.value, (t) => t === 'minute' ? fetchMinuteData() : drawChart())
+watch(() => props.symbol, () => kType.value === 'minute' ? fetchMinuteData() : drawChart())
+watch(() => props.records, drawChart, { deep: true })
 
-// 监听 symbol 变化，当 symbol 有值时重新绘制
-watch(() => props.symbol, (newSymbol) => {
-  if (newSymbol && chartInstance) {
-    drawChart()
-  }
-}, { immediate: true })
+const goBack = () => emit('go-back', { strategy: props.strategyFrom, preset: props.presetFrom })
 </script>
+
+<style scoped>
+.unified-chart-container {
+  display: flex;
+  flex-direction: column;
+  height: 600px;
+  border-radius: 6px;
+  transition: background 0.3s, color 0.3s, border-color 0.3s;
+  overflow: hidden;
+  border: 1px solid transparent;
+}
+
+/* Soft Dark (Dimmed) Theme */
+.unified-chart-container.dark {
+  background: #22272e;
+  color: #adbac7;
+  border-color: #444c56;
+}
+.dark .chart-header { background: #2d333b; border-bottom: 1px solid #444c56; }
+.dark .chart-toolbar { background: #22272e; border-bottom: 1px solid #444c56; }
+.dark .interval-selector { background: #2d333b; border: 1px solid #444c56; }
+.dark .interval-btn { color: #768390; }
+.dark .interval-btn.active { background: #444c56; color: #adbac7; }
+.dark .theme-input { background: #2d333b; border-color: #444c56; color: #adbac7; }
+.dark .btn-nav, .dark .btn-action { background: #2d333b; border-color: #444c56; color: #adbac7; }
+.dark .btn-action:hover { background: #444c56; }
+
+/* Soft Light Theme */
+.unified-chart-container.light {
+  background: #f6f8fa;
+  color: #24292e;
+  border-color: #d1d5da;
+}
+.light .chart-header { background: #e1e4e8; border-bottom: 1px solid #d1d5da; }
+.light .chart-toolbar { background: #f6f8fa; border-bottom: 1px solid #d1d5da; }
+.light .interval-selector { background: #e1e4e8; border: 1px solid #d1d5da; }
+.light .interval-btn { color: #586069; }
+.light .interval-btn.active { background: #ffffff; color: #0366d6; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.light .theme-input { background: #ffffff; border-color: #d1d5da; color: #24292e; }
+.light .btn-nav, .light .btn-action { background: #ffffff; border-color: #d1d5da; color: #24292e; }
+.light .btn-action:hover { background: #f3f4f6; }
+.light .symbol-badge { background: #2ea44f; }
+.light .sep { color: #6a737d; font-size: 12px; }
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 15px;
+  align-items: center;
+}
+
+.symbol-badge { color: #fff; padding: 2px 6px; border-radius: 3px; font-weight: bold; margin-right: 10px; font-size: 13px; }
+.stock-name { font-size: 16px; font-weight: 600; }
+.data-count { color: #768390; font-size: 11px; margin-left: 10px; }
+.light .data-count { color: #586069; }
+
+.chart-toolbar {
+  display: flex;
+  gap: 15px;
+  padding: 8px 15px;
+  align-items: center;
+}
+
+.interval-selector { display: flex; border-radius: 4px; padding: 2px; }
+.interval-btn { padding: 3px 10px; border: none; background: transparent; font-size: 12px; cursor: pointer; border-radius: 3px; font-weight: 500; }
+
+.theme-input { border: 1px solid; padding: 3px 6px; border-radius: 3px; font-size: 12px; outline: none; transition: border-color 0.2s; }
+.theme-input:focus { border-color: #0366d6; }
+
+.nav-controls { display: flex; gap: 4px; }
+.btn-nav, .btn-action { border: 1px solid; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; font-weight: 500; transition: background 0.2s; }
+
+.theme-toggle { font-size: 14px; margin-right: 5px; }
+
+.toolbar-spacer { flex-grow: 1; }
+
+.chart-main-wrapper {
+  flex-grow: 1;
+  position: relative;
+  width: 100%;
+}
+
+.chart-canvas { width: 100%; height: 100%; }
+
+.chart-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(246, 248, 250, 0.7); font-size: 14px; z-index: 10;
+}
+.dark .chart-overlay { background: rgba(34, 39, 46, 0.7); }
+
+.spinner {
+  width: 24px; height: 24px; border: 2px solid rgba(0,0,0,0.05); border-top-color: #0366d6; border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+.dark .spinner { border-color: #444c56; border-top-color: #539bf5; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>

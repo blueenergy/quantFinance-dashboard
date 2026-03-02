@@ -74,46 +74,25 @@
             <Suspense>
               <template #default>
                 <StockChart
-              :symbol="chartSymbol"
-              :stockName="stockName"
-              :records="chartRecords"
-              :moneyFlowRecords="moneyFlowRecords"
-              :signalDates="signalDates"
-              :tradeMarkers="tradeMarkers"
-              :prevStock="prevStock"
-              :nextStock="nextStock"
-              :hasPrev="hasPrev"
-              :hasNext="hasNext"
-              :watchlist="watchlist"
-              :currentIndex="currentIndex"
-              :strategyFrom="currentStrategy"
-              :presetFrom="currentPreset"
-              @go-back="goBackToStrategyPool"
-                />
-              </template>
-              <template #fallback>
-                <div class="skeleton skeleton-chart">图表加载中...</div>
-              </template>
-            </Suspense>
-          </div>
-
-          <!-- 新增：分钟K线图标签页 -->
-          <div v-if="activeTab === 'minute-chart'" class="minute-chart-view">
-            <Suspense>
-              <template #default>
-                <MinuteKlineChart
                   :symbol="chartSymbol"
                   :stockName="stockName"
+                  :records="chartRecords"
+                  :moneyFlowRecords="moneyFlowRecords"
+                  :signalDates="signalDates"
+                  :tradeMarkers="tradeMarkers"
                   :prevStock="prevStock"
                   :nextStock="nextStock"
                   :hasPrev="hasPrev"
                   :hasNext="hasNext"
                   :watchlist="watchlist"
                   :currentIndex="currentIndex"
+                  :strategyFrom="currentStrategy"
+                  :presetFrom="currentPreset"
+                  @go-back="goBackToStrategyPool"
                 />
               </template>
               <template #fallback>
-                <div class="skeleton skeleton-chart">分钟K线加载中...</div>
+                <div class="skeleton skeleton-chart">图表加载中...</div>
               </template>
             </Suspense>
           </div>
@@ -299,7 +278,6 @@ import ResetPassword from './components/ResetPassword.vue'
 // Lazy-load heavy views/components to avoid loading them for normal users
 import { defineAsyncComponent, ref, onMounted, computed, watch, nextTick } from 'vue'
 const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
-const MinuteKlineChart = defineAsyncComponent(() => import('./components/MinuteKlineChart.vue'))
 // StockAnalysis component removed: AI analysis moved to AIAnalysisHistory
 const AIAnalysisHistory = defineAsyncComponent(() => import('./components/AIAnalysisHistory.vue'))
 const MarketAnalysisBulletin = defineAsyncComponent(() => import('./components/MarketAnalysisBulletin.vue'))
@@ -404,12 +382,9 @@ const adminTabs = computed(() => {
     { id: 'watchlist', name: '自选股' },
     { id: 'backtest', name: '📊 回测管理' },
     { id: 'strategies', name: '策略配置' },
-
     { id: 'strategy-workers', name: '🚀 实盘交易' },
     { id: 'trade-executions', name: '交易记录' },
     { id: 'trading-manual', name: '人工干预' }, 
-    { id: 'chart', name: '日K线图' },
-    { id: 'minute-chart', name: '📊 分钟K线' }, 
     { id: 'history', name: 'AI分析回溯' },
     { id: 'strategy-execution-analysis', name: '策略执行分析' },
     { id: 'spectrum', name: '阴阳谱' },
