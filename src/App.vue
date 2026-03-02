@@ -403,9 +403,9 @@ const adminTabs = computed(() => {
     { id: 'ranking', name: '金榜' },
     { id: 'watchlist', name: '自选股' },
     { id: 'backtest', name: '📊 回测管理' },
-    { id: 'strategies', name: '实盘交易' },
+    { id: 'strategies', name: '策略配置' },
 
-    { id: 'strategy-workers', name: '🚀 策略Workers' },
+    { id: 'strategy-workers', name: '🚀 实盘交易' },
     { id: 'trade-executions', name: '交易记录' },
     { id: 'trading-manual', name: '人工干预' }, 
     { id: 'chart', name: '日K线图' },
