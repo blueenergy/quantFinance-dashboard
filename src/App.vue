@@ -89,6 +89,7 @@
                   :strategyFrom="currentStrategy"
                   :presetFrom="currentPreset"
                   @go-back="goBackToStrategyPool"
+                  @load-more="handleLoadMore"
                 />
               </template>
               <template #fallback>
@@ -602,6 +603,48 @@ async function loadStockData(symbol) {
     chartRecords.value = []
     moneyFlowRecords.value = []
     stockName.value = ''
+  }
+}
+
+// 新增：加载更多历史数据（无限滚动）
+async function handleLoadMore(earliestDate) {
+  if (!chartSymbol.value || !earliestDate) return
+  
+  try {
+    const symbol = chartSymbol.value
+    const currentStart = new Date(earliestDate.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'))
+    const prevStart = new Date(currentStart)
+    prevStart.setDate(prevStart.getDate() - 180)
+    
+    const toYmd = (d) => d.toISOString().slice(0,10).replace(/-/g, '')
+    const startDateStr = toYmd(prevStart)
+    const endDateStr = earliestDate.replace(/-/g, '')
+    
+    const klineUrl = `/api/records/?limit=1000&sort=-trade_date&symbol=${symbol}&start_date=${startDateStr}&end_date=${endDateStr}`
+    
+    const [klineRes, moneyFlowRes] = await Promise.all([
+      axios.get(klineUrl, { timeout: 15000 }),
+      axios.get(`/api/money-flow-records?symbol=${symbol}&start_date=${startDateStr}&end_date=${endDateStr}`)
+    ])
+    
+    const newRecords = klineRes.data || []
+    const newMoneyFlow = moneyFlowRes.data.data || []
+    
+    if (newRecords.length === 0) {
+      return
+    }
+
+    const recordMap = new Map()
+    newRecords.forEach(r => recordMap.set(normalizeDateForComparison(r.trade_date), r))
+    chartRecords.value.forEach(r => recordMap.set(normalizeDateForComparison(r.trade_date), r))
+    chartRecords.value = Array.from(recordMap.values()).sort((a, b) => b.trade_date.localeCompare(a.trade_date))
+    
+    const mfMap = new Map()
+    newMoneyFlow.forEach(r => mfMap.set(normalizeDateForComparison(r.trade_date), r))
+    moneyFlowRecords.value.forEach(r => mfMap.set(normalizeDateForComparison(r.trade_date), r))
+    moneyFlowRecords.value = Array.from(mfMap.values()).sort((a, b) => b.trade_date.localeCompare(a.trade_date))
+  } catch (error) {
+    console.error('[App] handleLoadMore failed:', error)
   }
 }
 
