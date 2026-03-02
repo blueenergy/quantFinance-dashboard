@@ -49,7 +49,7 @@
     <!-- Today's History Timeline -->
     <div v-if="history.length > 1 && !loading" class="mb-4">
       <div class="d-flex align-center ga-2 mb-2">
-        <span class="text-caption" style="color:rgba(255,255,255,0.5)">今日分析记录：</span>
+        <span class="text-caption" style="color:rgba(255,255,255,0.65)">今日分析记录：</span>
         <v-chip
           v-for="rec in history"
           :key="rec.id"
@@ -77,7 +77,7 @@
         >
           {{ analysis.market_sentiment }}
         </v-chip>
-        <span class="text-caption" style="color:rgba(255,255,255,0.45)">{{ analysis.sentiment_reason }}</span>
+        <span class="text-caption" style="color:rgba(255,255,255,0.65)">{{ analysis.sentiment_reason }}</span>
       </div>
 
       <!-- Thinking Process -->
@@ -112,8 +112,9 @@
               <span class="text-body-2 font-weight-bold" style="color:rgba(255,255,255,0.95)">{{ theme.theme }}</span>
             </div>
             <div class="text-caption mt-1" style="color:rgba(255,255,255,0.65)">{{ theme.reason }}</div>
-            <div class="d-flex ga-1 mt-1 flex-wrap">
-              <v-chip v-for="s in (theme.stocks || []).slice(0,4)" :key="s" size="x-small" variant="outlined">{{ s }}</v-chip>
+            <div v-if="(theme.stocks || []).length" class="d-flex ga-1 mt-2 flex-wrap align-center">
+              <span class="text-caption mr-1" style="color:rgba(255,255,255,0.6)">代表股：</span>
+              <v-chip v-for="s in (theme.stocks || []).slice(0,4)" :key="s" size="x-small" color="cyan" variant="outlined" class="mr-1">{{ s }}</v-chip>
             </div>
           </v-card>
         </div>
@@ -138,7 +139,7 @@
                 <div class="d-flex justify-space-between align-center mb-2">
                   <div>
                     <span class="text-h6 font-weight-bold" style="color:rgba(255,255,255,0.95)">{{ stock.name }}</span>
-                    <span class="text-caption ml-2" style="color:rgba(255,255,255,0.45)">{{ stock.ts_code }}</span>
+                    <span class="text-caption ml-2" style="color:rgba(255,255,255,0.65)">{{ stock.ts_code }}</span>
                   </div>
                   <div class="d-flex align-center ga-1">
                     <v-chip size="x-small" color="purple" variant="tonal">🏆#{{ stock.rank }}</v-chip>
@@ -160,7 +161,7 @@
 
                 <p class="text-body-2 mb-2" style="color:rgba(255,255,255,0.85)">{{ stock.reason }}</p>
 
-                <div v-if="stock.rank_reason" class="text-caption mb-1" style="color:rgba(255,255,255,0.55)">
+                <div v-if="stock.rank_reason" class="text-caption mb-1" style="color:rgba(255,255,255,0.75)">
                   📌 {{ stock.rank_reason }}
                 </div>
                 <div v-if="stock.risk_note" class="text-caption" style="color:rgba(255, 160, 0, 0.85)">
@@ -194,7 +195,7 @@
       </v-card>
 
       <!-- Meta footer -->
-      <div class="text-caption d-flex justify-space-between" style="color:rgba(255,255,255,0.35)">
+      <div class="text-caption d-flex justify-space-between" style="color:rgba(255,255,255,0.55)">
         <span>模型: {{ model }} | 热股数: {{ stockCount }}</span>
         <span>分析时间: {{ formatDateTime(analysisTime) }}</span>
       </div>
