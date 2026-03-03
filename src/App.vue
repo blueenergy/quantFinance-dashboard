@@ -255,6 +255,16 @@
             </template>
           </Suspense>
 
+          <!-- AI Chat Assistant Tab -->
+          <Suspense v-if="activeTab === 'chat'">
+            <template #default>
+              <ChatPanel />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">AI助手加载中...</div>
+            </template>
+          </Suspense>
+
           <!-- Sector Concept Analysis Tab (概念板块分析) -->
           <Suspense v-if="activeTab === 'sector-concept'">
             <template #default>
@@ -311,6 +321,7 @@ const StrategyStockPool = defineAsyncComponent(() => import('./components/Strate
 const LimitUpLadder = defineAsyncComponent(() => import('./views/LimitUpLadder.vue'))
 const SectorConceptAnalysis = defineAsyncComponent(() => import('./components/SectorConceptAnalysis.vue'))
 const HotStockAnalysis = defineAsyncComponent(() => import('./components/HotStockAnalysis.vue'))
+const ChatPanel = defineAsyncComponent(() => import('./components/ChatPanel.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
@@ -403,6 +414,7 @@ const adminTabs = computed(() => {
     { id: 'spectrum', name: '阴阳谱' },
     { id: 'securities', name: '账户工作台' },
     { id: 'user-profile', name: '用户配置' },
+    { id: 'chat', name: '🤖 AI助手' },
   ]
   
   // 核心逻辑：获取当前用户的服务等级
