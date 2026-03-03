@@ -58,8 +58,24 @@
             <div v-if="msg.role === 'assistant' && msg.toolsUsed && msg.toolsUsed.length" class="tools-used">
               <span v-for="t in msg.toolsUsed" :key="t" class="tool-tag">⚙️ {{ t }}</span>
             </div>
-            <div class="bubble" v-html="renderContent(msg.content)"></div>
-          </div>
+            <div class="bubble" v-html="renderContent(msg.content)"></div>            <!-- Feedback buttons (assistant only, after message has an ID) -->
+            <div v-if="msg.role === 'assistant' && msg.message_id" class="feedback-row">
+              <button
+                :class="['fb-btn', 'up', { active: msg.feedback === 'up' }]"
+                :disabled="!!msg.feedback"
+                @click="submitFeedback(msg, i, 'up')"
+                title="这个回答很有用"
+              >👍</button>
+              <button
+                :class="['fb-btn', 'down', { active: msg.feedback === 'down' }]"
+                :disabled="!!msg.feedback"
+                @click="submitFeedback(msg, i, 'down')"
+                title="这个回答需要改进"
+              >👎</button>
+              <span v-if="msg.feedback" class="fb-thanks">
+                {{ msg.feedback === 'up' ? '已记录，下次会更好！' : '收到了，会持续优化' }}
+              </span>
+            </div>          </div>
         </div>
 
         <!-- Streaming indicator -->
@@ -118,6 +134,7 @@ const inputText = ref('')
 const isStreaming = ref(false)
 const streamingContent = ref('')
 const streamingTools = ref([])
+let pendingMsgId = ''   // message_id received via SSE before commit to messages[]
 
 const messagesAreaRef = ref(null)
 const inputRef = ref(null)
@@ -241,6 +258,8 @@ async function switchConversation(conv) {
         role: m.role,
         content: m.content,
         toolsUsed: [],
+        message_id: m.id || '',
+        feedback: null,
       }))
       scrollBottom()
     }
@@ -333,6 +352,8 @@ async function sendMessage() {
 
           if (evt.type === 'conv_id') {
             currentConvId.value = evt.conversation_id
+          } else if (evt.type === 'msg_id') {
+            pendingMsgId = evt.message_id
           } else if (evt.type === 'tool_result') {
             if (!streamingTools.value.includes(evt.tool_name)) {
               streamingTools.value = [...streamingTools.value, evt.tool_name]
@@ -353,7 +374,10 @@ async function sendMessage() {
       role: 'assistant',
       content: streamingContent.value,
       toolsUsed: [...streamingTools.value],
+      message_id: pendingMsgId,
+      feedback: null,
     })
+    pendingMsgId = ''
     streamingContent.value = ''
     streamingTools.value = []
 
@@ -378,6 +402,39 @@ async function sendMessage() {
 
 function stopStream() {
   abortController?.abort()
+}
+
+// ──────────────────────── feedback ──────────────────────────────────────────
+function findUserQuestion(msgIndex) {
+  for (let i = msgIndex - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') return messages[i].content
+  }
+  return ''
+}
+
+async function submitFeedback(msg, msgIndex, rating) {
+  if (msg.feedback) return  // already rated
+  msg.feedback = rating     // optimistic update
+  try {
+    const resp = await fetch('/assistant/api/feedback', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify({
+        message_id: msg.message_id,
+        conversation_id: currentConvId.value,
+        user_question: findUserQuestion(msgIndex),
+        ai_answer: msg.content,
+        rating,
+      }),
+    })
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  } catch (e) {
+    msg.feedback = null  // revert on error
+    console.warn('[ChatPanel] feedback failed', e)
+  }
 }
 </script>
 
@@ -720,5 +777,37 @@ function stopStream() {
 .conv-list::-webkit-scrollbar-thumb {
   background: #d1d9e0;
   border-radius: 2px;
+}
+
+/* ─── Feedback buttons ─── */
+.feedback-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.message-row.assistant:hover .feedback-row { opacity: 1; }
+.feedback-row:has(.active) { opacity: 1; }
+
+.fb-btn {
+  padding: 3px 9px;
+  border: 1px solid #d1d9e0;
+  border-radius: 14px;
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1.4;
+}
+.fb-btn:hover:not(:disabled) { border-color: #0466c8; background: #f0f7ff; }
+.fb-btn:disabled { cursor: default; opacity: 0.7; }
+.fb-btn.up.active  { background: #dcfce7; border-color: #16a34a; }
+.fb-btn.down.active { background: #fee2e2; border-color: #dc2626; }
+
+.fb-thanks {
+  font-size: 11px;
+  color: #6b7280;
 }
 </style>
