@@ -14,8 +14,15 @@
           :class="{ active: conv.id === currentConvId }"
           @click="switchConversation(conv)"
         >
-          <span class="conv-name">{{ conv.name || '新对话' }}</span>
-          <span class="conv-time">{{ fmtTime(conv.updated_at) }}</span>
+          <div class="conv-item-main">
+            <span class="conv-name">{{ conv.name || '新对话' }}</span>
+            <span class="conv-time">{{ fmtTime(conv.updated_at) }}</span>
+          </div>
+          <button
+            class="conv-delete-btn"
+            title="删除对话"
+            @click.stop="deleteConversation(conv)"
+          >✕</button>
         </div>
         <div v-if="conversations.length === 0" class="no-conv">暂无对话</div>
       </div>
@@ -242,6 +249,23 @@ async function switchConversation(conv) {
   }
 }
 
+async function deleteConversation(conv) {
+  if (!confirm(`删除对话「${conv.name || '新对话'}」？`)) return
+  try {
+    await fetch(`/assistant/api/conversations/${conv.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+  } catch (e) {
+    console.warn('[ChatPanel] deleteConversation failed', e)
+  }
+  // If deleting the active conversation, reset to new-conversation state
+  if (currentConvId.value === conv.id) {
+    newConversation()
+  }
+  await loadConversations()
+}
+
 // ──────────────────────── send / stream ──────────────────────────────────────
 function sendSuggestion(text) {
   inputText.value = text
@@ -410,12 +434,20 @@ function stopStream() {
   border-radius: 6px;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 4px;
   transition: background 0.1s;
 }
 .conv-item:hover { background: #f0f4f8; }
 .conv-item.active { background: #e8f0fb; }
+
+.conv-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 
 .conv-name {
   font-size: 13px;
@@ -428,6 +460,27 @@ function stopStream() {
   font-size: 11px;
   color: #9aa3af;
 }
+
+.conv-delete-btn {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: #b0b8c1;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+.conv-item:hover .conv-delete-btn { opacity: 1; }
+.conv-delete-btn:hover { background: #fee2e2; color: #dc2626; }
 
 .no-conv {
   font-size: 13px;
