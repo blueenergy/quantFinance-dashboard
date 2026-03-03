@@ -133,6 +133,16 @@
             </Suspense>
           </div>
 
+          <!-- ETF淘金 -->
+          <Suspense v-if="activeTab === 'etf'">
+            <template #default>
+              <EtfView />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">ETF模块加载中...</div>
+            </template>
+          </Suspense>
+
           <!-- 在内容区域添加 -->
           <Suspense v-if="activeTab === 'ranking'">
             <template #default>
@@ -276,6 +286,7 @@ import UserAvatar from './components/UserAvatar.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
 import WatchListData from './components/WatchListData.vue'
 import ResetPassword from './components/ResetPassword.vue'
+import EtfView from './views/EtfView.vue'
 // Lazy-load heavy views/components to avoid loading them for normal users
 import { defineAsyncComponent, ref, onMounted, computed, watch, nextTick } from 'vue'
 const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
@@ -376,8 +387,9 @@ watch(activeTab, (newTab) => {
 const adminTabs = computed(() => {
   const baseTabs = [
     { id: 'limit-up-ladder', name: '📊 连板天梯' },
-    { id: 'sector-concept', name: '📈 概念板块' },
-    { id: 'hot-stock', name: '🔥 热股分析' },
+    { id: 'sector-concept', name: '📈 概念板块', req_vip: true },
+    { id: 'hot-stock', name: '🔥 热股分析', req_vip: true },
+    { id: 'etf', name: '💰 ETF淘金', req_vip: true },
     { id: 'strategy-pool', name: '🎯 策略股池' },
     { id: 'ranking', name: '金榜' },
     { id: 'watchlist', name: '自选股' },
@@ -392,10 +404,24 @@ const adminTabs = computed(() => {
     { id: 'securities', name: '账户工作台' },
     { id: 'user-profile', name: '用户配置' },
   ]
+  
+  // 核心逻辑：获取当前用户的服务等级
+  const currentServiceLevel = user.value?.service_level || 'free'
+  const isVipOrAbove = ['vip', 'premium'].includes(currentServiceLevel)
+  
+  // 过滤掉当前用户权限不足的板块
+  const filteredTabs = baseTabs.filter(tab => {
+    if (tab.req_vip && !isVipOrAbove) {
+      return false // 不是 VIP 或以上等级则不显示该 Tab
+    }
+    return true
+  })
+
+  // 管理员额外追加后台 Tab
   if (user.value?.is_admin) {
-    baseTabs.push({ id: 'admin', name: '管理后台' })
+    filteredTabs.push({ id: 'admin', name: '管理后台' })
   }
-  return baseTabs
+  return filteredTabs
 })
 
 
