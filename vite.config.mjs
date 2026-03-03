@@ -34,7 +34,11 @@ export default defineConfig({
     port: 5173,       // 自定义端口
     proxy: {
       '/records': 'http://localhost:3001',
-      '/api': 'http://localhost:3001',  // 添加API路径代理
+      '/api': 'http://localhost:3001',          // quantFinance API
+      '/assistant': {
+        target: 'http://localhost:8002',
+        rewrite: (path) => path.replace(/^\/assistant/, ''),
+      },
     }
   }
 })
