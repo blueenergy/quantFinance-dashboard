@@ -86,8 +86,8 @@
               <span v-for="t in streamingTools" :key="t" class="tool-tag">⚙️ {{ t }}</span>
             </div>
             <div class="bubble streaming">
+              <span v-if="streamingStatus && !streamingContent" class="thinking-status">{{ streamingStatus }}</span>
               <span v-html="renderContent(streamingContent)"></span>
-              <span class="cursor" v-if="!streamingContent">思考中</span>
               <span class="cursor blink">▌</span>
             </div>
           </div>
@@ -134,6 +134,7 @@ const inputText = ref('')
 const isStreaming = ref(false)
 const streamingContent = ref('')
 const streamingTools = ref([])
+const streamingStatus = ref('')   // current progress step label (e.g. "正在调用工具…")
 let pendingMsgId = ''   // message_id received via SSE before commit to messages[]
 
 const messagesAreaRef = ref(null)
@@ -239,6 +240,7 @@ function newConversation() {
   messages.splice(0, messages.length)
   streamingContent.value = ''
   streamingTools.value = []
+  streamingStatus.value = ''
   isStreaming.value = false
   nextTick(() => inputRef.value?.focus())
 }
@@ -308,6 +310,7 @@ async function sendMessage() {
   isStreaming.value = true
   streamingContent.value = ''
   streamingTools.value = []
+  streamingStatus.value = ''
 
   abortController = new AbortController()
 
@@ -354,13 +357,18 @@ async function sendMessage() {
             currentConvId.value = evt.conversation_id
           } else if (evt.type === 'msg_id') {
             pendingMsgId = evt.message_id
+          } else if (evt.type === 'status') {
+            streamingStatus.value = evt.message
           } else if (evt.type === 'tool_result') {
+            streamingStatus.value = ''
             if (!streamingTools.value.includes(evt.tool_name)) {
               streamingTools.value = [...streamingTools.value, evt.tool_name]
             }
           } else if (evt.type === 'token') {
+            streamingStatus.value = ''
             streamingContent.value += evt.content
           } else if (evt.type === 'error') {
+            streamingStatus.value = ''
             streamingContent.value = `❌ 错误：${evt.message}`
           }
         } catch {
@@ -394,6 +402,7 @@ async function sendMessage() {
     }
     streamingContent.value = ''
     streamingTools.value = []
+    streamingStatus.value = ''
   } finally {
     isStreaming.value = false
     abortController = null
@@ -669,6 +678,28 @@ async function submitFeedback(msg, msgIndex, rating) {
 
 .bubble.streaming {
   min-width: 40px;
+}
+
+.thinking-status {
+  color: #6b7280;
+  font-size: 13px;
+  font-style: italic;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.thinking-status::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #0466c8;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .cursor {
