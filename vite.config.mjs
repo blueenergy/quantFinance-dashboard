@@ -38,6 +38,8 @@ export default defineConfig({
       '/assistant': {
         target: 'http://localhost:8002',
         rewrite: (path) => path.replace(/^\/assistant/, ''),
+        proxyTimeout: 300000,   // 5 min — SSE streams can run a long time
+        timeout: 300000,
       },
     }
   }
