@@ -30,6 +30,8 @@
         <template v-if="!user?.is_admin">
           <!-- 全球市场联动分析 (盘前) -->
           <GlobalMarketBrief />
+          <!-- 数据脉搏 (系统心跳 + 新闻 + 同步状态) -->
+          <DataPulse />
           <!-- AI公告栏 (盘中/盘后) -->
           <MarketAnalysisBulletin />
           
@@ -297,6 +299,7 @@ import NotificationCenter from './components/NotificationCenter.vue'
 import WatchListData from './components/WatchListData.vue'
 import ResetPassword from './components/ResetPassword.vue'
 import EtfView from './views/EtfView.vue'
+import DataPulse from './components/DataPulse.vue'
 // Lazy-load heavy views/components to avoid loading them for normal users
 import { defineAsyncComponent, ref, onMounted, computed, watch, nextTick } from 'vue'
 const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
