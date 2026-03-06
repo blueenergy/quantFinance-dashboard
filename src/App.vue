@@ -145,6 +145,16 @@
             </template>
           </Suspense>
 
+          <!-- 财报猎手 -->
+          <Suspense v-if="activeTab === 'earnings-hunter'">
+            <template #default>
+              <EarningsHunter />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">财报猎手加载中...</div>
+            </template>
+          </Suspense>
+
           <!-- 在内容区域添加 -->
           <Suspense v-if="activeTab === 'ranking'">
             <template #default>
@@ -324,6 +334,7 @@ const StrategyStockPool = defineAsyncComponent(() => import('./components/Strate
 const LimitUpLadder = defineAsyncComponent(() => import('./views/LimitUpLadder.vue'))
 const SectorConceptAnalysis = defineAsyncComponent(() => import('./components/SectorConceptAnalysis.vue'))
 const HotStockAnalysis = defineAsyncComponent(() => import('./components/HotStockAnalysis.vue'))
+const EarningsHunter = defineAsyncComponent(() => import('./views/EarningsHunter.vue'))
 const ChatPanel = defineAsyncComponent(() => import('./components/ChatPanel.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
@@ -404,6 +415,7 @@ const adminTabs = computed(() => {
     { id: 'sector-concept', name: '📈 概念板块', req_vip: true },
     { id: 'hot-stock', name: '🔥 热股分析', req_vip: true },
     { id: 'etf', name: '💰 ETF淘金', req_vip: true },
+    { id: 'earnings-hunter', name: '🎯 财报猎手', req_vip: true },
     { id: 'strategy-pool', name: '🎯 策略股池' },
     { id: 'ranking', name: '金榜' },
     { id: 'watchlist', name: '自选股' },
