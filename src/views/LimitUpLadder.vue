@@ -43,9 +43,10 @@
           density="compact"
           variant="outlined"
           hide-details
-          style="max-width: 150px"
+          style="max-width: 150px; color: rgba(255, 255, 255, 0.9);"
           @update:model-value="loadData"
           @click="openDatePicker"
+          :input-props="{ style: 'color: rgba(255, 255, 255, 0.9) !important;' }"
         />
         <v-btn
           color="primary"
@@ -845,5 +846,21 @@ onUnmounted(() => {
 
 .min-height-0 {
   min-height: 0 !important;
+}
+
+/* Fix date picker text color in dark theme */
+.v-text-field input[type="date"] {
+  color: rgba(255, 255, 255, 0.9) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.v-text-field input[type="date"]::-webkit-datetime-edit {
+  color: rgba(255, 255, 255, 0.9) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.v-text-field input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
 }
 </style>
