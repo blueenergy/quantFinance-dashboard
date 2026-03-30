@@ -64,6 +64,35 @@
       </div>
     </div>
 
+    <!-- Data Freshness Status -->
+    <v-alert
+      v-if="dataStatus && dataStatus.has_data"
+      :type="dataStatus.is_fresh ? 'success' : 'warning'"
+      variant="tonal"
+      density="compact"
+      class="mb-3"
+    >
+      <div class="d-flex align-center justify-space-between">
+        <span>
+          📊 原始数据: {{ dataStatus.trade_date }} |
+          {{ dataStatus.stock_count }} 只热股 |
+          {{ dataStatus.freshness_minutes < 60 ? dataStatus.freshness_minutes + '分钟前获取' : Math.floor(dataStatus.freshness_minutes / 60) + '小时前获取' }}
+        </span>
+        <v-chip size="x-small" :color="dataStatus.is_fresh ? 'success' : 'warning'">
+          {{ dataStatus.is_fresh ? '数据就绪' : '数据较旧' }}
+        </v-chip>
+      </div>
+    </v-alert>
+    <v-alert
+      v-else-if="dataStatus && !dataStatus.has_data"
+      type="info"
+      variant="tonal"
+      density="compact"
+      class="mb-3"
+    >
+      暂无原始数据，点击分析按钮将自动获取
+    </v-alert>
+
     <!-- Analysis Result -->
     <div v-if="analysis && !loading">
       <!-- Meta badges -->
@@ -214,11 +243,15 @@ import {
   analyzeHotStock,
   getLatestHotStock,
   getHotStockHistory,
+  getHotStockDataStatus,
   pollHotStockTask
 } from '../api/hotStock'
 
 const sourceIndex = ref('0')
 const source = computed(() => sourceIndex.value === '0' ? 'ths' : 'dc')
+
+const dataStatus = ref(null)
+const dataStatusLoading = ref(false)
 
 const loading = ref(false)
 const error = ref('')
@@ -237,7 +270,22 @@ const selectedHistoryId = ref(null)
 watch(source, () => {
   loadLatest()
   loadHistory()
+  fetchDataStatus()
 })
+
+async function fetchDataStatus() {
+  dataStatusLoading.value = true
+  try {
+    const res = await getHotStockDataStatus(source.value)
+    if (res.success) {
+      dataStatus.value = res.data
+    }
+  } catch (err) {
+    console.error('Failed to fetch data status:', err)
+  } finally {
+    dataStatusLoading.value = false
+  }
+}
 
 async function loadLatest() {
   try {
@@ -307,6 +355,7 @@ async function startAnalysis(force = false) {
       } else {
         setAnalysis(result)
         await loadHistory()
+        await fetchDataStatus()
         showThinking.value = false
       }
     } else if (result.status === 'failed') {
@@ -348,6 +397,7 @@ function formatDateTime(iso) {
 onMounted(() => {
   loadLatest()
   loadHistory()
+  fetchDataStatus()
 })
 </script>
 

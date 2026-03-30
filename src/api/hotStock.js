@@ -45,6 +45,14 @@ export async function getHotStockHistory(source = 'ths', date = null) {
     return await res.json();
 }
 
+export async function getHotStockDataStatus(source = 'ths') {
+    const res = await fetch(`${API_BASE}/hot-stock/data-status?source=${source}`, {
+        headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error(`Get data status failed: ${res.status}`);
+    return await res.json();
+}
+
 export async function pollHotStockTask(taskId, onProgress, intervalMs = 2000, maxAttempts = 60) {
     for (let i = 0; i < maxAttempts; i++) {
         const result = await getHotStockTask(taskId);
