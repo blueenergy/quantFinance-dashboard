@@ -68,7 +68,7 @@
     <div v-if="analysis && !loading">
       <!-- Meta badges -->
       <div class="d-flex align-center ga-2 mb-4 flex-wrap">
-        <v-chip color="primary" variant="tonal" size="small">🕐 {{ formatRankTime(rankTime) }}</v-chip>
+        <v-chip color="primary" variant="tonal" size="small">🕐 数据: {{ rankTime || '未知' }}</v-chip>
         <v-chip color="secondary" variant="tonal" size="small">{{ sourceName }}</v-chip>
         <v-chip
           :color="sentimentColor(analysis.market_sentiment)"
