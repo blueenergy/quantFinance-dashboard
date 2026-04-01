@@ -9,9 +9,9 @@
         <span v-if="isPostMarket" class="post-market-badge">收盘复盘</span>
       </h3>
       <div class="header-controls">
-        <input type="date" v-model="selectedDate" @change="handleDateChange" class="date-input" :disabled="loading" />
-        <button class="refresh-btn" @click="fetchAnalysis" :disabled="loading">
-          {{ loading ? '刷新中...' : '🔄 刷新' }}
+        <input type="date" v-model="selectedDate" @change="handleDateChange" class="date-input" :disabled="loading || triggering" />
+        <button class="trigger-btn" @click="triggerAnalysis" :disabled="loading || triggering">
+          {{ triggering ? '提交中...' : '🚀 触发分析' }}
         </button>
       </div>
     </div>
@@ -83,10 +83,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import request from '../utils/request'
-import { useAuth } from '../services/auth.js'
 import IndustrySignals from './IndustrySignals.vue'
-
-const { user, isAuthenticated, authService } = useAuth()
 
 const loading = ref(false)
 const error = ref('')
@@ -94,35 +91,26 @@ const analysis = ref(null)
 const selectedDate = ref(new Date().toISOString().split('T')[0])
 
 function handleDateChange() {
-  fetchAnalysis()
+  fetchLatestAnalysis()
 }
 
-// 获取大盘分析
-async function fetchAnalysis() {
+// 获取最新的大盘分析（由 quantAnalyzer 自动生成）
+async function fetchLatestAnalysis() {
   loading.value = true
   error.value = ''
   analysis.value = null
-  
-  try {
-    // 检查是否已登录
-    if (!isAuthenticated.value) {
-      throw new Error('请先登录后再获取分析')
-    }
-    
-    
 
-    
-    // 发送API请求
+  try {
     const response = await request.post('/analyze-market', {
       type: 'daily_overview',
       date: selectedDate.value
     })
-    
+
     if (response.success) {
       analysis.value = {
-        timestamp: response.cache_info?.created_at || new Date().toISOString(),  // 使用后端返回的分析时间
-        analysisDate: response.analysis_date || '未知日期',  // 添加分析基准日期
-        cacheInfo: response.cache_info || null,  // 添加缓存信息
+        timestamp: response.cache_info?.created_at || new Date().toISOString(),
+        analysisDate: response.analysis_date || '未知日期',
+        cacheInfo: response.cache_info || null,
         mood: response.mood || '谨慎乐观',
         summary: response.summary || '市场表现平稳，投资者情绪较为理性。',
         keyPoints: response.keyPoints || [
@@ -136,11 +124,11 @@ async function fetchAnalysis() {
         industry_signals: response.industry_signals || null
       }
     } else {
-      throw new Error(response.error || '分析失败')
+      throw new Error(response.error || '暂无分析数据')
     }
   } catch (err) {
     console.error('获取市场分析失败:', err)
-    
+
     // 如果 err.response 存在，说明服务器响应了错误（如 4xx/5xx）
     if (err.response && err.response.data && err.response.data.error) {
       error.value = err.response.data.error
@@ -151,6 +139,38 @@ async function fetchAnalysis() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+// 触发新的大盘分析任务
+const triggering = ref(false)
+
+async function triggerAnalysis() {
+  if (triggering.value) return
+
+  triggering.value = true
+  try {
+    const response = await request.post('/trigger-market-analysis', {
+      date: selectedDate.value
+    })
+
+    if (response.success) {
+      // 提示用户任务已提交
+      alert(`✅ 分析任务已提交！\n任务ID: ${response.task_id}\nAI正在进行深度分析，请稍候刷新查看结果。`)
+    } else {
+      throw new Error(response.error || '提交失败')
+    }
+  } catch (err) {
+    console.error('触发分析失败:', err)
+    let msg = '触发分析失败'
+    if (err.response?.data?.error) {
+      msg += ': ' + err.response.data.error
+    } else if (err.message) {
+      msg += ': ' + err.message
+    }
+    alert(msg)
+  } finally {
+    triggering.value = false
   }
 }
 
@@ -221,7 +241,7 @@ function getCacheIcon(fromCache) {
 
 // 自动加载时调用
 onMounted(() => {
-  fetchAnalysis()
+  fetchLatestAnalysis()
 })
 </script>
 
@@ -280,8 +300,8 @@ onMounted(() => {
   margin-left: 8px;
 }
 
-.refresh-btn {
-  background: rgba(255, 255, 255, 0.2);
+.trigger-btn {
+  background: #10b981;
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 8px 16px;
@@ -291,11 +311,11 @@ onMounted(() => {
   transition: all 0.3s;
 }
 
-.refresh-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.3);
+.trigger-btn:hover:not(:disabled) {
+  background: #059669;
 }
 
-.refresh-btn:disabled {
+.trigger-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
 }
