@@ -142,13 +142,12 @@
                 </span>
               </td>
               <td class="stock-name">{{ getStockName(symbol) || symbol }}</td>
-              <td colspan="5" class="no-data">暂无数据</td>
+              <td colspan="7" class="no-data">暂无数据</td>
+              <td v-if="useRealtimeData" class="no-data"></td>
               <td>
-                <div class="action-btn-group">
-                  <button @click="selectChart(symbol)" class="chart-btn">📈 K线</button>
-                  <button @click="openHistoryModal(symbol)" class="history-btn">🕑 历史分析</button>
-                  <button @click="removeStock(symbol)" class="remove-btn">移除</button>
-                </div>
+                <button @click="selectChart(symbol)" class="chart-btn">📈 K线</button>
+                <button @click="openHistoryModal(symbol)" class="history-btn">🕑 历史分析</button>
+                <button @click="removeStock(symbol)" class="remove-btn">移除</button>
               </td>
             </tr>
           </tbody>
@@ -824,14 +823,15 @@ onMounted(async () => {
 
 .action-btn-group {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-start;
   align-items: center;
+  max-width: 260px;
 }
 .action-btn-group button {
   margin-right: 0;
-  white-space: nowrap;
+  margin-bottom: 4px;
 }
 
 .watchlist-header {
