@@ -87,8 +87,8 @@
             <!-- 各管线状态 -->
             <div class="sync-jobs">
               <div v-for="job in overview.sync_health.jobs" :key="job.type" class="sync-job-row">
-                <span class="job-icon" :class="job.status === 'complete' ? 'ok' : 'fail'">
-                  {{ job.status === 'complete' ? '✅' : '⚠️' }}
+                <span class="job-icon" :class="jobIconClass(job.status)">
+                  {{ jobIconText(job.status) }}
                 </span>
                 <span class="job-name">{{ jobLabel(job.type) }}</span>
                 <span class="job-date">{{ job.latest_date || '--' }}</span>
@@ -147,10 +147,12 @@ const pulseClass = computed(() => {
 
 const latestDataDate = computed(() => {
   if (!overview.value?.data_freshness) return null
-  const dates = Object.values(overview.value.data_freshness).filter(Boolean)
-  if (dates.length === 0) return null
-  const latest = dates.sort().pop()
-  // 20260305 -> 03-05
+  const raw = Object.values(overview.value.data_freshness).filter(Boolean)
+  const ymd = raw
+    .map((v) => (typeof v === 'string' && v.length >= 8 ? v.replace(/\D/g, '').slice(0, 8) : null))
+    .filter(Boolean)
+  if (ymd.length === 0) return null
+  const latest = ymd.sort().pop()
   if (latest && latest.length === 8) {
     return `${latest.slice(4, 6)}-${latest.slice(6, 8)}`
   }
@@ -170,9 +172,21 @@ const jobLabels = {
   stock_daily: '股票日线', index_daily: '指数日线', etf_daily: 'ETF日线',
   financial_sync: '财务数据', moneyflow: '资金流向', ladder_sync: '连板天梯',
   market_sentiment: '市场情绪', international_news: '国际新闻',
+  industry_sync: '行业与ETF聚合', hot_stock_sync: '热股同步',
 }
 function jobLabel(type) {
   return jobLabels[type] || type
+}
+
+function jobIconText(st) {
+  if (st === 'complete') return '✅'
+  if (st === 'no_record') return '➖'
+  return '⚠️'
+}
+function jobIconClass(st) {
+  if (st === 'complete') return 'ok'
+  if (st === 'no_record') return 'missing'
+  return 'fail'
 }
 
 function isStale(dateStr) {
