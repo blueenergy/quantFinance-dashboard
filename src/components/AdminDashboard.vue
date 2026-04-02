@@ -144,23 +144,6 @@
       <AdminLogsTable :logs="adminLogs" :format-date="formatDate" />
     </div>
 
-    <!-- AI分析日志 -->
-    <div v-if="activeTab === 'ai-logs'" class="ai-logs-section">
-      <div class="section-header">
-        <h3>🧠 AI 分析日志</h3>
-      </div>
-      <AIAnalysisLogsTable :logs="aiAnalysisLogs" :format-date="formatDate" @view-detail="viewAILogDetail" />
-      <Pagination v-if="aiLogsPagination" :page="aiLogsPagination.page" :total-pages="aiLogsPagination.total_pages" @change="loadAIAnalysisLogs" />
-    </div>
-
-    <!-- AI用户分析记录（复用 aiAnalysisLogs 数据集） -->
-    <div v-if="activeTab === 'ai-logs'" class="ai-logs-section">
-      <div class="section-header">
-        <h3>🤖 用户AI分析统计</h3>
-      </div>
-      <AIUserAnalysisTable :records="aiAnalysisLogs" :format-date="formatDate" />
-    </div>
-
     <!-- 用户详情模态框 -->
     <UserDetailModal :user="selectedUser" :stats="selectedUserStats" :format-date="formatDate" @close="closeUserDetail" />
 
@@ -178,8 +161,6 @@ import Pagination from './Pagination.vue'
 import UsersTable from './UsersTable.vue'
 import LoginLogsTable from './LoginLogsTable.vue'
 import AdminLogsTable from './AdminLogsTable.vue'
-import AIAnalysisLogsTable from './AIAnalysisLogsTable.vue'
-import AIUserAnalysisTable from './AIUserAnalysisTable.vue'
 import UserDetailModal from './UserDetailModal.vue'
 import DataCollectionMonitor from './DataCollectionMonitor.vue'
 import WorkerNodesMonitor from './WorkerNodesMonitor.vue'
@@ -194,8 +175,6 @@ export default {
     UsersTable, 
     LoginLogsTable, 
     AdminLogsTable, 
-    AIAnalysisLogsTable, 
-    AIUserAnalysisTable, 
     UserDetailModal,
     DataCollectionMonitor,
     WorkerNodesMonitor,
@@ -222,8 +201,7 @@ export default {
         { id: 'users', name: '用户管理', icon: '👥' },
         { id: 'permissions', name: '权限管理', icon: '🔐' },
         { id: 'logs', name: '登录日志', icon: '📋' },
-        { id: 'admin-logs', name: '管理员日志', icon: '⚙️' },
-        { id: 'ai-logs', name: 'AI分析日志', icon: '🧠' }
+        { id: 'admin-logs', name: '管理员日志', icon: '⚙️' }
       ],
       
       // 统计数据
@@ -243,11 +221,7 @@ export default {
       
       // 管理员日志
       adminLogs: [],
-      adminLogsPagination: null,
-      
-      // AI分析日志
-      aiAnalysisLogs: [],
-      aiLogsPagination: null
+      adminLogsPagination: null
     }
   },
   computed: {
@@ -271,8 +245,7 @@ export default {
     // 并行加载初始数据以降低首屏等待时间
     await Promise.all([
       this.loadStatistics(),
-      this.loadUsers(),
-      this.loadAIAnalysisLogs()
+      this.loadUsers()
     ])
   },
   methods: {
@@ -416,35 +389,12 @@ export default {
       }
     },
     
-    // 加载AI分析日志
-    async loadAIAnalysisLogs(page = 1) {
-      try {
-        this.loading = true
-        const data = await this.apiGet('/api/admin/analysis-logs', { page, page_size: 50 })
-        this.aiAnalysisLogs = data.logs
-        const pag = data.pagination
-        this.aiLogsPagination = {
-          page: pag.page,
-          page_size: pag.page_size,
-          total: pag.total,
-          total_pages: Math.ceil(pag.total / pag.page_size)
-        }
-      } catch (error) {
-        console.error('加载AI分析日志失败:', error)
-        alert(error.message || '加载AI分析日志失败')
-      } finally {
-        this.loading = false
-      }
-    },
-    
     // 监听标签切换
     async tabChanged() {
       if (this.activeTab === 'logs' && this.loginLogs.length === 0) {
         await this.loadLoginLogs()
       } else if (this.activeTab === 'admin-logs' && this.adminLogs.length === 0) {
         await this.loadAdminLogs()
-      } else if (this.activeTab === 'ai-logs' && this.aiAnalysisLogs.length === 0) {
-        await this.loadAIAnalysisLogs()
       }
     },
     
