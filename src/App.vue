@@ -66,7 +66,7 @@
           </button>
         </div>
 
-        <div class="tab-content">
+        <div v-if="user?.is_admin || adminTabs.length" class="tab-content">
           <div v-if="activeTab === 'watchlist'" class="watchlist-view">
             <WatchListData @select-chart="selectStockForChart" />
           </div>
@@ -298,6 +298,7 @@
             </template>
           </Suspense>
         </div>
+        <p v-else class="nav-policy-loading">无法加载主导航列表，请刷新页面重试。</p>
         </template>
         <p v-else class="nav-policy-loading">主导航策略加载中…</p>
       </div>
@@ -488,14 +489,14 @@ watch(activeTab, (newTab) => {
   console.log('已保存当前tab:', newTab)
 })
 
-// 动态标签 - 管理员看全部业务 Tab + 后台；普通用户受 VIP 与服务端白名单约束
+// 动态标签：管理员固定全量业务 Tab + 后台；普通用户仅按服务端权益矩阵返回的 visible_tab_ids（顺序一致）
 const adminTabs = computed(() => {
   const baseTabs = [
     { id: 'limit-up-ladder', name: '📊 连板天梯' },
-    { id: 'sector-concept', name: '📈 概念板块', req_vip: true },
-    { id: 'hot-stock', name: '🔥 热股分析', req_vip: true },
-    { id: 'etf', name: '💰 ETF淘金', req_vip: true },
-    { id: 'earnings-hunter', name: '🎯 财报猎手', req_vip: true },
+    { id: 'sector-concept', name: '📈 概念板块' },
+    { id: 'hot-stock', name: '🔥 热股分析' },
+    { id: 'etf', name: '💰 ETF淘金' },
+    { id: 'earnings-hunter', name: '🎯 财报猎手' },
     { id: 'strategy-pool', name: '🎯 策略股池' },
     { id: 'ranking', name: '金榜' },
     { id: 'watchlist', name: '自选股' },
@@ -503,7 +504,7 @@ const adminTabs = computed(() => {
     { id: 'strategies', name: '策略配置' },
     { id: 'strategy-workers', name: '🚀 实盘交易' },
     { id: 'trade-executions', name: '交易记录' },
-    { id: 'trading-manual', name: '人工干预' }, 
+    { id: 'trading-manual', name: '人工干预' },
     { id: 'history', name: 'AI分析回溯' },
     { id: 'strategy-execution-analysis', name: '策略执行分析' },
     { id: 'spectrum', name: '阴阳谱' },
@@ -511,33 +512,37 @@ const adminTabs = computed(() => {
     { id: 'user-profile', name: '用户配置' },
     { id: 'chat', name: '🤖 AI助手' },
   ]
-  
-  const currentServiceLevel = user.value?.service_level || 'free'
-  const isVipOrAbove = ['vip', 'premium'].includes(currentServiceLevel)
 
-  let filteredTabs
   if (user.value?.is_admin) {
-    filteredTabs = baseTabs.map((t) => ({ ...t }))
-  } else {
-    filteredTabs = baseTabs.filter((tab) => {
-      if (tab.req_vip && !isVipOrAbove) return false
-      return true
-    })
-    if (navPolicyResolved.value && serverVisibleTabIds.value !== null) {
-      const allow = new Set(serverVisibleTabIds.value)
-      filteredTabs = filteredTabs.filter((t) => allow.has(t.id))
-    }
+    const filteredTabs = baseTabs.map((t) => ({ ...t }))
+    filteredTabs.push({ id: 'admin', name: '管理后台' })
+    return filteredTabs
   }
 
-  if (user.value?.is_admin) {
-    filteredTabs.push({ id: 'admin', name: '管理后台' })
+  if (!navPolicyResolved.value) {
+    return []
+  }
+
+  const ids = serverVisibleTabIds.value
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return []
+  }
+
+  const tabById = Object.fromEntries(baseTabs.map((t) => [t.id, t]))
+  const filteredTabs = []
+  for (const id of ids) {
+    const row = tabById[id]
+    if (row) filteredTabs.push({ ...row })
   }
   return filteredTabs
 })
 
 watch(adminTabs, (tabs) => {
   const ids = tabs.map((t) => t.id)
-  if (ids.length && !ids.includes(activeTab.value)) {
+  if (!ids.length) {
+    return
+  }
+  if (!ids.includes(activeTab.value)) {
     activeTab.value = ids[0]
   }
 }, { deep: true })
@@ -955,6 +960,8 @@ async function handleLoginSuccess(authData) {
   if (authData.user.is_admin) {
     activeTab.value = 'admin'
     console.log('管理员登录，跳转到系统管理页面')
+  } else if (Array.isArray(ids) && ids.length) {
+    activeTab.value = ids[0]
   } else {
     activeTab.value = 'watchlist'
   }
@@ -1023,8 +1030,9 @@ onMounted(async () => {
   if (savedTab && adminTabs.value.some(tab => tab.id === savedTab)) {
     // 检查管理员tab的访问权限
     if (savedTab === 'admin' && !user.value?.is_admin) {
-      console.log('非管理员用户尝试访问管理后台，跳转到自选股')
-      activeTab.value = 'watchlist'
+      const tabs = adminTabs.value
+      activeTab.value = tabs.length ? tabs[0].id : 'watchlist'
+      console.log('非管理员用户尝试访问管理后台，跳转到允许的首个 Tab')
     } else {
       activeTab.value = savedTab
       console.log('恢复上次浏览的页面:', savedTab)
@@ -1033,7 +1041,8 @@ onMounted(async () => {
     activeTab.value = 'admin'
     console.log('管理员自动跳转到系统管理页面')
   } else {
-    activeTab.value = 'watchlist'
+    const tabs = adminTabs.value
+    activeTab.value = tabs.length ? tabs[0].id : 'watchlist'
   }
 })
 
