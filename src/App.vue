@@ -54,6 +54,7 @@
           </div>
         </div>
 
+        <template v-if="tabsShellReady">
         <div class="tabs">
           <button 
             v-for="tab in adminTabs" 
@@ -297,6 +298,8 @@
             </template>
           </Suspense>
         </div>
+        </template>
+        <p v-else class="nav-policy-loading">主导航策略加载中…</p>
       </div>
     </div>
   </v-app>
@@ -384,6 +387,45 @@ axios.interceptors.response.use(
 
 const { user, isAuthenticated, validateToken, logout } = useAuth()
 
+// 主导航可见列表：与权益矩阵对齐；sessionStorage 减轻首屏「null=不筛」导致的闪烁与错乱
+const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v1'
+const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v1'
+
+function readNavCacheRaw() {
+  try {
+    const u = sessionStorage.getItem(NAV_CACHE_USER_KEY)
+    const raw = sessionStorage.getItem(NAV_CACHE_IDS_KEY)
+    if (!u || !raw) return null
+    const userJson = localStorage.getItem('user_info')
+    if (!userJson) return null
+    const current = JSON.parse(userJson).username
+    if (current !== u) return null
+    const ids = JSON.parse(raw)
+    return Array.isArray(ids) ? ids : null
+  } catch {
+    return null
+  }
+}
+
+function writeNavCache(ids, username) {
+  try {
+    if (!username || !Array.isArray(ids)) return
+    sessionStorage.setItem(NAV_CACHE_USER_KEY, username)
+    sessionStorage.setItem(NAV_CACHE_IDS_KEY, JSON.stringify(ids))
+  } catch {
+    /* storage quota / private mode */
+  }
+}
+
+function clearNavCache() {
+  try {
+    sessionStorage.removeItem(NAV_CACHE_USER_KEY)
+    sessionStorage.removeItem(NAV_CACHE_IDS_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 // 密码重置相关状态
 const isResetPasswordMode = ref(false)
 const resetToken = ref('')
@@ -402,13 +444,51 @@ const currentStrategy = ref('') // 当前查看股票的策略
 const currentPreset = ref('') // 当前查看股票的preset
 const tradeMarkers = ref([]) // 交易标记点（买入+卖出）
 
+const _cachedNavIds = readNavCacheRaw()
+/** 非管理员：服务端允许的 tab id；null 且 navPolicyResolved 时表示仅本地 VIP 规则 */
+const serverVisibleTabIds = ref(_cachedNavIds)
+/** 是否已具备可信导航策略（避免此前 serverVisibleTabIds===null 时完全跳过矩阵筛选） */
+const navPolicyResolved = ref(!!_cachedNavIds)
+
+const tabsShellReady = computed(() => {
+  if (user.value?.is_admin) return true
+  return navPolicyResolved.value
+})
+
+async function loadNavigationTabs() {
+  const token = localStorage.getItem('access_token')
+  if (!token || !isAuthenticated.value) {
+    serverVisibleTabIds.value = null
+    navPolicyResolved.value = false
+    clearNavCache()
+    return
+  }
+  try {
+    const res = await axios.get('/api/user/navigation-tabs')
+    if (res.data?.success && Array.isArray(res.data.data?.visible_tab_ids)) {
+      serverVisibleTabIds.value = res.data.data.visible_tab_ids
+      const u = user.value?.username
+      if (u) writeNavCache(serverVisibleTabIds.value, u)
+    } else {
+      serverVisibleTabIds.value = null
+    }
+  } catch (e) {
+    console.error('加载主导航策略失败:', e)
+    if (!readNavCacheRaw()) {
+      serverVisibleTabIds.value = null
+    }
+  } finally {
+    navPolicyResolved.value = true
+  }
+}
+
 // 监听activeTab变化，保存到localStorage
 watch(activeTab, (newTab) => {
   localStorage.setItem('activeTab', newTab)
   console.log('已保存当前tab:', newTab)
 })
 
-// 动态标签 - 管理员只显示管理功能，普通用户显示业务功能
+// 动态标签 - 管理员看全部业务 Tab + 后台；普通用户受 VIP 与服务端白名单约束
 const adminTabs = computed(() => {
   const baseTabs = [
     { id: 'limit-up-ladder', name: '📊 连板天梯' },
@@ -432,24 +512,35 @@ const adminTabs = computed(() => {
     { id: 'chat', name: '🤖 AI助手' },
   ]
   
-  // 核心逻辑：获取当前用户的服务等级
   const currentServiceLevel = user.value?.service_level || 'free'
   const isVipOrAbove = ['vip', 'premium'].includes(currentServiceLevel)
-  
-  // 过滤掉当前用户权限不足的板块
-  const filteredTabs = baseTabs.filter(tab => {
-    if (tab.req_vip && !isVipOrAbove) {
-      return false // 不是 VIP 或以上等级则不显示该 Tab
-    }
-    return true
-  })
 
-  // 管理员额外追加后台 Tab
+  let filteredTabs
+  if (user.value?.is_admin) {
+    filteredTabs = baseTabs.map((t) => ({ ...t }))
+  } else {
+    filteredTabs = baseTabs.filter((tab) => {
+      if (tab.req_vip && !isVipOrAbove) return false
+      return true
+    })
+    if (navPolicyResolved.value && serverVisibleTabIds.value !== null) {
+      const allow = new Set(serverVisibleTabIds.value)
+      filteredTabs = filteredTabs.filter((t) => allow.has(t.id))
+    }
+  }
+
   if (user.value?.is_admin) {
     filteredTabs.push({ id: 'admin', name: '管理后台' })
   }
   return filteredTabs
 })
+
+watch(adminTabs, (tabs) => {
+  const ids = tabs.map((t) => t.id)
+  if (ids.length && !ids.includes(activeTab.value)) {
+    activeTab.value = ids[0]
+  }
+}, { deep: true })
 
 
 function formatDate(dateStr) {
@@ -840,22 +931,39 @@ async function selectStockForChart(stockData) {
   window.currentSourceInfo = sourceInfo
 }
 
-function handleLoginSuccess(authData) {
+async function handleLoginSuccess(authData) {
   console.log('登录成功:', authData.user.username)
-  // 使用认证服务设置状态，这会触发响应式更新
+  let ids = null
+  try {
+    const res = await axios.get('/api/user/navigation-tabs', {
+      headers: { Authorization: `Bearer ${authData.access_token}` },
+    })
+    if (res.data?.success && Array.isArray(res.data.data?.visible_tab_ids)) {
+      ids = res.data.data.visible_tab_ids
+    }
+  } catch (e) {
+    console.error('加载主导航策略失败:', e)
+  }
   authService.setAuth(authData)
-  
+  serverVisibleTabIds.value = ids
+  navPolicyResolved.value = true
+  if (ids && authData.user?.username) {
+    writeNavCache(ids, authData.user.username)
+  }
+
   // 根据用户角色设置默认标签页
   if (authData.user.is_admin) {
     activeTab.value = 'admin'
     console.log('管理员登录，跳转到系统管理页面')
   } else {
     activeTab.value = 'watchlist'
-    activeTab.value = 'watchlist'
   }
 }
 
 function handleLogout() {
+  clearNavCache()
+  serverVisibleTabIds.value = null
+  navPolicyResolved.value = false
   logout()
   console.log('用户已登出')
 }
@@ -908,6 +1016,8 @@ onMounted(async () => {
     console.log('Token已失效,请重新登录')
     return
   }
+
+  await loadNavigationTabs()
 
   // Token有效，优先恢复上次的tab，否则根据用户角色设置默认界面
   const savedTab = localStorage.getItem('activeTab')
@@ -1109,6 +1219,16 @@ const hasNext = computed(() => currentIndex.value < watchlist.value.length - 1)
 .feature-tag:hover {
   background: #e2e8f0;
   color: #475569;
+}
+
+.nav-policy-loading {
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  color: #b19cd9;
+  font-size: 15px;
+  text-align: center;
+  background: rgba(30, 30, 63, 0.45);
+  border-radius: 8px;
 }
 
 .tabs {

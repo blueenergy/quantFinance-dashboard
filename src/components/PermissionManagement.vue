@@ -1,6 +1,11 @@
 <template>
   <div class="permission-management">
     <h2>权限管理</h2>
+
+    <!-- 权益矩阵（仅管理员；先行配置，运行时后续接入） -->
+    <div class="section matrix-wrap">
+      <EntitlementsMatrix />
+    </div>
     
     <!-- 用户权限管理 -->
     <div class="section">
@@ -23,7 +28,7 @@
         {{ userPermissionResult }}
       </div>
     </div>
-    
+
     <!-- 策略权限管理 -->
     <div class="section">
       <h3>策略权限管理</h3>
@@ -93,13 +98,15 @@
 <script>
 import { ref, onMounted } from 'vue'
 import UpgradeRequest from './UpgradeRequest.vue'
+import EntitlementsMatrix from './EntitlementsMatrix.vue'
 
 const API_BASE = import.meta.env.VITE_API_BASE || "/api"
 
 export default {
   name: 'PermissionManagement',
   components: {
-    UpgradeRequest
+    UpgradeRequest,
+    EntitlementsMatrix,
   },
   props: {
     currentUser: {
@@ -116,7 +123,7 @@ export default {
     const serviceLevels = ref({})
     const userPermissionResult = ref('')
     const strategyPermissionResult = ref('')
-    
+
     // 获取所有策略权限
     const loadStrategies = async () => {
       try {
@@ -288,7 +295,7 @@ export default {
       currentUser: props.currentUser,
       updateUserPermission,
       updateStrategyPermission,
-      getServiceLevelName
+      getServiceLevelName,
     }
   }
 }
@@ -357,6 +364,23 @@ export default {
   border-radius: 4px;
   color: #155724;
   margin-top: 10px;
+}
+
+.result.error {
+  background-color: #fdecea;
+  border-color: #e74c3c;
+  color: #c0392b;
+}
+
+.hint {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.muted {
+  color: #888;
 }
 
 .service-level {
