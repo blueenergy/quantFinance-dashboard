@@ -986,12 +986,12 @@ onMounted(async () => {
     return // 不需要验证token，直接显示重置密码页面
   }
 
-  // 并行验证 Token 与获取自选股，减少等待时间
-  if (!isAuthenticated.value) return
+  // 必须验证 token 获取正确的用户信息，不能依赖 localStorage 中的缓存
+  if (!localStorage.getItem('access_token')) return
 
-  const token = localStorage.getItem('access_token')
   const fetchWatchlist = async () => {
     try {
+      const token = localStorage.getItem('access_token')
       const res = await axios.get('/api/user/watchlist-stocks', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
@@ -1006,31 +1006,26 @@ onMounted(async () => {
     }
   }
 
-  const [tokenResult, watchlistResult] = await Promise.allSettled([
-    validateToken(),
-    fetchWatchlist()
-  ])
-
-  const isValid = tokenResult.status === 'fulfilled' ? tokenResult.value : false
-  if (!isValid) {
+  // 必须先验证 token，获取正确的用户信息
+  const tokenValid = await validateToken()
+  if (!tokenValid) {
     console.log('Token已失效,请重新登录')
     return
   }
-
   await loadNavigationTabs()
+  // 现在 user.value 包含正确的服务器数据
+  await fetchWatchlist()
 
-  // Token有效，优先恢复上次的tab，否则根据用户角色设置默认界面
+  // 根据用户角色设置默认界面
   const savedTab = localStorage.getItem('activeTab')
   console.log('尝试恢复tab:', savedTab, '用户:', user.value?.username, '是否管理员:', user.value?.is_admin)
-  
+
   if (savedTab && adminTabs.value.some(tab => tab.id === savedTab)) {
     // 检查管理员tab的访问权限
     if (savedTab === 'admin' && !user.value?.is_admin) {
-      // 如果不是管理员，不能访问管理后台
       console.log('非管理员用户尝试访问管理后台，跳转到自选股')
       activeTab.value = 'watchlist'
     } else {
-      // 恢复上次的tab
       activeTab.value = savedTab
       console.log('恢复上次浏览的页面:', savedTab)
     }
@@ -1040,8 +1035,6 @@ onMounted(async () => {
   } else {
     activeTab.value = 'watchlist'
   }
-  
-
 })
 
 // 新增代码：图表视图的股票选择逻辑
