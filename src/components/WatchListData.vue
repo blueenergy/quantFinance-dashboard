@@ -99,7 +99,7 @@
               <th>涨跌幅</th>
               <th>成交量</th>
               <th v-if="useRealtimeData">更新时间</th>
-              <th>操作</th>
+              <th style="min-width: 280px;">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -122,10 +122,10 @@
               </td>
               <td>{{ formatVolume(stock.volume) }}</td>
               <td v-if="useRealtimeData" class="update-time">{{ formatUpdateTime(stock.update_time) }}</td>
-              <td>
-                  <div class="action-btn-group">
+              <td style="white-space: nowrap;">
+                  <div class="action-btn-group" style="white-space: nowrap;">
                     <button @click="selectChart(stock.symbol)" class="chart-btn">📈 K线</button>
-                    <button @click="deepAnalyzeStock(stock.symbol)" class="deep-analyze-btn" :disabled="deepAnalyzingStock === stock.symbol">
+                    <button @click="deepAnalyzeStock(stock.symbol)" class="deep-analyze-btn" :disabled="deepAnalyzingStock === stock.symbol" style="display: inline-block !important; visibility: visible !important; flex-shrink: 0;">
                       {{ deepAnalyzingStock === stock.symbol ? '提交中...' : '🔬 深度分析' }}
                     </button>
                     <button @click="openHistoryModal(stock.symbol)" class="history-btn">🕑 历史分析</button>
@@ -146,6 +146,9 @@
               <td v-if="useRealtimeData" class="no-data"></td>
               <td>
                 <button @click="selectChart(symbol)" class="chart-btn">📈 K线</button>
+                <button @click="deepAnalyzeStock(symbol)" class="deep-analyze-btn" :disabled="deepAnalyzingStock === symbol">
+                  {{ deepAnalyzingStock === symbol ? '提交中...' : '🔬 深度分析' }}
+                </button>
                 <button @click="openHistoryModal(symbol)" class="history-btn">🕑 历史分析</button>
                 <button @click="removeStock(symbol)" class="remove-btn">移除</button>
               </td>
@@ -763,7 +766,6 @@ function formatUpdateTime(timeStr) {
 function formatPE(val) {
   if (val === undefined || val === null) return '-';
   return Number(val).toFixed(2);
-/* 操作按钮自适应分组样式 */
   }
 
 function formatMarketCap(val) {
@@ -823,11 +825,11 @@ onMounted(async () => {
 
 .action-btn-group {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
   justify-content: flex-start;
   align-items: center;
-  max-width: 260px;
+  overflow-x: auto;
 }
 .action-btn-group button {
   margin-right: 0;
@@ -1025,7 +1027,7 @@ onMounted(async () => {
   border-collapse: collapse;
   background: rgba(30, 30, 63, 0.8);
   border-radius: 12px;
-  overflow: hidden;
+  overflow-x: auto;
   box-shadow: 0 4px 20px rgba(138, 43, 226, 0.2);
   border: 1px solid rgba(138, 43, 226, 0.2);
 }
@@ -1036,6 +1038,7 @@ onMounted(async () => {
   text-align: left;
   border-bottom: 1px solid rgba(138, 43, 226, 0.2);
   color: #e6e6fa;
+  overflow: visible;
 }
 
 .data-table th {
@@ -1332,6 +1335,11 @@ onMounted(async () => {
   margin-right: 5px;
   transition: all 0.2s;
   box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-width: 70px;
+  text-align: center;
 }
 .deep-analyze-btn:hover {
   background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
