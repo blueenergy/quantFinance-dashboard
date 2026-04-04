@@ -59,7 +59,11 @@ export async function getPositionsOpportunities() {
  */
 export async function getLatestPortfolioAnalysis(type = null) {
     let url = `${API_BASE}/analyze/portfolio-opportunities/latest`;
-    if (type) url += `?analysis_type=${type}`;
+    const params = new URLSearchParams();
+    if (type) params.set('analysis_type', type);
+    params.set('_t', Date.now());  // 禁用浏览器缓存
+    const qs = params.toString();
+    if (qs) url += '?' + qs;
 
     const res = await fetch(url, {
         method: 'GET',
@@ -74,7 +78,7 @@ export async function getLatestPortfolioAnalysis(type = null) {
  * @param {string} taskId - 任务ID
  */
 export async function getPortfolioTaskStatus(taskId) {
-    const url = `${API_BASE}/analyze/portfolio-task/${taskId}`;
+    const url = `${API_BASE}/analyze/portfolio-task/${taskId}?_t=${Date.now()}`;
 
     const res = await fetch(url, {
         method: 'GET',
