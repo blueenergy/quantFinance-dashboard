@@ -280,6 +280,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import request from '../utils/request'
 import { mdiRefresh } from '@mdi/js'
 
 const loading = ref(false)
@@ -317,9 +318,9 @@ async function runWatchdog() {
   
   try {
     const symbols = WATCH_SYMBOLS.join(',')
-    const res = await axios.get(`/api/market-quotes?symbols=${symbols}`)
-    if (res.data.success) {
-      const quotes = res.data.data
+    const res = await request.get(`/market-quotes?symbols=${symbols}`)
+    if (res.success) {
+      const quotes = res.data
       
       // 检查偏差
       for (const sym of WATCH_SYMBOLS) {
@@ -385,12 +386,12 @@ async function fetchGlobalAnalysis() {
   loading.value = true
   error.value = ''
   try {
-    const response = await axios.get('/api/global-analysis')
-    if (response.data.success) {
-      analysisResult.value = response.data.data
+    const data = await request.get('/global-analysis')
+    if (data.success) {
+      analysisResult.value = data.data
     } else {
-      if (!response.data.error.includes('今日尚无')) {
-        error.value = response.data.error
+      if (!data.error?.includes('今日尚无')) {
+        error.value = data.error
       }
     }
   } catch (err) {
@@ -467,9 +468,9 @@ async function refreshAnalysis() {
   refreshing.value = true
   try {
     // 1. Trigger backend analysis
-    const res = await axios.post('/api/analyze-global')
+    const res = await request.post('/analyze-global')
     
-    if (res.data.success) {
+    if (res.success) {
       // 2. Clear current analysis temporarily or show loading state
       // loading.value = true -- maybe not, just keep showing old one with a loading indicator
       
@@ -484,7 +485,7 @@ async function refreshAnalysis() {
         refreshing.value = false
       }, 2000)
     } else {
-      console.error('Trigger analysis failed:', res.data.error)
+      console.error('Trigger analysis failed:', res.error)
       refreshing.value = false
     }
   } catch (e) {
