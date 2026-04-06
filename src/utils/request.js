@@ -33,8 +33,19 @@ service.interceptors.response.use(
   error => {
     // 对响应错误做点什么
     if (error.response && error.response.status === 401) {
-      // token过期等处理
+      // token过期等处理：与 App.vue 缓存清理策略保持一致
       localStorage.removeItem('access_token')
+      localStorage.removeItem('user_info')
+      localStorage.removeItem('activeTab')
+      localStorage.removeItem('activeTab_v2')
+      localStorage.removeItem('activeTab_username_v2')
+      sessionStorage.removeItem('nav_visible_tab_ids_v1')
+      sessionStorage.removeItem('nav_visible_tab_username_v1')
+      try {
+        window.currentSourceInfo = null
+      } catch (e) {
+        // ignore in non-browser contexts
+      }
       window.location.href = '/login'
     }
     console.error('Response error:', error)
