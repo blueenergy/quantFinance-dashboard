@@ -391,6 +391,8 @@ const { user, isAuthenticated, validateToken, logout } = useAuth()
 // 主导航可见列表：与权益矩阵对齐；sessionStorage 减轻首屏「null=不筛」导致的闪烁与错乱
 const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v1'
 const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v1'
+const ACTIVE_TAB_KEY = 'activeTab_v2'
+const ACTIVE_TAB_USER_KEY = 'activeTab_username_v2'
 
 function readNavCacheRaw() {
   try {
@@ -422,6 +424,41 @@ function clearNavCache() {
   try {
     sessionStorage.removeItem(NAV_CACHE_USER_KEY)
     sessionStorage.removeItem(NAV_CACHE_IDS_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+function readActiveTabCache() {
+  try {
+    const u = localStorage.getItem(ACTIVE_TAB_USER_KEY)
+    const tab = localStorage.getItem(ACTIVE_TAB_KEY)
+    const userJson = localStorage.getItem('user_info')
+    if (!u || !tab || !userJson) return null
+    const current = JSON.parse(userJson).username
+    if (!current || current !== u) return null
+    return tab
+  } catch {
+    return null
+  }
+}
+
+function writeActiveTabCache(tab, username) {
+  try {
+    if (!tab || !username) return
+    localStorage.setItem(ACTIVE_TAB_USER_KEY, username)
+    localStorage.setItem(ACTIVE_TAB_KEY, tab)
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearActiveTabCache() {
+  try {
+    localStorage.removeItem(ACTIVE_TAB_USER_KEY)
+    localStorage.removeItem(ACTIVE_TAB_KEY)
+    // Clean legacy key to avoid cross-account tab bleed.
+    localStorage.removeItem('activeTab')
   } catch {
     /* ignore */
   }
@@ -485,7 +522,10 @@ async function loadNavigationTabs() {
 
 // 监听activeTab变化，保存到localStorage
 watch(activeTab, (newTab) => {
-  localStorage.setItem('activeTab', newTab)
+  const username = user.value?.username
+  if (username) {
+    writeActiveTabCache(newTab, username)
+  }
   console.log('已保存当前tab:', newTab)
 })
 
@@ -950,6 +990,8 @@ async function handleLoginSuccess(authData) {
     console.error('加载主导航策略失败:', e)
   }
   authService.setAuth(authData)
+  // New session should not inherit stale source context from previous user.
+  window.currentSourceInfo = null
   serverVisibleTabIds.value = ids
   navPolicyResolved.value = true
   if (ids && authData.user?.username) {
@@ -969,8 +1011,10 @@ async function handleLoginSuccess(authData) {
 
 function handleLogout() {
   clearNavCache()
+  clearActiveTabCache()
   serverVisibleTabIds.value = null
   navPolicyResolved.value = false
+  window.currentSourceInfo = null
   logout()
   console.log('用户已登出')
 }
@@ -1024,7 +1068,7 @@ onMounted(async () => {
   await fetchWatchlist()
 
   // 根据用户角色设置默认界面
-  const savedTab = localStorage.getItem('activeTab')
+  const savedTab = readActiveTabCache()
   console.log('尝试恢复tab:', savedTab, '用户:', user.value?.username, '是否管理员:', user.value?.is_admin)
 
   if (savedTab && adminTabs.value.some(tab => tab.id === savedTab)) {
