@@ -10,11 +10,13 @@
           :icon="mdiRefresh" 
           variant="text" 
           size="x-small" 
-          color="grey" 
+          color="grey"
+          :disabled="refreshing || !canTriggerGlobalAnalysis"
           :loading="refreshing"
           @click="refreshAnalysis"
           class="ml-1"
         ></v-btn>
+        <span v-if="!canTriggerGlobalAnalysis" class="pro-hint">专业版可用</span>
       </div>
       <div v-if="brief" class="sentiment-indicator" :class="getSentimentClass(brief.sentiment_score)">
         <span class="score">{{ brief.sentiment_score }}</span>
@@ -282,11 +284,15 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import request from '../utils/request'
 import { mdiRefresh } from '@mdi/js'
+import { useAuth } from '../services/auth.js'
+import { canUseProFeature } from '../utils/entitlements'
 
 const loading = ref(false)
 const error = ref('')
 const analysisResult = ref(null)
 const activeMarketTab = ref('indices')
+const { user } = useAuth()
+const canTriggerGlobalAnalysis = computed(() => canUseProFeature(user.value))
 
 // 提取数据
 // 后端现在直接返回 { categories: { indices: {...}, ... } }
@@ -527,6 +533,12 @@ async function refreshAnalysis() {
   font-size: 12px;
   color: #a0aec0;
   margin-left: 4px;
+}
+
+.pro-hint {
+  margin-left: 6px;
+  font-size: 11px;
+  color: #cbd5e0;
 }
 
 .sentiment-indicator {
