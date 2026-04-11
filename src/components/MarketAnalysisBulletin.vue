@@ -10,9 +10,15 @@
       </h3>
       <div class="header-controls">
         <input type="date" v-model="selectedDate" @change="handleDateChange" class="date-input" :disabled="loading || triggering" />
-        <button class="trigger-btn" @click="triggerAnalysis" :disabled="loading || triggering">
+        <button
+          class="trigger-btn"
+          :class="{ 'trigger-btn--locked': !canTriggerMarketAnalysis }"
+          @click="triggerAnalysis"
+          :disabled="loading || triggering || !canTriggerMarketAnalysis"
+        >
           {{ triggering ? '提交中...' : '🚀 触发分析' }}
         </button>
+        <span v-if="!canTriggerMarketAnalysis" class="pro-hint">专业版可用</span>
       </div>
     </div>
     
@@ -92,6 +98,8 @@
 import { ref, onMounted, computed } from 'vue'
 import request from '../utils/request'
 import IndustrySignals from './IndustrySignals.vue'
+import { useAuth } from '../services/auth.js'
+import { canUseProFeature } from '../utils/entitlements'
 
 const loading = ref(false)
 const error = ref('')
@@ -99,6 +107,8 @@ const errorTip = ref('')
 const triggerHint = ref('')
 const analysis = ref(null)
 const selectedDate = ref(new Date().toISOString().split('T')[0])
+const { user } = useAuth()
+const canTriggerMarketAnalysis = computed(() => canUseProFeature(user.value))
 
 function handleDateChange() {
   fetchLatestAnalysis()
@@ -372,6 +382,19 @@ onMounted(() => {
 .trigger-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.trigger-btn--locked {
+  background: #6b7280;
+}
+
+.trigger-btn--locked:hover:not(:disabled) {
+  background: #6b7280;
+}
+
+.pro-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .bulletin-content {

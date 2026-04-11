@@ -990,6 +990,8 @@ async function handleLoginSuccess(authData) {
     console.error('加载主导航策略失败:', e)
   }
   authService.setAuth(authData)
+  // Immediately refresh full profile so user_info contains service_level and other server-side fields.
+  await validateToken()
   // New session should not inherit stale source context from previous user.
   window.currentSourceInfo = null
   serverVisibleTabIds.value = ids
