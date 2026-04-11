@@ -11,6 +11,15 @@ function authHeaders() {
     return headers;
 }
 
+function normalizeTaskStatus(rawStatus) {
+    if (rawStatus == null) return "unknown";
+    let s = String(rawStatus);
+    if (s.startsWith("TaskStatus.")) {
+        s = s.split(".", 2)[1] || s;
+    }
+    return s.toLowerCase();
+}
+
 /**
  * 获取组合机会分析（自选股 + 持仓）
  */
@@ -99,10 +108,12 @@ export async function getPortfolioTaskStatus(taskId) {
 export async function pollPortfolioTask(taskId, onProgress = null, intervalMs = 3000, maxAttempts = 60) {
     for (let i = 0; i < maxAttempts; i++) {
         const result = await getPortfolioTaskStatus(taskId);
+        const normalizedStatus = normalizeTaskStatus(result.status);
+        result.status = normalizedStatus;
         
         if (onProgress) onProgress(result);
         
-        if (result.status === 'completed' || result.status === 'failed') {
+        if (normalizedStatus === 'completed' || normalizedStatus === 'failed') {
             return result;
         }
         
