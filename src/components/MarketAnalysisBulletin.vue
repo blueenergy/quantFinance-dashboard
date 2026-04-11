@@ -17,6 +17,10 @@
     </div>
     
     <div class="bulletin-content">
+      <div v-if="triggerHint" class="trigger-hint">
+        {{ triggerHint }}
+      </div>
+
       <div v-if="loading" class="loading">
         <div class="spinner"></div>
         <p>AI正在分析最新市场情况...</p>
@@ -92,6 +96,7 @@ import IndustrySignals from './IndustrySignals.vue'
 const loading = ref(false)
 const error = ref('')
 const errorTip = ref('')
+const triggerHint = ref('')
 const analysis = ref(null)
 const selectedDate = ref(new Date().toISOString().split('T')[0])
 
@@ -186,8 +191,26 @@ async function triggerAnalysis() {
     })
 
     if (response.success) {
+      if (response.is_non_trading_trigger && response.requested_date && response.effective_analysis_date) {
+        triggerHint.value = `你在 ${response.requested_date}（非交易日）发起触发，系统将按最近交易日 ${response.effective_analysis_date} 生成/展示分析。`
+      } else {
+        triggerHint.value = ''
+      }
+
+      if (response.effective_analysis_date && selectedDate.value !== response.effective_analysis_date) {
+        selectedDate.value = response.effective_analysis_date
+      }
+
+      if (response.skipped_existing) {
+        alert(`ℹ️ ${response.message || '最近交易日已有分析结果，已为你切换展示。'}`)
+        await fetchLatestAnalysis()
+        return
+      }
+
       // 提示用户任务已提交
-      alert(`✅ 分析任务已提交！\n任务ID: ${response.task_id}\nAI正在进行深度分析，请稍候刷新查看结果。`)
+      const taskLine = response.task_id ? `\n任务ID: ${response.task_id}` : ''
+      const noticeLine = response.message ? `\n${response.message}` : ''
+      alert(`✅ 分析任务已提交！${taskLine}${noticeLine}\nAI正在进行深度分析，请稍候刷新查看结果。`)
     } else {
       throw new Error(response.error || '提交失败')
     }
@@ -384,6 +407,16 @@ onMounted(() => {
   text-align: center;
   color: #dc3545;
   padding: 40px 20px;
+}
+
+.trigger-hint {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 13px;
 }
 
 .retry-btn {
