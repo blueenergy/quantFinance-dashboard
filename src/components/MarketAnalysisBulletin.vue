@@ -24,7 +24,7 @@
       
       <div v-else-if="error" class="error">
         <p>❌ {{ error }}</p>
-        <p class="error-tip">请联系系统管理员检查后台服务运行状态</p>
+        <p v-if="errorTip" class="error-tip">{{ errorTip }}</p>
       </div>
       
       <div v-else-if="analysis" class="analysis-content">
@@ -37,6 +37,10 @@
           <span class="market-mood" :class="getMoodClass(analysis.mood)">
             {{ getMoodIcon(analysis.mood) }} {{ analysis.mood }}
           </span>
+        </div>
+
+        <div v-if="analysis.notice" class="analysis-notice">
+          {{ analysis.notice }}
         </div>
         
         <div class="analysis-summary">
@@ -87,6 +91,7 @@ import IndustrySignals from './IndustrySignals.vue'
 
 const loading = ref(false)
 const error = ref('')
+const errorTip = ref('')
 const analysis = ref(null)
 const selectedDate = ref(new Date().toISOString().split('T')[0])
 
@@ -98,6 +103,7 @@ function handleDateChange() {
 async function fetchLatestAnalysis() {
   loading.value = true
   error.value = ''
+  errorTip.value = ''
   analysis.value = null
 
   try {
@@ -121,8 +127,13 @@ async function fetchLatestAnalysis() {
         outlook: response.outlook || '短期内市场可能延续震荡格局，建议关注结构性机会。',
         riskLevel: response.riskLevel || 'medium',
         riskNote: response.riskNote || '注意控制仓位，分散投资风险。',
-        industry_signals: response.industry_signals || null
+        industry_signals: response.industry_signals || null,
+        notice: response.notice || ''
       }
+    } else if (response.is_expected) {
+      error.value = response.error || '暂无分析数据'
+      errorTip.value = response.user_tip || '系统将在交易日的预定时间自动生成大盘分析，请稍后刷新。'
+      return
     } else {
       throw new Error(response.error || '暂无分析数据')
     }
@@ -132,10 +143,13 @@ async function fetchLatestAnalysis() {
     // 如果 err.response 存在，说明服务器响应了错误（如 4xx/5xx）
     if (err.response && err.response.data && err.response.data.error) {
       error.value = err.response.data.error
+      errorTip.value = err.response.data.user_tip || '请联系系统管理员检查后台服务运行状态'
     } else if (err.message) {
       error.value = err.message
+      errorTip.value = '请联系系统管理员检查后台服务运行状态'
     } else {
       error.value = '无法连接到分析服务'
+      errorTip.value = '请联系系统管理员检查后台服务运行状态'
     }
   } finally {
     loading.value = false
@@ -145,8 +159,25 @@ async function fetchLatestAnalysis() {
 // 触发新的大盘分析任务
 const triggering = ref(false)
 
+function isWeekendDate(dateStr) {
+  if (!dateStr) return false
+  const d = new Date(`${dateStr}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return false
+  const day = d.getDay()
+  return day === 0 || day === 6
+}
+
 async function triggerAnalysis() {
   if (triggering.value) return
+
+  if (isWeekendDate(selectedDate.value)) {
+    const todayStr = new Date().toISOString().split('T')[0]
+    const dateLabel = selectedDate.value === todayStr ? '今日' : '所选日期'
+    const shouldContinue = window.confirm(
+      `⚠️ ${dateLabel}为非交易日，不建议触发分析任务。\n\n系统通常会展示最近交易日分析结果。\n是否仍要继续提交？`
+    )
+    if (!shouldContinue) return
+  }
 
   triggering.value = true
   try {
@@ -418,6 +449,16 @@ onMounted(() => {
 
 .analysis-summary, .key-points, .market-outlook, .risk-alert {
   margin-bottom: 20px;
+}
+
+.analysis-notice {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f0f9ff;
+  color: #075985;
+  border: 1px solid #bae6fd;
+  font-size: 14px;
 }
 
 .analysis-summary h4, .key-points h4, .market-outlook h4, .risk-alert h4 {
