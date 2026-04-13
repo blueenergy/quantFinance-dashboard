@@ -49,7 +49,16 @@
                 <span class="cat-name">{{ category }}</span>
               </div>
               <div v-for="(item, idx) in items" :key="idx" class="news-item">
-                <span class="news-title">{{ item.title }}</span>
+                <a
+                  v-if="item.url"
+                  class="news-title news-link"
+                  :href="item.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {{ item.title }}
+                </a>
+                <span v-else class="news-title">{{ item.title }}</span>
                 <span class="news-meta">
                   <span class="news-source">{{ item.source }}</span>
                   <span v-if="item.published" class="news-time">{{ item.published }}</span>
@@ -412,6 +421,16 @@ onMounted(() => {
   color: #2d3748;
   line-height: 1.4;
   margin-bottom: 2px;
+}
+
+.news-link {
+  color: #2b6cb0;
+  text-decoration: none;
+}
+
+.news-link:hover {
+  color: #1a4f85;
+  text-decoration: underline;
 }
 
 .news-meta {
