@@ -67,8 +67,40 @@
 
         <div
           v-if="brief.international_shock_score !== undefined || brief.domestic_hedge_score !== undefined || brief.net_impact_score !== undefined"
-          class="score-strip"
+          class="score-strip-wrap"
         >
+          <div class="score-strip-header">
+            <span class="score-strip-title">📐 量化对冲分</span>
+            <v-btn
+              size="x-small"
+              variant="text"
+              color="primary"
+              :prepend-icon="mdiHelpCircleOutline"
+              @click="showScoreHelp = !showScoreHelp"
+            >
+              {{ showScoreHelp ? '收起解读' : '解读' }}
+            </v-btn>
+          </div>
+
+          <v-expand-transition>
+            <div v-if="showScoreHelp" class="score-help-panel">
+              <p class="score-help-line">
+                <strong>国际冲击分</strong> {{ scoreInterpretation.international.value }}（{{ scoreInterpretation.international.level }}）：
+                {{ scoreInterpretation.international.text }}
+              </p>
+              <p class="score-help-line">
+                <strong>国内对冲分</strong> {{ scoreInterpretation.domestic.value }}（{{ scoreInterpretation.domestic.level }}）：
+                {{ scoreInterpretation.domestic.text }}
+              </p>
+              <p class="score-help-line">
+                <strong>净影响分</strong> {{ scoreInterpretation.net.value }}（{{ scoreInterpretation.net.level }}）：
+                {{ scoreInterpretation.net.text }}
+              </p>
+              <p class="score-help-summary">综合解读：{{ scoreInterpretation.summary }}</p>
+            </div>
+          </v-expand-transition>
+
+          <div class="score-strip">
           <div class="score-pill score-international">
             <span class="pill-label">国际冲击分</span>
             <span class="pill-value">{{ formatScore(brief.international_shock_score) }}</span>
@@ -80,6 +112,7 @@
           <div class="score-pill score-net">
             <span class="pill-label">净影响分</span>
             <span class="pill-value">{{ formatScore(brief.net_impact_score) }}</span>
+          </div>
           </div>
         </div>
         
@@ -321,7 +354,7 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import request from '../utils/request'
-import { mdiRefresh } from '@mdi/js'
+import { mdiRefresh, mdiHelpCircleOutline } from '@mdi/js'
 import { useAuth } from '../services/auth.js'
 import { canUseProFeature } from '../utils/entitlements'
 
@@ -329,6 +362,7 @@ const loading = ref(false)
 const error = ref('')
 const analysisResult = ref(null)
 const activeMarketTab = ref('indices')
+const showScoreHelp = ref(false)
 const { user } = useAuth()
 const canTriggerGlobalAnalysis = computed(() => canUseProFeature(user.value))
 
@@ -483,6 +517,57 @@ function formatScore(num) {
   if (Number.isNaN(val)) return '--'
   return Math.round(val)
 }
+
+function normalizeScore(num) {
+  if (num === undefined || num === null || num === '') return null
+  const val = Number(num)
+  if (Number.isNaN(val)) return null
+  return Math.max(0, Math.min(100, Math.round(val)))
+}
+
+function buildScoreInsight(score, type) {
+  if (score === null) {
+    return { value: '--', level: '未知', text: '当前暂无有效数据。' }
+  }
+
+  if (type === 'international') {
+    if (score >= 70) return { value: score, level: '高', text: '外部风险冲击较强，地缘与全球风险偏好对A股影响偏负。' }
+    if (score >= 55) return { value: score, level: '中高', text: '外部扰动存在，开盘情绪可能偏谨慎。' }
+    if (score >= 40) return { value: score, level: '中性', text: '外部冲击可控，更多取决于国内资金与政策。' }
+    return { value: score, level: '低', text: '外部冲击有限，海外因素压制较弱。' }
+  }
+
+  if (type === 'domestic') {
+    if (score >= 70) return { value: score, level: '强', text: '国内政策与产业支撑较强，具备明显对冲能力。' }
+    if (score >= 55) return { value: score, level: '中强', text: '国内托底力度尚可，可部分对冲外部波动。' }
+    if (score >= 40) return { value: score, level: '中性', text: '国内对冲力度一般，难以完全抵消外部冲击。' }
+    return { value: score, level: '弱', text: '国内对冲偏弱，市场更易受外部风险牵引。' }
+  }
+
+  if (score >= 60) return { value: score, level: '偏多', text: '综合影响偏正，风险偏好有改善空间。' }
+  if (score >= 45) return { value: score, level: '中性偏谨慎', text: '多空因素交织，建议以节奏和仓位控制为主。' }
+  return { value: score, level: '偏空', text: '综合影响偏负，防守与风控优先。' }
+}
+
+const scoreInterpretation = computed(() => {
+  const b = brief.value || {}
+  const international = buildScoreInsight(normalizeScore(b.international_shock_score), 'international')
+  const domestic = buildScoreInsight(normalizeScore(b.domestic_hedge_score), 'domestic')
+  const net = buildScoreInsight(normalizeScore(b.net_impact_score), 'net')
+
+  let summary = '当前数据不足，建议结合盘中走势再判断。'
+  if (net.value !== '--') {
+    if (net.level === '偏多') {
+      summary = '净影响偏多，可适度提高风险偏好，但仍需观察外部事件是否反复。'
+    } else if (net.level === '偏空') {
+      summary = '净影响偏空，建议控制追涨，优先防守和仓位管理。'
+    } else {
+      summary = '净影响中性偏谨慎，建议结构化配置并保持策略弹性。'
+    }
+  }
+
+  return { international, domestic, net, summary }
+})
 
 function getChangeClass(change, inverse = false) {
   if (change === undefined || change === null) return ''
@@ -735,6 +820,45 @@ async function refreshAnalysis() {
   gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 12px;
+}
+
+.score-strip-wrap {
+  margin-bottom: 12px;
+}
+
+.score-strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.score-strip-title {
+  font-size: 12px;
+  color: #4a5568;
+  font-weight: 600;
+}
+
+.score-help-panel {
+  border: 1px solid #dbeafe;
+  background: #f8fbff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.score-help-line {
+  margin: 0 0 4px 0;
+  font-size: 12px;
+  color: #2d3748;
+  line-height: 1.5;
+}
+
+.score-help-summary {
+  margin: 6px 0 0 0;
+  font-size: 12px;
+  color: #1a365d;
+  font-weight: 600;
 }
 
 .score-pill {
