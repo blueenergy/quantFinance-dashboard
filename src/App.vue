@@ -1000,8 +1000,8 @@ async function handleLoginSuccess(authData) {
     writeNavCache(ids, authData.user.username)
   }
 
-  // 根据用户角色设置默认标签页
-  if (authData.user.is_admin) {
+  // 根据服务端确认后的用户角色设置默认标签页，避免登录响应中的旧角色值污染
+  if (user.value?.is_admin) {
     activeTab.value = 'admin'
     console.log('管理员登录，跳转到系统管理页面')
   } else if (Array.isArray(ids) && ids.length) {
@@ -1091,6 +1091,20 @@ onMounted(async () => {
     activeTab.value = tabs.length ? tabs[0].id : 'watchlist'
   }
 })
+
+// 角色降级保护：一旦当前用户不是管理员，不允许停留在 admin 标签页
+watch(
+  () => user.value?.is_admin,
+  (isAdmin) => {
+    if (isAdmin || activeTab.value !== 'admin') {
+      return
+    }
+
+    const tabs = adminTabs.value
+    activeTab.value = tabs.length ? tabs[0].id : 'watchlist'
+    console.log('检测到非管理员用户处于管理后台，已自动纠正到普通标签页')
+  }
+)
 
 // 新增代码：图表视图的股票选择逻辑
 
