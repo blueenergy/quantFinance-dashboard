@@ -142,47 +142,47 @@
             <!-- 1. 核心指数 -->
             <v-window-item value="indices">
               <div class="market-indices">
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^IXIC')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^IXIC')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.indices, '^IXIC'))">
                   <span class="m-name">纳斯达克</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^IXIC')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^IXIC')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^GSPC')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^GSPC')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.indices, '^GSPC'))">
                   <span class="m-name">标普500</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^GSPC')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^GSPC')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^DJI')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^DJI')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.indices, '^DJI'))">
                   <span class="m-name">道琼斯</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^DJI')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^DJI')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^RUT')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^RUT')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.indices, '^RUT'))">
                   <span class="m-name">罗素2000</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^RUT')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^RUT')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^VIX')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^VIX')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.indices, '^VIX'))">
                   <span class="m-name">恐慌指数(VIX)</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^VIX')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^VIX')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'NQ=F')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'NQ=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.us_index_futures, 'NQ=F'))">
                   <span class="m-name">纳指期货</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(marketData.us_index_futures, 'NQ=F')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(marketData.us_index_futures, 'NQ=F')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'ES=F')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'ES=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.us_index_futures, 'ES=F'))">
                   <span class="m-name">标普期货</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(marketData.us_index_futures, 'ES=F')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(marketData.us_index_futures, 'ES=F')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'YM=F')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'YM=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.us_index_futures, 'YM=F'))">
                   <span class="m-name">道指期货</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(marketData.us_index_futures, 'YM=F')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(marketData.us_index_futures, 'YM=F')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'RTY=F')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'RTY=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.us_index_futures, 'RTY=F'))">
                   <span class="m-name">罗素期货</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(marketData.us_index_futures, 'RTY=F')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(marketData.us_index_futures, 'RTY=F')?.change_pct) }}</span>
@@ -365,6 +365,20 @@ const activeMarketTab = ref('indices')
 const showScoreHelp = ref(false)
 const { user } = useAuth()
 const canTriggerGlobalAnalysis = computed(() => canUseProFeature(user.value))
+const showQuoteDebug = computed(() => {
+  try {
+    let value = new URLSearchParams(window.location.search).get('debugQuote')
+    if (!value && window.location.hash && window.location.hash.includes('?')) {
+      const hashQuery = window.location.hash.split('?')[1] || ''
+      value = new URLSearchParams(hashQuery).get('debugQuote')
+    }
+    if (!value) return false
+    const v = value.toLowerCase()
+    return v === '1' || v === 'true' || v === 'yes'
+  } catch (_) {
+    return false
+  }
+})
 
 // 提取数据
 // 后端现在直接返回 { categories: { indices: {...}, ... } }
@@ -498,6 +512,24 @@ function formatTime(ts) {
 function getMarketItem(collection, symbol) {
   if (!collection) return null
   return collection[symbol]
+}
+
+function buildQuoteSourceTooltip(item) {
+  if (!showQuoteDebug.value || !item) return ''
+
+  const changeSource = item.change_pct_source || ''
+  const prevSource = item.prev_close_source || ''
+  if (!changeSource && !prevSource) {
+    return '数据口径说明\n暂无来源字段（请先运行新版 global sync 写入来源字段）'
+  }
+
+  const parts = ['数据口径说明']
+  if (changeSource) parts.push(`涨跌幅来源: ${changeSource}`)
+  if (prevSource) parts.push(`前收来源: ${prevSource}`)
+  if (item.prev_close !== undefined && item.prev_close !== null) {
+    parts.push(`前收值: ${formatNumber(item.prev_close)}`)
+  }
+  return parts.join('\n')
 }
 
 function formatNumber(num) {
