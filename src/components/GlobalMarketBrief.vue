@@ -64,6 +64,24 @@
       </div>
 
       <div v-else-if="brief" class="brief-body">
+
+        <div
+          v-if="brief.international_shock_score !== undefined || brief.domestic_hedge_score !== undefined || brief.net_impact_score !== undefined"
+          class="score-strip"
+        >
+          <div class="score-pill score-international">
+            <span class="pill-label">国际冲击分</span>
+            <span class="pill-value">{{ formatScore(brief.international_shock_score) }}</span>
+          </div>
+          <div class="score-pill score-domestic">
+            <span class="pill-label">国内对冲分</span>
+            <span class="pill-value">{{ formatScore(brief.domestic_hedge_score) }}</span>
+          </div>
+          <div class="score-pill score-net">
+            <span class="pill-label">净影响分</span>
+            <span class="pill-value">{{ formatScore(brief.net_impact_score) }}</span>
+          </div>
+        </div>
         
         <!-- 新增：市场数据仪表盘 (数据快照) -->
         <div v-if="marketData" class="market-dashboard">
@@ -459,6 +477,13 @@ function formatPercent(num) {
   return (val > 0 ? '+' : '') + val.toFixed(2) + '%'
 }
 
+function formatScore(num) {
+  if (num === undefined || num === null || num === '') return '--'
+  const val = Number(num)
+  if (Number.isNaN(val)) return '--'
+  return Math.round(val)
+}
+
 function getChangeClass(change, inverse = false) {
   if (change === undefined || change === null) return ''
   const val = Number(change)
@@ -704,6 +729,38 @@ async function refreshAnalysis() {
   padding: 14px 16px;
   margin-bottom: 12px;
 }
+
+.score-strip {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.score-pill {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.pill-label {
+  font-size: 12px;
+  color: #4a5568;
+}
+
+.pill-value {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.score-international .pill-value { color: #c53030; }
+.score-domestic .pill-value { color: #2b6cb0; }
+.score-net .pill-value { color: #2f855a; }
 
 .analysis-section.highlight {
   background: linear-gradient(135deg, #ebf8ff 0%, #f0fff4 100%);
