@@ -116,6 +116,26 @@
                   <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^VIX')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^VIX')?.change_pct) }}</span>
                 </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'NQ=F')?.change_pct)">
+                  <span class="m-name">纳指期货</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.us_index_futures, 'NQ=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.us_index_futures, 'NQ=F')?.change_pct) }}</span>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'ES=F')?.change_pct)">
+                  <span class="m-name">标普期货</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.us_index_futures, 'ES=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.us_index_futures, 'ES=F')?.change_pct) }}</span>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'YM=F')?.change_pct)">
+                  <span class="m-name">道指期货</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.us_index_futures, 'YM=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.us_index_futures, 'YM=F')?.change_pct) }}</span>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'RTY=F')?.change_pct)">
+                  <span class="m-name">罗素期货</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.us_index_futures, 'RTY=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.us_index_futures, 'RTY=F')?.change_pct) }}</span>
+                </div>
               </div>
             </v-window-item>
 
@@ -316,8 +336,10 @@ const marketDate = computed(() => {
 const watchdogAlert = ref(null) // { symbol: 'FXI', diffPct: 1.2, currentPrice: 38.5 }
 let watchdogTimer = null
 
-// 监控列表：需要监控的符号
-const WATCH_SYMBOLS = ['^IXIC', 'FXI', 'GC=F', '^RUT']
+// 监控列表：优先使用股指期货信号（更贴近A股开盘前的风险偏好）
+// NQ=F: 纳斯达克100期货, ES=F: 标普500期货, YM=F: 道琼斯期货, RTY=F: 罗素2000期货
+// FXI: 中国大盘ETF（离岸中国资产代表）, GC=F: 黄金期货（避险情绪代表）
+const WATCH_SYMBOLS = ['NQ=F', 'ES=F', 'YM=F', 'RTY=F', 'FXI', 'GC=F']
 
 async function runWatchdog() {
   if (!marketData.value) return
@@ -333,6 +355,7 @@ async function runWatchdog() {
         // 找到快照价格
         let snapshotItem = null
         if (marketData.value.indices && marketData.value.indices[sym]) snapshotItem = marketData.value.indices[sym]
+        else if (marketData.value.us_index_futures && marketData.value.us_index_futures[sym]) snapshotItem = marketData.value.us_index_futures[sym]
         else if (marketData.value.commodities && marketData.value.commodities[sym]) snapshotItem = marketData.value.commodities[sym]
         
         if (snapshotItem && quotes[sym]) {
