@@ -56,9 +56,10 @@
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {{ item.title }}
+                  {{ displayNewsTitle(item) }}
                 </a>
-                <span v-else class="news-title">{{ item.title }}</span>
+                <span v-else class="news-title">{{ displayNewsTitle(item) }}</span>
+                <span v-if="showOriginalTitle(item)" class="news-title-original">{{ item.title }}</span>
                 <span class="news-meta">
                   <span class="news-source">{{ item.source }}</span>
                   <span v-if="item.published" class="news-time">{{ item.published }}</span>
@@ -175,6 +176,20 @@ const categoryIcons = {
 }
 function categoryIcon(cat) {
   return categoryIcons[cat] || '📰'
+}
+
+function displayNewsTitle(item) {
+  if (!item) return ''
+  const zh = (item.title_zh || '').trim()
+  if (zh) return zh
+  return item.title || ''
+}
+
+function showOriginalTitle(item) {
+  if (!item) return false
+  const zh = (item.title_zh || '').trim()
+  const en = (item.title || '').trim()
+  return Boolean(zh && en && zh !== en)
 }
 
 const jobLabels = {
@@ -420,6 +435,14 @@ onMounted(() => {
   font-size: 12px;
   color: #2d3748;
   line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+.news-title-original {
+  display: block;
+  font-size: 10px;
+  color: #718096;
+  line-height: 1.3;
   margin-bottom: 2px;
 }
 
