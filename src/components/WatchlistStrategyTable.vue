@@ -487,7 +487,15 @@ function formatTimestamp(ts) {
 }
 
 function normalizeSymbol(symbol) {
-  return symbol != null ? symbol.toString().padStart(6, '0') : ''
+  if (symbol == null) return ''
+  const raw = symbol.toString().trim().toUpperCase()
+  if (!raw) return ''
+  if (raw.includes('.')) return raw
+
+  // Backward compatibility for legacy rows without exchange suffix.
+  const code = raw.padStart(6, '0')
+  const suffix = code.startsWith('6') ? 'SH' : 'SZ'
+  return `${code}.${suffix}`
 }
 
 function hasStrategyConfig(strategies) {
@@ -543,7 +551,7 @@ async function loadData() {
 function buildStrategyMap(strategies) {
   const map = {}
   strategies.forEach(s => {
-    const sym = s.symbol
+    const sym = normalizeSymbol(s.symbol)
     if (!map[sym]) map[sym] = {}
     map[sym][s.strategy_key] = {
       params: s.params || {},
@@ -556,7 +564,7 @@ function buildStrategyMap(strategies) {
 
 function buildNameMap(stocks) {
   const map = {}
-  stocks.forEach(s => { map[s.symbol] = s.name })
+  stocks.forEach(s => { map[normalizeSymbol(s.symbol)] = s.name })
   return map
 }
 
