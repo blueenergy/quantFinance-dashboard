@@ -193,10 +193,18 @@ function showOriginalTitle(item) {
 }
 
 const jobLabels = {
-  stock_daily: '股票日线', index_daily: '指数日线', etf_daily: 'ETF日线',
-  financial_sync: '财务数据', moneyflow: '资金流向', ladder_sync: '连板天梯',
-  market_sentiment: '市场情绪', international_news: '国际新闻',
-  industry_sync: '行业与ETF聚合', hot_stock_sync: '热股同步',
+  stock_daily: '股票日线',
+  stock_weekly: '股票周线',
+  stock_monthly: '股票月线',
+  index_daily: '指数日线',
+  etf_daily: 'ETF日线',
+  financial_sync: '财务数据',
+  moneyflow: '资金流向',
+  ladder_sync: '连板天梯',
+  market_sentiment: '市场情绪',
+  international_news: '国际新闻',
+  industry_sync: '行业与ETF聚合',
+  hot_stock_sync: '热股同步',
 }
 function jobLabel(type) {
   return jobLabels[type] || type
