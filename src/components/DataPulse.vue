@@ -155,11 +155,17 @@ const pulseClass = computed(() => {
   return 'error'
 })
 
+function leadingYyyymmdd(v) {
+  if (typeof v !== 'string' || !v) return null
+  const m = v.match(/^(\d{8})/)
+  return m ? m[1] : null
+}
+
 const latestDataDate = computed(() => {
   if (!overview.value?.data_freshness) return null
   const raw = Object.values(overview.value.data_freshness).filter(Boolean)
   const ymd = raw
-    .map((v) => (typeof v === 'string' && v.length >= 8 ? v.replace(/\D/g, '').slice(0, 8) : null))
+    .map((v) => leadingYyyymmdd(v))
     .filter(Boolean)
   if (ymd.length === 0) return null
   const latest = ymd.sort().pop()
@@ -222,7 +228,8 @@ function jobIconClass(st) {
   return 'fail'
 }
 
-function isStale(dateStr) {
+function isStale(display) {
+  const dateStr = leadingYyyymmdd(display)
   if (!dateStr || dateStr.length !== 8) return false
   const today = new Date()
   const y = parseInt(dateStr.slice(0, 4))
