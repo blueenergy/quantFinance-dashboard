@@ -198,6 +198,7 @@ const jobLabels = {
   stock_monthly: '股票月线',
   index_daily: '指数日线',
   etf_daily: 'ETF日线',
+  etf_share_size: 'ETF份额规模',
   financial_sync: '财务数据',
   moneyflow: '资金流向',
   ladder_sync: '连板天梯',
