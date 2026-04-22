@@ -100,7 +100,7 @@
                 <span class="job-icon" :class="jobIconClass(job.status)">
                   {{ jobIconText(job.status) }}
                 </span>
-                <span class="job-name">{{ jobLabel(job.type) }}</span>
+                <span class="job-name">{{ job.label || jobLabel(job.type) }}</span>
                 <span class="job-date">{{ job.latest_date || '--' }}</span>
               </div>
             </div>
@@ -212,6 +212,7 @@ const jobLabels = {
   international_news: '国际新闻',
   industry_sync: '行业与ETF聚合',
   hot_stock_sync: '热股同步',
+  stock_composite_scoring: '综合评分',
 }
 function jobLabel(type) {
   return jobLabels[type] || type
