@@ -116,7 +116,7 @@ watch(() => props.history, async (newVal) => {
 async function markRead(ids) {
     // Call backend
     const token = localStorage.getItem('token') // Simplified
-    await axios.post(`${import.meta.env.VITE_API_URL || '/api'}/analyze/mark-read`, ids, {
+    await axios.post(`${import.meta.env.VITE_API_BASE || '/api'}/analyze/mark-read`, ids, {
         headers: { Authorization: `Bearer ${token}` }
     })
 }
