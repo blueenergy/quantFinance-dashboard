@@ -114,6 +114,17 @@
             </Suspense>
           </div>
 
+          <div v-if="activeTab === 'task-center'" class="history-view">
+            <Suspense>
+              <template #default>
+                <AnalysisTaskCenter />
+              </template>
+              <template #fallback>
+                <div class="skeleton skeleton-table">AI分析回溯中心加载中...</div>
+              </template>
+            </Suspense>
+          </div>
+
           <div v-if="activeTab === 'admin' && user?.is_admin" class="admin-view">
             <Suspense>
               <template #default>
@@ -319,6 +330,7 @@ import { defineAsyncComponent, ref, onMounted, computed, watch, nextTick } from 
 const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
 // StockAnalysis component removed: AI analysis moved to AIAnalysisHistory
 const AIAnalysisHistory = defineAsyncComponent(() => import('./components/AIAnalysisHistory.vue'))
+const AnalysisTaskCenter = defineAsyncComponent(() => import('./components/AnalysisTaskCenter.vue'))
 const MarketAnalysisBulletin = defineAsyncComponent(() => import('./components/MarketAnalysisBulletin.vue'))
 const GlobalMarketBrief = defineAsyncComponent(() => import('./components/GlobalMarketBrief.vue'))
 const AdminDashboard = defineAsyncComponent(() => import('./components/AdminDashboard.vue'))
@@ -546,6 +558,7 @@ const adminTabs = computed(() => {
     { id: 'trade-executions', name: '交易记录' },
     { id: 'trading-manual', name: '人工干预' },
     { id: 'history', name: 'AI分析回溯' },
+    { id: 'task-center', name: '🔬 AI分析回溯中心' },
     { id: 'strategy-execution-analysis', name: '策略执行分析' },
     { id: 'spectrum', name: '阴阳谱' },
     { id: 'securities', name: '账户工作台' },
