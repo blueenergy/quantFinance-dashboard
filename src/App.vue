@@ -106,7 +106,7 @@
           <div v-if="activeTab === 'history'" class="history-view">
             <Suspense>
               <template #default>
-                <AIAnalysisHistory />
+                <AIAnalysisHistory :key="navKey('history')" />
               </template>
               <template #fallback>
                 <div class="skeleton skeleton-table">AI分析回溯加载中...</div>
@@ -117,7 +117,7 @@
           <div v-if="activeTab === 'task-center'" class="history-view">
             <Suspense>
               <template #default>
-                <AnalysisTaskCenter />
+                <AnalysisTaskCenter @open-task="handleOpenTask" />
               </template>
               <template #fallback>
                 <div class="skeleton skeleton-table">AI分析回溯中心加载中...</div>
@@ -150,7 +150,7 @@
           <!-- ETF淘金 -->
           <Suspense v-if="activeTab === 'etf'">
             <template #default>
-              <EtfView />
+              <EtfView :key="navKey('etf')" />
             </template>
             <template #fallback>
               <div class="skeleton skeleton-table">ETF模块加载中...</div>
@@ -272,7 +272,7 @@
           <!-- Limit-Up Ladder Tab (连板天梯) -->
           <Suspense v-if="activeTab === 'limit-up-ladder'">
             <template #default>
-              <LimitUpLadder />
+              <LimitUpLadder :key="navKey('limit-up-ladder')" />
             </template>
             <template #fallback>
               <div class="skeleton skeleton-table">连板天梯加载中...</div>
@@ -326,7 +326,7 @@ import ResetPassword from './components/ResetPassword.vue'
 import EtfView from './views/EtfView.vue'
 import DataPulse from './components/DataPulse.vue'
 // Lazy-load heavy views/components to avoid loading them for normal users
-import { defineAsyncComponent, ref, onMounted, computed, watch, nextTick } from 'vue'
+import { defineAsyncComponent, ref, onMounted, computed, watch, nextTick, provide, readonly } from 'vue'
 const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
 // StockAnalysis component removed: AI analysis moved to AIAnalysisHistory
 const AIAnalysisHistory = defineAsyncComponent(() => import('./components/AIAnalysisHistory.vue'))
@@ -485,6 +485,39 @@ const watchlist = ref([])
 const chartRecords = ref([])
 const moneyFlowRecords = ref([])
 const activeTab = ref('watchlist')
+
+// ── Navigation-intent system ─────────────────────────────────────────────────
+// AnalysisTaskCenter emits 'open-task'; we store the intent here, provide it
+// to all descendants, and force-remount the target tab component via :key.
+const navigationIntent = ref(null) // { type, taskId, symbol, targetTab, nonce }
+function clearNavigationIntent() { navigationIntent.value = null }
+provide('navigationIntent', readonly(navigationIntent))
+provide('clearNavigationIntent', clearNavigationIntent)
+
+const _TYPE_TO_TAB = {
+  deep_analysis: 'history',
+  limit_up_analysis: 'history',
+  limit_up_feedback: 'history',
+  broken_limit_up_feedback: 'history',
+  portfolio_analysis: 'limit-up-ladder',
+  etf_analysis: 'etf',
+}
+
+function handleOpenTask({ type, taskId, symbol }) {
+  const targetTab = _TYPE_TO_TAB[type] ?? null
+  if (!targetTab) return
+  navigationIntent.value = { type, taskId, symbol, targetTab, nonce: Date.now() }
+  activeTab.value = targetTab
+}
+
+/** Returns a unique :key for a tab component, causing remount when a navigation intent targets it. */
+function navKey(tabId) {
+  const intent = navigationIntent.value
+  if (intent && intent.targetTab === tabId) return `${tabId}-${intent.nonce}`
+  return tabId
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const stockName = ref('')
 const chartSymbol = computed(() => 
   watchlist.value.length > 0 ? watchlist.value[currentIndex.value] : ''

@@ -273,7 +273,8 @@
         <analysis-card 
           type="watchlist" 
           :analyze-api="watchlistAnalyzeApi" 
-          :get-latest-api="getLatestApi" 
+          :get-latest-api="getLatestApi"
+          :initial-task-id="portfolioInitialTaskId"
           class="mt-4" 
         />
         
@@ -281,7 +282,8 @@
         <analysis-card 
           type="positions" 
           :analyze-api="positionsAnalyzeApi" 
-          :get-latest-api="getLatestApi" 
+          :get-latest-api="getLatestApi"
+          :initial-task-id="portfolioInitialTaskId"
           class="mt-4" 
         />
       </v-col>
@@ -440,12 +442,24 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject } from 'vue'
 import { getDailyLadder, getIndicators, getSectorRanking, getReasoningDetail, submitReasoningFeedback } from '../api/ladder'
 import { getWatchlistOpportunities, getPositionsOpportunities, getLatestPortfolioAnalysis } from '../api/portfolio'
 import LadderTierCard from '../components/LadderTierCard.vue'
 import AnalysisCard from '../components/AnalysisCard.vue'
 import MarketSpectrumChart from '../components/MarketSpectrumChart.vue'
+
+// Navigation-intent injection
+const navigationIntent = inject('navigationIntent', null)
+const clearNavigationIntent = inject('clearNavigationIntent', () => {})
+
+// If we were navigated here via a portfolio_analysis task, expose that taskId
+const portfolioInitialTaskId = computed(() => {
+  const intent = navigationIntent?.value
+  return (intent && intent.type === 'portfolio_analysis' && intent.targetTab === 'limit-up-ladder')
+    ? intent.taskId
+    : null
+})
 
 // API wrapper functions for the analysis cards
 const watchlistAnalyzeApi = () => getWatchlistOpportunities()
@@ -725,6 +739,11 @@ onMounted(() => {
   }
   
   loadData()
+
+  // Clear navigation intent after AnalysisCard(s) have had a chance to mount and read it
+  if (navigationIntent?.value?.type === 'portfolio_analysis') {
+    clearNavigationIntent()
+  }
 })
 
 onUnmounted(() => {

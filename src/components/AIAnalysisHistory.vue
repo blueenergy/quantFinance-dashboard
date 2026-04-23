@@ -73,8 +73,16 @@
             <div class="detail-item" v-for="block in detailBlocks" :key="block.key">
               <strong>{{ block.title }}:</strong>
               <template v-if="block.type === 'levels'">
-                <p>支撑位: {{ selectedItem.analysis?.support_level || '暂无' }}</p>
-                <p>阻力位: {{ selectedItem.analysis?.resistance_level || '暂无' }}</p>
+                <p>支撑位(释义): {{ selectedItem.analysis?.support_level || '暂无' }}</p>
+                <p>阻力位(释义): {{ selectedItem.analysis?.resistance_level || '暂无' }}</p>
+                <div v-if="selectedItem.analysis?.risk_price_levels" class="system-risk-levels">
+                  <p style="margin-top:0.5rem"><strong>系统参考价(程序计算)</strong></p>
+                  <p v-if="selectedItem.analysis.risk_price_levels.reference_close != null">基准收盘: {{ selectedItem.analysis.risk_price_levels.reference_close }}</p>
+                  <p v-if="selectedItem.analysis.risk_price_levels.atr_14 != null">ATR(14): {{ selectedItem.analysis.risk_price_levels.atr_14 }}</p>
+                  <p v-if="selectedItem.analysis.risk_price_levels.stop_loss != null">参考止损: {{ selectedItem.analysis.risk_price_levels.stop_loss }}</p>
+                  <p v-if="selectedItem.analysis.risk_price_levels.take_profit_1 != null">参考止盈一: {{ selectedItem.analysis.risk_price_levels.take_profit_1 }}</p>
+                  <p v-if="selectedItem.analysis.risk_price_levels.take_profit_2 != null">参考止盈二: {{ selectedItem.analysis.risk_price_levels.take_profit_2 }}</p>
+                </div>
               </template>
               <template v-else>
                 <p>{{ block.get(selectedItem) }}</p>
@@ -93,8 +101,16 @@
   </div>
 </template>
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, inject } from 'vue'
 import axios from 'axios'
+import { getAnalysisTaskDetail } from '../api/analysisTasks'
+
+// Navigation-intent injection (provided by App.vue)
+const navigationIntent = inject('navigationIntent', null)
+const clearNavigationIntent = inject('clearNavigationIntent', () => {})
+
+// Task types that this component handles
+const HISTORY_TYPES = ['deep_analysis', 'limit_up_analysis', 'limit_up_feedback', 'broken_limit_up_feedback']
 
 // Static label maps - 只保留真正需要翻译的标签
 const adviceLabels = { buy: '买入', hold: '持有', sell: '卖出' }
@@ -167,6 +183,7 @@ async function loadHistory() {
           risk_level: analysis.risk_level,
           support_level: analysis.support_level,
           resistance_level: analysis.resistance_level,
+          risk_price_levels: analysis.risk_price_levels,
           confidence_score: analysis.confidence_score,
           key_points: analysis.key_points || []
         }
@@ -193,7 +210,45 @@ if (typeof window !== 'undefined') {
   })
 }
 
-onMounted(loadHistory)
+onMounted(async () => {
+  await loadHistory()
+
+  const intent = navigationIntent?.value
+  if (intent && HISTORY_TYPES.includes(intent.type) && intent.taskId) {
+    try {
+      const raw = await getAnalysisTaskDetail(intent.taskId)
+      const taskMeta = raw?.task_meta || {}
+      const baseResult = raw?.base_result || {}
+      // deep_analysis stores { analysis: { technical_analysis, investment_advice, ... } }
+      const analysis = baseResult?.analysis || baseResult || {}
+      const historyItem = {
+        id: taskMeta.task_id || intent.taskId,
+        stock_code: taskMeta.symbol || intent.symbol || '未知',
+        stock_name: taskMeta.stock_name || '',
+        provider: taskMeta.provider || 'task-center',
+        model: taskMeta.model || '',
+        created_at: taskMeta.created_at || taskMeta.completed_at || '',
+        analysis: {
+          technical_analysis: analysis.technical_analysis,
+          long_term_forecast: analysis.long_term_forecast,
+          mid_term_forecast: analysis.mid_term_forecast,
+          short_term_forecast: analysis.short_term_forecast,
+          investment_advice: analysis.investment_advice,
+          risk_level: analysis.risk_level,
+          support_level: analysis.support_level,
+          resistance_level: analysis.resistance_level,
+          confidence_score: analysis.confidence_score,
+          key_points: analysis.key_points || []
+        }
+      }
+      selectedItem.value = historyItem
+    } catch (e) {
+      console.warn('[AIAnalysisHistory] failed to load task for navigation:', e)
+    } finally {
+      clearNavigationIntent()
+    }
+  }
+})
 </script>
 
 <style scoped>

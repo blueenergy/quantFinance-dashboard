@@ -195,6 +195,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { pollPortfolioTask } from '../api/portfolio'
+import { getAnalysisTaskDetail } from '../api/analysisTasks'
 
 const props = defineProps({
   type: {
@@ -209,6 +210,10 @@ const props = defineProps({
   getLatestApi: {
     type: Function,
     required: true
+  },
+  initialTaskId: {
+    type: String,
+    default: null
   }
 })
 
@@ -341,8 +346,29 @@ function getActionColor(action) {
   return 'grey'
 }
 
-onMounted(() => {
-  loadLatestAnalysis()
+onMounted(async () => {
+  if (props.initialTaskId) {
+    try {
+      const raw = await getAnalysisTaskDetail(props.initialTaskId)
+      const baseResult = raw?.base_result || {}
+      // portfolio_analysis result is nested under 'analysis' key
+      const taskAnalysis = baseResult?.analysis || baseResult
+      if (taskAnalysis) {
+        analysis.value = taskAnalysis
+        ladderDate.value = raw?.task_meta?.data_date || ''
+        provider.value = raw?.task_meta?.provider || ''
+        model.value = raw?.task_meta?.model || ''
+        latestAnalysisTime.value = raw?.task_meta?.completed_at || ''
+        analyzed.value = true
+        dialog.value = true
+      }
+    } catch (e) {
+      console.warn('[AnalysisCard] failed to load initial task:', e)
+      loadLatestAnalysis()
+    }
+  } else {
+    loadLatestAnalysis()
+  }
 })
 </script>
 

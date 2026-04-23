@@ -120,9 +120,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, inject } from 'vue'
 import axios from 'axios'
 import EtfChart from '../components/EtfChart.vue'
+import { getAnalysisTaskDetail } from '../api/analysisTasks'
+
+// Navigation-intent injection
+const navigationIntent = inject('navigationIntent', null)
+const clearNavigationIntent = inject('clearNavigationIntent', () => {})
 
 const PAGE_SIZE = 2000
 
@@ -218,8 +223,40 @@ function loadMore() {
   fetchList({ append: true })
 }
 
-onMounted(() => {
-  fetchList({ append: false })
+onMounted(async () => {
+  await fetchList({ append: false })
+
+  const intent = navigationIntent?.value
+  if (intent && intent.type === 'etf_analysis' && intent.symbol) {
+    try {
+      // Find and select the ETF by symbol
+      const res = await axios.get('/api/etf/list', { params: { q: intent.symbol, limit: 30 } })
+      const pick = _pickEtfRow(res.data.data, intent.symbol)
+      if (pick) {
+        // Set ETF without triggering fetchLatestAnalysis (we'll load a specific task)
+        selectedEtf.value = pick
+        chartRecords.value = []
+        try {
+          const kline = await axios.get(`/api/etf/${pick.ts_code}/kline?limit=250`)
+          if (kline.data.success) chartRecords.value = kline.data.data
+        } catch (_) { /* non-fatal */ }
+      }
+      // Load the specific task's analysis result
+      if (intent.taskId) {
+        const raw = await getAnalysisTaskDetail(intent.taskId)
+        const baseResult = raw?.base_result || {}
+        // etf_analysis result may be nested under 'analysis' or flat
+        const etfAnalysis = baseResult?.analysis || baseResult
+        if (etfAnalysis && (etfAnalysis.actionable_score != null || etfAnalysis.core_logic)) {
+          analysisResult.value = etfAnalysis
+        }
+      }
+    } catch (e) {
+      console.warn('[EtfView] failed to handle etf_analysis navigation intent:', e)
+    } finally {
+      clearNavigationIntent()
+    }
+  }
 })
 
 function _normTs(s) {
