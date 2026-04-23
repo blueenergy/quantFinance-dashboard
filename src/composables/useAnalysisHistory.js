@@ -18,10 +18,9 @@ export function useAnalysisHistory() {
       // 登录状态下从后端获取
       try {
         const token = localStorage.getItem('access_token')
-        // 使用 params 对象而不是 URL 字符串，确保客户端验证可以检测到 symbol
         const resp = await axios.get('/api/analysis-history', {
           headers: { Authorization: `Bearer ${token}` },
-          params: { symbol }  // 明确使用 params 对象
+          params: { symbol }
         })
         console.log(`[loadHistory] API 响应:`, resp.data)
         const raw = resp.data?.data || []
@@ -50,55 +49,8 @@ export function useAnalysisHistory() {
     }
   }
 
-  async function addHistory(symbol, result, provider, model, stock_name) {
-    if (isAuthenticated?.value) {
-      // 登录状态下保存到后端
-      try {
-        const token = localStorage.getItem('access_token')
-        const base = result?.analysis ? result.analysis : (result || {})
-        const analysisPayload = { ...base }
-        if (!analysisPayload.symbol) analysisPayload.symbol = symbol
-        const resolvedName = stock_name || analysisPayload.stock_name || symbol
-        if (!analysisPayload.stock_name) analysisPayload.stock_name = resolvedName
-        await axios.post('/api/analysis-history', {
-          symbol,
-          stock_name: resolvedName,
-          analysis_result: {
-            analysis: analysisPayload,
-            provider,
-            model
-          },
-          provider,
-          model,
-          timestamp: new Date().toISOString()
-        }, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        await loadHistory(symbol)
-      } catch (e) {}
-    } else {
-      // 未登录保存到本地
-      if (!analysisHistory.value[symbol]) analysisHistory.value[symbol] = []
-      const base = result?.analysis ? result.analysis : (result || {})
-      const analysisPayload = { ...base }
-      if (!analysisPayload.symbol) analysisPayload.symbol = symbol
-      const resolvedName = stock_name || analysisPayload.stock_name || symbol
-      if (!analysisPayload.stock_name) analysisPayload.stock_name = resolvedName
-      analysisHistory.value[symbol].unshift({
-        symbol,
-        analysis: analysisPayload,
-        analysis_result: { analysis: analysisPayload, provider, model },
-        stock_name: resolvedName,
-        timestamp: new Date().toISOString()
-      })
-      analysisHistory.value[symbol] = analysisHistory.value[symbol].slice(0, 10)
-      localStorage.setItem('analysisHistory', JSON.stringify(analysisHistory.value))
-    }
-  }
-
   return {
     analysisHistory,
     loadHistory,
-    addHistory
   }
 }
