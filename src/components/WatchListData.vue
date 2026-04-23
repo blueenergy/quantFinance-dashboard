@@ -192,7 +192,7 @@ import { searchStocks } from '../api/stock'
 
 const emit = defineEmits(['select-chart'])
 const { isAuthenticated, currentUser } = useAuth()
-const { analysisHistory, loadHistory, addHistory } = useAnalysisHistory()
+const { analysisHistory, loadHistory } = useAnalysisHistory()
 
 const inputSymbol = ref('')
 const watchList = ref([])
