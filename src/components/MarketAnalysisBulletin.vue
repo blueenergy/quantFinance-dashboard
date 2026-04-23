@@ -68,6 +68,10 @@
         <div class="market-outlook">
           <h4>🔮 市场展望</h4>
           <p>{{ analysis.outlook }}</p>
+          <p v-if="analysis.nextTradingDays?.length" class="next-trading-days">
+            <span class="next-trading-days__label">后续 A 股交易日（交易所日历）</span>
+            <span class="next-trading-days__dates">{{ analysis.nextTradingDays.join('、') }}</span>
+          </p>
         </div>
         
         <div class="risk-alert" v-if="analysis.riskLevel !== 'low'">
@@ -140,6 +144,9 @@ async function fetchLatestAnalysis() {
           '外围市场保持稳定，人民币汇率企稳'
         ],
         outlook: response.outlook || '短期内市场可能延续震荡格局，建议关注结构性机会。',
+        nextTradingDays: Array.isArray(response.next_trading_days)
+          ? response.next_trading_days
+          : [],
         riskLevel: response.riskLevel || 'medium',
         riskNote: response.riskNote || '注意控制仓位，分散投资风险。',
         industry_signals: response.industry_signals || null,
@@ -532,6 +539,28 @@ onMounted(() => {
 .key-points li {
   margin-bottom: 8px;
   color: #4a5568;
+}
+
+.next-trading-days {
+  margin: 12px 0 0 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+  color: #4a5568;
+  line-height: 1.5;
+}
+
+.next-trading-days__label {
+  display: block;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 4px;
+}
+
+.next-trading-days__dates {
+  font-variant-numeric: tabular-nums;
 }
 
 .risk-alert {
