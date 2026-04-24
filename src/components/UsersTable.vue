@@ -34,6 +34,12 @@
               :disabled="user.username === currentUser?.username"
             >{{ user.is_active ? '禁用' : '激活' }}</button>
             <button @click="emitDetail(user)" class="btn-base btn-sm btn-gradient-blue">详情</button>
+            <button
+              v-if="user.is_active && !user.last_login"
+              @click="emitReminder(user)"
+              class="btn-base btn-sm btn-gradient-orange"
+              title="发送登录提醒邮件"
+            >📧 提醒</button>
           </td>
         </tr>
       </tbody>
@@ -48,11 +54,13 @@ const props = defineProps({
   currentUser: { type: Object, default: null },
   formatDate: { type: Function, required: true }
 })
-const emit = defineEmits(['toggle-status','view-detail'])
+const emit = defineEmits(['toggle-status','view-detail','send-reminder'])
 const emitToggle = (u) => emit('toggle-status', u)
 const emitDetail = (u) => emit('view-detail', u)
+const emitReminder = (u) => emit('send-reminder', u)
 </script>
 
 <style scoped>
 .empty-msg { padding:12px; font-size:13px; color: var(--color-muted); }
+.btn-gradient-orange { background: linear-gradient(135deg, #f6d365 0%, #fd7043 100%); color: #fff; }
 </style>

@@ -100,7 +100,17 @@
             placeholder="搜索用户名、邮箱或姓名..."
             class="search-input"
           >
+          <button @click="sendBulkReminder" class="btn-base btn-gradient-blue" style="margin-left:10px;white-space:nowrap">
+            📧 批量提醒未登录用户
+          </button>
         </div>
+      </div>
+      <div v-if="reminderResult" class="reminder-result" :class="reminderResult.success ? 'reminder-ok' : 'reminder-err'">
+        {{ reminderResult.message }}
+        <span v-if="reminderResult.data && reminderResult.data.failed > 0" style="margin-left:8px;font-size:12px;opacity:0.8">
+          （{{ reminderResult.data.failed }} 封失败：{{ reminderResult.data.failed_users.map(u => u.username).join('、') }}）
+        </span>
+        <button @click="reminderResult = null" style="margin-left:10px;background:none;border:none;cursor:pointer;font-size:14px">✕</button>
       </div>
       <UsersTable
         :users="users"
@@ -108,6 +118,7 @@
         :format-date="formatDate"
         @toggle-status="toggleUserStatus"
         @view-detail="viewUserDetail"
+        @send-reminder="sendUserReminder"
       />
       <Pagination v-if="usersPagination" :page="usersPagination.page" :total-pages="usersPagination.total_pages" @change="loadUsers" />
     </div>
@@ -218,6 +229,9 @@ export default {
       loginLogs: [],
       logsPagination: null,
       showSuccessOnly: false,
+
+      // 未登录提醒
+      reminderResult: null,
       
       // 管理员日志
       adminLogs: [],
@@ -356,6 +370,43 @@ export default {
     closeUserDetail() {
       this.selectedUser = null
       this.selectedUserStats = null
+    },
+
+    // 批量发送登录提醒
+    async sendBulkReminder() {
+      if (!confirm('将向所有已审批但从未登录过的用户发送登录提醒邮件，确定继续吗？')) return
+      try {
+        this.loading = true
+        this.reminderResult = null
+        const response = await axios.post('/api/admin/users/notify-never-logged-in')
+        this.reminderResult = response.data
+      } catch (error) {
+        this.reminderResult = {
+          success: false,
+          message: error.response?.data?.detail || '批量提醒发送失败，请检查 SMTP 配置',
+          data: null
+        }
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // 单个用户发送登录提醒
+    async sendUserReminder(user) {
+      try {
+        this.loading = true
+        this.reminderResult = null
+        const response = await axios.post(`/api/admin/users/${user.id}/send-reminder`)
+        this.reminderResult = response.data
+      } catch (error) {
+        this.reminderResult = {
+          success: false,
+          message: error.response?.data?.detail || `向 ${user.username} 发送提醒失败`,
+          data: null
+        }
+      } finally {
+        this.loading = false
+      }
     },
     
     // 加载登录日志
@@ -632,6 +683,25 @@ export default {
 
 .search-input::placeholder {
   color: #6b7280;
+}
+
+.reminder-result {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.reminder-ok {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #16a34a;
+}
+.reminder-err {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #dc2626;
 }
 
 /* 数据表格样式 - 蓝白专业设计 */
