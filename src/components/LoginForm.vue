@@ -3,6 +3,13 @@
     <div class="login-form">
       <h2>{{ isLogin ? '用户登录' : '用户注册' }}</h2>
       
+      <div v-if="isLogin && registerInfo" class="register-info" role="status">
+        {{ registerInfo }}
+        <p class="activate-help">
+          <a href="/activate">没收到开通邮件？点此重发</a>
+        </p>
+      </div>
+      
       <!-- 忘记密码模式 -->
       <form v-if="isForgotPassword" @submit.prevent="handleForgotPassword">
         <div class="form-group">
@@ -130,6 +137,8 @@ export default {
     const success = ref('')
     const confirmPassword = ref('')
     const forgotEmail = ref('')
+    /** 注册成功切到登录后显示的提示 */
+    const registerInfo = ref('')
 
     const formData = reactive({
       username: '',
@@ -150,6 +159,7 @@ export default {
 
     const toggleMode = () => {
       isLogin.value = !isLogin.value
+      registerInfo.value = ''
       resetForm()
     }
 
@@ -275,7 +285,8 @@ export default {
         } else {
           // 注册成功，切换到登录模式
           error.value = ''
-          alert('注册成功！您的账户正在等待管理员审批，审批通过后即可登录。')
+          registerInfo.value =
+            '注册成功。我们已向您的邮箱发送开通链接，您也可等待管理员审批后再登录。如未收到邮件，请查垃圾箱或改日重试。'
           isLogin.value = true
           resetForm()
         }
@@ -290,6 +301,7 @@ export default {
     return {
       isLogin,
       isForgotPassword,
+      registerInfo,
       loading,
       error,
       success,
@@ -331,6 +343,19 @@ export default {
   color: #333;
   font-size: 24px;
 }
+
+.register-info {
+  background: #e8f5e9;
+  color: #1b5e20;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #a5d6a7;
+}
+.activate-help { margin: 10px 0 0; font-size: 13px; }
+.activate-help a { color: #0d47a1; }
 
 .form-group {
   margin-bottom: 20px;

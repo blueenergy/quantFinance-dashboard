@@ -1,8 +1,13 @@
 <template>
   <v-app id="app">
+    <!-- 注册后邮件内「开通」链接：/activate?token=... -->
+    <AccountActivate
+      v-if="isAccountActivateMode"
+      :token="accountActivateToken"
+    />
     <!-- 重置密码页面 -->
-    <ResetPassword 
-      v-if="isResetPasswordMode" 
+    <ResetPassword
+      v-else-if="isResetPasswordMode"
       :token="resetToken"
       @done="handleResetDone"
     />
@@ -311,6 +316,7 @@ import LoginForm from './components/LoginForm.vue'
 import UserAvatar from './components/UserAvatar.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
 import WatchListData from './components/WatchListData.vue'
+import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
 import EtfView from './views/EtfView.vue'
 import DataPulse from './components/DataPulse.vue'
@@ -464,7 +470,9 @@ function clearActiveTabCache() {
   }
 }
 
-// 密码重置相关状态
+// 注册邮件开通、密码重置
+const isAccountActivateMode = ref(false)
+const accountActivateToken = ref('')
 const isResetPasswordMode = ref(false)
 const resetToken = ref('')
 
@@ -1032,6 +1040,17 @@ function handleResetDone() {
 onMounted(async () => {
   // 检查是否是密码重置URL
   const urlParams = new URLSearchParams(window.location.search)
+  if (window.location.pathname === '/activate') {
+    const t = urlParams.get('token')
+    if (t) {
+      isAccountActivateMode.value = true
+      accountActivateToken.value = t
+    } else {
+      isAccountActivateMode.value = true
+      accountActivateToken.value = ''
+    }
+    return
+  }
   const resetTokenParam = urlParams.get('token')
   if (resetTokenParam && window.location.pathname === '/reset-password') {
     isResetPasswordMode.value = true
