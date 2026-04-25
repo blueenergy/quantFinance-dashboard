@@ -197,7 +197,7 @@
             <div class="config-list">
               <div 
                 v-for="(config, index) in aiConfigs" 
-                :key="config.id"
+                :key="`ai-cfg-${index}-${config.id || 'na'}`"
                 :class="['config-item', { active: config.id === activeAIConfigId }]"
               >
                 <div class="config-info">
