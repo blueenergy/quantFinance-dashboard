@@ -69,6 +69,18 @@
           </div>
         </div>
 
+        <div
+          v-if="klineData.length && !klineLoading"
+          class="kline-info"
+          :title="klineInfoTitle"
+        >
+          <span>最新 <strong class="d">{{ klineInfoDate }}</strong></span>
+          <span v-if="klineInfoPct != null" :class="pctClass(klineInfoPct)">涨跌 {{ klineInfoPct > 0 ? '+' : '' }}{{ klineInfoPct.toFixed(2) }}%</span>
+          <span v-if="klineInfoChg != null" :class="pctClass(klineInfoChg)">涨跌额 {{ klineInfoChg > 0 ? '+' : '' }}{{ formatNum2(klineInfoChg) }}</span>
+          <span v-if="klineInfoFloat != null" title="流通市值（数据为万元，已换算显示）">流通 {{ formatMvWan(klineInfoFloat) }}</span>
+          <span v-if="klineInfoTotal != null" title="总市值（数据为万元，已换算显示）">总市值 {{ formatMvWan(klineInfoTotal) }}</span>
+        </div>
+
         <div class="chart-box" ref="chartBoxRef">
           <div v-if="klineLoading" class="overlay">加载 K 线…</div>
           <div v-else-if="klineError" class="overlay err">{{ klineError }}</div>
@@ -131,6 +143,67 @@ const crumb2 = computed(() => (selectedL2.value ? (selectedL2.value.name || sele
 const crumb3 = computed(() => (selectedL3.value ? (selectedL3.value.name || selectedL3.value.index_code) : ''))
 const chartTitle = computed(() => activeCode.value)
 
+/** 最新一根 K 线，用于图上方摘要（与 sw_daily 字段名一致：pct_change/change 为 % / 点；float_mv、total_mv 为万元，见 Tushare 文档） */
+const lastKline = computed(() => {
+  const arr = klineData.value
+  if (!arr.length) return null
+  return arr[arr.length - 1]
+})
+const klineInfoDate = computed(() => fmtAxis(lastKline.value?.trade_date) || '—')
+const klineInfoPct = computed(() => toNumOrNull(lastKline.value?.pct_change))
+const klineInfoChg = computed(() => toNumOrNull(lastKline.value?.change))
+const klineInfoFloat = computed(() => toNumOrNull(lastKline.value?.float_mv))
+const klineInfoTotal = computed(() => toNumOrNull(lastKline.value?.total_mv))
+const klineInfoTitle = computed(
+  () => '最新交易日行情摘要；鼠标悬停 K 线可查看每根 K 的成交量、成交额、涨跌幅与市值。'
+)
+
+function toNumOrNull (v) {
+  if (v == null || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/** 万元 → 万 / 亿 中文（与常见行情软件习惯一致） */
+function formatMvWan (wan) {
+  if (wan == null || !Number.isFinite(Number(wan))) return '—'
+  const w = Number(wan)
+  if (w >= 1e4) {
+    return `${(w / 1e4).toFixed(2)} 亿`
+  }
+  if (w >= 1) {
+    return `${w.toFixed(0)} 万`
+  }
+  return w.toFixed(2)
+}
+
+/** 成交额 Tushare 为千元，转为「亿元」展示 */
+function formatAmountQianYuan (q) {
+  if (q == null || !Number.isFinite(Number(q))) return '—'
+  const yi = Number(q) / 1e5
+  if (Math.abs(yi) >= 0.01) return `${yi.toFixed(2)} 亿`
+  return `${(Number(q) / 1e2).toFixed(0)} 万`
+}
+
+function formatVolShow (v) {
+  if (v == null || !Number.isFinite(Number(v))) return '—'
+  const x = Number(v)
+  if (x >= 1e4) return `${(x / 1e4).toFixed(2)} 万手`
+  return `${x.toFixed(0)} 手`
+}
+
+function formatNum2 (n) {
+  if (n == null || !Number.isFinite(Number(n))) return '—'
+  return Number(n).toFixed(2)
+}
+
+function pctClass (n) {
+  if (n == null || !Number.isFinite(n)) return ''
+  if (n > 0) return 'q-up'
+  if (n < 0) return 'q-dn'
+  return 'q-eq'
+}
+
 function ymdFromInput (s) {
   if (!s) return ''
   return String(s).replace(/-/g, '')
@@ -165,6 +238,12 @@ function ensureChart () {
   return chartInstance
 }
 
+function barUpDnColor (o, c) {
+  const open = Number(o) || 0
+  const close = Number(c) || 0
+  return close >= open ? '#b71c1c' : '#1b5e20'
+}
+
 async function drawCandles () {
   if (!klineData.value.length) {
     if (chartInstance) chartInstance.clear()
@@ -189,26 +268,230 @@ async function drawCandles () {
     const h = Number(r.high) != null ? Number(r.high) : Math.max(o, cl)
     return [o, cl, l, h]
   })
-  c.setOption({
+  const pcts = data.map((r) => {
+    const p = toNumOrNull(r.pct_change)
+    return p == null || !Number.isFinite(p) ? null : p
+  })
+  const hasPct = pcts.some((p) => p != null)
+  const vols = data.map((r) => toNumOrNull(r.vol))
+  const hasVol = vols.some((v) => v != null)
+  const amounts = data.map((r) => toNumOrNull(r.amount))
+  const hasAmt = amounts.some((a) => a != null)
+  const volData = hasVol
+    ? vols.map((v, i) => {
+        const d = data[i]
+        return {
+          value: v == null || !Number.isFinite(v) ? 0 : v,
+          itemStyle: { color: barUpDnColor(d.open, d.close) }
+        }
+      })
+    : []
+  const amountData = hasAmt
+    ? amounts.map((v) => (v == null || !Number.isFinite(v) ? 0 : v))
+    : []
+
+  const hasSub = hasVol || hasAmt
+  /** 双副图：量+额；单副图：只显示有数据的那一个 */
+  const subBoth = hasVol && hasAmt
+  const xAxis0 = {
+    type: 'category',
+    data: times,
+    scale: true,
+    gridIndex: 0,
+    axisLine: { lineStyle: { color: '#666' } }
+  }
+  const xAxisH = (gi) => ({
+    type: 'category',
+    data: times,
+    gridIndex: gi,
+    scale: true,
+    axisLine: { show: false },
+    axisLabel: { show: false },
+    axisTick: { show: false },
+    splitLine: { show: false }
+  })
+  // 有副图时：grid1=量（若有）、grid2=额或第二指标；单副时 bottom 的 x 轴在 grid1
+  const xAxisSubBottom = (gi) => ({
+    type: 'category',
+    data: times,
+    gridIndex: gi,
+    scale: true,
+    axisLine: { lineStyle: { color: '#666' } }
+  })
+  // 有副图：主图 + 成交量 + 成交额；无副图仅 K+可选涨跌幅线。无涨跌幅列时不挂空「涨跌%」Y 轴，副图 y 轴从 1 起编号。
+  const buildGridsXAxesYAxes = () => {
+    if (!hasSub) {
+      return {
+        grid: [{ left: 48, right: hasPct ? 56 : 20, top: 36, bottom: 56 }],
+        xAxis: { type: 'category', data: times, axisLine: { lineStyle: { color: '#666' } } },
+        yAxis: hasPct
+          ? [
+              { type: 'value', scale: true, splitLine: { lineStyle: { color: '#333' } } },
+              { type: 'value', scale: true, name: '涨跌%', nameTextStyle: { color: '#888' }, position: 'right', splitLine: { show: false } }
+            ]
+          : { type: 'value', scale: true, splitLine: { lineStyle: { color: '#333' } } },
+        xZoomIdx: [0]
+      }
+    }
+    if (subBoth) {
+      const yMain = hasPct
+        ? [
+            { type: 'value', scale: true, gridIndex: 0, splitLine: { lineStyle: { color: '#333' } } },
+            { type: 'value', scale: true, name: '涨跌%', nameTextStyle: { color: '#888' }, position: 'right', gridIndex: 0, splitLine: { show: false } }
+          ]
+        : [{ type: 'value', scale: true, gridIndex: 0, splitLine: { lineStyle: { color: '#333' } } }]
+      return {
+        grid: [
+          { left: 50, right: hasPct ? 56 : 20, top: 32, height: '48%' },
+          { left: 50, right: 20, top: '60%', height: '14%' },
+          { left: 50, right: 20, top: '76%', height: '12%' }
+        ],
+        xAxis: [xAxis0, xAxisH(1), xAxisSubBottom(2)],
+        yAxis: [
+          ...yMain,
+          { type: 'value', name: '量(手)', nameTextStyle: { color: '#888' }, scale: true, gridIndex: 1, splitLine: { show: true, lineStyle: { color: '#2a2a2a' } } },
+          { type: 'value', name: '额(亿)', nameTextStyle: { color: '#888' }, scale: true, gridIndex: 2, splitLine: { show: true, lineStyle: { color: '#2a2a2a' } } }
+        ],
+        xZoomIdx: [0, 1, 2]
+      }
+    }
+    // 仅量或仅额：两格
+    const yMainSingle = hasPct
+      ? [
+          { type: 'value', scale: true, gridIndex: 0, splitLine: { lineStyle: { color: '#333' } } },
+          { type: 'value', scale: true, name: '涨跌%', nameTextStyle: { color: '#888' }, position: 'right', gridIndex: 0, splitLine: { show: false } }
+        ]
+      : [{ type: 'value', scale: true, gridIndex: 0, splitLine: { lineStyle: { color: '#333' } } }]
+    return {
+      grid: [
+        { left: 50, right: hasPct ? 56 : 20, top: 32, height: '55%' },
+        { left: 50, right: 20, top: '64%', height: '22%' }
+      ],
+      xAxis: [xAxis0, xAxisSubBottom(1)],
+      yAxis: [
+        ...yMainSingle,
+        { type: 'value', name: hasVol ? '量(手)' : '额(亿)', nameTextStyle: { color: '#888' }, scale: true, gridIndex: 1, splitLine: { show: true, lineStyle: { color: '#2a2a2a' } } }
+      ],
+      xZoomIdx: [0, 1]
+    }
+  }
+  const gxy = buildGridsXAxesYAxes()
+  // 主图：价轴 0 + 可选 涨跌% 1；有涨跌% 时副图从 y 下标 2 起，否则从 1 起
+  const yVol = hasSub && hasVol ? (hasPct ? 2 : 1) : 0
+  const yAmt = hasSub && hasAmt
+    ? (subBoth ? (hasPct ? 3 : 2) : (hasPct ? 2 : 1))
+    : 0
+  const xVol = hasSub ? 1 : 0
+  const xAmt = hasSub && subBoth ? 2 : (hasSub && hasAmt ? 1 : 0)
+  const option = {
     backgroundColor: 'transparent',
     textStyle: { color: '#ccc' },
-    grid: { left: 48, right: 20, top: 36, bottom: 56 },
-    xAxis: { type: 'category', data: times, axisLine: { lineStyle: { color: '#666' } } },
-    yAxis: { type: 'value', scale: true, splitLine: { lineStyle: { color: '#333' } } },
-    dataZoom: [{ type: 'inside' }, { type: 'slider', height: 18, bottom: 6 }],
-    series: [{
-      name: 'K',
-      type: 'candlestick',
-      data: ohlc,
-      itemStyle: {
-        color: '#ef5350',
-        color0: '#26a69a',
-        borderColor: '#ef5350',
-        borderColor0: '#26a69a'
+    axisPointer: { link: [{ xAxisIndex: 'all' }], type: 'cross' },
+    grid: gxy.grid,
+    xAxis: gxy.xAxis,
+    yAxis: gxy.yAxis,
+    dataZoom: hasSub
+      ? [
+          { type: 'inside', xAxisIndex: gxy.xZoomIdx },
+          { type: 'slider', xAxisIndex: gxy.xZoomIdx, height: 20, bottom: 4, borderColor: '#444' }
+        ]
+      : [{ type: 'inside' }, { type: 'slider', height: 18, bottom: 6 }],
+    series: (() => {
+      const s = [
+        {
+          name: 'K线',
+          type: 'candlestick',
+          xAxisIndex: 0,
+          yAxisIndex: 0,
+          data: ohlc,
+          itemStyle: {
+            color: '#ef5350',
+            color0: '#26a69a',
+            borderColor: '#ef5350',
+            borderColor0: '#26a69a'
+          }
+        }
+      ]
+      if (hasPct) {
+        s.push({
+          name: '涨跌幅%',
+          type: 'line',
+          xAxisIndex: 0,
+          yAxisIndex: 1,
+          data: pcts,
+          showSymbol: false,
+          lineStyle: { width: 1, color: '#9ccc65' },
+          connectNulls: true,
+          z: 5
+        })
       }
-    }],
-    tooltip: { trigger: 'axis' }
-  }, true)
+      if (hasSub && hasVol) {
+        s.push({
+          name: '成交量',
+          type: 'bar',
+          xAxisIndex: xVol,
+          yAxisIndex: yVol,
+          data: volData,
+          barMaxWidth: 6
+        })
+      }
+      if (hasSub && hasAmt) {
+        s.push({
+          name: '成交额(千元→亿轴)',
+          type: 'bar',
+          xAxisIndex: xAmt,
+          yAxisIndex: yAmt,
+          // 与右轴标「亿」：千元 / 1e5 = 亿
+          data: amountData.map((q) => (q == null ? 0 : q / 1e5)),
+          itemStyle: { color: 'rgba(100, 181, 246, 0.65)' },
+          barMaxWidth: 6
+        })
+      }
+      if (!hasSub) {
+        s[0].xAxisIndex = 0
+        s[0].yAxisIndex = 0
+      }
+      return s
+    })(),
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' },
+      confine: true,
+      formatter (params) {
+        if (!params || !params.length) return ''
+        const idx = params[0].dataIndex
+        const d = data[idx]
+        if (!d) return ''
+        const t = params.map((p) => {
+          if (p.seriesName === 'K线' && p.data && p.data.length >= 4) {
+            const [o, c, l, h] = p.data
+            return `开 ${formatNum2(o)}　收 ${formatNum2(c)}<br/>低 ${formatNum2(l)}　高 ${formatNum2(h)}`
+          }
+          if (p.seriesName === '涨跌幅%' && p.data != null) {
+            return `涨跌幅 ${Number(p.data).toFixed(2)}%`
+          }
+          if (p.seriesName === '成交量') {
+            const v = p.data
+            const val = v && typeof v === 'object' && 'value' in v ? v.value : v
+            return `成交 ${formatVolShow(val)}`
+          }
+          if (p.seriesName && p.seriesName.indexOf('成交额') === 0) {
+            const y = toNumOrNull(d.amount)
+            return `成交额 ${formatAmountQianYuan(y)}（Tushare 为千元）`
+          }
+          return ''
+        }).filter(Boolean)
+        const extra = []
+        if (d.pct_change != null) extra.push(`涨跌幅(字段) ${formatNum2(d.pct_change)}%`)
+        if (d.change != null) extra.push(`涨跌额 ${(Number(d.change) > 0 ? '+' : '')}${formatNum2(d.change)}`)
+        if (d.float_mv != null) extra.push(`流通市值 ${formatMvWan(d.float_mv)}`)
+        if (d.total_mv != null) extra.push(`总市值 ${formatMvWan(d.total_mv)}`)
+        const body = t.concat(extra).filter(Boolean).join('<br/>')
+        return `<div class="k-tip"><strong>${fmtAxis(d.trade_date)}</strong><br/>${body}</div>`
+      }
+    }
+  }
+  c.setOption(option, true)
   c.resize()
 }
 
@@ -392,11 +675,25 @@ onBeforeUnmount(() => {
 .dates label { color: #aaa; font-size: 12px; margin-right: 0.5rem; }
 .d-inp { background: #222; color: #ddd; border: 1px solid #444; border-radius: 4px; }
 .sm { font-size: 11px; }
+.kline-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  font-size: 12px;
+  color: #aaa;
+  margin: 0.25rem 0 0.35rem;
+  min-height: 1.4em;
+}
+.kline-info .d { color: #e0e0e0; font-weight: 600; }
+.kline-info .q-up { color: #e57373; }
+.kline-info .q-dn { color: #81c784; }
+.kline-info .q-eq { color: #9e9e9e; }
 .chart-box {
   position: relative;
   width: 100%;
-  height: 420px;
-  min-height: 400px;
+  height: 500px;
+  min-height: 480px;
   background: #121212;
   border: 1px solid #2a2a2a;
   border-radius: 6px;
@@ -411,9 +708,9 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   min-width: 100px;
-  min-height: 380px;
+  min-height: 440px;
 }
-.chart-box > :deep(.echarts) { width: 100% !important; height: 100% !important; min-height: 380px; }
+.chart-box > :deep(.echarts) { width: 100% !important; height: 100% !important; min-height: 440px; }
 .overlay {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   color: #aaa; background: rgba(0,0,0,0.35);
