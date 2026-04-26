@@ -270,16 +270,15 @@ const stocksWithoutData = computed(() => {
   return watchList.value.filter(symbol => !dataSymbols.includes(symbol))
 })
 
-// 监听登录状态变化
+// 勿使用 immediate: true，否则与下方 onMounted 重复触发 handleUserLogin（双份请求）；
+// 且默认 Tab 为自选股时，未进该页也会因误挂载而拉数（见 App.vue activeTab 初始化）
 watch(isAuthenticated, async (newValue, oldValue) => {
   if (newValue && !oldValue) {
-    // 用户刚登录，尝试迁移本地数据并加载服务器数据
     await handleUserLogin()
   } else if (!newValue && oldValue) {
-    // 用户登出，切换到本地模式
     await handleUserLogout()
   }
-}, { immediate: true })
+})
 
 // 处理用户登录
 async function handleUserLogin() {

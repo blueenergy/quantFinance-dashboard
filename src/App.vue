@@ -480,7 +480,8 @@ const currentIndex = ref(0)
 const watchlist = ref([]) 
 const chartRecords = ref([])
 const moneyFlowRecords = ref([])
-const activeTab = ref('watchlist')
+// 不要默认 'watchlist'，否则在 onMounted 用缓存恢复 Tab 前会先挂载 WatchListData 并全量拉自选股
+const activeTab = ref(readActiveTabCache() ?? '')
 const stockName = ref('')
 const chartSymbol = computed(() => 
   watchlist.value.length > 0 ? watchlist.value[currentIndex.value] : ''
@@ -595,6 +596,41 @@ watch(adminTabs, (tabs) => {
   }
 }, { deep: true })
 
+/** 图表区 prev/next 与自选股 ref；仅切入「自选股 / 图表」Tab 时拉取，避免登录首屏就请求 */
+let _appChartWatchlistInFlight = null
+async function loadAppChartWatchlist() {
+  if (!localStorage.getItem('access_token') || !isAuthenticated.value) {
+    return
+  }
+  if (_appChartWatchlistInFlight) {
+    return _appChartWatchlistInFlight
+  }
+  _appChartWatchlistInFlight = (async () => {
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await axios.get('/api/user/watchlist-stocks', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.data && res.data.success && Array.isArray(res.data.data)) {
+        watchlist.value = res.data.data.map((stock) => stock.symbol)
+      } else {
+        watchlist.value = ['000001', '000002', '000003']
+      }
+    } catch (e) {
+      console.error('获取自选股失败:', e)
+      watchlist.value = ['000001', '000002', '000003']
+    } finally {
+      _appChartWatchlistInFlight = null
+    }
+  })()
+  return _appChartWatchlistInFlight
+}
+
+watch(activeTab, (t) => {
+  if (t === 'chart' || t === 'watchlist') {
+    void loadAppChartWatchlist()
+  }
+})
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
@@ -1025,6 +1061,7 @@ function handleLogout() {
   serverVisibleTabIds.value = null
   navPolicyResolved.value = false
   window.currentSourceInfo = null
+  watchlist.value = []
   logout()
   console.log('用户已登出')
 }
@@ -1061,23 +1098,6 @@ onMounted(async () => {
   // 必须验证 token 获取正确的用户信息，不能依赖 localStorage 中的缓存
   if (!localStorage.getItem('access_token')) return
 
-  const fetchWatchlist = async () => {
-    try {
-      const token = localStorage.getItem('access_token')
-      const res = await axios.get('/api/user/watchlist-stocks', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      if (res.data && res.data.success && Array.isArray(res.data.data)) {
-        watchlist.value = res.data.data.map(stock => stock.symbol)
-      } else {
-        watchlist.value = ['000001', '000002', '000003']
-      }
-    } catch (e) {
-      console.error('获取自选股失败:', e)
-      watchlist.value = ['000001', '000002', '000003']
-    }
-  }
-
   // 必须先验证 token，获取正确的用户信息
   const tokenValid = await validateToken()
   if (!tokenValid) {
@@ -1085,8 +1105,7 @@ onMounted(async () => {
     return
   }
   await loadNavigationTabs()
-  // 现在 user.value 包含正确的服务器数据
-  await fetchWatchlist()
+  // 自选股列表由 watch(activeTab) 在进入「自选股 / 图表」时通过 loadAppChartWatchlist 拉取
 
   // 根据用户角色设置默认界面
   const savedTab = readActiveTabCache()
@@ -1108,6 +1127,11 @@ onMounted(async () => {
   } else {
     const tabs = adminTabs.value
     activeTab.value = tabs.length ? tabs[0].id : 'watchlist'
+  }
+
+  // 恢复 Tab 后若正在图表/自选股，拉一次（activeTab 未变时 watch 不会触发）
+  if (activeTab.value === 'chart' || activeTab.value === 'watchlist') {
+    await loadAppChartWatchlist()
   }
 })
 
