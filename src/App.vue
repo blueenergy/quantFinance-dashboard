@@ -161,6 +161,16 @@
             </template>
           </Suspense>
 
+          <!-- 申万行业指数 K 线 -->
+          <Suspense v-if="activeTab === 'shenwan-index'">
+            <template #default>
+              <ShenwanIndustryIndex />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">申万行业指数加载中...</div>
+            </template>
+          </Suspense>
+
           <!-- 在内容区域添加 -->
           <Suspense v-if="activeTab === 'ranking'">
             <template #default>
@@ -345,6 +355,7 @@ const LimitUpLadder = defineAsyncComponent(() => import('./views/LimitUpLadder.v
 const SectorConceptAnalysis = defineAsyncComponent(() => import('./components/SectorConceptAnalysis.vue'))
 const HotStockAnalysis = defineAsyncComponent(() => import('./components/HotStockAnalysis.vue'))
 const EarningsHunter = defineAsyncComponent(() => import('./views/EarningsHunter.vue'))
+const ShenwanIndustryIndex = defineAsyncComponent(() => import('./views/ShenwanIndustryIndex.vue'))
 const ChatPanel = defineAsyncComponent(() => import('./components/ChatPanel.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
@@ -546,6 +557,7 @@ const adminTabs = computed(() => {
     { id: 'hot-stock', name: '🔥 热股分析' },
     { id: 'etf', name: '💰 ETF淘金' },
     { id: 'earnings-hunter', name: '🎯 财报猎手' },
+    { id: 'shenwan-index', name: '📊 申万行业指数' },
     { id: 'strategy-pool', name: '🎯 策略股池' },
     { id: 'ranking', name: '金榜' },
     { id: 'watchlist', name: '自选股' },
