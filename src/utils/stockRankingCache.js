@@ -14,8 +14,8 @@ export function djb2Hash(s) {
   return (h >>> 0).toString(36)
 }
 
+/** Deep-clone ranking rows for localStorage. Avoid structuredClone: Vue refs may hold Proxies BigInt etc. */
 function cloneRankings(arr) {
-  if (typeof structuredClone === 'function') return structuredClone(arr)
   return JSON.parse(JSON.stringify(arr))
 }
 
