@@ -198,13 +198,32 @@
       </div>
     </div>
 
-    <!-- ✅ 评分详情弹窗 (保持原有功能并增强) -->
-    <div v-if="showScoreDetail" class="modal-overlay" @click="closeScoreDetail">
-      <div class="modal-content score-detail-modal" @click.stop ref="scoreDetailModalRef">
-  <h4 class="flex-row-center gap-md wrap">
-          <span>{{ selectedStock?.symbol }} - {{ selectedStock?.name }} 评分详情</span>
-          <span v-if="scoreDetailCategory" class="category-chip">{{ translateCategory(scoreDetailCategory) }}</span>
-        </h4>
+    <!-- ✅ 评分详情弹窗 (保持原有功能并增强；支持全屏阅读，交互对齐连板天梯 AI 思考过程) -->
+    <div
+      v-if="showScoreDetail"
+      class="modal-overlay score-detail-modal-overlay"
+      :class="{ 'score-detail-modal-overlay--raised': scoreDetailMaximized }"
+      @click="onScoreDetailOverlayClick"
+    >
+      <div
+        class="modal-content score-detail-modal"
+        :class="{ 'score-detail-modal--maximized': scoreDetailMaximized }"
+        @click.stop
+        ref="scoreDetailModalRef"
+      >
+        <div class="score-detail-modal-toolbar">
+          <h4 class="score-detail-modal-title flex-row-center gap-md wrap">
+            <span>{{ selectedStock?.symbol }} - {{ selectedStock?.name }} 评分详情</span>
+            <span v-if="scoreDetailCategory" class="category-chip">{{ translateCategory(scoreDetailCategory) }}</span>
+          </h4>
+          <button
+            type="button"
+            class="btn-base btn-sm btn-gradient-teal score-detail-fullscreen-btn"
+            @click.stop="scoreDetailMaximized = !scoreDetailMaximized"
+          >
+            {{ scoreDetailMaximized ? '退出全屏' : '全屏' }}
+          </button>
+        </div>
         <div class="score-detail-content">
           <div v-if="scoreDetailCategory === 'composite'" class="detail-inline-block">
             <div class="detail-block">
@@ -236,7 +255,7 @@
             </button>
           </div>
         </div>
-  <button @click="closeScoreDetail" class="btn-base btn-md btn-gradient-gray">关闭</button>
+        <button type="button" @click="closeScoreDetail" class="btn-base btn-md btn-gradient-gray score-detail-close-footer">关闭</button>
       </div>
     </div>
   </div>
@@ -434,6 +453,7 @@ const pickingForSymbol = ref('')
 
 // Score detail modal
 const showScoreDetail = ref(false)
+const scoreDetailMaximized = ref(false)
 const selectedStock = ref(null)
 
 // 🆕 添加沪深300相关状态变量
@@ -1454,7 +1474,16 @@ function formatCategoryBadgeTitle(key) {
   return `已选 ${sel} / 总 ${total}`
 }
 
+function onScoreDetailOverlayClick() {
+  if (scoreDetailMaximized.value) {
+    scoreDetailMaximized.value = false
+    return
+  }
+  closeScoreDetail()
+}
+
 function closeScoreDetail() {
+  scoreDetailMaximized.value = false
   showScoreDetail.value = false
   selectedStock.value = null
 }
@@ -1481,6 +1510,19 @@ watch(perStockStrategies, () => {
     fetchScoreDetails(selectedStock.value, 'composite')
   }
 }, { deep: true })
+
+// 评分详情：Esc 先退出全屏再关闭弹窗（与全屏阅读一致）
+watch(showScoreDetail, (open, _prev, onCleanup) => {
+  if (!open) return
+  const onKey = (e) => {
+    if (e.key !== 'Escape') return
+    e.preventDefault()
+    if (scoreDetailMaximized.value) scoreDetailMaximized.value = false
+    else closeScoreDetail()
+  }
+  window.addEventListener('keydown', onKey)
+  onCleanup(() => window.removeEventListener('keydown', onKey))
+})
 
 // Load HS300 constituents automatically when user switches quick-select tab to hs300
 watch(selectedCategory, async (val) => {
@@ -2085,8 +2127,66 @@ const star50SelectedCount = computed(() => {
 
 
 /* ✅ 评分详情模态框增强样式 */
+.score-detail-modal-overlay--raised {
+  z-index: 2990;
+  background-color: rgba(0, 0, 0, 0.78);
+}
+
 .score-detail-modal {
   max-width: 500px;
+}
+
+.score-detail-modal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.score-detail-modal-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.score-detail-fullscreen-btn {
+  flex-shrink: 0;
+}
+
+.score-detail-modal--maximized {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(96vw, 1400px);
+  height: min(92vh, 960px);
+  max-width: none !important;
+  max-height: none !important;
+  z-index: 3000;
+  margin: 0;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
+  border-radius: 10px;
+}
+
+.score-detail-modal--maximized .score-detail-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 12px 0;
+}
+
+.score-detail-modal--maximized .score-detail-close-footer {
+  flex-shrink: 0;
+  margin-top: 4px;
 }
 
 .score-detail-content {
