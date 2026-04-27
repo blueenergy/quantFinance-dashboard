@@ -177,11 +177,15 @@
         </div>
       </div>
     </div>
+
+    <v-snackbar v-model="snackbar" :color="snackbarColor" :timeout="snackbarTimeout" location="top" multi-line>
+      {{ snackbarMessage }}
+    </v-snackbar>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
 import axios from 'axios'
 import { useAuth } from '../services/auth.js'
 import { watchlistService } from '../services/watchlist.js'
@@ -199,6 +203,10 @@ const watchList = ref([])
 const stocksData = ref([])
 const loading = ref(false)
 const deepAnalyzingStock = ref('')
+const snackbar = ref(false)
+const snackbarMessage = ref('')
+const snackbarColor = ref('success')
+const snackbarTimeout = ref(5000)
 const migrationComplete = ref(false)
 const showHistoryModal = ref(false)
 const historySymbol = ref('')
@@ -530,6 +538,106 @@ function selectChart(symbol) {
   emit('select-chart', symbol)
 }
 
+// 获取股票名称
+function getStockName(symbol) {
+  const stockData = stocksData.value.find((stock) => stock.symbol === symbol)
+  return stockData?.name || symbol
+}
+
+/** 用于提示：有名称时「名称（代码）」，否则仅代码 */
+function formatStockLabel(symbol) {
+  const name = getStockName(symbol)
+  if (name && name !== symbol) {
+    return `${name}（${symbol}）`
+  }
+  return symbol
+}
+
+const activeDeepTaskPolls = new Map()
+
+function showAppSnackbar(message, color = 'success', timeout = 5000) {
+  snackbarMessage.value = message
+  snackbarColor.value = color
+  snackbarTimeout.value = timeout
+  snackbar.value = true
+}
+
+/**
+ * 轮询任务直到完成/失败/超时，完成后用 Snackbar 提醒（带股票名与代码）。
+ */
+function startDeepAnalysisTaskPoll(taskId, symbol) {
+  if (activeDeepTaskPolls.has(taskId)) {
+    clearInterval(activeDeepTaskPolls.get(taskId))
+  }
+  const label = formatStockLabel(symbol)
+  const maxAttempts = 200
+  let attempts = 0
+
+  const run = async () => {
+    attempts += 1
+    if (attempts > maxAttempts) {
+      const i = activeDeepTaskPolls.get(taskId)
+      if (i) clearInterval(i)
+      activeDeepTaskPolls.delete(taskId)
+      showAppSnackbar(`「${label}」分析等待超时，请稍后在「历史分析」中查看。`, 'warning', 6000)
+      return
+    }
+    const token = localStorage.getItem('access_token')
+    try {
+      const { data } = await axios.get(`/api/analyze/task/${taskId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const st = (data.status || '').toLowerCase()
+      if (st === 'pending' || st === 'processing') {
+        return
+      }
+      const intervalId = activeDeepTaskPolls.get(taskId)
+      if (intervalId) clearInterval(intervalId)
+      activeDeepTaskPolls.delete(taskId)
+
+      if (st === 'completed') {
+        const ok = data.success !== false
+        if (ok) {
+          showAppSnackbar(`「${label}」深度分析已完成，可在历史分析中查看。`, 'success', 6000)
+        } else {
+          showAppSnackbar(`「${label}」深度分析已结束，但结果异常，请查看历史分析。`, 'warning', 6000)
+        }
+      } else if (st === 'completed_with_parse_error') {
+        showAppSnackbar(`「${label}」深度分析已完成，解析异常，请查看历史分析。`, 'warning', 6000)
+      } else if (st === 'failed') {
+        const err = data.error || '分析失败'
+        showAppSnackbar(`「${label}」深度分析失败：${err}`, 'error', 8000)
+      } else {
+        showAppSnackbar(`「${label}」分析状态：${st}`, 'info', 5000)
+      }
+    } catch (e) {
+      if (e.response?.status === 401) {
+        const i = activeDeepTaskPolls.get(taskId)
+        if (i) clearInterval(i)
+        activeDeepTaskPolls.delete(taskId)
+        return
+      }
+      if (e.response?.status === 404) {
+        const i = activeDeepTaskPolls.get(taskId)
+        if (i) clearInterval(i)
+        activeDeepTaskPolls.delete(taskId)
+        showAppSnackbar(`无法查询「${label}」的任务状态。`, 'error', 5000)
+      }
+    }
+  }
+
+  const intervalId = setInterval(run, 3000)
+  activeDeepTaskPolls.set(taskId, intervalId)
+  run()
+}
+
+onUnmounted(() => {
+  for (const id of activeDeepTaskPolls.values()) {
+    clearInterval(id)
+  }
+  activeDeepTaskPolls.clear()
+})
+
 // 深度分析股票
 async function deepAnalyzeStock(symbol) {
   if (!isAuthenticated?.value) {
@@ -554,9 +662,19 @@ async function deepAnalyzeStock(symbol) {
     
     if (response.data && response.data.success) {
       const remaining = response.data.quota_remaining
-      alert(`✅ 深度分析任务已提交！\n\n剩余配额: ${remaining}\n排队位置: ${response.data.position_in_queue}\n\nAI正在进行深度思考（约需1-3分钟），请稍候点击"历史分析"查看结果。`)
+      const pos = response.data.position_in_queue
+      const label = formatStockLabel(symbol)
+      showAppSnackbar(
+        `已提交「${label}」深度分析。剩余配额 ${remaining}，排队约 ${pos} 位。分析完成后会在此提醒。`,
+        'success',
+        7000
+      )
+      const taskId = response.data.task_id
+      if (taskId) {
+        startDeepAnalysisTaskPoll(taskId, symbol)
+      }
     } else {
-      alert(`提交失败: ${response.data.message || '未知错误'}`)
+      showAppSnackbar(`提交失败: ${response.data?.message || '未知错误'}`, 'error', 5000)
     }
     
   } catch (error) {
@@ -565,11 +683,11 @@ async function deepAnalyzeStock(symbol) {
     const detail = error.response?.data?.detail
     
     if (status === 403) {
-      alert(`🚫 提交失败: ${detail || '配额不足或权限不够'}`)
+      showAppSnackbar(`提交失败: ${detail || '配额不足或权限不够'}`, 'error', 6000)
     } else if (status === 401) {
-      alert('登录已过期，请重新登录')
+      showAppSnackbar('登录已过期，请重新登录', 'error', 5000)
     } else {
-      alert(`❌ 系统错误: ${detail || error.message || '请稍后重试'}`)
+      showAppSnackbar(`系统错误: ${detail || error.message || '请稍后重试'}`, 'error', 5000)
     }
   } finally {
     deepAnalyzingStock.value = ''
@@ -597,12 +715,6 @@ function openHistoryModal(symbol) {
 function closeHistoryModal() {
   showHistoryModal.value = false
   historySymbol.value = ''
-}
-
-// 获取股票名称
-function getStockName(symbol) {
-  const stockData = stocksData.value.find(stock => stock.symbol === symbol)
-  return stockData?.name || symbol
 }
 
 // 获取单个股票的最新数据
