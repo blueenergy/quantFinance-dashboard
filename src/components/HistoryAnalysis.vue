@@ -15,6 +15,12 @@
         <span class="history-model">🧠 模型: <b>{{ item.model || 'unknown' }}</b></span>
       </div>
       <div class="history-body">
+        <div v-if="item.analysis?.quant_score_snapshot_tag || item.analysis?.quant_score_cross_check">
+          <span class="label">量化快照:</span> {{ item.analysis?.quant_score_snapshot_tag || '—' }}
+        </div>
+        <div v-if="item.analysis?.quant_score_cross_check">
+          <span class="label">分数与叙述对照:</span> {{ item.analysis?.quant_score_cross_check }}
+        </div>
         <div><span class="label">📊 技术面分析:</span> {{ item.analysis?.technical_analysis || '无' }}</div>
         <div><span class="label">⏳ 长期走势预测:</span> {{ item.analysis?.long_term_forecast || '无' }}</div>
         <div><span class="label">⏳ 中期走势预测:</span> {{ item.analysis?.mid_term_forecast || '无' }}</div>

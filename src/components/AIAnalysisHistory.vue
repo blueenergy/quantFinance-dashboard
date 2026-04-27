@@ -107,6 +107,8 @@ const selectedItem = ref(null)
 
 // Detail block spec (reduces template repetition)
 const detailBlocks = [
+  { key: 'qtag', title: '量化快照标记', get: (it) => it.analysis?.quant_score_snapshot_tag || '暂无' },
+  { key: 'qcross', title: '分数与叙述对照 (stock_scores)', get: (it) => it.analysis?.quant_score_cross_check || '暂无' },
   { key: 'technical', title: '技术分析', get: (it) => it.analysis?.technical_analysis || '暂无' },
   { key: 'long', title: '长期预测', get: (it) => it.analysis?.long_term_forecast || '暂无' },
   { key: 'mid', title: '中期预测', get: (it) => it.analysis?.mid_term_forecast || '暂无' },
@@ -159,6 +161,8 @@ async function loadHistory() {
         model: item.model || analysisResult.model || 'unknown',
         created_at: item.created_at || item.timestamp || new Date().toISOString(),
         analysis: {
+          quant_score_snapshot_tag: analysis.quant_score_snapshot_tag,
+          quant_score_cross_check: analysis.quant_score_cross_check,
           technical_analysis: analysis.technical_analysis,
           long_term_forecast: analysis.long_term_forecast,
           mid_term_forecast: analysis.mid_term_forecast,
