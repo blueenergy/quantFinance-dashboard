@@ -140,7 +140,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import axios from 'axios'
 import EtfChart from '../components/EtfChart.vue'
 
@@ -266,6 +266,7 @@ function _pickEtfRow(rows, queryRaw) {
   if (!q) return null
   const exact = rowsOk.find((r) => _normTs(r.ts_code) === q)
   if (exact) return exact
+  // 北交所 ETF 很少；6 位数字时最后尝试 .BJ，多数时候不会命中
   if (/^\d{6}$/.test(q)) {
     const sh = rowsOk.find((r) => _normTs(r.ts_code) === `${q}.SH`)
     if (sh) return sh
@@ -298,8 +299,9 @@ async function switchToEtfFromSharedSearch() {
   }
 }
 
-async function loadEtfKline (tsCode) {
+async function loadEtfKline (tsCode, tfForRequest) {
   if (!tsCode) return
+  const tf = tfForRequest != null && tfForRequest !== '' ? tfForRequest : klineTf.value
   if (klineAbort) {
     try { klineAbort.abort() } catch (e) { /* noop */ }
   }
@@ -309,7 +311,7 @@ async function loadEtfKline (tsCode) {
   klineLoading.value = true
   try {
     const res = await axios.get(`${etfApiBase}/etf/${tsCode}/kline`, {
-      params: { limit: 250, tf: klineTf.value },
+      params: { limit: 250, tf },
       signal,
     })
     if (myGen !== klineLoadGen) return
@@ -345,10 +347,25 @@ const selectEtf = async (etf) => {
   fetchLatestAnalysis(etf.ts_code)
 }
 
-watch([selectedEtf, klineTf], async ([etf]) => {
-  if (!etf?.ts_code) return
-  await loadEtfKline(etf.ts_code)
+/** 单次调度：同 tick 内同时改 selectedEtf + klineTf 时只产生一次监听器触发，避免连打两次 K 线。 */
+const klineRequestSig = computed(() => {
+  const c = selectedEtf.value?.ts_code
+  if (!c) return null
+  return { tsCode: c, tf: klineTf.value }
 })
+
+watch(
+  klineRequestSig,
+  async (sig) => {
+    if (!sig?.tsCode) {
+      if (klineAbort) {
+        try { klineAbort.abort() } catch (e) { /* noop */ }
+      }
+      return
+    }
+    await loadEtfKline(sig.tsCode, sig.tf)
+  }
+)
 
 const fetchLatestAnalysis = async (symbol) => {
   try {
@@ -401,6 +418,16 @@ const pollTaskStatus = (taskId) => {
     }
   }, 2000)
 }
+
+onBeforeUnmount(() => {
+  if (pollingTimer.value) {
+    clearInterval(pollingTimer.value)
+    pollingTimer.value = null
+  }
+  if (klineAbort) {
+    try { klineAbort.abort() } catch (e) { /* noop */ }
+  }
+})
 </script>
 
 <style scoped>

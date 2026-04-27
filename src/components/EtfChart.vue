@@ -18,7 +18,6 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, computed, nextTick } from 'vue'
-import * as echarts from 'echarts'
 
 const props = defineProps({
   symbol: String,
@@ -47,29 +46,48 @@ const klineCountLabel = computed(() => {
 const containerRef = ref(null)
 const chartWrapperRef = ref(null)
 const chartRef = ref(null)
+/** 懒加载，避免把整包 echarts 打进主 chunk */
+let echarts = null
 let chartInstance = null
+let resizeOb = null
 
-onMounted(() => {
-  if (chartRef.value) {
+async function ensureEchartsAndInit() {
+  if (!chartRef.value) return null
+  if (!echarts) {
+    const mod = await import('echarts')
+    echarts = mod.default || mod
+  }
+  if (!chartInstance) {
     chartInstance = echarts.init(chartRef.value)
-    
-    // Resize observer
-    const resizeOb = new ResizeObserver(() => {
+    resizeOb = new ResizeObserver(() => {
       if (chartInstance) chartInstance.resize()
     })
-    resizeOb.observe(containerRef.value)
-    
-    if (props.records && props.records.length > 0) {
-      drawChart()
+    if (containerRef.value) {
+      resizeOb.observe(containerRef.value)
     }
+  }
+  return chartInstance
+}
+
+onMounted(async () => {
+  await nextTick()
+  if (!chartRef.value) return
+  await ensureEchartsAndInit()
+  if (props.records?.length) {
+    await drawChart()
   }
 })
 
 onBeforeUnmount(() => {
+  if (resizeOb) {
+    try { resizeOb.disconnect() } catch (e) { /* noop */ }
+    resizeOb = null
+  }
   if (chartInstance) {
-    chartInstance.dispose()
+    try { chartInstance.dispose() } catch (e) { /* noop */ }
     chartInstance = null
   }
+  echarts = null
 })
 
 watch(
@@ -88,13 +106,14 @@ watch(
       return
     }
     nextTick(() => {
-      drawChart()
+      void drawChart()
     })
   },
   { deep: true }
 )
 
-function drawChart() {
+async function drawChart() {
+  await ensureEchartsAndInit()
   if (!chartInstance || !props.records.length) return
 
   // Sort data ascending for echarts
