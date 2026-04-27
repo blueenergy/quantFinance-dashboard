@@ -138,6 +138,35 @@ const activeItem = computed(() => selectedL3.value || selectedL2.value || select
 const activeCode = computed(() => activeItem.value?.index_code || '')
 const activeName = computed(() => activeItem.value?.name || '')
 
+/**
+ * 仅当用户已选到「可出 K 线的叶子」时非空，用于请求 /kline、避免在树内点击 L1/L2 时
+ * 用中间层 index_code 反复发请求、又被下一次点击清掉（见 activeItem 仍含 L1/L2 的中间态）。
+ * - 选了 L3 → 用 L3
+ * - 选了 L2 且该支下 L3 已确认加载完且子列表为空 → 叶在 L2
+ * - 仅 L1 且 L2 已确认无子级 → 叶在 L1
+ */
+const klineIndexCode = computed(() => {
+  if (selectedL3.value) {
+    return selectedL3.value.index_code || ''
+  }
+  if (
+    selectedL2.value
+    && !l3Loading.value
+    && l3List.value.length === 0
+  ) {
+    return selectedL2.value.index_code || ''
+  }
+  if (
+    selectedL1.value
+    && !l2Loading.value
+    && l2List.value.length === 0
+    && !selectedL2.value
+  ) {
+    return selectedL1.value.index_code || ''
+  }
+  return ''
+})
+
 const crumb1 = computed(() => selectedL1.value?.name || selectedL1.value?.index_code || '')
 const crumb2 = computed(() => (selectedL2.value ? (selectedL2.value.name || selectedL2.value.index_code) : ''))
 const crumb3 = computed(() => (selectedL3.value ? (selectedL3.value.name || selectedL3.value.index_code) : ''))
@@ -503,7 +532,8 @@ function clearKlineState () {
 }
 
 async function reloadKline () {
-  if (!activeCode.value) {
+  const code = klineIndexCode.value
+  if (!code) {
     clearKlineState()
     return
   }
@@ -512,7 +542,7 @@ async function reloadKline () {
   klineMsg.value = ''
   try {
     const params = {
-      ts_code: activeCode.value,
+      ts_code: code,
       tf: tf.value,
       limit: klineLimit
     }
@@ -607,8 +637,12 @@ function onPickL3 (it) {
   clearKlineState()
 }
 
-watch([tf, activeCode, startD, endD], () => {
-  if (activeCode.value) reloadKline()
+watch([klineIndexCode, tf, startD, endD], () => {
+  if (klineIndexCode.value) {
+    reloadKline()
+  } else {
+    clearKlineState()
+  }
 })
 
 onMounted(() => {
