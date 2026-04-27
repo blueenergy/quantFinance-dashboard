@@ -418,11 +418,10 @@ watch(
 const refreshKey = ref(0) // bump to force computed refresh when needed
 const loadingMessage = ref('')
 const lastUpdateTime = ref('')
-// maxDate used by date inputs: prefer lastUpdateTime when available, otherwise today
-const maxDate = computed(() => {
-  if (lastUpdateTime.value) return lastUpdateTime.value
-  return new Date().toISOString().slice(0, 10)
-})
+// Date picker max: calendar today only. Do not use lastUpdateTime: in "latest per
+// symbol" mode, rows can have different score_date, and the top row's date may be
+// older than dates that still exist in DB, which would incorrectly block the picker.
+const maxDate = computed(() => new Date().toISOString().slice(0, 10))
 // AbortController for cancelling in-flight fetchRankings requests
 const currentRequestController = ref(null)
 
