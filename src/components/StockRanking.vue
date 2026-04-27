@@ -249,12 +249,21 @@ import RankingTable from './RankingTable.vue'
 import axios from 'axios'
 import { getCompositeScore, formatDateDisplay, generateCSV as utilGenerateCSV, deduplicateStocksByLatestDate } from '../utils/scoreUtils.js'
 import { computeDisplayRows } from '../utils/displayRows.js'
+import { loadStockRankingPrefs, saveStockRankingPrefs } from '../utils/stockRankingPrefs.js'
+import {
+  buildStockRankingCacheKey,
+  readStockRankingCache,
+  writeStockRankingCache,
+  scoreDateMatchesRequest,
+} from '../utils/stockRankingCache.js'
 
 const emit = defineEmits(['view-chart'])
 
 // Centralized debug logger (auto disabled in production build)
 const DEBUG = import.meta.env?.DEV === true
 function dlog(...args) { if (DEBUG) { try { console.debug('[StockRanking]', ...args) } catch(e) {} } }
+
+const _srp = loadStockRankingPrefs()
 
 // -------------------------
 // Reactive state (grouped and documented)
@@ -264,16 +273,16 @@ function dlog(...args) { if (DEBUG) { try { console.debug('[StockRanking]', ...a
 // Each item typically contains: { symbol, name, composite_score, score_date, per_date_scores?, per_date_fields?, ... }
 const rankings = ref([])
 const loading = ref(false)
-const displayLimit = ref(30)
+const displayLimit = ref(_srp?.displayLimit ?? 30)
 
 // UI mode & inputs
 // viewMode: one of 'ranking' | 'selected' | 'watchlist'
 // stockInput / stockSuggestions: helpers for the stock input autocomplete
 // selectedStocks: array of selected symbols for 'selected' mode
-const viewMode = ref('ranking') // 'ranking' | 'selected' | 'watchlist'
+const viewMode = ref(_srp?.viewMode ?? 'ranking') // 'ranking' | 'selected' | 'watchlist'
 const stockInput = ref('')
 const stockSuggestions = ref([])
-const selectedStocks = ref([])
+const selectedStocks = ref(_srp?.selectedStocks?.length ? [..._srp.selectedStocks] : [])
 // 评分详情（单类别）
 const scoreDetailCategory = ref(null)
 const scoreDetailData = ref(null)
@@ -348,15 +357,41 @@ function formatDetailValue(v) {
 // selectedDate: single date input (ISO yyyy-mm-dd)
 // selectedDateInput: auxiliary input used when adding to selectedDates
 // selectedDates: array of selected yyyyMMdd strings used for multi-date flattening
-const selectedDate = ref('')
+const selectedDate = ref(_srp?.selectedDate ?? '')
 const selectedDateInput = ref('')
-const selectedDates = ref([])
+const selectedDates = ref(_srp?.selectedDates?.length ? [..._srp.selectedDates] : [])
 
 // Strategy controls
 // rankingStrategy: global strategy used across modes unless a per-stock override is set
 // perStockStrategies: map { SYMBOL: 'balanced'|'aggressive'|'conservative' } for per-symbol overrides
-const rankingStrategy = ref('balanced')
-const perStockStrategies = ref({})
+const rankingStrategy = ref(_srp?.rankingStrategy ?? 'balanced')
+const perStockStrategies = ref(
+  _srp?.perStockStrategies && typeof _srp.perStockStrategies === 'object'
+    ? { ..._srp.perStockStrategies }
+    : {}
+)
+
+let _prefsSaveTimer = null
+function schedulePersistStockRankingPrefs() {
+  clearTimeout(_prefsSaveTimer)
+  _prefsSaveTimer = setTimeout(() => {
+    saveStockRankingPrefs({
+      viewMode: viewMode.value,
+      displayLimit: displayLimit.value,
+      rankingStrategy: rankingStrategy.value,
+      selectedDate: selectedDate.value,
+      selectedDates: [...selectedDates.value],
+      selectedStocks: [...selectedStocks.value],
+      perStockStrategies: { ...perStockStrategies.value },
+    })
+  }, 320)
+}
+
+watch(
+  [viewMode, displayLimit, rankingStrategy, selectedDate, selectedDates, selectedStocks, perStockStrategies],
+  schedulePersistStockRankingPrefs,
+  { deep: true }
+)
 
 // UI helpers / tokens
 // refreshKey: small integer token bumped to force expensive computed properties to re-evaluate
@@ -476,9 +511,8 @@ function getAuthHeaders() {
 
 // ✅ 主数据获取方法 - 根据模式调用不同API
 async function fetchRankings() {
-  loading.value = true
-  try {
   dlog('fetchRankings start viewMode=', viewMode.value)
+  try {
     // cancel any previous in-flight request
     try {
       if (currentRequestController.value) {
@@ -500,6 +534,41 @@ async function fetchRankings() {
       const dd = String(d.getDate()).padStart(2, '0')
       dateParam = `${yyyy}${mm}${dd}`
     }
+
+    function symbolsForIndexMode(vm) {
+      switch (vm) {
+        case 'hs300':
+          return (hs300Stocks.value || []).map((s) => s.symbol)
+        case 'csi500':
+          return (csi500Stocks.value || []).map((s) => s.symbol)
+        case 'a500':
+          return (a500Stocks.value || []).map((s) => s.symbol)
+        case 'star50':
+          return (star50Stocks.value || []).map((s) => s.symbol)
+        default:
+          return []
+      }
+    }
+
+    const cacheKey = buildStockRankingCacheKey({
+      viewMode: viewMode.value,
+      displayLimit: displayLimit.value,
+      rankingStrategy: rankingStrategy.value,
+      dateParam,
+      selectedDates: selectedDates.value,
+      selectedStocks: selectedStocks.value,
+      watchlistSymbols: watchlist.value,
+      indexSymbols: symbolsForIndexMode(viewMode.value),
+    })
+    const cached = readStockRankingCache(cacheKey)
+    let hadWarmCache = false
+    if (cached && scoreDateMatchesRequest(dateParam, cached.primaryScoreDate)) {
+      rankings.value = JSON.parse(JSON.stringify(cached.rankings))
+      if (cached.lastUpdateTime) lastUpdateTime.value = cached.lastUpdateTime
+      hadWarmCache = true
+    }
+    loading.value = !hadWarmCache
+
     switch (viewMode.value) {
       case 'ranking': {
         loadingMessage.value = `加载前 ${displayLimit.value} 名股票评分...`
@@ -691,6 +760,24 @@ async function fetchRankings() {
       } else {
         lastUpdateTime.value = new Date().toLocaleDateString()
       }
+    }
+
+    const writeKey = buildStockRankingCacheKey({
+      viewMode: viewMode.value,
+      displayLimit: displayLimit.value,
+      rankingStrategy: rankingStrategy.value,
+      dateParam,
+      selectedDates: selectedDates.value,
+      selectedStocks: selectedStocks.value,
+      watchlistSymbols: watchlist.value,
+      indexSymbols: symbolsForIndexMode(viewMode.value),
+    })
+    if (writeKey && rankings.value.length > 0) {
+      writeStockRankingCache(writeKey, {
+        rankings: rankings.value,
+        lastUpdateTime: lastUpdateTime.value,
+        primaryScoreDate: rankings.value[0]?.score_date,
+      })
     }
   } catch (error) {
     // Ignore abort errors triggered by new requests
