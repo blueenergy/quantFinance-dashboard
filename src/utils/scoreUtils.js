@@ -25,6 +25,13 @@ export function escapeCSV(cell) {
   return '"' + s.replace(/"/g, '""') + '"'
 }
 
+function formatCsvReturnSincePct(v) {
+  if (v == null || Number.isNaN(Number(v))) return ''
+  const n = Number(v)
+  const sign = n > 0 ? '+' : ''
+  return `${sign}${n.toFixed(2)}%`
+}
+
 export function generateCSV(data, selectedDates, getEffectiveStrategyFor, getCompositeScoreFn) {
   // data: array of stock records
   // selectedDates: array of yyyyMMdd strings
@@ -33,8 +40,16 @@ export function generateCSV(data, selectedDates, getEffectiveStrategyFor, getCom
 
   let headers = ['排名', '股票代码', '股票名称']
   const includePerDate = Array.isArray(selectedDates) && selectedDates.length > 0
-  if (includePerDate) selectedDates.forEach(d => headers.push(`总分(${formatDateDisplay(d)})`))
-  else headers = headers.concat(['总分', '周期评分', '成长评分', '基本面评分', '价值评分', '技术面评分', '资金流评分'])
+  if (includePerDate) {
+    selectedDates.forEach(d => {
+      headers.push(`总分(${formatDateDisplay(d)})`)
+      headers.push(`评分日以来涨跌(${formatDateDisplay(d)})`)
+    })
+  } else {
+    headers = headers.concat([
+      '总分', '周期评分', '成长评分', '基本面评分', '价值评分', '技术面评分', '资金流评分', '评分日以来涨跌',
+    ])
+  }
 
   const rows = data.map((stock, index) => {
     const base = [index + 1, stock.symbol, stock.name || '']
@@ -43,6 +58,8 @@ export function generateCSV(data, selectedDates, getEffectiveStrategyFor, getCom
         const stockStrat = getEffectiveStrategyFor(stock.symbol)
         const score = stock.per_date_scores?.[d]?.[stockStrat] ?? ''
         base.push(score)
+        const pr = stock.per_date_return_since?.[d]
+        base.push(formatCsvReturnSincePct(pr?.return_since_score_pct))
       })
       return base
     }
@@ -54,7 +71,8 @@ export function generateCSV(data, selectedDates, getEffectiveStrategyFor, getCom
       stock.fundamental_score,
       stock.value_score,
       stock.technical_score,
-      stock.money_flow_score
+      stock.money_flow_score,
+      formatCsvReturnSincePct(stock.return_since_score_pct),
     ])
   })
 

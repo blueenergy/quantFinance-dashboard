@@ -6,6 +6,7 @@
         <th class="th-symbol">股票代码</th>
         <th class="th-name">股票名称</th>
         <th class="th-date">日期</th>
+        <th class="th-return-since" title="未复权收盘；分红送转可能影响长区间">评分日以来涨跌</th>
   <th class="th-score">总分</th>
         <th class="th-cycle">周期</th>
         <th class="th-growth">成长</th>
@@ -31,6 +32,15 @@
         </td>
         <td class="td-date">
           <span>{{ formatDateDisplay(row.display_date || row.score_date) }}</span>
+        </td>
+        <td class="td-return-since">
+          <div class="return-since-cell">
+            <span
+              :class="returnSinceClass(row.display_return_since_score_pct)"
+              :title="returnSinceTooltip(row)"
+            >{{ formatReturnSince(row.display_return_since_score_pct) }}</span>
+            <span v-if="returnSinceDateLine(row)" class="return-since-dates">{{ returnSinceDateLine(row) }}</span>
+          </div>
         </td>
         <td class="td-score" @click="onShowScore(row._origin || row)">
           <div class="score-badge-wrapper">
@@ -109,6 +119,45 @@ const getRowClass = props.getRowClass
 const isInWatchlist = props.isInWatchlist
 const viewMode = props.viewMode
 const displayRows = props.displayRows
+
+function formatReturnSince(v) {
+  if (v == null || Number.isNaN(Number(v))) return '—'
+  const n = Number(v)
+  const sign = n > 0 ? '+' : ''
+  return `${sign}${n.toFixed(2)}%`
+}
+
+function returnSinceClass(v) {
+  if (v == null || Number.isNaN(Number(v))) return 'return-since-na'
+  const n = Number(v)
+  if (n > 0) return 'return-since-up'
+  if (n < 0) return 'return-since-down'
+  return 'return-since-flat'
+}
+
+function returnSinceDateLine(row) {
+  const b = row.display_price_base_trade_date
+  const l = row.display_price_latest_trade_date
+  if (!b && !l) return ''
+  const fb = b ? formatDateDisplay(b) : '—'
+  const fl = l ? formatDateDisplay(l) : '—'
+  return `${fb} → ${fl}`
+}
+
+function returnSinceTooltip(row) {
+  const v = row.display_return_since_score_pct
+  const b = row.display_price_base_trade_date
+  const l = row.display_price_latest_trade_date
+  const fb = b ? formatDateDisplay(b) : null
+  const fl = l ? formatDateDisplay(l) : null
+  const pctText =
+    v != null && !Number.isNaN(Number(v))
+      ? `涨跌幅 ${formatReturnSince(v)}（未复权收盘）`
+      : '暂无有效涨跌幅'
+  const dateText =
+    fb || fl ? `基准交易日 ${fb || '—'}，最新日线 ${fl || '—'}` : '无基准/最新日线日期'
+  return `${pctText}。${dateText}。分红送转可能影响长区间对比。`
+}
 </script>
 
 <style scoped>
@@ -147,6 +196,7 @@ const displayRows = props.displayRows
 }
 .th-symbol { background: linear-gradient(135deg, #3498db, #2980b9); }
 .th-name { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+.th-return-since { background: linear-gradient(135deg, #546e7a, #37474f); min-width: 128px; }
 .th-score { background: linear-gradient(135deg, #e67e22, #d35400); }
 .th-cycle { background: linear-gradient(135deg, #1abc9c, #16a085); }
 .th-growth { background: linear-gradient(135deg, #43e97b, #38f9d7); }
@@ -216,6 +266,27 @@ const displayRows = props.displayRows
 .money-score { background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; }
 .growth-score { background: linear-gradient(135deg, #43e97b, #38f9d7); color: #0a2a0a; }
 .value-score { background: linear-gradient(135deg, #ffd700, #ffb300); color: #7a4a00; }
+
+/* A 股习惯：涨红跌绿 */
+.return-since-up { color: #c62828; font-weight: 700; }
+.return-since-down { color: #2e7d32; font-weight: 700; }
+.return-since-flat { color: #616161; font-weight: 600; }
+.return-since-na { color: #9e9e9e; font-weight: 500; }
+
+.return-since-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  line-height: 1.25;
+}
+.return-since-dates {
+  font-size: 11px;
+  font-weight: 500;
+  color: #5c6c7c;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
 
 .btn-chart, .btn-watch, .btn-remove {
   border:none; cursor:pointer; font-weight:600; letter-spacing:.5px;

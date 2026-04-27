@@ -34,4 +34,54 @@ describe('computeDisplayRows', () => {
     const rows = computeDisplayRows({ rankings, viewMode: 'selected', selectedDates: ['20250918'], rankingStrategy: 'balanced', perStockStrategies: { AAA: 'aggressive' }, getCompositeScore })
     expect(rows[0].display_composite_score).toBe(91)
   })
+
+  it('passes through price base/latest for return-since column', () => {
+    const rankings = [
+      {
+        symbol: '000001.SZ',
+        composite_score: { balanced: 70 },
+        score_date: '20250920',
+        return_since_score_pct: 1.5,
+        price_base_trade_date: '20250918',
+        price_latest_trade_date: '20251001',
+      },
+    ]
+    const rows = computeDisplayRows({
+      rankings,
+      viewMode: 'ranking',
+      selectedDates: [],
+      rankingStrategy: 'balanced',
+      perStockStrategies: {},
+      getCompositeScore,
+    })
+    expect(rows[0].display_price_base_trade_date).toBe('20250918')
+    expect(rows[0].display_price_latest_trade_date).toBe('20251001')
+  })
+
+  it('flattens per_date_return_since price dates in selected mode', () => {
+    const rankings = [
+      {
+        symbol: 'AAA',
+        composite_score: { balanced: 80 },
+        per_date_scores: { '20250918': { balanced: 82 } },
+        per_date_return_since: {
+          '20250918': {
+            return_since_score_pct: 2,
+            price_base_trade_date: '20250910',
+            price_latest_trade_date: '20250925',
+          },
+        },
+      },
+    ]
+    const rows = computeDisplayRows({
+      rankings,
+      viewMode: 'selected',
+      selectedDates: ['20250918'],
+      rankingStrategy: 'balanced',
+      perStockStrategies: {},
+      getCompositeScore,
+    })
+    expect(rows[0].display_price_base_trade_date).toBe('20250910')
+    expect(rows[0].display_price_latest_trade_date).toBe('20250925')
+  })
 })

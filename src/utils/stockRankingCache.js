@@ -4,7 +4,7 @@ export const RANKING_CACHE_MAX_ENTRIES = 25
 export const RANKING_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
 function cacheBlobKey() {
-  return `stockRanking_cache_blob_v1__${getStockRankingPrefsUsername()}`
+  return `stockRanking_cache_blob_v2__${getStockRankingPrefsUsername()}`
 }
 
 /** @param {string} s */

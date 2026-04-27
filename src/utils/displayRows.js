@@ -7,7 +7,13 @@ export function computeDisplayRows({ rankings = [], viewMode = 'ranking', select
 
   if (viewMode !== 'selected' || sDates.length === 0) {
     const strategyKey = rankingStrategy
-    return rv.map(r => ({ ...r, display_composite_score: getCompositeScore(r, strategyKey) }))
+    return rv.map(r => ({
+      ...r,
+      display_composite_score: getCompositeScore(r, strategyKey),
+      display_return_since_score_pct: r.return_since_score_pct ?? null,
+      display_price_base_trade_date: r.price_base_trade_date ?? null,
+      display_price_latest_trade_date: r.price_latest_trade_date ?? null,
+    }))
   }
 
   const rows = []
@@ -25,6 +31,11 @@ export function computeDisplayRows({ rankings = [], viewMode = 'ranking', select
       const copy = { ...r }
       copy.display_date = d
       copy.display_composite_score = score
+      const pr = r.per_date_return_since && r.per_date_return_since[d]
+      copy.display_return_since_score_pct =
+        pr != null && pr.return_since_score_pct != null ? pr.return_since_score_pct : null
+      copy.display_price_base_trade_date = pr?.price_base_trade_date ?? null
+      copy.display_price_latest_trade_date = pr?.price_latest_trade_date ?? null
       if (r.per_date_fields && r.per_date_fields[d]) {
         const f = r.per_date_fields[d]
         copy.cycle_score = f.cycle_score ?? copy.cycle_score
