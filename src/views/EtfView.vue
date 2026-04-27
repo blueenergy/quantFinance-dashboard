@@ -106,13 +106,33 @@
         </div>
 
         <div class="chart-container">
+          <div class="kline-tf-bar">
+            <span class="kline-tf-label">K 线周期</span>
+            <button
+              v-for="opt in klineTfOptions"
+              :key="opt.value"
+              type="button"
+              class="tf-pill"
+              :class="{ on: klineTf === opt.value, busy: klineLoading }"
+              @click="klineTf = opt.value"
+            >
+              {{ opt.label }}
+            </button>
+            <span v-if="klineLoading" class="kline-loading-hint" aria-live="polite">加载中（周/月 K 需聚合较多日线，请稍候）…</span>
+          </div>
           <EtfChart
-            v-if="chartRecords.length > 0"
+            v-if="selectedEtf && (chartRecords.length > 0 || klineLoading)"
+            :key="selectedEtf.ts_code"
             :symbol="selectedEtf.ts_code"
             :name="selectedEtf.name"
+            :tf="klineTf"
+            :loading="klineLoading"
             :records="chartRecords"
           />
-          <div v-else class="skeleton-chart">K线及资金流图表加载中...</div>
+          <div
+            v-else-if="selectedEtf"
+            class="skeleton-chart"
+          >K线及资金流图表加载中...</div>
         </div>
       </div>
     </div>
@@ -120,9 +140,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import EtfChart from '../components/EtfChart.vue'
+
+/** 与 .env 的 VITE_API_BASE 一致时，可直连后端便于排查；默认 /api 走 Vite 代理到 localhost:3001 */
+const etfApiBase = (import.meta.env.VITE_API_BASE || '/api').toString().replace(/\/$/, '') || '/api'
 
 const PAGE_SIZE = 2000
 
@@ -147,6 +170,16 @@ const analysisResult = ref(null)
 const analyzing = ref(false)
 const pollingTimer = ref(null)
 const chartRecords = ref([])
+const klineLoading = ref(false)
+let klineLoadGen = 0
+let klineAbort = null
+
+const klineTf = ref('1d')
+const klineTfOptions = [
+  { value: '1d', label: '日K' },
+  { value: '1w', label: '周K' },
+  { value: '1m', label: '月K' },
+]
 
 const showLoadMore = computed(() => {
   if (searchQuery.value.trim()) return false
@@ -170,7 +203,7 @@ async function fetchList({ append = false } = {}) {
   try {
     const q = searchQuery.value.trim()
     if (q) {
-      const res = await axios.get('/api/etf/list', {
+      const res = await axios.get(`${etfApiBase}/etf/list`, {
         params: { q, limit: 200 },
       })
       etfList.value = res.data.data || []
@@ -178,7 +211,7 @@ async function fetchList({ append = false } = {}) {
       listTotal.value = res.data.count || etfList.value.length
     } else {
       const offset = append ? etfList.value.length : 0
-      const res = await axios.get('/api/etf/list', {
+      const res = await axios.get(`${etfApiBase}/etf/list`, {
         params: {
           sort: 'total_share',
           limit: PAGE_SIZE,
@@ -250,7 +283,7 @@ async function switchToEtfFromSharedSearch() {
   if (!raw || switchingEtf.value) return
   switchingEtf.value = true
   try {
-    const res = await axios.get('/api/etf/list', { params: { q: raw, limit: 30 } })
+    const res = await axios.get(`${etfApiBase}/etf/list`, { params: { q: raw, limit: 30 } })
     const pick = _pickEtfRow(res.data.data, raw)
     if (!pick || !pick.ts_code) {
       alert('未找到该 ETF，请检查代码或名称后重试')
@@ -265,26 +298,61 @@ async function switchToEtfFromSharedSearch() {
   }
 }
 
+async function loadEtfKline (tsCode) {
+  if (!tsCode) return
+  if (klineAbort) {
+    try { klineAbort.abort() } catch (e) { /* noop */ }
+  }
+  klineAbort = new AbortController()
+  const signal = klineAbort.signal
+  const myGen = ++klineLoadGen
+  klineLoading.value = true
+  try {
+    const res = await axios.get(`${etfApiBase}/etf/${tsCode}/kline`, {
+      params: { limit: 250, tf: klineTf.value },
+      signal,
+    })
+    if (myGen !== klineLoadGen) return
+    if (res.data?.success) {
+      chartRecords.value = res.data.data || []
+    } else {
+      chartRecords.value = []
+    }
+  } catch (e) {
+    if (
+      e?.code === 'ERR_CANCELED' ||
+      e?.name === 'CanceledError' ||
+      e?.name === 'AbortError'
+    ) {
+      return
+    }
+    console.error('Failed to fetch ETF K-line data', e)
+    if (myGen === klineLoadGen) {
+      chartRecords.value = []
+    }
+  } finally {
+    if (myGen === klineLoadGen) {
+      klineLoading.value = false
+    }
+  }
+}
+
 const selectEtf = async (etf) => {
   selectedEtf.value = etf
   analysisResult.value = null
   chartRecords.value = []
-
+  klineTf.value = '1d'
   fetchLatestAnalysis(etf.ts_code)
-
-  try {
-    const res = await axios.get(`/api/etf/${etf.ts_code}/kline?limit=250`)
-    if (res.data.success) {
-      chartRecords.value = res.data.data
-    }
-  } catch (e) {
-    console.error('Failed to fetch ETF K-line data', e)
-  }
 }
+
+watch([selectedEtf, klineTf], async ([etf]) => {
+  if (!etf?.ts_code) return
+  await loadEtfKline(etf.ts_code)
+})
 
 const fetchLatestAnalysis = async (symbol) => {
   try {
-    const res = await axios.get(`/api/etf/${symbol}/analysis`)
+    const res = await axios.get(`${etfApiBase}/etf/${symbol}/analysis`)
     if (res.data.success && res.data.analysis) {
       analysisResult.value = res.data.analysis
     }
@@ -298,7 +366,7 @@ const triggerAnalysis = async () => {
 
   analyzing.value = true
   try {
-    const res = await axios.post('/api/etf/analyze', {
+    const res = await axios.post(`${etfApiBase}/etf/analyze`, {
       symbol: selectedEtf.value.ts_code,
       force: true,
     })
@@ -317,7 +385,7 @@ const pollTaskStatus = (taskId) => {
 
   pollingTimer.value = setInterval(async () => {
     try {
-      const res = await axios.get(`/api/etf/task/${taskId}`)
+      const res = await axios.get(`${etfApiBase}/etf/task/${taskId}`)
       if (res.data.status === 'completed') {
         clearInterval(pollingTimer.value)
         analysisResult.value = res.data.analysis
@@ -593,13 +661,65 @@ const pollTaskStatus = (taskId) => {
 }
 
 .chart-container {
+  min-height: 600px;
   height: 600px;
   border: 1px dashed var(--border-color, #ccc);
   border-radius: 8px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   color: #888;
+  box-sizing: border-box;
+  padding: 0.5rem 0.5rem 0.25rem;
+  gap: 0.5rem;
+}
+
+.kline-tf-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  font-size: 12px;
+  color: #666;
+}
+
+.kline-tf-label {
+  margin-right: 0.25rem;
+  color: #888;
+}
+
+.tf-pill {
+  background: #f0f0f0;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  padding: 2px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #333;
+}
+
+.tf-pill.on {
+  background: #e6f7ff;
+  border-color: #1890ff;
+  color: #096dd9;
+  font-weight: 600;
+}
+
+.tf-pill.on.busy {
+  opacity: 0.9;
+}
+
+.kline-loading-hint {
+  color: #1890ff;
+  font-size: 12px;
+  margin-left: 0.25rem;
+}
+
+.chart-container :deep(.unified-chart-container) {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
 }
 
 .loading-state,

@@ -4,32 +4,49 @@
       <div class="stock-info">
         <span class="symbol-badge">{{ props.symbol }}</span>
         <span class="stock-name">{{ props.name || '' }}</span>
-        <span class="data-count">{{ records?.length || 0 }} 天数据</span>
+        <span class="data-count">{{ klineCountLabel }}</span>
       </div>
     </div>
 
     <!-- Main Chart -->
     <div class="chart-main-wrapper" ref="chartWrapperRef">
       <div ref="chartRef" class="chart-canvas"></div>
-      <div v-if="loading" class="chart-overlay loading"><div class="spinner"></div></div>
+      <div v-if="props.loading" class="chart-overlay loading"><div class="spinner"></div></div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, computed, nextTick } from 'vue'
 import * as echarts from 'echarts'
 
 const props = defineProps({
   symbol: String,
   name: String,
+  /** 1d | 1w | 1m — matches API /api/etf/.../kline?tf= */
+  tf: { type: String, default: '1d' },
+  /** True while parent fetches kline (especially weekly / monthly aggregate). */
+  loading: { type: Boolean, default: false },
   records: { type: Array, default: () => [] }
+})
+
+const tfLabel = computed(() => {
+  const t = (props.tf || '1d').toLowerCase()
+  if (t === '1w' || t === 'w') return '周K'
+  if (t === '1m' || t === 'm') return '月K'
+  return '日K'
+})
+
+const klineCountLabel = computed(() => {
+  if (props.loading) {
+    return `加载中… · ${tfLabel.value}`
+  }
+  return `${props.records?.length || 0} 根 · ${tfLabel.value}`
 })
 
 const containerRef = ref(null)
 const chartWrapperRef = ref(null)
 const chartRef = ref(null)
-const loading = ref(false)
 let chartInstance = null
 
 onMounted(() => {
@@ -55,15 +72,33 @@ onBeforeUnmount(() => {
   }
 })
 
-watch(() => props.records, () => {
-  drawChart()
-}, { deep: true })
+watch(
+  () => [props.records, props.loading, props.tf],
+  () => {
+    if (props.loading && (!props.records || !props.records.length)) {
+      if (chartInstance) {
+        try { chartInstance.clear() } catch (e) { /* noop */ }
+      }
+      return
+    }
+    if (!props.records || !props.records.length) {
+      if (chartInstance) {
+        try { chartInstance.clear() } catch (e) { /* noop */ }
+      }
+      return
+    }
+    nextTick(() => {
+      drawChart()
+    })
+  },
+  { deep: true }
+)
 
 function drawChart() {
   if (!chartInstance || !props.records.length) return
-  
+
   // Sort data ascending for echarts
-  // The records from API are descending, so reverse a copy
+  // The records from the API are descending, so reverse a copy
   const dataList = [...props.records].reverse()
   
   const dates = dataList.map(r => r.trade_date)
