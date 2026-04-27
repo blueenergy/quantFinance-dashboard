@@ -171,15 +171,19 @@
             </template>
           </Suspense>
 
-          <!-- 在内容区域添加 -->
-          <Suspense v-if="activeTab === 'ranking'">
-            <template #default>
-              <StockRanking @view-chart="selectStockForChart" />
-            </template>
-            <template #fallback>
-              <div class="skeleton skeleton-table">评分模块加载中...</div>
-            </template>
-          </Suspense>
+          <!-- 金榜：首次进入后再不卸载，仅 v-show 隐藏，避免反复请求与丢状态 -->
+          <template v-if="rankingTabMounted">
+            <div v-show="activeTab === 'ranking'">
+              <Suspense>
+                <template #default>
+                  <StockRanking @view-chart="selectStockForChart" />
+                </template>
+                <template #fallback>
+                  <div class="skeleton skeleton-table">评分模块加载中...</div>
+                </template>
+              </Suspense>
+            </div>
+          </template>
           <Suspense v-if="activeTab === 'spectrum'">
             <template #default>
               <MarketSpectrum />
@@ -358,6 +362,7 @@ const EarningsHunter = defineAsyncComponent(() => import('./views/EarningsHunter
 const ShenwanIndustryIndex = defineAsyncComponent(() => import('./views/ShenwanIndustryIndex.vue'))
 const ChatPanel = defineAsyncComponent(() => import('./components/ChatPanel.vue'))
 import { useAuth, authService } from './services/auth.js'
+import { nextRankingTabMountedState } from './utils/rankingTabMountGate.js'
 import axios from 'axios'
 
 // 设置axios请求拦截器，自动添加认证头
@@ -493,6 +498,8 @@ const chartRecords = ref([])
 const moneyFlowRecords = ref([])
 // 不要默认 'watchlist'，否则在 onMounted 用缓存恢复 Tab 前会先挂载 WatchListData 并全量拉自选股
 const activeTab = ref(readActiveTabCache() ?? '')
+/** After first visit to 金榜, keep StockRanking mounted and toggle with v-show only. */
+const rankingTabMounted = ref(false)
 const stockName = ref('')
 const chartSymbol = computed(() => 
   watchlist.value.length > 0 ? watchlist.value[currentIndex.value] : ''
@@ -542,12 +549,13 @@ async function loadNavigationTabs() {
 
 // 监听activeTab变化，保存到localStorage
 watch(activeTab, (newTab) => {
+  rankingTabMounted.value = nextRankingTabMountedState(rankingTabMounted.value, newTab)
   const username = user.value?.username
   if (username) {
     writeActiveTabCache(newTab, username)
   }
   console.log('已保存当前tab:', newTab)
-})
+}, { immediate: true })
 
 // 动态标签：管理员固定全量业务 Tab + 后台；普通用户仅按服务端权益矩阵返回的 visible_tab_ids（顺序一致）
 const adminTabs = computed(() => {
