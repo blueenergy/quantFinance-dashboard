@@ -57,6 +57,36 @@ describe('buildStockRankingCacheKey', () => {
     ).toBeNull()
   })
 
+  it('index modes cache key ignores calendar dateParam (GET by-index uses latest per symbol)', () => {
+    const k = buildStockRankingCacheKey({
+      viewMode: 'hs300',
+      displayLimit: 30,
+      rankingStrategy: 'balanced',
+      dateParam: '20200101',
+      selectedDates: [],
+      selectedStocks: [],
+      watchlistSymbols: [],
+      indexSymbols: [],
+    })
+    expect(k).toBe('hs300|balanced|latest')
+  })
+
+  it('includes page offset and size when paginating', () => {
+    const k = buildStockRankingCacheKey({
+      viewMode: 'csi500',
+      displayLimit: 30,
+      rankingStrategy: 'balanced',
+      dateParam: '',
+      selectedDates: [],
+      selectedStocks: [],
+      watchlistSymbols: [],
+      indexSymbols: [],
+      pageOffset: 30,
+      pageSize: 30,
+    })
+    expect(k).toBe('csi500|balanced|latest|o:30|ps:30')
+  })
+
   it('uses hash tail for very long symbol lists', () => {
     const stocks = Array.from({ length: 400 }, (_, i) => String(600000 + (i % 1000)).padStart(6, '0'))
     const k = buildStockRankingCacheKey({

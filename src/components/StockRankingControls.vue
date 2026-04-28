@@ -18,7 +18,12 @@
   <div class="mt-xs text-muted info-inline">(child viewMode: <strong>{{ viewMode }}</strong>)</div>
       </v-col>
 
-      <v-col cols="12" sm="6" md="4" v-show="viewMode !== 'selected'">
+      <v-col
+        cols="12"
+        sm="6"
+        md="4"
+        v-show="viewMode === 'ranking' || viewMode === 'watchlist'"
+      >
         <div class="flex-row-center gap-sm">
           <label class="label-fixed">选择日期：</label>
           <v-text-field
@@ -33,7 +38,11 @@
       </v-col>
     </v-row>
 
-    <v-row v-if="viewMode === 'ranking' || viewMode === 'watchlist'" class="control-group" align="center">
+    <v-row
+      v-if="viewMode === 'ranking' || viewMode === 'watchlist' || viewMode === 'selected' || viewMode === 'hs300' || viewMode === 'csi500' || viewMode === 'a500' || viewMode === 'star50'"
+      class="control-group"
+      align="center"
+    >
       <v-col cols="12" sm="4">
         <label v-if="viewMode === 'ranking'">显示数量：</label>
         <v-select
@@ -85,19 +94,6 @@
 
           <div v-if="selectedStocks.length > 0" class="selected-stocks mt-sm">
             <v-chip v-for="symbol in selectedStocks" :key="symbol" class="ma-1" closable @click:close="handleRemoveStock(symbol)">{{ symbol }}</v-chip>
-          </div>
-
-          <div class="flex-row-center gap-sm mt-sm">
-            <label>策略：</label>
-            <v-select
-              v-model="internalRankingStrategy"
-              :items="rankingStrategyOptions"
-              item-title="label"
-              item-value="value"
-              density="compact"
-              variant="outlined"
-              style="min-width:160px;"
-            />
           </div>
 
           <div class="multi-date-area mt-md" style="width:100%;">

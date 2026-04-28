@@ -2,6 +2,8 @@ import { getStockRankingPrefsUsername } from './stockRankingPrefs.js'
 
 export const RANKING_CACHE_MAX_ENTRIES = 25
 export const RANKING_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+/** 指数/大批量指定股/长自选股分页拉榜时每页条数（与后端 page_size 一致） */
+export const STOCK_RANKINGS_PAGE_SIZE = 30
 
 function cacheBlobKey() {
   return `stockRanking_cache_blob_v2__${getStockRankingPrefsUsername()}`
@@ -29,6 +31,8 @@ function cloneRankings(arr) {
  *   selectedStocks: string[],
  *   watchlistSymbols: string[],
  *   indexSymbols: string[],
+ *   pageOffset?: number,
+ *   pageSize?: number | null,
  * }} state
  * @returns {string | null}
  */
@@ -42,9 +46,13 @@ export function buildStockRankingCacheKey(state) {
     selectedStocks = [],
     watchlistSymbols = [],
     indexSymbols = [],
+    pageOffset = 0,
+    pageSize = null,
   } = state
 
   const dp = dateParam || ''
+  const pageSeg =
+    pageSize != null && pageSize > 0 ? `|o:${pageOffset}|ps:${pageSize}` : ''
 
   switch (viewMode) {
     case 'ranking':
@@ -54,22 +62,20 @@ export function buildStockRankingCacheKey(state) {
       const d = selectedDates.length ? [...selectedDates].sort().join(',') : ''
       const syms = [...selectedStocks].sort().join(',')
       const tail = syms.length > 1500 ? `h:${djb2Hash(syms)}|n:${selectedStocks.length}` : `s:${syms}`
-      return `selected|${rankingStrategy}|${dp}|d:${d}|${tail}`
+      return `selected|${rankingStrategy}|${dp}|d:${d}|${tail}${pageSeg}`
     }
     case 'watchlist': {
       if (!watchlistSymbols.length) return null
       const syms = [...watchlistSymbols].sort().join(',')
       const tail = syms.length > 1500 ? `h:${djb2Hash(syms)}|n:${watchlistSymbols.length}` : `s:${syms}`
-      return `watchlist|${rankingStrategy}|${dp}|${tail}`
+      return `watchlist|${rankingStrategy}|${dp}|${tail}${pageSeg}`
     }
     case 'hs300':
     case 'csi500':
     case 'a500':
     case 'star50': {
-      if (!indexSymbols.length) return null
-      const syms = [...indexSymbols].sort().join(',')
-      const tail = syms.length > 1500 ? `h:${djb2Hash(syms)}|n:${indexSymbols.length}` : `s:${syms}`
-      return `${viewMode}|${rankingStrategy}|${dp}|${tail}`
+      // 指数榜不按顶栏日历请求；缓存段固定 latest，与 scoreDateMatchesRequest 解耦
+      return `${viewMode}|${rankingStrategy}|latest${pageSeg}`
     }
     default:
       return null

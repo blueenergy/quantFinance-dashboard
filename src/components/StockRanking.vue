@@ -61,7 +61,41 @@
       <!-- 显示模式标题 -->
       <div class="mode-header">
         <h4>{{ getModeTitle() }}</h4>
-  <span class="stock-count">共 {{ (viewMode === 'selected' && selectedDates.length > 0) ? displayRows.length : rankings.length }} 只股票</span>
+        <div class="mode-header-row">
+          <span class="stock-count">
+            <template v-if="viewMode === 'selected' && selectedDates.length > 0">
+              共 {{ displayRows.length }} 只股票
+            </template>
+            <template v-else-if="usePagedRankingsFetch">
+              本页 {{ rankings.length }} 条 · 共 {{ rankingTotal || rankings.length }} 条
+            </template>
+            <template v-else>
+              共 {{ rankings.length }} 只股票
+            </template>
+          </span>
+          <div
+            v-if="usePagedRankingsFetch && rankingTotal > STOCK_RANKINGS_PAGE_SIZE"
+            class="ranking-pager"
+          >
+            <button
+              type="button"
+              class="btn-base btn-sm btn-gradient-gray"
+              :disabled="rankingPageOffset <= 0"
+              @click="rankingPrevPage"
+            >
+              上一页
+            </button>
+            <span class="pager-meta">第 {{ rankingPageLabel }} 页</span>
+            <button
+              type="button"
+              class="btn-base btn-sm btn-gradient-gray"
+              :disabled="rankingPageOffset + rankings.length >= rankingTotal"
+              @click="rankingNextPage"
+            >
+              下一页
+            </button>
+          </div>
+        </div>
       </div>
 
       <RankingTable
@@ -274,6 +308,7 @@ import {
   readStockRankingCache,
   writeStockRankingCache,
   scoreDateMatchesRequest,
+  STOCK_RANKINGS_PAGE_SIZE,
 } from '../utils/stockRankingCache.js'
 
 const emit = defineEmits(['view-chart'])
@@ -444,6 +479,45 @@ const quickSelectCategories = ref([
 const selectedCategory = ref(quickSelectCategories.value[0].key)
 const watchlist = ref([])
 
+/** 服务端分页：offset + page_size；指数恒分页；自选股/指定股仅当标的数 > 每页条数 */
+const rankingPageOffset = ref(0)
+const rankingTotal = ref(0)
+const usePagedRankingsFetch = computed(() => {
+  const vm = viewMode.value
+  if (vm === 'hs300' || vm === 'csi500' || vm === 'a500' || vm === 'star50') return true
+  if (vm === 'watchlist' && (watchlist.value || []).length > STOCK_RANKINGS_PAGE_SIZE) return true
+  if (
+    vm === 'selected' &&
+    selectedDates.value.length === 0 &&
+    (selectedStocks.value || []).length > STOCK_RANKINGS_PAGE_SIZE
+  ) {
+    return true
+  }
+  return false
+})
+const rankingPageLabel = computed(
+  () => Math.floor(rankingPageOffset.value / STOCK_RANKINGS_PAGE_SIZE) + 1
+)
+
+function appendRankingsPageQuery(url) {
+  if (!usePagedRankingsFetch.value) return url
+  const joiner = url.includes('?') ? '&' : '?'
+  return `${url}${joiner}offset=${rankingPageOffset.value}&page_size=${STOCK_RANKINGS_PAGE_SIZE}`
+}
+
+function rankingPrevPage() {
+  rankingPageOffset.value = Math.max(0, rankingPageOffset.value - STOCK_RANKINGS_PAGE_SIZE)
+  fetchRankings()
+}
+
+function rankingNextPage() {
+  const next = rankingPageOffset.value + STOCK_RANKINGS_PAGE_SIZE
+  if (next < rankingTotal.value) {
+    rankingPageOffset.value = next
+    fetchRankings()
+  }
+}
+
 // Available-dates modal (used when picking dates for a single symbol)
 const showAvailableDatesModal = ref(false)
 const availableDatesForSymbol = ref([]) // array of yyyyMMdd strings returned by /api/stock-dates
@@ -465,6 +539,8 @@ const star50Loading = ref(false)
 const a500Stocks = ref([])
 const a500Loading = ref(false)
 // 🆕 添加中证500相关状态变量
+// 指数成分股 ref：导出/快选等用；指数 Tab 排行榜走 GET by-index，不依赖此处是否已加载。
+// 另：refreshIndexData 会先 st.list.value=[] 再拉取，其间会短暂为空（属预期）。
 const csi500Stocks = ref([])
 const csi500Loading = ref(false)
 // Tabs horizontal scroll helpers
@@ -531,6 +607,7 @@ function getAuthHeaders() {
 // ✅ 主数据获取方法 - 根据模式调用不同API
 async function fetchRankings() {
   dlog('fetchRankings start viewMode=', viewMode.value)
+  const abortThis = new AbortController()
   try {
     // cancel any previous in-flight request
     try {
@@ -540,8 +617,8 @@ async function fetchRankings() {
     } catch (e) {
       // no-op
     }
-    currentRequestController.value = new AbortController()
-    const signal = currentRequestController.value.signal
+    currentRequestController.value = abortThis
+    const signal = abortThis.signal
     let response
     // 构造日期参数
     let dateParam = ''
@@ -578,10 +655,20 @@ async function fetchRankings() {
       selectedStocks: selectedStocks.value,
       watchlistSymbols: watchlist.value,
       indexSymbols: symbolsForIndexMode(viewMode.value),
+      pageOffset: usePagedRankingsFetch.value ? rankingPageOffset.value : 0,
+      pageSize: usePagedRankingsFetch.value ? STOCK_RANKINGS_PAGE_SIZE : null,
     })
     const cached = readStockRankingCache(cacheKey)
     let hadWarmCache = false
-    if (cached && scoreDateMatchesRequest(dateParam, cached.primaryScoreDate)) {
+    const indexView =
+      viewMode.value === 'hs300' ||
+      viewMode.value === 'csi500' ||
+      viewMode.value === 'a500' ||
+      viewMode.value === 'star50'
+    // 指数榜 GET 不按顶栏日历截 score_date；缓存命中也不应用 dateParam 与 primaryScoreDate 对齐
+    const cacheDateOk =
+      indexView || scoreDateMatchesRequest(dateParam, cached?.primaryScoreDate)
+    if (cached && cacheDateOk) {
       rankings.value = JSON.parse(JSON.stringify(cached.rankings))
       if (cached.lastUpdateTime) lastUpdateTime.value = cached.lastUpdateTime
       hadWarmCache = true
@@ -598,84 +685,33 @@ async function fetchRankings() {
         response = await axios.get(url, { signal })
         break
       }
-      // 🆕 添加沪深300模式
-      case 'hs300': {
-        loadingMessage.value = '加载沪深300指数成分股评分...'
-        
-        // 🔧 先确保成分股数据已加载
-        if (hs300Stocks.value.length === 0) {
-          await fetchIndexConstituents('hs300')
-        }
-        
-        // 🆕 使用指定股票模式的API，传入沪深300成分股代码
-        const hs300Symbols = hs300Stocks.value.map(stock => stock.symbol)
-        const payload = { symbols: hs300Symbols }
-        
-        let url = '/api/stock-rankings/selected'
-        const qp = []
-        if (dateParam) qp.push(`date=${dateParam}`)
-        if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
-        if (qp.length) url += `?${qp.join('&')}`
-        
-        dlog(`获取 ${hs300Symbols.length} 只沪深300成分股评分`)
-        response = await axios.post(url, payload, { signal })
-        break
-      }
-      case 'csi500': {
-        loadingMessage.value = '加载中证500指数成分股评分...'
-        if (csi500Stocks.value.length === 0) {
-          await fetchIndexConstituents('csi500')
-        }
-        const csi500Symbols = csi500Stocks.value.map(stock => stock.symbol)
-        if (csi500Symbols.length === 0) {
-          console.warn('[fetchRankings] csi500 成分股为空，使用回退数据')
-        }
-        const payload = { symbols: csi500Symbols }
-        let url = '/api/stock-rankings/selected'
-        const qp = []
-        if (dateParam) qp.push(`date=${dateParam}`)
-        if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
-        if (qp.length) url += `?${qp.join('&')}`
-        dlog(`获取 ${csi500Symbols.length} 只中证500成分股评分`)
-        response = await axios.post(url, payload, { signal })
-        break
-      }
-      case 'a500': {
-        loadingMessage.value = '加载中证A500指数成分股评分...'
-        if (a500Stocks.value.length === 0) {
-          await fetchIndexConstituents('a500')
-        }
-        const a500Symbols = a500Stocks.value.map(stock => stock.symbol)
-        const payload = { symbols: a500Symbols }
-        let url = '/api/stock-rankings/selected'
-        const qp = []
-        if (dateParam) qp.push(`date=${dateParam}`)
-        if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
-        if (qp.length) url += `?${qp.join('&')}`
-        dlog(`获取 ${a500Symbols.length} 只中证A500成分股评分`)
-        response = await axios.post(url, payload, { signal })
-        break
-      }
+      case 'hs300':
+      case 'csi500':
+      case 'a500':
       case 'star50': {
-        loadingMessage.value = '加载科创50指数成分股评分...'
-        if (star50Stocks.value.length === 0) {
-          await fetchIndexConstituents('star50')
+        const indexLabels = {
+          hs300: '沪深300',
+          csi500: '中证500',
+          a500: '中证A500',
+          star50: '科创50',
         }
-        const star50Symbols = star50Stocks.value.map(stock => stock.symbol)
-        const payload = { symbols: star50Symbols }
-        dlog('star50 payload size=', star50Symbols.length)
-        let url = '/api/stock-rankings/selected'
-        const qp = []
-        if (dateParam) qp.push(`date=${dateParam}`)
-        if (rankingStrategy.value) qp.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
-        if (qp.length) url += `?${qp.join('&')}`
-        dlog(`获取 ${star50Symbols.length} 只科创50成分股评分`)
-        response = await axios.post(url, payload, { signal })
+        loadingMessage.value = `加载${indexLabels[viewMode.value]}指数成分股评分...`
+        let url = `/api/stock-rankings/by-index/${encodeURIComponent(viewMode.value)}`
+        const qpIdx = []
+        if (rankingStrategy.value) {
+          qpIdx.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+        }
+        // 不传 date：与旧 POST 一致，按各股最新 score_date 再筛 index_codes；避免顶栏历史日导致整表为空
+        if (qpIdx.length) url += `?${qpIdx.join('&')}`
+        url = appendRankingsPageQuery(url)
+        dlog('index rankings GET', url)
+        response = await axios.get(url, { signal })
         break
       }
       case 'selected': {
         if (selectedStocks.value.length === 0) {
           rankings.value = []
+          rankingTotal.value = 0
           loading.value = false
           return
         }
@@ -688,10 +724,18 @@ async function fetchRankings() {
         payload.strategy = rankingStrategy.value
         if (selectedDates.value.length > 0) {
           payload.dates = selectedDates.value
+          const qpSel = []
+          if (rankingStrategy.value) qpSel.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+          if (qpSel.length) url += `?${qpSel.join('&')}`
+          url = appendRankingsPageQuery(url)
           dlog('posting with dates', payload.dates)
           response = await axios.post(url, payload, { signal })
         } else {
-          if (dateParam) url += `?date=${dateParam}`
+          const qpSel = []
+          if (dateParam) qpSel.push(`date=${dateParam}`)
+          if (rankingStrategy.value) qpSel.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+          if (qpSel.length) url += `?${qpSel.join('&')}`
+          url = appendRankingsPageQuery(url)
           dlog('posting without dates url=', url)
           response = await axios.post(url, payload, { signal })
         }
@@ -706,6 +750,7 @@ async function fetchRankings() {
         }
         if (watchlist.value.length === 0) {
           rankings.value = []
+          rankingTotal.value = 0
           loading.value = false
           return
         }
@@ -717,6 +762,7 @@ async function fetchRankings() {
         if (dateParam) qp2.push(`date=${dateParam}`)
         if (rankingStrategy.value) qp2.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
         if (qp2.length) url += `?${qp2.join('&')}`
+        url = appendRankingsPageQuery(url)
         response = await axios.post(url, payload, { signal })
         break
       }
@@ -729,20 +775,27 @@ async function fetchRankings() {
     if (!response) {
       console.error('[fetchRankings] empty response')
       rankings.value = []
+      rankingTotal.value = 0
     } else if (response.data && typeof response.data === 'object') {
       if (response.data.success && response.data.data) {
         rankings.value = response.data.data
+        const t = response.data.total
+        rankingTotal.value = typeof t === 'number' ? t : (response.data.data || []).length
       } else if (Array.isArray(response.data)) {
         rankings.value = response.data
+        rankingTotal.value = response.data.length
       } else {
         // server returned object but not expected shape
         rankings.value = []
+        rankingTotal.value = 0
       }
     } else if (Array.isArray(response)) {
       // fallback if axios returned array directly
       rankings.value = response
+      rankingTotal.value = response.length
     } else {
       rankings.value = []
+      rankingTotal.value = 0
     }
     dlog('rankings count after response', (rankings.value || []).length)
       try {
@@ -790,6 +843,8 @@ async function fetchRankings() {
       selectedStocks: selectedStocks.value,
       watchlistSymbols: watchlist.value,
       indexSymbols: symbolsForIndexMode(viewMode.value),
+      pageOffset: usePagedRankingsFetch.value ? rankingPageOffset.value : 0,
+      pageSize: usePagedRankingsFetch.value ? STOCK_RANKINGS_PAGE_SIZE : null,
     })
     if (writeKey && rankings.value.length > 0) {
       writeStockRankingCache(writeKey, {
@@ -812,10 +867,10 @@ async function fetchRankings() {
       alert('获取股票评分失败: ' + (error.response?.data?.detail || error.message))
     }
   } finally {
-    loading.value = false
-    // clear controller if this request finished (success or error other than cancel)
-    if (currentRequestController.value) {
-      try { currentRequestController.value = null } catch (e) {}
+    // 仅当本 invocation 仍是「当前」请求时收尾，避免被 abort 的旧任务清空新任务的 controller
+    if (currentRequestController.value === abortThis) {
+      currentRequestController.value = null
+      loading.value = false
     }
   }
 }
@@ -1011,24 +1066,11 @@ function onViewModeChange() {
       })
       break
     case 'hs300':
-  fetchIndexConstituents('hs300').then(() => {
-        fetchRankings()
-      })
-      break
     case 'csi500':
-      fetchIndexConstituents('csi500').then(() => {
-        fetchRankings()
-      })
-      break
     case 'a500':
-      fetchIndexConstituents('a500').then(() => {
-        fetchRankings()
-      })
-      break
     case 'star50':
-      fetchIndexConstituents('star50').then(() => {
-        fetchRankings()
-      })
+      // 指数榜数据来自 GET by-index，不依赖成分列表；避免 .then 晚到与快速切换 viewMode 竞态
+      fetchRankings()
       break
     default:
       break
@@ -1038,6 +1080,7 @@ function onViewModeChange() {
 function handleChangeViewMode(newMode) {
   if (!newMode) { console.warn('handleChangeViewMode called with empty value:', newMode); return }
   try { console.debug('[StockRanking] handleChangeViewMode received ->', newMode) } catch (err) {}
+  rankingPageOffset.value = 0
   viewMode.value = newMode
   onViewModeChange()
 }
@@ -1045,6 +1088,7 @@ function handleChangeViewMode(newMode) {
 function handleChangeDate(newDate) {
   if (!newDate) { console.warn('handleChangeDate called with empty value:', newDate); return }
   try { console.debug('[StockRanking] handleChangeDate received ->', newDate) } catch (err) {}
+  rankingPageOffset.value = 0
   selectedDate.value = newDate
   onDateChange()
 }
@@ -1053,6 +1097,7 @@ function handleChangeDate(newDate) {
 function handleChildDisplayLimitChange(v) {
   const val = (v && typeof v === 'object' && v.target && 'value' in v.target) ? v.target.value : v
   displayLimit.value = Number(val) || displayLimit.value || 50
+  rankingPageOffset.value = 0
   fetchRankings()
 }
 
@@ -1535,7 +1580,7 @@ watch(selectedCategory, async (val) => {
   try { await fetchIndexConstituents('a500') } catch (e) { console.warn('auto a500 fetch failed', e) }
   }
   if (val === 'csi500' && (!csi500Stocks.value || csi500Stocks.value.length === 0) && !csi500Loading.value) {
-    try { await fetchCSI500Constituents() } catch (e) { console.warn('auto csi500 fetch failed', e) }
+    try { await fetchIndexConstituents('csi500') } catch (e) { console.warn('auto csi500 fetch failed', e) }
   }
 })
 
@@ -1553,18 +1598,25 @@ try {
   onUnmounted(() => { window.removeEventListener('resize', updateTabsScrollState) })
 } catch (e) {}
 function onRankingStrategyChange() {
-  // If in ranking or watchlist mode, re-fetch to get server-side sorted/updated results
-  if (viewMode.value === 'ranking' || viewMode.value === 'watchlist') {
+  const serverSortedModes = new Set([
+    'ranking',
+    'watchlist',
+    'selected',
+    'hs300',
+    'csi500',
+    'a500',
+    'star50',
+  ])
+  if (serverSortedModes.has(viewMode.value)) {
+    rankingPageOffset.value = 0
     fetchRankings()
     return
   }
-  // Otherwise locally re-sort existing rankings using getCompositeScore
   try {
     rankings.value.sort((a, b) => getCompositeScore(b, rankingStrategy.value) - getCompositeScore(a, rankingStrategy.value))
   } catch (e) {
     console.error('排序失败:', e)
   }
-  // bump refreshKey to ensure dependent computed properties update
   try { refreshKey.value = (refreshKey.value || 0) + 1 } catch (e) {}
 }
 
@@ -1573,22 +1625,22 @@ function onRankingStrategyChange() {
 // =============================
 const indexStateMap = {
   hs300: { list: hs300Stocks, loading: hs300Loading, path: '/api/index/hs300/constituents', fallback: [
-    { symbol: '000001', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.85 },
-    { symbol: '000002', name: '万科A', industry: '房地产开发', market_cap: 250000000000, weight: 0.78 }
+    { symbol: '000001.SZ', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.85 },
+    { symbol: '000002.SZ', name: '万科A', industry: '房地产开发', market_cap: 250000000000, weight: 0.78 }
   ] },
   a500: { list: a500Stocks, loading: a500Loading, path: '/api/index/a500/constituents', fallback: [
-    { symbol: '600519', name: '贵州茅台', industry: '白酒', market_cap: 2500000000000, weight: 2.50 },
-    { symbol: '000333', name: '美的集团', industry: '家电', market_cap: 450000000000, weight: 1.20 }
+    { symbol: '600519.SH', name: '贵州茅台', industry: '白酒', market_cap: 2500000000000, weight: 2.50 },
+    { symbol: '000333.SZ', name: '美的集团', industry: '家电', market_cap: 450000000000, weight: 1.20 }
   ] },
   // 修复: 中证500 应使用自身 loading ref 且提供更贴近该指数的示例成分
   csi500: { list: csi500Stocks, loading: csi500Loading, path: '/api/index/csi500/constituents', fallback: [
-    { symbol: '000001', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.35 },
-    { symbol: '600036', name: '招商银行', industry: '银行', market_cap: 340000000000, weight: 0.40 },
-    { symbol: '002415', name: '海康威视', industry: '电子', market_cap: 310000000000, weight: 0.45 }
+    { symbol: '000001.SZ', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.35 },
+    { symbol: '600036.SH', name: '招商银行', industry: '银行', market_cap: 340000000000, weight: 0.40 },
+    { symbol: '002415.SZ', name: '海康威视', industry: '电子', market_cap: 310000000000, weight: 0.45 }
   ] },
   star50: { list: star50Stocks, loading: star50Loading, path: '/api/index/star50/constituents', fallback: [
-    { symbol: '688001', name: '华兴源创', industry: '半导体', market_cap: 45000000000, weight: 1.10 },
-    { symbol: '688012', name: '中微公司', industry: '半导体设备', market_cap: 120000000000, weight: 2.20 }
+    { symbol: '688001.SH', name: '华兴源创', industry: '半导体', market_cap: 45000000000, weight: 1.10 },
+    { symbol: '688012.SH', name: '中微公司', industry: '半导体设备', market_cap: 120000000000, weight: 2.20 }
   ] }
 }
 
@@ -1599,15 +1651,22 @@ async function fetchIndexConstituents(indexKey) {
   st.loading.value = true
   try {
     const resp = await axios.get(st.path)
-    if (resp.data.success && resp.data.data) {
-      st.list.value = resp.data.data
+    // 注意：[] 在 JS 中为 truthy，不能写 `if (resp.data.data)`，否则 success + 空列表会误采纳、且不走 fallback
+    const rows = Array.isArray(resp.data?.data) ? resp.data.data : null
+    if (resp.data?.success && rows && rows.length > 0) {
+      st.list.value = rows
       console.log(`📊 获取到 ${st.list.value.length} 只 ${indexKey} 成分股`)
+      return st.list.value
+    }
+    if (resp.data?.success && rows && rows.length === 0) {
+      console.warn(`获取 ${indexKey} 成分股返回空列表，使用本地 fallback`)
+      st.list.value = [...st.fallback]
       return st.list.value
     }
     throw new Error('API返回数据格式错误')
   } catch (e) {
     console.warn(`获取 ${indexKey} 成分股失败，使用本地数据:`, e.message)
-    st.list.value = st.fallback
+    st.list.value = [...st.fallback]
     return st.list.value
   } finally {
     st.loading.value = false
@@ -1797,11 +1856,31 @@ const star50SelectedCount = computed(() => {
 
 .mode-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
   margin-bottom: 15px;
   padding: 10px 0;
   border-bottom: 2px solid #e9ecef;
+}
+
+.mode-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.ranking-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pager-meta {
+  font-size: 13px;
+  color: #555;
 }
 
 .stock-count {
