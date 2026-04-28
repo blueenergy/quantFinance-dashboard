@@ -39,7 +39,7 @@
     </v-row>
 
     <v-row
-      v-if="viewMode === 'ranking' || viewMode === 'watchlist' || viewMode === 'selected' || viewMode === 'hs300' || viewMode === 'csi500' || viewMode === 'a500' || viewMode === 'star50'"
+      v-if="viewMode === 'ranking' || viewMode === 'watchlist' || viewMode === 'selected' || viewMode === 'hs300' || viewMode === 'csi500' || viewMode === 'csi1000' || viewMode === 'a500' || viewMode === 'star50'"
       class="control-group"
       align="center"
     >
@@ -205,6 +205,7 @@ const viewModeOptions = [
   { label: '自选股模式', value: 'watchlist' },
   { label: '沪深300模式', value: 'hs300' },
   { label: '中证500模式', value: 'csi500' },
+  { label: '中证1000模式', value: 'csi1000' },
   { label: '中证A500模式', value: 'a500' },
   { label: '科创50模式', value: 'star50' },
 ]

@@ -71,6 +71,20 @@ describe('buildStockRankingCacheKey', () => {
     expect(k).toBe('hs300|balanced|latest')
   })
 
+  it('index mode csi1000 uses latest cache segment', () => {
+    const k = buildStockRankingCacheKey({
+      viewMode: 'csi1000',
+      displayLimit: 30,
+      rankingStrategy: 'balanced',
+      dateParam: '20200101',
+      selectedDates: [],
+      selectedStocks: [],
+      watchlistSymbols: [],
+      indexSymbols: [],
+    })
+    expect(k).toBe('csi1000|balanced|latest')
+  })
+
   it('includes page offset and size when paginating', () => {
     const k = buildStockRankingCacheKey({
       viewMode: 'csi500',

@@ -72,6 +72,7 @@ export function buildStockRankingCacheKey(state) {
     }
     case 'hs300':
     case 'csi500':
+    case 'csi1000':
     case 'a500':
     case 'star50': {
       // 指数榜不按顶栏日历请求；缓存段固定 latest，与 scoreDateMatchesRequest 解耦
