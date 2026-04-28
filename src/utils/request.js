@@ -48,7 +48,10 @@ service.interceptors.response.use(
       }
       window.location.href = '/login'
     }
-    console.error('Response error:', error)
+    // 轮询/后台请求可传 silentErrorLog: true，避免控制台被 ECONNABORTED 刷屏
+    if (!error.config?.silentErrorLog) {
+      console.error('Response error:', error)
+    }
     return Promise.reject(error)
   }
 )

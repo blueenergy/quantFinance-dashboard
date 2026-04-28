@@ -407,12 +407,21 @@ let watchdogTimer = null
 // FXI: 中国大盘ETF（离岸中国资产代表）, GC=F: 黄金期货（避险情绪代表）
 const WATCH_SYMBOLS = ['NQ=F', 'ES=F', 'YM=F', 'RTY=F', 'FXI', 'GC=F']
 
+/** 防止 interval 与慢请求重叠导致排队超时 */
+let watchdogInFlight = false
+
 async function runWatchdog() {
   if (!marketData.value) return
-  
+  if (watchdogInFlight) return
+  watchdogInFlight = true
+
   try {
     const symbols = WATCH_SYMBOLS.join(',')
-    const res = await request.get(`/market-quotes?symbols=${symbols}`)
+    // 全局 axios 默认 30s；登录后整页并发多，Mongo 偶发慢时易误杀。Watchdog 用更长超时且不打满控制台错误日志。
+    const res = await request.get(`/market-quotes?symbols=${symbols}`, {
+      timeout: 120000,
+      silentErrorLog: true,
+    })
     if (res.success) {
       const quotes = res.data
       
@@ -447,7 +456,15 @@ async function runWatchdog() {
       watchdogAlert.value = null
     }
   } catch (e) {
-    console.error("Watchdog check failed:", e)
+    if (e?.code === 'ECONNABORTED') {
+      try {
+        console.warn('[GlobalMarketBrief] Watchdog: 行情请求超时，下次 interval 再试')
+      } catch (_) {}
+    } else {
+      console.error('Watchdog check failed:', e)
+    }
+  } finally {
+    watchdogInFlight = false
   }
 }
 
@@ -481,7 +498,8 @@ async function fetchGlobalAnalysis() {
   loading.value = true
   error.value = ''
   try {
-    const data = await request.get('/global-analysis')
+    // 后端默认裁剪 market_data 体积；全量调试可改为 params: { full: 'true' }
+    const data = await request.get('/global-analysis', { timeout: 120000 })
     if (data.success) {
       analysisResult.value = data.data
     } else {
@@ -490,7 +508,11 @@ async function fetchGlobalAnalysis() {
       }
     }
   } catch (err) {
-    console.error('Failed to fetch global analysis:', err)
+    if (err?.code === 'ECONNABORTED') {
+      console.warn('[GlobalMarketBrief] 全球市场分析请求超时（已 120s），请检查 analyzer DB 与网络')
+    } else {
+      console.error('Failed to fetch global analysis:', err)
+    }
   } finally {
     loading.value = false
   }
