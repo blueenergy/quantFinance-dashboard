@@ -36,34 +36,7 @@
         </v-alert>
       </div>
 
-      <!-- Watchdog Alert -->
-      <div v-if="watchdogAlert" class="watchdog-alert">
-        <v-alert
-          density="compact"
-          type="warning"
-          variant="tonal"
-          class="mb-2"
-        >
-          <div class="d-flex justify-space-between align-center">
-            <span style="font-size: 13px">
-              <strong>市场剧烈波动</strong>: {{ watchdogAlert.name }} 
-              {{ watchdogAlert.direction === 'up' ? '上涨' : '下跌' }} {{ watchdogAlert.diffPct }}% 
-              (现价 {{ formatNumber(watchdogAlert.currentPrice) }})，分析可能过时。
-            </span>
-            <v-btn
-              size="x-small"
-              color="warning"
-              variant="flat"
-              @click="refreshAnalysis"
-              :loading="refreshing"
-            >
-              刷新分析
-            </v-btn>
-          </div>
-        </v-alert>
-      </div>
-
-      <div v-else-if="brief" class="brief-body">
+      <div v-if="brief" class="brief-body">
 
         <div
           v-if="brief.international_shock_score !== undefined || brief.domestic_hedge_score !== undefined || brief.net_impact_score !== undefined"
@@ -116,12 +89,28 @@
           </div>
         </div>
         
-        <!-- 新增：市场数据仪表盘 (数据快照) -->
-        <div v-if="marketData" class="market-dashboard">
+        <!-- 市场数据：优先展示 MongoDB 最新同步（Yahoo），与下方 AI 报告解耦 -->
+        <div v-if="displayMarketData" class="market-dashboard">
           <div class="dashboard-header">
-            <h4>📉 市场数据快照 <span class="snap-time" v-if="marketDate">({{ marketDate }} 收盘)</span><span class="snap-time" v-else-if="analysisTimestamp">({{ formatTime(analysisTimestamp) }})</span></h4>
-            <v-chip size="x-small" color="grey" variant="outlined">快照数据</v-chip>
+            <h4>
+              📉 全球市场行情
+              <span v-if="marketDate" class="snap-time">（{{ marketDate }} 口径）</span>
+            </h4>
+            <v-chip size="x-small" :color="isShowingLiveQuotes ? 'success' : 'grey'" variant="tonal">
+              {{ isShowingLiveQuotes ? '库内最新' : '分析快照' }}
+            </v-chip>
           </div>
+          <p class="dashboard-footnote">
+            <template v-if="isShowingLiveQuotes && liveSyncedAtMax">
+              {{ liveSourceNote }} · 同步入库时间不晚于 {{ formatDateTime(liveSyncedAtMax) }}
+            </template>
+            <template v-else-if="isShowingLiveQuotes && !liveSyncedAtMax">
+              {{ liveSourceNote }}（未返回单条时间戳，请以数据引擎同步任务为准）
+            </template>
+            <template v-else>
+              暂未能从行情库拉取最新数据，当前为<strong>分析报告附带</strong>的快照；刷新页面或稍后重试。下方 AI 段落仍对应标题所示分析时间。
+            </template>
+          </p>
 
           <v-tabs
             v-model="activeMarketTab"
@@ -142,50 +131,50 @@
             <!-- 1. 核心指数 -->
             <v-window-item value="indices">
               <div class="market-indices">
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^IXIC')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.indices, '^IXIC'))">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.indices, '^IXIC')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.indices, '^IXIC'))">
                   <span class="m-name">纳斯达克</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^IXIC')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^IXIC')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.indices, '^IXIC')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.indices, '^IXIC')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^GSPC')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.indices, '^GSPC'))">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.indices, '^GSPC')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.indices, '^GSPC'))">
                   <span class="m-name">标普500</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^GSPC')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^GSPC')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.indices, '^GSPC')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.indices, '^GSPC')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^DJI')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.indices, '^DJI'))">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.indices, '^DJI')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.indices, '^DJI'))">
                   <span class="m-name">道琼斯</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^DJI')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^DJI')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.indices, '^DJI')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.indices, '^DJI')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^RUT')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.indices, '^RUT'))">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.indices, '^RUT')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.indices, '^RUT'))">
                   <span class="m-name">罗素2000</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^RUT')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^RUT')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.indices, '^RUT')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.indices, '^RUT')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.indices, '^VIX')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.indices, '^VIX'))">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.indices, '^VIX')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.indices, '^VIX'))">
                   <span class="m-name">恐慌指数(VIX)</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.indices, '^VIX')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.indices, '^VIX')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.indices, '^VIX')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.indices, '^VIX')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'NQ=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.us_index_futures, 'NQ=F'))">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.us_index_futures, 'NQ=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.us_index_futures, 'NQ=F'))">
                   <span class="m-name">纳指期货</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.us_index_futures, 'NQ=F')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.us_index_futures, 'NQ=F')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.us_index_futures, 'NQ=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.us_index_futures, 'NQ=F')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'ES=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.us_index_futures, 'ES=F'))">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.us_index_futures, 'ES=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.us_index_futures, 'ES=F'))">
                   <span class="m-name">标普期货</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.us_index_futures, 'ES=F')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.us_index_futures, 'ES=F')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.us_index_futures, 'ES=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.us_index_futures, 'ES=F')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'YM=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.us_index_futures, 'YM=F'))">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.us_index_futures, 'YM=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.us_index_futures, 'YM=F'))">
                   <span class="m-name">道指期货</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.us_index_futures, 'YM=F')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.us_index_futures, 'YM=F')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.us_index_futures, 'YM=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.us_index_futures, 'YM=F')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.us_index_futures, 'RTY=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(marketData.us_index_futures, 'RTY=F'))">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.us_index_futures, 'RTY=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.us_index_futures, 'RTY=F'))">
                   <span class="m-name">罗素期货</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.us_index_futures, 'RTY=F')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.us_index_futures, 'RTY=F')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.us_index_futures, 'RTY=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.us_index_futures, 'RTY=F')?.change_pct) }}</span>
                 </div>
               </div>
             </v-window-item>
@@ -194,10 +183,10 @@
             <v-window-item value="china">
               <div class="market-indices">
                 <div class="market-item" v-for="(symbol, index) in ['FXI', '2823.HK', 'PGJ', 'BABA', 'PDD', 'JD', 'NIO']" :key="index"
-                     :class="getChangeClass(getMarketItem(marketData.china_concepts, symbol)?.change_pct)">
-                  <span class="m-name">{{ getMarketItem(marketData.china_concepts, symbol)?.name || symbol }}</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.china_concepts, symbol)?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.china_concepts, symbol)?.change_pct) }}</span>
+                     :class="getChangeClass(getMarketItem(displayMarketData.china_concepts, symbol)?.change_pct)">
+                  <span class="m-name">{{ getMarketItem(displayMarketData.china_concepts, symbol)?.name || symbol }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.china_concepts, symbol)?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.china_concepts, symbol)?.change_pct) }}</span>
                 </div>
               </div>
             </v-window-item>
@@ -206,10 +195,10 @@
             <v-window-item value="tech">
               <div class="market-indices">
                 <div class="market-item" v-for="(symbol, index) in ['NVDA', 'TSLA', 'AAPL', 'MSFT', 'GOOG', 'META', 'AMZN', 'AMD', 'INTC']" :key="index"
-                     :class="getChangeClass(getMarketItem(marketData.tech_giants, symbol)?.change_pct)">
-                  <span class="m-name">{{ getMarketItem(marketData.tech_giants, symbol)?.name || symbol }}</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.tech_giants, symbol)?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.tech_giants, symbol)?.change_pct) }}</span>
+                     :class="getChangeClass(getMarketItem(displayMarketData.tech_giants, symbol)?.change_pct)">
+                  <span class="m-name">{{ getMarketItem(displayMarketData.tech_giants, symbol)?.name || symbol }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.tech_giants, symbol)?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.tech_giants, symbol)?.change_pct) }}</span>
                 </div>
               </div>
             </v-window-item>
@@ -217,30 +206,30 @@
             <!-- 4. 商品外汇 -->
             <v-window-item value="commodities">
               <div class="market-indices">
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.commodities, 'GC=F')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.commodities, 'GC=F')?.change_pct)">
                   <span class="m-name">黄金</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.commodities, 'GC=F')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.commodities, 'GC=F')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.commodities, 'GC=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.commodities, 'GC=F')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.commodities, 'SI=F')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.commodities, 'SI=F')?.change_pct)">
                   <span class="m-name">白银</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.commodities, 'SI=F')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.commodities, 'SI=F')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.commodities, 'SI=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.commodities, 'SI=F')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.commodities, 'CL=F')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.commodities, 'CL=F')?.change_pct)">
                   <span class="m-name">原油</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.commodities, 'CL=F')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.commodities, 'CL=F')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.commodities, 'CL=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.commodities, 'CL=F')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.forex, 'CNH=X')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.forex, 'CNH=X')?.change_pct)">
                   <span class="m-name">离岸人民币</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.forex, 'CNH=X')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.forex, 'CNH=X')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.forex, 'CNH=X')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.forex, 'CNH=X')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.forex, 'DX-Y.NYB')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.forex, 'DX-Y.NYB')?.change_pct)">
                   <span class="m-name">美元指数</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.forex, 'DX-Y.NYB')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.forex, 'DX-Y.NYB')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.forex, 'DX-Y.NYB')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.forex, 'DX-Y.NYB')?.change_pct) }}</span>
                 </div>
               </div>
             </v-window-item>
@@ -248,20 +237,20 @@
             <!-- 5. 债券加密 -->
             <v-window-item value="other">
                <div class="market-indices">
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.bonds, '^TNX')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.bonds, '^TNX')?.change_pct)">
                   <span class="m-name">10年美债</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.bonds, '^TNX')?.price) }}%</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.bonds, '^TNX')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.bonds, '^TNX')?.price) }}%</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.bonds, '^TNX')?.change_pct) }}</span>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(marketData.crypto, 'BTC-USD')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.crypto, 'BTC-USD')?.change_pct)">
                   <span class="m-name">比特币</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.crypto, 'BTC-USD')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.crypto, 'BTC-USD')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.crypto, 'BTC-USD')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.crypto, 'BTC-USD')?.change_pct) }}</span>
                 </div>
-                 <div class="market-item" :class="getChangeClass(getMarketItem(marketData.crypto, 'ETH-USD')?.change_pct)">
+                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.crypto, 'ETH-USD')?.change_pct)">
                   <span class="m-name">以太坊</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(marketData.crypto, 'ETH-USD')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(marketData.crypto, 'ETH-USD')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.crypto, 'ETH-USD')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.crypto, 'ETH-USD')?.change_pct) }}</span>
                 </div>
                </div>
             </v-window-item>
@@ -269,8 +258,43 @@
           </v-window>
         </div>
 
-        <!-- 三步骤分析展示 -->
-        
+        <!-- AI 分析报告区：与上方行情解耦；过时提示仅出现在此区域 -->
+        <div class="analysis-report-region">
+          <div class="report-region-header">
+            <h4 class="report-region-title">📝 AI 分析报告</h4>
+            <p v-if="analysisTimestamp" class="report-meta">
+              本段文字与量化打分基于 <strong>{{ formatDateTime(analysisTimestamp) }}</strong> 生成时的行情与新闻摘要。
+              <template v-if="isShowingLiveQuotes && liveSyncedAtMax">
+                当前页顶部报价已更新至 <strong>{{ formatDateTime(liveSyncedAtMax) }}</strong>（库内同步），二者不完全一致属正常；若关键标的波动显著，请以顶部数字为准并考虑重新分析。
+              </template>
+            </p>
+          </div>
+
+          <div v-if="watchdogAlert" class="stale-report-alert">
+            <v-alert density="compact" type="warning" variant="tonal" class="mb-0">
+              <div class="d-flex flex-column flex-sm-row justify-space-between stale-report-alert-row">
+                <span class="stale-report-text">
+                  <strong>报告可能已滞后</strong>：自分析完成以来，
+                  <strong>{{ watchdogAlert.name }}</strong> 相对当时用于分析的快照价已
+                  {{ watchdogAlert.direction === 'up' ? '上涨' : '下跌' }}约 <strong>{{ watchdogAlert.diffPct }}%</strong>
+                 （分析时参考价 {{ formatNumber(watchdogAlert.snapshotPrice) }} → 当前库内价 {{ formatNumber(watchdogAlert.currentPrice) }}）。
+                  下方结论未自动重写，专业版可点击「刷新分析」触发重新研判。
+                </span>
+                <v-btn
+                  v-if="canTriggerGlobalAnalysis"
+                  size="x-small"
+                  color="warning"
+                  variant="flat"
+                  class="align-self-start flex-shrink-0"
+                  @click="refreshAnalysis"
+                  :loading="refreshing"
+                >
+                  刷新分析
+                </v-btn>
+              </div>
+            </v-alert>
+          </div>
+
         <!-- Step 1: 国外市场分析 -->
         <div v-if="brief.foreign_impact" class="analysis-section foreign-section">
           <h4 class="section-title">📊 国外市场影响</h4>
@@ -341,9 +365,10 @@
             <p>{{ brief.trading_suggestion }}</p>
           </div>
         </div>
+        </div>
       </div>
 
-      <div v-else class="empty-state">
+      <div v-if="!brief && !loading && !error" class="empty-state">
         <p>📡 暂无隔夜全球数据，请等待 08:30 自动简报生成</p>
       </div>
     </div>
@@ -351,8 +376,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import request from '../utils/request'
 import { mdiRefresh, mdiHelpCircleOutline } from '@mdi/js'
 import { useAuth } from '../services/auth.js'
@@ -383,116 +407,129 @@ const showQuoteDebug = computed(() => {
 // 提取数据
 // 后端现在直接返回 { categories: { indices: {...}, ... } }
 const brief = computed(() => analysisResult.value?.analysis || null)
-const marketData = computed(() => {
+/** 写入 global_analysis 文档时的行情快照（LLM 当时所见） */
+const snapshotMarketData = computed(() => {
   const data = analysisResult.value?.market_data
-  // 如果后端返回的就是 categories 字典，直接用
   return data?.categories || data || null
 })
-const analysisTimestamp = computed(() => analysisResult.value?.analyzed_at || analysisResult.value?.timestamp)
-const marketDate = computed(() => {
-  if (!marketData.value?.indices) return null
-  const ixic = marketData.value.indices['^IXIC']
-  if (ixic?.date) return ixic.date
-  // Fallback to any item
-  const firstKey = Object.keys(marketData.value.indices)[0]
-  return marketData.value.indices[firstKey]?.date || null
+
+const liveDashboardPayload = ref(null)
+
+const displayMarketData = computed(() => {
+  const live = liveDashboardPayload.value?.categories
+  if (live && typeof live === 'object') {
+    const hasAny = Object.keys(live).some(
+      (cat) => live[cat] && typeof live[cat] === 'object' && Object.keys(live[cat]).length > 0
+    )
+    if (hasAny) return live
+  }
+  return snapshotMarketData.value
 })
 
-// --- Watchdog Logic Start ---
-const watchdogAlert = ref(null) // { symbol: 'FXI', diffPct: 1.2, currentPrice: 38.5 }
-let watchdogTimer = null
+const isShowingLiveQuotes = computed(() => {
+  const live = liveDashboardPayload.value?.categories
+  if (!live || typeof live !== 'object') return false
+  return Object.keys(live).some(
+    (cat) => live[cat] && typeof live[cat] === 'object' && Object.keys(live[cat]).length > 0
+  )
+})
 
-// 监控列表：优先使用股指期货信号（更贴近A股开盘前的风险偏好）
-// NQ=F: 纳斯达克100期货, ES=F: 标普500期货, YM=F: 道琼斯期货, RTY=F: 罗素2000期货
-// FXI: 中国大盘ETF（离岸中国资产代表）, GC=F: 黄金期货（避险情绪代表）
+const liveSyncedAtMax = computed(() => liveDashboardPayload.value?.synced_at_max || null)
+const liveSourceNote = computed(() => liveDashboardPayload.value?.source_note || 'Yahoo Finance（经同步任务入库）')
+
+const analysisTimestamp = computed(() => analysisResult.value?.analyzed_at || analysisResult.value?.timestamp)
+const marketDate = computed(() => {
+  if (!displayMarketData.value?.indices) return null
+  const ixic = displayMarketData.value.indices['^IXIC']
+  if (ixic?.date) return ixic.date
+  const firstKey = Object.keys(displayMarketData.value.indices)[0]
+  return displayMarketData.value.indices[firstKey]?.date || null
+})
+
+// --- 库内最新价 vs 分析快照：仅在报告区提示，不遮挡顶部行情 ---
+const watchdogAlert = ref(null)
+let livePollTimer = null
+let pollInFlight = false
+
 const WATCH_SYMBOLS = ['NQ=F', 'ES=F', 'YM=F', 'RTY=F', 'FXI', 'GC=F']
 
-/** 防止 interval 与慢请求重叠导致排队超时 */
-let watchdogInFlight = false
+function getItemFromCategories(categories, sym) {
+  if (!categories || typeof categories !== 'object') return null
+  const order = ['indices', 'us_index_futures', 'china_concepts', 'tech_giants', 'commodities', 'forex', 'bonds', 'crypto']
+  for (const cat of order) {
+    const bucket = categories[cat]
+    if (bucket && bucket[sym]) return bucket[sym]
+  }
+  return null
+}
 
-async function runWatchdog() {
-  if (!marketData.value) return
-  if (watchdogInFlight) return
-  watchdogInFlight = true
+function checkStaleVsSnapshot() {
+  const snap = snapshotMarketData.value
+  const live = liveDashboardPayload.value?.categories
+  if (!snap || !live) {
+    watchdogAlert.value = null
+    return
+  }
+  for (const sym of WATCH_SYMBOLS) {
+    const snapshotItem = getItemFromCategories(snap, sym)
+    const liveItem = getItemFromCategories(live, sym)
+    if (!snapshotItem || !liveItem) continue
+    const snapPrice = Number(snapshotItem.price)
+    const currPrice = Number(liveItem.price)
+    if (!Number.isFinite(snapPrice) || snapPrice === 0 || !Number.isFinite(currPrice)) continue
+    const diff = Math.abs(currPrice - snapPrice)
+    const pct = (diff / snapPrice) * 100
+    if (pct > 1.0) {
+      watchdogAlert.value = {
+        symbol: sym,
+        name: snapshotItem.name || sym,
+        diffPct: pct.toFixed(1),
+        currentPrice: currPrice,
+        snapshotPrice: snapPrice,
+        direction: currPrice > snapPrice ? 'up' : 'down',
+      }
+      return
+    }
+  }
+  watchdogAlert.value = null
+}
 
+async function fetchLiveDashboard() {
+  if (!brief.value) return
+  if (pollInFlight) return
+  pollInFlight = true
   try {
-    const symbols = WATCH_SYMBOLS.join(',')
-    // 全局 axios 默认 30s；登录后整页并发多，Mongo 偶发慢时易误杀。Watchdog 用更长超时且不打满控制台错误日志。
-    const res = await request.get(`/market-quotes?symbols=${symbols}`, {
+    const res = await request.get('/global-market-dashboard', {
       timeout: 120000,
       silentErrorLog: true,
     })
-    if (res.success) {
-      const quotes = res.data
-      
-      // 检查偏差
-      for (const sym of WATCH_SYMBOLS) {
-        // 找到快照价格
-        let snapshotItem = null
-        if (marketData.value.indices && marketData.value.indices[sym]) snapshotItem = marketData.value.indices[sym]
-        else if (marketData.value.us_index_futures && marketData.value.us_index_futures[sym]) snapshotItem = marketData.value.us_index_futures[sym]
-        else if (marketData.value.commodities && marketData.value.commodities[sym]) snapshotItem = marketData.value.commodities[sym]
-        
-        if (snapshotItem && quotes[sym]) {
-          const snapPrice = snapshotItem.price
-          const currPrice = quotes[sym].price
-          const diff = Math.abs(currPrice - snapPrice)
-          const pct = (diff / snapPrice) * 100
-          
-          // 阈值：1%
-          if (pct > 1.0) {
-            watchdogAlert.value = {
-              symbol: sym,
-              name: snapshotItem.name,
-              diffPct: pct.toFixed(1),
-              currentPrice: currPrice,
-              direction: currPrice > snapPrice ? 'up' : 'down'
-            }
-            return // 只有有一个告警就够了
-          }
-        }
-      }
-      // 如果没有偏差，清除告警
-      watchdogAlert.value = null
+    if (res.success && res.data) {
+      liveDashboardPayload.value = res.data
+      checkStaleVsSnapshot()
     }
   } catch (e) {
-    if (e?.code === 'ECONNABORTED') {
-      try {
-        console.warn('[GlobalMarketBrief] Watchdog: 行情请求超时，下次 interval 再试')
-      } catch (_) {}
-    } else {
-      console.error('Watchdog check failed:', e)
+    if (e?.code !== 'ECONNABORTED') {
+      console.warn('[GlobalMarketBrief] 拉取 global-market-dashboard 失败:', e)
     }
   } finally {
-    watchdogInFlight = false
+    pollInFlight = false
   }
 }
 
-function startWatchdog() {
-  stopWatchdog()
-  // Run immediately then interval
-  runWatchdog()
-  watchdogTimer = setInterval(runWatchdog, 60 * 1000) // 60s
+function startLivePoll() {
+  stopLivePoll()
+  const tick = async () => {
+    if (!brief.value) return
+    await fetchLiveDashboard()
+  }
+  void tick()
+  livePollTimer = setInterval(tick, 60 * 1000)
 }
 
-function stopWatchdog() {
-  if (watchdogTimer) clearInterval(watchdogTimer)
-  watchdogTimer = null
+function stopLivePoll() {
+  if (livePollTimer) clearInterval(livePollTimer)
+  livePollTimer = null
 }
-// --- Watchdog Logic End ---
-
-// Hook into lifecycle
-onMounted(() => {
-  fetchGlobalAnalysis().then(() => {
-    // Start watchdog if analysis exists
-    if (analysisResult.value) startWatchdog()
-  })
-})
-
-import { onUnmounted } from 'vue'
-onUnmounted(() => {
-  stopWatchdog()
-})
 
 async function fetchGlobalAnalysis() {
   loading.value = true
@@ -502,9 +539,23 @@ async function fetchGlobalAnalysis() {
     const data = await request.get('/global-analysis', { timeout: 120000 })
     if (data.success) {
       analysisResult.value = data.data
+      if (analysisResult.value?.analysis) {
+        void fetchLiveDashboard()
+        startLivePoll()
+      } else {
+        stopLivePoll()
+        liveDashboardPayload.value = null
+        watchdogAlert.value = null
+      }
     } else {
       if (!data.error?.includes('今日尚无')) {
         error.value = data.error
+      }
+      if (data.error?.includes('今日尚无')) {
+        analysisResult.value = null
+        stopLivePoll()
+        liveDashboardPayload.value = null
+        watchdogAlert.value = null
       }
     }
   } catch (err) {
@@ -651,6 +702,10 @@ function getStrengthColor(strength) {
 
 onMounted(() => {
   fetchGlobalAnalysis()
+})
+
+onUnmounted(() => {
+  stopLivePoll()
 })
 
 const refreshing = ref(false)
@@ -1014,11 +1069,55 @@ async function refreshAnalysis() {
 
 .dashboard-header h4 {
   margin: 0;
-  font-size: 12px;
-  color: #718096;
+  font-size: 13px;
+  color: #4a5568;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.02em;
+}
+
+.dashboard-footnote {
+  margin: 0 0 10px 0;
+  font-size: 11px;
+  color: #718096;
+  line-height: 1.45;
+}
+
+.analysis-report-region {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.report-region-header {
+  margin-bottom: 10px;
+}
+
+.report-region-title {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.report-meta {
+  margin: 0;
+  font-size: 12px;
+  color: #4a5568;
+  line-height: 1.55;
+}
+
+.stale-report-alert {
+  margin-bottom: 12px;
+  animation: fadeIn 0.35s ease-out;
+}
+
+.stale-report-alert-row {
+  gap: 10px;
+}
+
+.stale-report-text {
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .snap-time {
@@ -1070,10 +1169,6 @@ async function refreshAnalysis() {
   margin-right: -16px;
   padding-left: 16px;
   padding-right: 16px; 
-}
-
-.watchdog-alert {
-  animation: fadeIn 0.5s ease-in-out;
 }
 
 @keyframes fadeIn {
