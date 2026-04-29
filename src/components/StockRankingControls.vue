@@ -22,7 +22,7 @@
         cols="12"
         sm="6"
         md="4"
-        v-show="viewMode === 'ranking' || viewMode === 'watchlist'"
+        v-show="viewMode === 'ranking' || viewMode === 'watchlist' || isIndexViewMode()"
       >
         <div class="flex-row-center gap-sm">
           <label class="label-fixed">选择日期：</label>
@@ -122,20 +122,13 @@
       </v-col>
     </v-row>
 
-    <v-row v-if="viewMode === 'hs300'" class="control-group">
-      <v-col cols="12">
-        <div class="hs300-info">
-          <span class="index-info">📈 沪深300指数成分股 <span v-if="hs300StocksLength > 0">({{ hs300StocksLength }} 只)</span><span v-else-if="hs300Loading">加载中...</span></span>
-        </div>
-        <v-btn small @click="$emit('refresh-hs300')" :disabled="hs300Loading">{{ hs300Loading ? '刷新中...' : '🔄 刷新成分股' }}</v-btn>
-        <v-btn small text @click="$emit('export-hs300')">📊 导出成分股信息</v-btn>
-      </v-col>
-    </v-row>
-
     <v-row class="control-group" align="center">
       <v-col cols="12">
-        <v-btn text @click="$emit('export-scores')">导出数据</v-btn>
-        <span class="last-update">最后更新: {{ lastUpdateTime }}</span>
+        <v-btn v-if="!isIndexViewMode()" text @click="$emit('export-scores')">导出数据</v-btn>
+        <span
+          class="last-update"
+          :class="{ 'last-update--align-start': isIndexViewMode() }"
+        >最后更新: {{ lastUpdateTime }}</span>
       </v-col>
     </v-row>
   </div>
@@ -151,7 +144,7 @@ const emit = defineEmits([
   // distinct events: top date input requests a maybe-open hook, while the selected-mode button
   // explicitly requests opening available-dates for the currently selected symbol.
   'maybe-open-available-dates-top', 'open-available-dates-selected', 'clear-selected-dates', 'remove-date',
-  'view-watchlist-stocks', 'clear-watchlist', 'refresh-hs300', 'export-hs300', 'export-scores'
+  'view-watchlist-stocks', 'clear-watchlist', 'export-scores'
 ])
 
 const props = defineProps({
@@ -165,8 +158,6 @@ const props = defineProps({
   selectedStocks: { type: Array, default: () => [] },
   selectedDates: { type: Array, default: () => [] },
   watchlistLength: { type: Number, default: 0 },
-  hs300StocksLength: { type: Number, default: 0 },
-  hs300Loading: { type: Boolean, default: false },
   lastUpdateTime: { type: String, default: '' }
   ,
   // Optional callback props (allow parent to inject functions directly)
@@ -194,9 +185,13 @@ const stockSuggestions = refs.stockSuggestions
 const selectedStocks = refs.selectedStocks
 const selectedDates = refs.selectedDates
 const watchlistLength = refs.watchlistLength
-const hs300StocksLength = refs.hs300StocksLength
-const hs300Loading = refs.hs300Loading
 const lastUpdateTime = refs.lastUpdateTime
+
+/** 指数类显示模式（与 StockRanking 侧 index 分支一致） */
+const INDEX_CODE_VIEW_MODES = new Set(['hs300', 'csi500', 'csi1000', 'a500', 'star50'])
+function isIndexViewMode() {
+  return INDEX_CODE_VIEW_MODES.has(String(viewMode.value || ''))
+}
 
 // Options constants (avoid large inline arrays causing template parse ambiguity)
 const viewModeOptions = [
@@ -471,6 +466,9 @@ onMounted(() => {
   font-size: 12px;
   margin-left: 10px;
 }
+.last-update--align-start {
+  margin-left: 0;
+}
 
 .date-input {
   padding: 6px 12px;
@@ -490,26 +488,6 @@ onMounted(() => {
   border: 1px solid #ddd;
   border-radius: 4px;
   padding: 4px 6px;
-}
-
-.btn-refresh, .btn-export-info {
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.btn-refresh:disabled {
-  background: linear-gradient(135deg, #bdc3c7, #95a5a6);
-  cursor: not-allowed;
-}
-
-.btn-export-info {
-  background: linear-gradient(135deg, #9b59b6, #8e44ad);
 }
 
 /* small utility kept local */
