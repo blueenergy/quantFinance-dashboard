@@ -15,8 +15,6 @@
     :selectedStocks="selectedStocks"
     :selectedDates="selectedDates"
     :watchlistLength="watchlist.length"
-    :hs300StocksLength="hs300Stocks.length"
-    :hs300Loading="hs300Loading"
     :lastUpdateTime="lastUpdateTime"
     :selectSuggestionCb="selectSuggestion"
     :addStockCb="addStockToQuery"
@@ -34,8 +32,6 @@
     @clear-selected-dates="clearSelectedDates"
     @view-watchlist-stocks="viewWatchlistStocks"
     @clear-watchlist="clearWatchlist"
-  @refresh-hs300="() => refreshIndexData('hs300')"
-  @export-hs300="() => exportIndexInfo('hs300')"
     @export-scores="exportScores"
       />
     </div>
@@ -550,8 +546,7 @@ const star50Loading = ref(false)
 const a500Stocks = ref([])
 const a500Loading = ref(false)
 // 🆕 添加中证500相关状态变量
-// 指数成分股 ref：导出/快选等用；指数 Tab 排行榜走 GET by-index，不依赖此处是否已加载。
-// 另：refreshIndexData 会先 st.list.value=[] 再拉取，其间会短暂为空（属预期）。
+// 指数成分股 ref：快选等用；指数 Tab 排行榜走 GET by-index，不依赖此处是否已加载。
 const csi500Stocks = ref([])
 const csi500Loading = ref(false)
 const csi1000Stocks = ref([])
@@ -678,15 +673,10 @@ async function fetchRankings() {
     })
     const cached = readStockRankingCache(cacheKey)
     let hadWarmCache = false
-    const indexView =
-      viewMode.value === 'hs300' ||
-      viewMode.value === 'csi500' ||
-      viewMode.value === 'csi1000' ||
-      viewMode.value === 'a500' ||
-      viewMode.value === 'star50'
-    // 指数榜 GET 不按顶栏日历截 score_date；缓存命中也不应用 dateParam 与 primaryScoreDate 对齐
-    const cacheDateOk =
-      indexView || scoreDateMatchesRequest(dateParam, cached?.primaryScoreDate)
+    const cacheDateOk = scoreDateMatchesRequest(
+      dateParam,
+      cached?.primaryScoreDate
+    )
     if (cached && cacheDateOk) {
       rankings.value = JSON.parse(JSON.stringify(cached.rankings))
       if (cached.lastUpdateTime) lastUpdateTime.value = cached.lastUpdateTime
@@ -722,7 +712,9 @@ async function fetchRankings() {
         if (rankingStrategy.value) {
           qpIdx.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
         }
-        // 不传 date：与旧 POST 一致，按各股最新 score_date 再筛 index_codes；避免顶栏历史日导致整表为空
+        if (dateParam) {
+          qpIdx.push(`date=${encodeURIComponent(dateParam)}`)
+        }
         if (qpIdx.length) url += `?${qpIdx.join('&')}`
         url = appendRankingsPageQuery(url)
         dlog('index rankings GET', url)
@@ -1733,47 +1725,6 @@ async function fetchIndexConstituents(indexKey) {
   }
 }
 
-async function refreshIndexData(indexKey) {
-  const st = indexStateMap[indexKey]
-  if (!st) return
-  try {
-    st.list.value = []
-    await fetchIndexConstituents(indexKey)
-    if (viewMode.value === indexKey) await fetchRankings()
-  } catch (e) {
-    console.error(`刷新 ${indexKey} 数据失败:`, e)
-    alert(`刷新失败，已使用本地数据: ${e.message}`)
-  }
-}
-
-function buildIndexCSVData(list) {
-  return list.map(stock => ({
-    '股票代码': stock.symbol,
-    '股票名称': stock.name,
-    '所属行业': stock.industry || '未知',
-    '市值(亿)': stock.market_cap ? (stock.market_cap / 100000000).toFixed(2) : '',
-    '权重(%)': stock.weight ? stock.weight.toFixed(2) : ''
-  }))
-}
-
-async function exportIndexInfo(indexKey) {
-  const st = indexStateMap[indexKey]
-  if (!st) return
-  try {
-    if (st.list.value.length === 0) await fetchIndexConstituents(indexKey)
-    if (st.list.value.length === 0) {
-      alert(`无${indexKey}成分股数据可导出`)
-      return
-    }
-    const csvData = buildIndexCSVData(st.list.value)
-    const csv = utilGenerateCSV(csvData)
-    downloadCSV(csv, `${indexKey}-constituents-${new Date().toISOString().split('T')[0]}.csv`)
-  } catch (e) {
-    console.error(`导出 ${indexKey} 成分股失败:`, e)
-    alert('导出失败: ' + e.message)
-  }
-}
-
 // 生成显示行：如果在指定模式并选择了多个日期，则为每个 symbol/date 生成单独行
 const displayRows = computed(() => {
   // small reactive token to force re-evaluation when UI-level strategy changes
@@ -2491,44 +2442,6 @@ const star50SelectedCount = computed(() => {
     color: #6c757d;
     font-size: 12px;
   }
-}
-/* 🆕 沪深300相关样式 */
-.hs300-info {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  flex-wrap: wrap;
-}
-
-.index-info {
-  color: #2c3e50;
-  font-weight: bold;
-  font-size: 16px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #e8f5e8, #f0f8f0);
-  border: 2px solid #27ae60;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.btn-refresh, .btn-export-info {
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.btn-refresh:disabled {
-  background: linear-gradient(135deg, #bdc3c7, #95a5a6);
-  cursor: not-allowed;
-}
-
-.btn-export-info {
-  background: linear-gradient(135deg, #9b59b6, #8e44ad);
 }
 .category-chip {
   background: linear-gradient(135deg, #ff9800, #f57c00);
