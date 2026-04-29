@@ -57,7 +57,7 @@ describe('buildStockRankingCacheKey', () => {
     ).toBeNull()
   })
 
-  it('index modes cache key ignores calendar dateParam (GET by-index uses latest per symbol)', () => {
+  it('index modes include date in cache key when calendar date is set', () => {
     const k = buildStockRankingCacheKey({
       viewMode: 'hs300',
       displayLimit: 30,
@@ -68,15 +68,15 @@ describe('buildStockRankingCacheKey', () => {
       watchlistSymbols: [],
       indexSymbols: [],
     })
-    expect(k).toBe('hs300|balanced|latest')
+    expect(k).toBe('hs300|balanced|20200101')
   })
 
-  it('index mode csi1000 uses latest cache segment', () => {
+  it('index mode csi1000 uses latest when no date', () => {
     const k = buildStockRankingCacheKey({
       viewMode: 'csi1000',
       displayLimit: 30,
       rankingStrategy: 'balanced',
-      dateParam: '20200101',
+      dateParam: '',
       selectedDates: [],
       selectedStocks: [],
       watchlistSymbols: [],
