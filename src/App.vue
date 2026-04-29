@@ -287,6 +287,15 @@
             </template>
           </Suspense>
 
+          <Suspense v-if="activeTab === 'theme-lag-recommend'">
+            <template #default>
+              <ThemeLagRecommendPanel />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">主题补涨加载中...</div>
+            </template>
+          </Suspense>
+
           <!-- AI Chat Assistant Tab -->
           <Suspense v-if="activeTab === 'chat'">
             <template #default>
@@ -356,6 +365,7 @@ const UserProfile = defineAsyncComponent(() => import('./components/UserProfile.
 const BacktestManager = defineAsyncComponent(() => import('./components/BacktestManager.vue'))
 const StrategyStockPool = defineAsyncComponent(() => import('./components/StrategyStockPool.vue'))
 const LimitUpLadder = defineAsyncComponent(() => import('./views/LimitUpLadder.vue'))
+const ThemeLagRecommendPanel = defineAsyncComponent(() => import('./components/ThemeLagRecommendPanel.vue'))
 const SectorConceptAnalysis = defineAsyncComponent(() => import('./components/SectorConceptAnalysis.vue'))
 const HotStockAnalysis = defineAsyncComponent(() => import('./components/HotStockAnalysis.vue'))
 const EarningsHunter = defineAsyncComponent(() => import('./views/EarningsHunter.vue'))
@@ -561,6 +571,7 @@ watch(activeTab, (newTab) => {
 const adminTabs = computed(() => {
   const baseTabs = [
     { id: 'limit-up-ladder', name: '📊 连板天梯' },
+    { id: 'theme-lag-recommend', name: '📌 主题补涨' },
     { id: 'sector-concept', name: '📈 概念板块' },
     { id: 'hot-stock', name: '🔥 热股分析' },
     { id: 'etf', name: '💰 ETF淘金' },
