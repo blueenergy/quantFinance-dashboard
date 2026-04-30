@@ -21,7 +21,9 @@ RUN npm config set registry https://registry.npmmirror.com && \
 COPY . .
 ARG VITE_API_BASE=/api
 ENV VITE_API_BASE=$VITE_API_BASE
-RUN echo "Building with VITE_API_BASE=$VITE_API_BASE" && npm run build
+ARG VITE_ASSISTANT_STREAM_BACKEND=legacy
+ENV VITE_ASSISTANT_STREAM_BACKEND=$VITE_ASSISTANT_STREAM_BACKEND
+RUN echo "Building with VITE_API_BASE=$VITE_API_BASE VITE_ASSISTANT_STREAM_BACKEND=$VITE_ASSISTANT_STREAM_BACKEND" && npm run build
 
 ########## Runtime Stage ##########
 FROM nginx:alpine AS runtime

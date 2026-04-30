@@ -137,6 +137,13 @@ const streamingTools = ref([])
 const streamingStatus = ref('')   // current progress step label (e.g. "正在调用工具…")
 let pendingMsgId = ''   // message_id received via SSE before commit to messages[]
 
+const STREAM_BACKEND = import.meta.env.VITE_ASSISTANT_STREAM_BACKEND || 'legacy'
+/** quant-assistant SSE vs quant-api Hermes BFF */
+const ASSISTANT_STREAM_URL =
+  STREAM_BACKEND === 'hermes'
+    ? '/api/assistant/chat/stream'
+    : '/assistant/api/chat/stream'
+
 const messagesAreaRef = ref(null)
 const inputRef = ref(null)
 
@@ -315,7 +322,7 @@ async function sendMessage() {
   abortController = new AbortController()
 
   try {
-    const resp = await fetch('/assistant/api/chat/stream', {
+    const resp = await fetch(ASSISTANT_STREAM_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
