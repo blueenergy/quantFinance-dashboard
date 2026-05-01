@@ -4,7 +4,8 @@
       <div class="tl-col tl-col--title">
         <h1 class="tl-h1">主题补涨候选</h1>
         <p class="tl-sub">
-          主线概念 ∩ 指数成分 · 小涨补涨池（数据来自 quant_data；叙事来自已完成的分析任务）
+          主线概念 ∩ 指数成分 · 小涨补涨池（数据来自 quant_data；叙事来自已完成的分析任务）。
+          「模拟买入价」为验证规则中的锚定日 P₀（收盘）；「退出（日 / 价）」与「规则盈亏%」来自同锚定日验证结果；未跑验证时多为「—」。
         </p>
       </div>
       <div class="tl-col tl-col--controls">
@@ -40,6 +41,27 @@
         >
           加载
         </v-btn>
+        <v-btn
+          v-if="subscribedForCurrentIndex"
+          variant="outlined"
+          class="tl-btn-sub"
+          :loading="subActionLoading"
+          :disabled="!hasAuthToken"
+          @click="unsubscribeCurrent"
+        >
+          退订验证通知
+        </v-btn>
+        <v-btn
+          v-else
+          variant="outlined"
+          class="tl-btn-sub"
+          :loading="subActionLoading"
+          :disabled="!hasAuthToken"
+          @click="subscribeCurrent"
+        >
+          订阅验证结果通知
+        </v-btn>
+        <span v-if="!hasAuthToken" class="tl-hint">登录后可订阅「该指数池」验证更新（站内通知）</span>
       </div>
     </div>
 
@@ -70,6 +92,16 @@
                   <th class="tl-num">当日涨幅%</th>
                   <th class="tl-num">上限阈值</th>
                   <th class="tl-num">下限阈值</th>
+                  <th
+                    class="tl-num"
+                    title="锚定日 P₀：与 theme_lag_candidate_validation 使用的 volume_price 收盘一致"
+                  >
+                    模拟买入价
+                  </th>
+                  <th class="tl-col-exit" title="规则验证：止盈/止损/期满的退出日收盘价；数据不足见单元格提示">
+                    退出（日 / 价）
+                  </th>
+                  <th class="tl-num" title="相对 P₀ 的已实现收益率（小数比×100 为百分点）">规则盈亏%</th>
                 </tr>
               </thead>
               <tbody>
@@ -79,6 +111,9 @@
                   <td class="tl-num">{{ fmtPct(r.pct_chg) }}</td>
                   <td class="tl-num">{{ fmtPct(r.max_candidate_pct) }}</td>
                   <td class="tl-num">{{ fmtPct(r.min_candidate_pct) }}</td>
+                  <td class="tl-num" :title="fmtSimBuyTitle(r)">{{ fmtSimBuy(r) }}</td>
+                  <td class="tl-col-exit" :title="fmtExitTitle(r)">{{ fmtExitDayPrice(r) }}</td>
+                  <td class="tl-num" :title="fmtRulePnlTitle(r)">{{ fmtRulePnl(r) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -105,7 +140,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import axios from 'axios'
 
 function todayYmdDash() {
@@ -126,6 +161,9 @@ const indexOptions = [
 ]
 
 const loading = ref(false)
+const subActionLoading = ref(false)
+const subscriptions = ref([])
+const hasAuthToken = ref(false)
 const loaded = ref(false)
 const error = ref('')
 const candidates = ref([])
@@ -133,6 +171,78 @@ const narrativeBlock = ref(null)
 const resolvedTradeDate = ref('')
 
 let themeLagLoadSeq = 0
+
+function refreshAuthFlag() {
+  hasAuthToken.value = !!localStorage.getItem('access_token')
+}
+
+const subscribedForCurrentIndex = computed(() => {
+  const sk = indexStoreKey.value
+  return (subscriptions.value || []).some((s) => s.index_store_key === sk && s.enabled !== false)
+})
+
+async function fetchSubscriptions() {
+  refreshAuthFlag()
+  if (!hasAuthToken.value) {
+    subscriptions.value = []
+    return
+  }
+  try {
+    const token = localStorage.getItem('access_token')
+    const res = await axios.get('/api/user/theme-lag-validation-subscriptions', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    subscriptions.value = res.data?.data?.items || []
+  } catch {
+    subscriptions.value = []
+  }
+}
+
+async function subscribeCurrent() {
+  refreshAuthFlag()
+  if (!hasAuthToken.value) {
+    error.value = '请先登录后再订阅验证通知'
+    return
+  }
+  subActionLoading.value = true
+  error.value = ''
+  try {
+    const token = localStorage.getItem('access_token')
+    await axios.post(
+      '/api/user/theme-lag-validation-subscriptions',
+      { index_store_key: indexStoreKey.value, enabled: true },
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    await fetchSubscriptions()
+  } catch (e) {
+    const msg = e.response?.data?.detail || e.message || String(e)
+    error.value = typeof msg === 'string' ? msg : '订阅失败'
+  } finally {
+    subActionLoading.value = false
+  }
+}
+
+async function unsubscribeCurrent() {
+  refreshAuthFlag()
+  if (!hasAuthToken.value) {
+    return
+  }
+  subActionLoading.value = true
+  error.value = ''
+  try {
+    const token = localStorage.getItem('access_token')
+    const sk = encodeURIComponent(indexStoreKey.value)
+    await axios.delete(`/api/user/theme-lag-validation-subscriptions/${sk}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    await fetchSubscriptions()
+  } catch (e) {
+    const msg = e.response?.data?.detail || e.message || String(e)
+    error.value = typeof msg === 'string' ? msg : '退订失败'
+  } finally {
+    subActionLoading.value = false
+  }
+}
 
 const metaLine = computed(() => {
   if (!resolvedTradeDate.value) return ''
@@ -170,6 +280,73 @@ function fmtPct(v) {
   const n = Number(v)
   if (Number.isNaN(n)) return '—'
   return n.toFixed(2)
+}
+
+/** YYYYMMDD → YYYY-MM-DD */
+function fmtYmdDash(s) {
+  if (!s) return ''
+  const d = String(s).replace(/\D/g, '').slice(0, 8)
+  if (d.length !== 8) return String(s)
+  return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`
+}
+
+function fmtExitDayPrice(r) {
+  const d = r?.validation_exit_trade_date
+  const p = r?.validation_exit_price
+  if (d && p !== null && p !== undefined && p !== '') {
+    const n = Number(p)
+    if (!Number.isNaN(n)) return `${fmtYmdDash(d)} / ${n.toFixed(2)}`
+  }
+  const o = r?.validation_outcome
+  if (o === 'insufficient_data') return '数据不足'
+  if (o) return '—'
+  return '—'
+}
+
+function fmtSimBuy(r) {
+  const p = r?.validation_p0
+  if (p === null || p === undefined || p === '') return '—'
+  const n = Number(p)
+  if (Number.isNaN(n)) return '—'
+  return n.toFixed(2)
+}
+
+function fmtSimBuyTitle(r) {
+  if (r?.validation_p0 != null && r?.validation_p0 !== '' && !Number.isNaN(Number(r.validation_p0)))
+    return '锚定日 P₀（与验证任务 volume_price 收盘口径一致）'
+  return '尚无验证结果（无 P₀）'
+}
+
+function fmtRulePnl(r) {
+  const raw = r?.validation_return_pct
+  if (raw === null || raw === undefined || raw === '') return '—'
+  const n = Number(raw)
+  if (Number.isNaN(n)) return '—'
+  const pct = n * 100
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct.toFixed(2)}%`
+}
+
+function fmtRulePnlTitle(r) {
+  const o = r?.validation_outcome
+  if (r?.validation_return_pct != null && r?.validation_return_pct !== '' && !Number.isNaN(Number(r.validation_return_pct)))
+    return '相对 P₀ 的已实现收益率（验证规则）'
+  if (o === 'insufficient_data') return '数据不足，无有效收益率'
+  return '尚无验证结果'
+}
+
+function fmtExitTitle(r) {
+  const o = r?.validation_outcome
+  const map = {
+    take_profit: '规则验证：止盈（退出日收盘）',
+    stop_loss: '规则验证：止损（退出日收盘）',
+    expire: '规则验证：期满（第3根有效收盘）',
+    insufficient_data: '规则验证：有效收盘不足或缺锚定价 P₀',
+  }
+  if (o && map[o]) return map[o]
+  if (r?.validation_exit_trade_date && r?.validation_exit_price != null && r?.validation_exit_price !== '')
+    return '规则验证：退出日收盘价'
+  return '尚无验证结果（未跑 theme_lag_candidate_validation 或无该标的记录）'
 }
 
 const bucketGroups = computed(() => {
@@ -221,6 +398,7 @@ const narrativeHtml = computed(() => {
 
 async function loadPanel() {
   const seq = ++themeLagLoadSeq
+  refreshAuthFlag()
   error.value = ''
   loading.value = true
   loaded.value = false
@@ -264,6 +442,7 @@ async function loadPanel() {
       loading.value = false
       loaded.value = true
     }
+    void fetchSubscriptions()
   }
 }
 
@@ -275,6 +454,15 @@ watch(
   },
   { immediate: true },
 )
+
+watch(indexStoreKey, () => {
+  void fetchSubscriptions()
+})
+
+onMounted(() => {
+  refreshAuthFlag()
+  void fetchSubscriptions()
+})
 </script>
 
 <style scoped>
@@ -342,6 +530,22 @@ watch(
   text-transform: none;
   letter-spacing: normal;
   font-weight: 600;
+}
+
+.tl-btn-sub {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+  border-color: #333 !important;
+  color: #111 !important;
+}
+
+.tl-hint {
+  width: 100%;
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  color: #555;
+  margin-top: 0.25rem;
 }
 
 .tl-meta-row {
@@ -433,6 +637,12 @@ watch(
 .tl-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.tl-col-exit {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  min-width: 9.5rem;
 }
 
 .tl-narrative {
