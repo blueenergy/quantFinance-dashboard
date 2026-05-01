@@ -105,13 +105,17 @@
               </div>
             </div>
 
-            <!-- 数据新鲜度 -->
-            <div class="freshness-row" v-if="overview.data_freshness">
+            <!-- 数据新鲜度（优先 freshness_detail 保持与目录一致的顺序） -->
+            <div class="freshness-row" v-if="freshnessDisplayItems.length">
               <h4>📅 数据最后日期</h4>
               <div class="fresh-items">
-                <div v-for="(date, label) in overview.data_freshness" :key="label" class="fresh-item">
-                  <span class="f-label">{{ label }}</span>
-                  <span class="f-date" :class="{ stale: isStale(date) }">{{ date || '--' }}</span>
+                <div
+                  v-for="item in freshnessDisplayItems"
+                  :key="item._key"
+                  class="fresh-item"
+                >
+                  <span class="f-label">{{ item.label }}</span>
+                  <span class="f-date" :class="{ stale: isStale(item.display) }">{{ item.display || '--' }}</span>
                 </div>
               </div>
             </div>
@@ -161,12 +165,51 @@ function leadingYyyymmdd(v) {
   return m ? m[1] : null
 }
 
+function formatFreshnessRowDisplay(row) {
+  if (!row || row.latest_value == null) return null
+  const s = String(row.latest_value)
+  const base = s.length >= 8 && /^\d{8}/.test(s.slice(0, 8)) ? s.slice(0, 8) : s.slice(0, 32)
+  const num = row.coverage_numerator
+  const den = row.coverage_denominator
+  if (num != null && den != null && Number(den) > 0)
+    return `${base} · ${Number(num)}/${Number(den)}`
+  const pct = row.coverage_pct
+  if (pct != null && den != null && Number(den) > 0)
+    return `${base} · 覆盖 ${Number(pct).toFixed(1)}%`
+  return base
+}
+
+const freshnessDisplayItems = computed(() => {
+  const ov = overview.value
+  if (!ov) return []
+  const fd = ov.freshness_detail
+  if (fd && Array.isArray(fd)) {
+    return fd.map((row, i) => ({
+      _key: `${row.pipeline_id || ''}-${row.collection || ''}-${row.label || i}`,
+      label: row.label || row.pipeline_id || String(i),
+      display: formatFreshnessRowDisplay(row),
+    }))
+  }
+  const df = ov.data_freshness
+  if (!df || typeof df !== 'object') return []
+  return Object.entries(df).map(([label, date], i) => ({
+    _key: `legacy-${label}-${i}`,
+    label,
+    display: date,
+  }))
+})
+
 const latestDataDate = computed(() => {
-  if (!overview.value?.data_freshness) return null
-  const raw = Object.values(overview.value.data_freshness).filter(Boolean)
-  const ymd = raw
-    .map((v) => leadingYyyymmdd(v))
-    .filter(Boolean)
+  const fd = overview.value?.freshness_detail
+  const raw = []
+  if (fd && Array.isArray(fd)) {
+    fd.forEach((row) => {
+      if (row.latest_value != null) raw.push(String(row.latest_value))
+    })
+  } else if (overview.value?.data_freshness) {
+    raw.push(...Object.values(overview.value.data_freshness).filter(Boolean))
+  }
+  const ymd = raw.map((v) => leadingYyyymmdd(v)).filter(Boolean)
   if (ymd.length === 0) return null
   const latest = ymd.sort().pop()
   if (latest && latest.length === 8) {
