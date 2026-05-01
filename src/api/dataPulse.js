@@ -30,6 +30,25 @@ export async function fetchDataPulseNews(category = null) {
     return res.json();
 }
 
+/** 获取覆盖率缺口股票（须为目录中带 coverage 的集合） */
+export async function fetchCoverageGaps({ database = "quant_data", collection, period = null, skip = 0, limit = 200 } = {}) {
+    if (!collection) throw new Error("collection is required");
+    const params = new URLSearchParams();
+    params.set("database", database);
+    params.set("collection", collection);
+    params.set("skip", String(skip));
+    params.set("limit", String(limit));
+    if (period) params.set("period", String(period).replace(/-/g, "").slice(0, 8));
+    const res = await fetch(`${API_BASE}/data-pulse/coverage-gaps?${params.toString()}`, {
+        headers: authHeaders(),
+    });
+    if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`coverage-gaps failed: ${res.status} ${errText}`);
+    }
+    return res.json();
+}
+
 /** 获取数据同步任务状态 */
 export async function fetchDataPulseStatus() {
     const res = await fetch(`${API_BASE}/data-pulse/status`, {

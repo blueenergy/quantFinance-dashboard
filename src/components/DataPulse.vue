@@ -116,6 +116,12 @@
                 >
                   <span class="f-label">{{ item.label }}</span>
                   <span class="f-date" :class="{ stale: isStale(item.display) }">{{ item.display || '--' }}</span>
+                  <button
+                    v-if="coverageGapCount(item.row) > 0"
+                    type="button"
+                    class="f-gap-btn"
+                    @click.stop="openCoverageGaps(item.row)"
+                  >缺失 {{ coverageGapCount(item.row) }}</button>
                 </div>
               </div>
             </div>
@@ -123,13 +129,47 @@
         </div>
       </div>
     </v-expand-transition>
+
+    <v-dialog v-model="gapDialog" max-width="560" scrollable>
+      <v-card>
+        <v-card-title class="text-subtitle-1">{{ gapTitle }}</v-card-title>
+        <v-card-text>
+          <div v-if="gapLoading" class="gap-dialog-loading">
+            <v-progress-circular indeterminate size="24" width="2" color="primary" />
+          </div>
+          <div v-else-if="gapError" class="gap-dialog-error">{{ gapError }}</div>
+          <template v-else>
+            <p v-if="gapPayload" class="gap-dialog-meta">
+              报告期 {{ gapPayload.period }} · 共缺 {{ gapPayload.missing_total }} 只
+              <span v-if="gapPayload.missing_total > gapRows.length">（本页展示前 {{ gapRows.length }} 条）</span>
+            </p>
+            <v-table v-if="gapRows.length" density="compact" class="gap-table">
+              <thead>
+                <tr><th class="text-left">代码</th><th class="text-left">名称</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="(r, idx) in gapRows" :key="r.ts_code + '-' + idx">
+                  <td>{{ r.ts_code }}</td>
+                  <td>{{ r.name != null && r.name !== '' ? r.name : '—' }}</td>
+                </tr>
+              </tbody>
+            </v-table>
+            <p v-else class="text-caption text-medium-emphasis">无缺失记录</p>
+          </template>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="gapDialog = false">关闭</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { mdiChevronDown, mdiChevronUp, mdiCheckCircle, mdiAlertCircle } from '@mdi/js'
-import { fetchDataPulseOverview, fetchDataPulseNews } from '../api/dataPulse.js'
+import { fetchDataPulseOverview, fetchDataPulseNews, fetchCoverageGaps } from '../api/dataPulse.js'
 
 const expanded = ref(false)
 const panelTab = ref('news')
@@ -137,6 +177,13 @@ const overview = ref(null)
 const newsData = ref(null)
 const newsFetchedAt = ref(null)
 const newsLoading = ref(false)
+
+const gapDialog = ref(false)
+const gapLoading = ref(false)
+const gapError = ref(null)
+const gapTitle = ref('')
+const gapPayload = ref(null)
+const gapRows = ref([])
 
 const panelTabs = [
   { id: 'news', icon: '📰', label: '新闻快讯' },
@@ -188,6 +235,7 @@ const freshnessDisplayItems = computed(() => {
       _key: `${row.pipeline_id || ''}-${row.collection || ''}-${row.label || i}`,
       label: row.label || row.pipeline_id || String(i),
       display: formatFreshnessRowDisplay(row),
+      row,
     }))
   }
   const df = ov.data_freshness
@@ -196,6 +244,7 @@ const freshnessDisplayItems = computed(() => {
     _key: `legacy-${label}-${i}`,
     label,
     display: date,
+    row: null,
   }))
 })
 
@@ -217,6 +266,44 @@ const latestDataDate = computed(() => {
   }
   return latest
 })
+
+function coverageGapCount(row) {
+  if (!row) return 0
+  const d = row.coverage_denominator
+  const n = row.coverage_numerator
+  if (d == null || n == null) return 0
+  const diff = Number(d) - Number(n)
+  return diff > 0 ? diff : 0
+}
+
+async function openCoverageGaps(row) {
+  gapDialog.value = true
+  gapLoading.value = true
+  gapError.value = null
+  gapPayload.value = null
+  gapRows.value = []
+  gapTitle.value = `${row.label || row.collection} — 未覆盖股票`
+  const period = row.coverage_as_of || leadingYyyymmdd(String(row.latest_value || ''))
+  try {
+    const data = await fetchCoverageGaps({
+      database: row.database || 'quant_data',
+      collection: row.collection,
+      period: period || undefined,
+      skip: 0,
+      limit: 500,
+    })
+    if (!data.success) {
+      gapError.value = data.detail || '请求失败'
+      return
+    }
+    gapPayload.value = data
+    gapRows.value = Array.isArray(data.items) ? data.items : []
+  } catch (e) {
+    gapError.value = e?.message || String(e)
+  } finally {
+    gapLoading.value = false
+  }
+}
 
 // ── 工具方法 ──
 const categoryIcons = {
@@ -609,8 +696,10 @@ onMounted(() => {
 
 .fresh-item {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
 }
 
 .f-label { font-size: 10px; color: #a0aec0; }
@@ -621,6 +710,31 @@ onMounted(() => {
   color: #2d3748;
 }
 .f-date.stale { color: #f56565; }
+
+.f-gap-btn {
+  font-size: 11px;
+  border: none;
+  background: transparent;
+  color: #3182ce;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  font-family: inherit;
+}
+.f-gap-btn:hover { color: #2c5282; }
+
+.gap-dialog-loading,
+.gap-dialog-error {
+  text-align: center;
+  padding: 16px 0;
+}
+.gap-dialog-error { color: #c53030; font-size: 13px; }
+.gap-dialog-meta {
+  font-size: 12px;
+  color: #718096;
+  margin: 0 0 12px 0;
+}
+.gap-table { font-size: 12px; }
 
 /* ── 响应式 ── */
 @media (max-width: 768px) {
