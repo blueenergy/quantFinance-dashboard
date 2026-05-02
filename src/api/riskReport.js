@@ -77,7 +77,7 @@ export async function getMarketDailyAnalysis(date = null) {
 }
 
 /**
- * 触发全市场日报 LLM 解读任务
+ * 触发全市场日报 LLM 解读任务（A股）
  * @param {string|null} date - YYYYMMDD，默认今天
  */
 export async function triggerMarketDailyAnalysis(date = null) {
@@ -85,5 +85,29 @@ export async function triggerMarketDailyAnalysis(date = null) {
     if (date) url += `?date=${date}`;
     const res = await fetch(url, { method: "POST", headers: authHeaders() });
     if (!res.ok) throw new Error(`triggerMarketDailyAnalysis failed: ${res.status}`);
+    return await res.json();
+}
+
+/**
+ * 获取美股市场日报 LLM 解读结果（scope=us_market_daily）
+ * @param {string|null} date - YYYYMMDD，默认今天
+ */
+export async function getUsMarketDailyAnalysis(date = null) {
+    let url = `${API_BASE}/risk-reports/us-market-daily-analysis`;
+    if (date) url += `?date=${date}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`getUsMarketDailyAnalysis failed: ${res.status}`);
+    return await res.json();
+}
+
+/**
+ * 触发美股市场日报 LLM 解读任务
+ * @param {string|null} date - YYYYMMDD，默认今天
+ */
+export async function triggerUsMarketDailyAnalysis(date = null) {
+    let url = `${API_BASE}/risk-reports/analyze/us-market-daily`;
+    if (date) url += `?date=${date}`;
+    const res = await fetch(url, { method: "POST", headers: authHeaders() });
+    if (!res.ok) throw new Error(`triggerUsMarketDailyAnalysis failed: ${res.status}`);
     return await res.json();
 }

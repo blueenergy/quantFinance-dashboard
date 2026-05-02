@@ -22,12 +22,6 @@
         <button class="mrp-btn-sm mrp-btn-ghost" :disabled="overviewLoading" @click="loadOverview">
           🔄
         </button>
-        <button
-          class="mrp-btn-sm mrp-btn-dark"
-          :disabled="triggeringMarket"
-          @click="triggerMarketDaily"
-          title="触发全市场 LLM 日报解读"
-        >🤖 日报解读</button>
       </v-col>
     </v-row>
 
@@ -39,7 +33,7 @@
     </v-row>
 
     <!-- 无数据 -->
-    <v-row v-else-if="!overviewLoading && sectors.length === 0">
+    <v-row v-if="!overviewLoading && sectors.length === 0">
       <v-col cols="12">
         <div class="no-data-hint">
           <v-icon size="48" color="grey">mdi-chart-timeline-variant</v-icon>
@@ -49,10 +43,41 @@
       </v-col>
     </v-row>
 
+    <!-- 市场 Tab 切换 -->
+    <v-row v-if="!overviewLoading && sectors.length > 0" class="mb-2">
+      <v-col cols="12">
+        <div class="market-tabs">
+          <button
+            class="market-tab"
+            :class="{ 'market-tab-active': marketTab === 'us' }"
+            @click="switchMarketTab('us')"
+          >
+            🇺🇸 美股板块
+            <span class="tab-count">{{ usSectors.length }}</span>
+          </button>
+          <button
+            class="market-tab"
+            :class="{ 'market-tab-active': marketTab === 'a' }"
+            @click="switchMarketTab('a')"
+          >
+            🇨🇳 A股板块
+            <span class="tab-count">{{ aShareSectors.length }}</span>
+          </button>
+          <div class="tab-spacer" />
+          <button
+            class="mrp-btn-sm mrp-btn-dark"
+            :disabled="triggeringMarket"
+            @click="triggerMarketDaily"
+            :title="marketTab === 'us' ? '触发美股市场 LLM 日报解读' : '触发A股市场 LLM 日报解读'"
+          >🤖 {{ marketTab === 'us' ? '美股日报' : 'A股日报' }}</button>
+        </div>
+      </v-col>
+    </v-row>
+
     <!-- 行业卡片概览 -->
-    <v-row v-else>
+    <v-row v-if="!overviewLoading && sectors.length > 0">
       <v-col
-        v-for="s in sectors"
+        v-for="s in visibleSectors"
         :key="s.sector"
         cols="12" sm="6" md="4" lg="3"
       >
@@ -85,42 +110,42 @@
     </v-row>
 
     <!-- 全市场日报解读 -->
-    <v-row v-if="marketAnalysis" class="mt-3 mb-1">
+    <v-row v-if="tabAnalysis" class="mt-3 mb-1">
       <v-col cols="12">
         <div class="detail-paper">
           <div class="detail-header">
-            <span class="detail-title">🤖 全市场风险日报解读</span>
+            <span class="detail-title">🤖 {{ marketTab === 'us' ? '美股板块' : 'A股板块' }}风险日报解读</span>
             <div class="d-flex align-center gap-2">
-              <span class="mrp-caption">{{ marketAnalysis.model }} · {{ (marketAnalysis.generated_at || '').slice(0, 16) }}</span>
+              <span class="mrp-caption">{{ tabAnalysis.model }} · {{ (tabAnalysis.generated_at || '').slice(0, 16) }}</span>
               <button class="mrp-btn-sm mrp-btn-ghost" @click="refreshMarketAnalysis" title="刷新日报解读">↻</button>
             </div>
           </div>
           <div class="detail-divider" />
           <div class="mda-body">
-            <p class="mda-summary">{{ marketAnalysis.market_summary }}</p>
+            <p class="mda-summary">{{ tabAnalysis.market_summary }}</p>
             <div class="mda-grid mt-2">
               <!-- 风险分布 + 情绪 -->
               <div class="mda-block">
                 <div class="signal-title">📊 风险分布</div>
-                <div class="mda-chips mt-1" v-if="marketAnalysis.risk_distribution">
-                  <span class="mda-chip mda-chip-low">低风险 {{ (marketAnalysis.risk_distribution.low ?? []).length }}</span>
-                  <span class="mda-chip mda-chip-medium">中等 {{ (marketAnalysis.risk_distribution.medium ?? []).length }}</span>
-                  <span class="mda-chip mda-chip-high">高风险 {{ (marketAnalysis.risk_distribution.high ?? []).length }}</span>
-                  <span v-if="(marketAnalysis.risk_distribution.extreme ?? []).length" class="mda-chip mda-chip-extreme">极端 {{ (marketAnalysis.risk_distribution.extreme ?? []).length }}</span>
+                <div class="mda-chips mt-1" v-if="tabAnalysis.risk_distribution">
+                  <span class="mda-chip mda-chip-low">低风险 {{ (tabAnalysis.risk_distribution.low ?? []).length }}</span>
+                  <span class="mda-chip mda-chip-medium">中等 {{ (tabAnalysis.risk_distribution.medium ?? []).length }}</span>
+                  <span class="mda-chip mda-chip-high">高风险 {{ (tabAnalysis.risk_distribution.high ?? []).length }}</span>
+                  <span v-if="(tabAnalysis.risk_distribution.extreme ?? []).length" class="mda-chip mda-chip-extreme">极端 {{ (tabAnalysis.risk_distribution.extreme ?? []).length }}</span>
                 </div>
-                <div class="mrp-caption mt-1" v-if="marketAnalysis.risk_distribution?.dominant_risk">
-                  主导：{{ marketAnalysis.risk_distribution.dominant_risk }}
+                <div class="mrp-caption mt-1" v-if="tabAnalysis.risk_distribution?.dominant_risk">
+                  主导：{{ tabAnalysis.risk_distribution.dominant_risk }}
                 </div>
                 <div class="signal-title mt-2">💬 市场情绪</div>
-                <span class="mda-sentiment-chip mt-1" :class="sentimentClass(marketAnalysis.market_sentiment)">
-                  {{ marketAnalysis.market_sentiment }}
+                <span class="mda-sentiment-chip mt-1" :class="sentimentClass(tabAnalysis.market_sentiment)">
+                  {{ tabAnalysis.market_sentiment }}
                 </span>
               </div>
               <!-- 主要风险 -->
-              <div class="mda-block" v-if="marketAnalysis.top_risks?.length">
+              <div class="mda-block" v-if="tabAnalysis.top_risks?.length">
                 <div class="signal-title">⚠️ 主要风险</div>
                 <ul class="mda-list mt-1">
-                  <li v-for="(r, i) in marketAnalysis.top_risks" :key="i">
+                  <li v-for="(r, i) in tabAnalysis.top_risks" :key="i">
                     <strong>{{ r.sector_name || r.sector }}</strong>
                     <span class="mrp-caption ml-1">({{ r.score?.toFixed(1) }}分)</span>
                     — {{ r.reason }}
@@ -130,13 +155,13 @@
               <!-- 综合建议 -->
               <div class="mda-block">
                 <div class="signal-title">📌 综合建议</div>
-                <p class="mrp-caption mt-1">{{ marketAnalysis.overall_advice }}</p>
+                <p class="mrp-caption mt-1">{{ tabAnalysis.overall_advice }}</p>
               </div>
               <!-- 重点关注 -->
-              <div class="mda-block" v-if="marketAnalysis.key_watchpoints?.length">
+              <div class="mda-block" v-if="tabAnalysis.key_watchpoints?.length">
                 <div class="signal-title">🔍 重点关注</div>
                 <ul class="mda-list mt-1">
-                  <li v-for="(w, i) in marketAnalysis.key_watchpoints" :key="i">{{ w }}</li>
+                  <li v-for="(w, i) in tabAnalysis.key_watchpoints" :key="i">{{ w }}</li>
                 </ul>
               </div>
             </div>
@@ -324,7 +349,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import {
   getRiskOverview,
   getRiskDetail,
@@ -332,6 +357,8 @@ import {
   triggerRiskAnalysis,
   triggerMarketDailyAnalysis,
   getMarketDailyAnalysis,
+  triggerUsMarketDailyAnalysis,
+  getUsMarketDailyAnalysis,
 } from '../api/riskReport.js'
 
 // ---------------------------------------------------------------------------
@@ -356,8 +383,49 @@ const triggeringSector = ref(false)
 const triggeringMarket = ref(false)
 
 const marketAnalysis = ref(null)
+const usMarketAnalysis = ref(null)
+const marketTab = ref('us')  // 'us' = 美股（默认，美股是A股风向标）, 'a' = A股
 
 const snackbar = ref({ show: false, message: '', color: 'success' })
+
+// ---------------------------------------------------------------------------
+// Sector grouping
+// ---------------------------------------------------------------------------
+const aShareSectors = computed(() => sectors.value.filter(s => !s.sector.startsWith('us_')))
+const usSectors     = computed(() => sectors.value.filter(s => s.sector.startsWith('us_')))
+const visibleSectors = computed(() => marketTab.value === 'us' ? usSectors.value : aShareSectors.value)
+
+// Filter market daily analysis to match the active tab
+const tabAnalysis = computed(() => {
+  if (marketTab.value === 'us') {
+    if (!usMarketAnalysis.value) return null
+    const rd = usMarketAnalysis.value.risk_distribution
+    return {
+      ...usMarketAnalysis.value,
+      risk_distribution: rd ? {
+        low:     (rd.low     || []),
+        medium:  (rd.medium  || []),
+        high:    (rd.high    || []),
+        extreme: (rd.extreme || []),
+        dominant_risk: rd.dominant_risk,
+      } : null,
+    }
+  }
+  if (!marketAnalysis.value) return null
+  const keep = (key) => !key.startsWith('us_')
+  const rd = marketAnalysis.value.risk_distribution
+  return {
+    ...marketAnalysis.value,
+    top_risks: (marketAnalysis.value.top_risks || []).filter(r => keep(r.sector)),
+    risk_distribution: rd ? {
+      low:     (rd.low     || []).filter(keep),
+      medium:  (rd.medium  || []).filter(keep),
+      high:    (rd.high    || []).filter(keep),
+      extreme: (rd.extreme || []).filter(keep),
+      dominant_risk: rd.dominant_risk,
+    } : null,
+  }
+})
 
 // ---------------------------------------------------------------------------
 // Sector metadata
@@ -439,16 +507,22 @@ async function loadOverview() {
   detail.value = null
   trendData.value = []
   marketAnalysis.value = null
+  usMarketAnalysis.value = null
   try {
     const apiDate = toApiDate(selectedDate.value)
-    const [overviewData, analysisData] = await Promise.all([
+    const [overviewData, analysisData, usAnalysisData] = await Promise.all([
       getRiskOverview(apiDate),
       getMarketDailyAnalysis(apiDate).catch(() => null),
+      getUsMarketDailyAnalysis(apiDate).catch(() => null),
     ])
     sectors.value = overviewData.sectors || []
     const doc = analysisData?.analysis || null
     marketAnalysis.value = doc
       ? { ...doc.analysis, model: doc.model, generated_at: doc.generated_at }
+      : null
+    const usDoc = usAnalysisData?.analysis || null
+    usMarketAnalysis.value = usDoc
+      ? { ...usDoc.analysis, model: usDoc.model, generated_at: usDoc.generated_at }
       : null
   } catch (e) {
     showSnack(`加载概览失败: ${e.message}`, 'error')
@@ -460,12 +534,21 @@ async function loadOverview() {
 async function refreshMarketAnalysis() {
   try {
     const apiDate = toApiDate(selectedDate.value)
-    const res = await getMarketDailyAnalysis(apiDate)
-    const doc = res?.analysis || null
-    marketAnalysis.value = doc
-      ? { ...doc.analysis, model: doc.model, generated_at: doc.generated_at }
-      : null
-    if (!marketAnalysis.value) showSnack('暂无日报解读，请先触发 🤖 日报解读', 'warning')
+    if (marketTab.value === 'us') {
+      const res = await getUsMarketDailyAnalysis(apiDate)
+      const doc = res?.analysis || null
+      usMarketAnalysis.value = doc
+        ? { ...doc.analysis, model: doc.model, generated_at: doc.generated_at }
+        : null
+      if (!usMarketAnalysis.value) showSnack('暂无美股日报解读，请先触发 🤖 美股日报', 'warning')
+    } else {
+      const res = await getMarketDailyAnalysis(apiDate)
+      const doc = res?.analysis || null
+      marketAnalysis.value = doc
+        ? { ...doc.analysis, model: doc.model, generated_at: doc.generated_at }
+        : null
+      if (!marketAnalysis.value) showSnack('暂无A股日报解读，请先触发 🤖 A股日报', 'warning')
+    }
   } catch (e) {
     showSnack(`刷新失败: ${e.message}`, 'error')
   }
@@ -601,6 +684,11 @@ function renderChart() {
   })
 }
 
+function switchMarketTab(tab) {
+  marketTab.value = tab
+  activeSector.value = null
+}
+
 // ---------------------------------------------------------------------------
 // LLM triggers
 // ---------------------------------------------------------------------------
@@ -622,8 +710,13 @@ async function triggerMarketDaily() {
   triggeringMarket.value = true
   try {
     const apiDate = toApiDate(selectedDate.value)
-    const res = await triggerMarketDailyAnalysis(apiDate)
-    showSnack(`全市场日报任务已提交（${res.sector_count} 个行业）`, 'success')
+    if (marketTab.value === 'us') {
+      const res = await triggerUsMarketDailyAnalysis(apiDate)
+      showSnack(`美股日报任务已提交（${res.sector_count} 个板块）`, 'success')
+    } else {
+      const res = await triggerMarketDailyAnalysis(apiDate)
+      showSnack(`A股日报任务已提交（${res.sector_count} 个行业）`, 'success')
+    }
   } catch (e) {
     showSnack(`提交失败: ${e.message}`, 'error')
   } finally {
@@ -660,6 +753,58 @@ onMounted(loadOverview)
   max-width: 1400px;
   margin: 0 auto;
   padding: 20px 24px;
+}
+
+/* Market tab switcher */
+.market-tabs {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 0;
+}
+.tab-spacer { flex: 1; }
+.market-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #666;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.market-tab:hover {
+  color: #1565c0;
+  background: #f0f4ff;
+}
+.market-tab-active {
+  color: #1565c0;
+  border-bottom-color: #1565c0;
+  font-weight: 600;
+}
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #e3eaf7;
+  color: #1565c0;
+  border-radius: 9px;
+}
+.market-tab-active .tab-count {
+  background: #1565c0;
+  color: #fff;
 }
 
 /* Typography */
