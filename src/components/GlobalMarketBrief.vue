@@ -379,14 +379,14 @@
     </div>
 
     <!-- K线弹窗 -->
-    <v-dialog v-model="chartDialog" max-width="900" scrollable>
+    <v-dialog v-model="chartDialog" max-width="900">
       <v-card style="background:#1a1a1a; height:520px; display:flex; flex-direction:column;">
         <v-card-title style="color:#fff; padding:8px 16px; font-size:14px; display:flex; align-items:center; flex-shrink:0;">
           {{ chartName }} K线
           <v-spacer />
           <v-btn icon size="small" @click="chartDialog=false" variant="text" color="grey">✕</v-btn>
         </v-card-title>
-        <v-card-text style="padding:0; flex:1; min-height:0;">
+        <v-card-text style="padding:0; height:460px; overflow:hidden;">
           <Suspense>
             <GlobalMarketChart v-if="chartDialog" :symbol="chartSymbol" :name="chartName" />
           </Suspense>

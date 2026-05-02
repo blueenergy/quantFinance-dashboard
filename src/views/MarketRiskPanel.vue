@@ -36,7 +36,7 @@
     <v-row v-if="!overviewLoading && sectors.length === 0">
       <v-col cols="12">
         <div class="no-data-hint">
-          <v-icon size="48" color="grey">mdi-chart-timeline-variant</v-icon>
+          <v-icon size="48" color="grey" :icon="mdiChartTimelineVariant" />
           <p class="mrp-muted mt-2">{{ selectedDate }} 暂无扫描数据</p>
           <p class="mrp-caption">每日 19:30 收盘后自动扫描，或联系管理员手动触发</p>
         </div>
@@ -350,6 +350,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { mdiChartTimelineVariant } from '@mdi/js'
 import {
   getRiskOverview,
   getRiskDetail,

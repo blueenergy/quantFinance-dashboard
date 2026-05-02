@@ -17,7 +17,7 @@ import {
 	VTable, VTooltip, VAlert, VChipGroup, VDivider,
 	// Add components for LimitUpLadder
 	VProgressLinear, VProgressCircular, VOverlay, VExpandTransition, VFadeTransition,
-	VSnackbar,
+	VSnackbar, VSkeletonLoader,
 } from 'vuetify/components';
 import { Ripple } from 'vuetify/directives';
 // Use SVG icon set to avoid loading large icon font
@@ -30,7 +30,7 @@ const vuetify = createVuetify({
 		VPagination, VForm, VListItemTitle, VListItemSubtitle, VMenu,
 		VTable, VTooltip, VAlert, VChipGroup, VDivider,
 		VProgressLinear, VProgressCircular, VOverlay, VExpandTransition, VFadeTransition,
-		VSnackbar,
+		VSnackbar, VSkeletonLoader,
 	},
 	directives: { Ripple },
 	icons: {
