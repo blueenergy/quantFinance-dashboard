@@ -289,11 +289,21 @@
         </div>
       </v-col>
 
-      <!-- 右：30日趋势图 -->
+      <!-- 右：趋势图 -->
       <v-col cols="12" md="6">
         <div class="detail-paper">
           <div class="detail-header">
-            <span class="detail-title">{{ sectorLabel(activeSector) }} — 近30日风险趋势</span>
+            <span class="detail-title">{{ sectorLabel(activeSector) }} — 风险趋势</span>
+            <div class="trend-tabs">
+              <button
+                v-for="d in [30, 60, 90]"
+                :key="d"
+                class="trend-tab"
+                :class="{ 'trend-tab-active': trendDays === d }"
+                :disabled="trendLoading"
+                @click="switchTrendDays(d)"
+              >{{ d }}日</button>
+            </div>
           </div>
           <div class="detail-divider" />
           <div class="detail-body">
@@ -340,6 +350,7 @@ const detailLoading = ref(false)
 const trendData = ref([])
 const trendLoading = ref(false)
 const trendChart = ref(null)
+const trendDays = ref(30)
 
 const triggeringSector = ref(false)
 const triggeringMarket = ref(false)
@@ -352,7 +363,8 @@ const snackbar = ref({ show: false, message: '', color: 'success' })
 // Sector metadata
 // ---------------------------------------------------------------------------
 const SECTOR_LABELS = {
-  semicon:    '半导体科技',
+  semicon:    '半导体芯片',
+  semicon_eq: '半导体设备',
   finance:    '金融',
   consumer:   '消费',
   healthcare: '医药医疗',
@@ -465,12 +477,13 @@ async function openDetail(sector) {
   detailLoading.value = true
   trendData.value = []
   trendLoading.value = true
+  trendDays.value = 30
 
   try {
     const apiDate = toApiDate(selectedDate.value)
     const [d, t] = await Promise.all([
       getRiskDetail(sector, apiDate, true),
-      getRiskTrend(sector, 30),
+      getRiskTrend(sector, trendDays.value),
     ])
     detail.value = d
     trendData.value = t?.data || []
@@ -478,6 +491,21 @@ async function openDetail(sector) {
     showSnack(`加载详情失败: ${e.message}`, 'error')
   } finally {
     detailLoading.value = false
+    trendLoading.value = false
+  }
+}
+
+async function switchTrendDays(days) {
+  if (days === trendDays.value || !activeSector.value) return
+  trendDays.value = days
+  trendLoading.value = true
+  trendData.value = []
+  try {
+    const t = await getRiskTrend(activeSector.value, days)
+    trendData.value = t?.data || []
+  } catch (e) {
+    showSnack(`趋势加载失败: ${e.message}`, 'error')
+  } finally {
     trendLoading.value = false
   }
 }
@@ -924,6 +952,27 @@ onMounted(loadOverview)
 .mt-2  { margin-top: 8px; }
 .mt-3  { margin-top: 12px; }
 .text-center { text-align: center; }
+
+/* Trend day-range tabs */
+.trend-tabs { display: flex; gap: 4px; }
+.trend-tab {
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: transparent;
+  color: #555;
+  cursor: pointer;
+  line-height: 1.7;
+  transition: background 0.1s, color 0.1s;
+}
+.trend-tab:hover:not(:disabled) { border-color: #888; color: #111; }
+.trend-tab:disabled { opacity: 0.45; cursor: default; }
+.trend-tab-active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
 
 /* ── Market Daily Analysis ── */
 .mda-body { padding: 2px 0 4px; }
