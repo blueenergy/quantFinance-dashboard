@@ -135,11 +135,13 @@
                   <span class="m-name">纳斯达克</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.indices, '^IXIC')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.indices, '^IXIC')?.change_pct) }}</span>
+                  <button class="kline-btn" @click.stop="openChart('^IXIC', '纳斯达克')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.indices, '^GSPC')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.indices, '^GSPC'))">
                   <span class="m-name">标普500</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.indices, '^GSPC')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.indices, '^GSPC')?.change_pct) }}</span>
+                  <button class="kline-btn" @click.stop="openChart('^GSPC', '标普500')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.indices, '^DJI')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.indices, '^DJI'))">
                   <span class="m-name">道琼斯</span>
@@ -155,6 +157,7 @@
                   <span class="m-name">恐慌指数(VIX)</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.indices, '^VIX')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.indices, '^VIX')?.change_pct) }}</span>
+                  <button class="kline-btn" @click.stop="openChart('^VIX', 'VIX恐慌指数')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.us_index_futures, 'NQ=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.us_index_futures, 'NQ=F'))">
                   <span class="m-name">纳指期货</span>
@@ -199,6 +202,7 @@
                   <span class="m-name">{{ getMarketItem(displayMarketData.tech_giants, symbol)?.name || symbol }}</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.tech_giants, symbol)?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.tech_giants, symbol)?.change_pct) }}</span>
+                  <button v-if="hasKline(symbol)" class="kline-btn" @click.stop="openChart(symbol, getMarketItem(displayMarketData.tech_giants, symbol)?.name || symbol)" title="查看K线">📈</button>
                 </div>
               </div>
             </v-window-item>
@@ -241,6 +245,7 @@
                   <span class="m-name">10年美债</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.bonds, '^TNX')?.price) }}%</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.bonds, '^TNX')?.change_pct) }}</span>
+                  <button class="kline-btn" @click.stop="openChart('^TNX', '10年美债收益率')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.crypto, 'BTC-USD')?.change_pct)">
                   <span class="m-name">比特币</span>
@@ -372,12 +377,37 @@
         <p>📡 暂无隔夜全球数据，请等待 08:30 自动简报生成</p>
       </div>
     </div>
+
+    <!-- K线弹窗 -->
+    <v-dialog v-model="chartDialog" max-width="900" scrollable>
+      <v-card style="background:#1a1a1a; height:520px; display:flex; flex-direction:column;">
+        <v-card-title style="color:#fff; padding:8px 16px; font-size:14px; display:flex; align-items:center; flex-shrink:0;">
+          {{ chartName }} K线
+          <v-spacer />
+          <v-btn icon size="small" @click="chartDialog=false" variant="text" color="grey">✕</v-btn>
+        </v-card-title>
+        <v-card-text style="padding:0; flex:1; min-height:0;">
+          <Suspense>
+            <GlobalMarketChart v-if="chartDialog" :symbol="chartSymbol" :name="chartName" />
+          </Suspense>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import request from '../utils/request'
+
+const GlobalMarketChart = defineAsyncComponent(() => import('./GlobalMarketChart.vue'))
+
+const KLINE_SYMBOLS = new Set(['SOXX', 'SMH', '^SOX', 'QQQ', 'XLK', '^IXIC', 'SPY', '^GSPC', '^VIX', '^TNX', 'NVDA', 'AMD'])
+const chartDialog = ref(false)
+const chartSymbol = ref('')
+const chartName = ref('')
+function hasKline(symbol) { return KLINE_SYMBOLS.has(symbol) }
+function openChart(symbol, name) { chartSymbol.value = symbol; chartName.value = name || symbol; chartDialog.value = true }
 import { mdiRefresh, mdiHelpCircleOutline } from '@mdi/js'
 import { useAuth } from '../services/auth.js'
 import { canUseProFeature } from '../utils/entitlements'
@@ -1158,6 +1188,19 @@ async function refreshAnalysis() {
   font-size: 11px;
   font-weight: 500;
 }
+
+.kline-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  opacity: 0.5;
+  line-height: 1;
+  align-self: flex-end;
+  margin-top: 1px;
+}
+.kline-btn:hover { opacity: 1; }
 
 .text-up { color: #f56565; }
 .text-down { color: #48bb78; }
