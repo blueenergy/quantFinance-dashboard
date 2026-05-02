@@ -1158,7 +1158,8 @@ async function refreshAnalysis() {
 
 .market-indices {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
   overflow-x: auto;
   padding-bottom: 4px;
 }
@@ -1166,7 +1167,8 @@ async function refreshAnalysis() {
 .market-item {
   display: flex;
   flex-direction: column;
-  min-width: 80px;
+  min-width: 72px;
+  flex: 0 1 auto;
 }
 
 .m-name {

@@ -469,13 +469,15 @@ onMounted(() => {
 
 .pulse-summary {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 6px 12px;
   flex: 1;
-  overflow: hidden;
+  min-width: 0;
+  align-items: center;
 }
 
 .summary-item {
-  font-size: 12px;
+  font-size: 11px;
   color: #718096;
   display: flex;
   align-items: center;
@@ -507,8 +509,9 @@ onMounted(() => {
 
 .ptab {
   flex: 1;
-  padding: 8px 12px;
-  font-size: 12px;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 11px;
   font-weight: 500;
   color: #718096;
   border: none;
@@ -525,9 +528,10 @@ onMounted(() => {
 .ptab:hover:not(.active) { background: #f7fafc; }
 
 .panel-content {
-  padding: 12px 16px;
+  padding: 10px 12px;
   max-height: 380px;
   overflow-y: auto;
+  overflow-x: auto;
 }
 
 .panel-loading, .panel-empty {
@@ -542,15 +546,16 @@ onMounted(() => {
 /* ── 新闻 ── */
 .news-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
 }
 
 .news-category {
   background: #f7fafc;
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid #edf2f7;
+  min-width: 0;
 }
 
 .category-header {
@@ -658,7 +663,7 @@ onMounted(() => {
 
 .sync-jobs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 4px;
   margin-bottom: 16px;
 }

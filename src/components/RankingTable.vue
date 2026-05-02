@@ -164,25 +164,26 @@ function returnSinceTooltip(row) {
 /* table-specific styles moved from StockRanking.vue */
 .ranking-table {
   width: 100%;
+  min-width: 1020px;
   border-collapse: collapse;
   margin-top: 10px;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
   border-radius: 8px;
   overflow: hidden;
-  font-size: 16px;
+  font-size: 14px;
   color: #222;
 }
 
 .table-header {
   background: linear-gradient(135deg, #23272f, #34495e);
   color: #fff;
-  font-size: 17px;
-  letter-spacing: 1px;
+  font-size: 14px;
+  letter-spacing: 0.5px;
 }
 
 .table-header th {
   border: 1px solid #34495e;
-  padding: 14px 10px;
+  padding: 8px 6px;
   font-weight: bold;
   text-shadow: 1px 1px 4px rgba(0,0,0,0.35);
   color: #fff;
@@ -196,7 +197,7 @@ function returnSinceTooltip(row) {
 }
 .th-symbol { background: linear-gradient(135deg, #3498db, #2980b9); }
 .th-name { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
-.th-return-since { background: linear-gradient(135deg, #546e7a, #37474f); min-width: 128px; }
+.th-return-since { background: linear-gradient(135deg, #546e7a, #37474f); min-width: 108px; max-width: 132px; }
 .th-score { background: linear-gradient(135deg, #e67e22, #d35400); }
 .th-cycle { background: linear-gradient(135deg, #1abc9c, #16a085); }
 .th-growth { background: linear-gradient(135deg, #43e97b, #38f9d7); }
@@ -215,7 +216,7 @@ function returnSinceTooltip(row) {
 
 .ranking-table td {
   border: 1px solid #e0e0e0;
-  padding: 12px 10px;
+  padding: 8px 6px;
   vertical-align: middle;
   color: #1a1a1a;
   font-weight: 600;
@@ -253,13 +254,13 @@ function returnSinceTooltip(row) {
 }
 
 .score-badge-wrapper { display:flex; align-items:center; justify-content:center; gap:8px; }
-.score-badge { display: inline-block; min-width: 50px; padding: 7px 14px; border-radius: 20px; font-weight: bold; text-align: center; font-size: 18px; color: #fff; text-shadow: 1px 1px 6px rgba(0,0,0,0.18); letter-spacing: 1px; }
+.score-badge { display: inline-block; min-width: 42px; padding: 5px 10px; border-radius: 16px; font-weight: bold; text-align: center; font-size: 15px; color: #fff; text-shadow: 1px 1px 6px rgba(0,0,0,0.18); letter-spacing: 0.5px; }
 .score-badge.score-high { background: linear-gradient(135deg, #4caf50, #388e3c); }
 .score-badge.score-mid-high { background: linear-gradient(135deg, #ff9800, #f57c00); }
 .score-badge.score-mid { background: linear-gradient(135deg, #2196f3, #1976d2); }
 .score-badge.score-low { background: linear-gradient(135deg, #9e9e9e, #757575); }
 
-.cycle-score, .fundamental-score, .technical-score, .money-score, .growth-score, .value-score { display: inline-block; padding: 5px 10px; border-radius: 5px; font-weight: bold; min-width: 44px; text-align: center; font-size: 16px; color: #fff; text-shadow: 1px 1px 6px rgba(0,0,0,0.18); letter-spacing: 1px; }
+.cycle-score, .fundamental-score, .technical-score, .money-score, .growth-score, .value-score { display: inline-block; padding: 4px 6px; border-radius: 5px; font-weight: bold; min-width: 36px; text-align: center; font-size: 14px; color: #fff; text-shadow: 1px 1px 6px rgba(0,0,0,0.18); letter-spacing: 0.3px; }
 .cycle-score { background: linear-gradient(135deg, #1abc9c, #16a085); color: white; }
 .fundamental-score { background: linear-gradient(135deg, #f39c12, #e67e22); color: white; }
 .technical-score { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; }
@@ -289,10 +290,10 @@ function returnSinceTooltip(row) {
 }
 
 .btn-chart, .btn-watch, .btn-remove {
-  border:none; cursor:pointer; font-weight:600; letter-spacing:.5px;
+  border:none; cursor:pointer; font-weight:600; letter-spacing:.3px;
   transition:transform .18s ease, box-shadow .18s ease, background .25s ease;
-  display:inline-flex; align-items:center; justify-content:center; gap:4px;
-  position:relative; padding:6px 10px; font-size:12px; border-radius:4px;
+  display:inline-flex; align-items:center; justify-content:center; gap:2px;
+  position:relative; padding:4px 8px; font-size:11px; border-radius:4px;
 }
 .btn-chart { background: linear-gradient(135deg,#3498db,#2980b9); color:#fff; }
 .btn-watch { background: linear-gradient(135deg,#ffa726,#ff9800); color:#fff; }

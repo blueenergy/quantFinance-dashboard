@@ -94,20 +94,22 @@
         </div>
       </div>
 
-      <RankingTable
-        :displayRows="displayRows"
-        :viewMode="viewMode"
-        :formatDateDisplay="formatDateDisplay"
-        :getScoreClass="getScoreClass"
-        :getRankClass="getRankClass"
-        :getRowClass="getRowClass"
-        :isInWatchlist="isInWatchlist"
-        @view-chart="viewChart"
-        @toggle-watchlist="toggleWatchlist"
-        @remove-stock="removeStockFromQuery"
-        @show-score="stock => fetchScoreDetails(stock, 'composite')"
-        @show-score-detail="({ stock, category }) => fetchScoreDetails(stock, category)"
-      />
+      <div class="ranking-table-scroll">
+        <RankingTable
+          :displayRows="displayRows"
+          :viewMode="viewMode"
+          :formatDateDisplay="formatDateDisplay"
+          :getScoreClass="getScoreClass"
+          :getRankClass="getRankClass"
+          :getRowClass="getRowClass"
+          :isInWatchlist="isInWatchlist"
+          @view-chart="viewChart"
+          @toggle-watchlist="toggleWatchlist"
+          @remove-stock="removeStockFromQuery"
+          @show-score="stock => fetchScoreDetails(stock, 'composite')"
+          @show-score-detail="({ stock, category }) => fetchScoreDetails(stock, category)"
+        />
+      </div>
     </div>
 
     <!-- ✅ 快速选择模态框 -->
@@ -2367,6 +2369,13 @@ const star50SelectedCount = computed(() => {
   border-top: 1px solid #ddd;
 }
 
+
+/* 宽表：保证右侧列仍在可视区内（可横向滚动），避免被父级裁切 */
+.ranking-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
 /* ✅ 保持原有表格样式 */
 

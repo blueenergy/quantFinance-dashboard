@@ -1380,23 +1380,31 @@ const hasNext = computed(() => currentIndex.value < watchlist.value.length - 1)
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  max-width: 100%;
+  padding: 6px 6px 0;
   border-bottom: 2px solid rgba(138, 43, 226, 0.3);
-  margin-bottom: 30px;
+  margin-bottom: 20px;
   background: rgba(30, 30, 63, 0.5);
   border-radius: 8px 8px 0 0;
 }
 
 .tab-button {
-  padding: 12px 24px;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 8px 12px;
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 500;
   color: #b19cd9;
   border-bottom: 2px solid transparent;
   transition: all 0.3s;
   position: relative;
+  white-space: nowrap;
 }
 
 .tab-button:hover {
