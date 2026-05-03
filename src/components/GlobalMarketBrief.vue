@@ -147,11 +147,13 @@
                   <span class="m-name">道琼斯</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.indices, '^DJI')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.indices, '^DJI')?.change_pct) }}</span>
+                  <button v-if="hasKline('^DJI')" class="kline-btn" @click.stop="openChart('^DJI', '道琼斯')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.indices, '^RUT')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.indices, '^RUT'))">
                   <span class="m-name">罗素2000</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.indices, '^RUT')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.indices, '^RUT')?.change_pct) }}</span>
+                  <button v-if="hasKline('^RUT')" class="kline-btn" @click.stop="openChart('^RUT', '罗素2000')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.indices, '^VIX')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.indices, '^VIX'))">
                   <span class="m-name">恐慌指数(VIX)</span>
@@ -163,21 +165,25 @@
                   <span class="m-name">纳指期货</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.us_index_futures, 'NQ=F')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.us_index_futures, 'NQ=F')?.change_pct) }}</span>
+                  <button v-if="hasKline('NQ=F')" class="kline-btn" @click.stop="openChart('NQ=F', '纳指期货')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.us_index_futures, 'ES=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.us_index_futures, 'ES=F'))">
                   <span class="m-name">标普期货</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.us_index_futures, 'ES=F')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.us_index_futures, 'ES=F')?.change_pct) }}</span>
+                  <button v-if="hasKline('ES=F')" class="kline-btn" @click.stop="openChart('ES=F', '标普期货')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.us_index_futures, 'YM=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.us_index_futures, 'YM=F'))">
                   <span class="m-name">道指期货</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.us_index_futures, 'YM=F')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.us_index_futures, 'YM=F')?.change_pct) }}</span>
+                  <button v-if="hasKline('YM=F')" class="kline-btn" @click.stop="openChart('YM=F', '道指期货')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.us_index_futures, 'RTY=F')?.change_pct)" :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.us_index_futures, 'RTY=F'))">
                   <span class="m-name">罗素期货</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.us_index_futures, 'RTY=F')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.us_index_futures, 'RTY=F')?.change_pct) }}</span>
+                  <button v-if="hasKline('RTY=F')" class="kline-btn" @click.stop="openChart('RTY=F', '罗素期货')" title="查看K线">📈</button>
                 </div>
               </div>
             </v-window-item>
@@ -190,6 +196,7 @@
                   <span class="m-name">{{ getMarketItem(displayMarketData.china_concepts, symbol)?.name || symbol }}</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.china_concepts, symbol)?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.china_concepts, symbol)?.change_pct) }}</span>
+                  <button v-if="hasKline(symbol)" class="kline-btn" @click.stop="openChart(symbol, getMarketItem(displayMarketData.china_concepts, symbol)?.name || symbol)" title="查看K线">📈</button>
                 </div>
               </div>
             </v-window-item>
@@ -214,26 +221,31 @@
                   <span class="m-name">黄金</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.commodities, 'GC=F')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.commodities, 'GC=F')?.change_pct) }}</span>
+                  <button v-if="hasKline('GC=F')" class="kline-btn" @click.stop="openChart('GC=F', '黄金')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.commodities, 'SI=F')?.change_pct)">
                   <span class="m-name">白银</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.commodities, 'SI=F')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.commodities, 'SI=F')?.change_pct) }}</span>
+                  <button v-if="hasKline('SI=F')" class="kline-btn" @click.stop="openChart('SI=F', '白银')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.commodities, 'CL=F')?.change_pct)">
                   <span class="m-name">原油</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.commodities, 'CL=F')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.commodities, 'CL=F')?.change_pct) }}</span>
+                  <button v-if="hasKline('CL=F')" class="kline-btn" @click.stop="openChart('CL=F', '原油')" title="查看K线">📈</button>
                 </div>
-                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.forex, 'CNH=X')?.change_pct)">
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.forex, 'USDCNH=X')?.change_pct)">
                   <span class="m-name">离岸人民币</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.forex, 'CNH=X')?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.forex, 'CNH=X')?.change_pct) }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.forex, 'USDCNH=X')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.forex, 'USDCNH=X')?.change_pct) }}</span>
+                  <button v-if="hasKline('USDCNH=X')" class="kline-btn" @click.stop="openChart('USDCNH=X', '离岸人民币')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.forex, 'DX-Y.NYB')?.change_pct)">
                   <span class="m-name">美元指数</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.forex, 'DX-Y.NYB')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.forex, 'DX-Y.NYB')?.change_pct) }}</span>
+                  <button v-if="hasKline('DX-Y.NYB')" class="kline-btn" @click.stop="openChart('DX-Y.NYB', '美元指数')" title="查看K线">📈</button>
                 </div>
               </div>
             </v-window-item>
@@ -251,11 +263,13 @@
                   <span class="m-name">比特币</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.crypto, 'BTC-USD')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.crypto, 'BTC-USD')?.change_pct) }}</span>
+                  <button v-if="hasKline('BTC-USD')" class="kline-btn" @click.stop="openChart('BTC-USD', '比特币')" title="查看K线">📈</button>
                 </div>
                  <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.crypto, 'ETH-USD')?.change_pct)">
                   <span class="m-name">以太坊</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.crypto, 'ETH-USD')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.crypto, 'ETH-USD')?.change_pct) }}</span>
+                  <button v-if="hasKline('ETH-USD')" class="kline-btn" @click.stop="openChart('ETH-USD', '以太坊')" title="查看K线">📈</button>
                 </div>
                </div>
             </v-window-item>
@@ -402,12 +416,23 @@ import request from '../utils/request'
 
 const GlobalMarketChart = defineAsyncComponent(() => import('./GlobalMarketChart.vue'))
 
-const KLINE_SYMBOLS = new Set(['SOXX', 'SMH', '^SOX', 'QQQ', 'XLK', '^IXIC', 'SPY', '^GSPC', '^VIX', '^TNX', 'NVDA', 'AMD'])
+const klineSymbols = ref(new Set())
 const chartDialog = ref(false)
 const chartSymbol = ref('')
 const chartName = ref('')
-function hasKline(symbol) { return KLINE_SYMBOLS.has(symbol) }
+function hasKline(symbol) { return klineSymbols.value.has(symbol) }
 function openChart(symbol, name) { chartSymbol.value = symbol; chartName.value = name || symbol; chartDialog.value = true }
+
+async function fetchKlineSymbols() {
+  try {
+    const res = await request({ method: 'get', url: '/global-market/kline-symbols' })
+    if (res?.success && Array.isArray(res.symbols)) {
+      klineSymbols.value = new Set(res.symbols)
+    }
+  } catch (e) {
+    // fallback: leave empty, no kline buttons shown
+  }
+}
 import { mdiRefresh, mdiHelpCircleOutline } from '@mdi/js'
 import { useAuth } from '../services/auth.js'
 import { canUseProFeature } from '../utils/entitlements'
@@ -731,6 +756,7 @@ function getStrengthColor(strength) {
 }
 
 onMounted(() => {
+  fetchKlineSymbols()
   fetchGlobalAnalysis()
 })
 
