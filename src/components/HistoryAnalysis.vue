@@ -50,6 +50,124 @@
           <span class="label" style="margin-left:12px;">信心分数:</span>
           <span>{{ item.analysis?.confidence_score ?? '无' }}</span>
         </div>
+
+        <!-- 评审流水线：默认折叠；正文在上，此处仅按需展开查看评审意见 / 初稿对照 -->
+        <div v-if="item.analysis?.deep_review_pipeline" class="review-pipeline-outer">
+          <div
+            v-if="item.analysis.deep_review_pipeline.revision_failed"
+            class="review-banner warn"
+          >
+            ⚠️ 修订稿生成失败，当前正文为<strong>初稿</strong>；以下为评审侧反馈（不可当作修订终稿）。
+            <span v-if="item.analysis.deep_review_pipeline.revision_error" class="muted">
+              （{{ item.analysis.deep_review_pipeline.revision_error }}）
+            </span>
+          </div>
+          <div v-else class="review-final-hint">
+            <span>
+              上方字段为已采纳评审意见后的<strong>最终修订稿</strong>。
+            </span>
+            <button
+              type="button"
+              class="btn-toggle-thinking btn-review-detail"
+              @click="toggleReviewDetail(item, idx)"
+            >
+              {{ reviewDetailOpen[itemKey(item, idx)] ? '收起' : '查看' }} 评审意见与初稿对照
+            </button>
+          </div>
+
+          <div
+            v-show="
+              item.analysis.deep_review_pipeline.revision_failed ||
+              reviewDetailOpen[itemKey(item, idx)]
+            "
+            class="review-pipeline"
+          >
+            <div
+              v-if="!item.analysis.deep_review_pipeline.revision_failed"
+              class="review-banner ok"
+            >
+              ✅ 评审摘要与问题清单、初稿对照（可选阅读）
+            </div>
+
+            <div v-if="item.analysis.deep_review_pipeline.review?.summary" class="review-summary">
+              <span class="label">评审摘要：</span>
+              {{ item.analysis.deep_review_pipeline.review.summary }}
+              <span
+                v-if="item.analysis.deep_review_pipeline.review.confidence_in_draft != null"
+                class="muted"
+              >
+                （评审对初稿置信度 {{ item.analysis.deep_review_pipeline.review.confidence_in_draft }}/100）
+              </span>
+            </div>
+
+            <div
+              v-if="(item.analysis.deep_review_pipeline.review?.issues || []).length"
+              class="review-issues"
+            >
+              <div class="label">评审问题清单（建设性意见）</div>
+              <ul>
+                <li
+                  v-for="(iss, j) in item.analysis.deep_review_pipeline.review.issues"
+                  :key="j"
+                >
+                  <span class="issue-id">#{{ iss.id || j + 1 }}</span>
+                  <span :class="['sev', iss.severity]">{{ iss.severity }}</span>
+                  <span class="cat">[{{ iss.category }}]</span>
+                  {{ iss.problem }}
+                  <span v-if="iss.suggestion" class="sug">→ {{ iss.suggestion }}</span>
+                </li>
+              </ul>
+            </div>
+
+            <div v-if="hasRevisionLog(item)" class="revision-log-block">
+              <div class="label">修订响应 revision_log</div>
+              <ul>
+                <li v-for="(row, k) in item.analysis.revision_log" :key="k">
+                  <code>{{ row.issue_id }}</code>
+                  <span class="action">{{ row.action }}</span>
+                  {{ row.note }}
+                </li>
+              </ul>
+            </div>
+
+            <div
+              v-if="!item.analysis.deep_review_pipeline.revision_failed && pipelineDraft(item)"
+              class="compare-toolbar"
+            >
+              <button
+                type="button"
+                class="btn-toggle-thinking"
+                @click="toggleCompare(item, idx)"
+              >
+                {{ compareOpen[itemKey(item, idx)] ? '收起' : '展开' }} 初稿 / 修订稿 关键字段对照表
+              </button>
+            </div>
+
+            <div
+              v-if="compareOpen[itemKey(item, idx)] && !item.analysis.deep_review_pipeline.revision_failed"
+              class="compare-table-wrap"
+            >
+              <table class="compare-table">
+                <thead>
+                  <tr>
+                    <th>字段</th>
+                    <th>初稿</th>
+                    <th>修订稿</th>
+                    <th>是否变化</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in compareRows(item)" :key="row.key">
+                    <td>{{ row.label }}</td>
+                    <td class="cell-draft">{{ row.draft }}</td>
+                    <td class="cell-revised">{{ row.revised }}</td>
+                    <td>{{ row.changed ? '是' : '否' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
         
         <!-- Thinking Process Toggle -->
         <div v-if="item.analysis?.thought_process_raw" style="margin-top: 12px;">
@@ -79,7 +197,7 @@
 </template>
 
 <script setup>
-import { reactive, watch, ref, onMounted } from 'vue'
+import { reactive, watch, ref } from 'vue'
 import axios from 'axios' 
 
 const props = defineProps({
@@ -141,6 +259,81 @@ function formatDateTime(timestamp) {
 
 const thinkingStates = reactive({})
 const maximizingStates = reactive({})
+/** 初稿/修订稿对照折叠：key = itemKey */
+const compareOpen = reactive({})
+/** 评审意见区块默认收起，只看最终稿的用户无需展开 */
+const reviewDetailOpen = reactive({})
+
+function itemKey(item, idx) {
+  return String(item.id || item._id || item.timestamp || idx)
+}
+
+function pipelineDraft(item) {
+  const p = item.analysis?.deep_review_pipeline
+  if (!p || p.revision_failed) return null
+  return p.draft || null
+}
+
+function revisedClean(item) {
+  const a = item.analysis || {}
+  const { deep_review_pipeline: _p, ...rest } = a
+  return rest
+}
+
+function hasRevisionLog(item) {
+  return Array.isArray(item.analysis?.revision_log) && item.analysis.revision_log.length > 0
+}
+
+function toggleCompare(item, idx) {
+  const k = itemKey(item, idx)
+  compareOpen[k] = !compareOpen[k]
+}
+
+function toggleReviewDetail(item, idx) {
+  const k = itemKey(item, idx)
+  if (k) {
+    reviewDetailOpen[k] = !reviewDetailOpen[k]
+  }
+}
+
+function truncate(s, n = 160) {
+  if (s == null || s === '') return '—'
+  const t = String(s)
+  return t.length <= n ? t : `${t.slice(0, n)}…`
+}
+
+function fmtPoints(v) {
+  if (Array.isArray(v)) return v.join('；') || '—'
+  return v || '—'
+}
+
+function compareRows(item) {
+  const d = pipelineDraft(item)
+  const r = revisedClean(item)
+  if (!d || !r) return []
+  const keys = [
+    { key: 'investment_advice', label: '投资建议' },
+    { key: 'risk_level', label: '风险等级' },
+    { key: 'confidence_score', label: '信心分数' },
+    { key: 'technical_analysis', label: '技术面（节选）' },
+    { key: 'quant_score_cross_check', label: '量化对照' },
+    { key: 'key_points', label: '要点摘要' },
+  ]
+  return keys.map(({ key, label }) => {
+    let dv = d[key]
+    let rv = r[key]
+    if (key === 'technical_analysis' || key === 'quant_score_cross_check') {
+      dv = truncate(dv, 200)
+      rv = truncate(rv, 200)
+    }
+    if (key === 'key_points') {
+      dv = truncate(fmtPoints(dv), 200)
+      rv = truncate(fmtPoints(rv), 200)
+    }
+    const changed = String(dv) !== String(rv)
+    return { key, label, draft: dv ?? '—', revised: rv ?? '—', changed }
+  })
+}
 
 function toggleThinking(item) {
   const key = item.id || item._id || item.timestamp
@@ -325,5 +518,120 @@ function toggleMaximize(item) {
     padding: 4px 12px;
     border-radius: 4px;
     cursor: pointer;
+}
+
+.review-pipeline-outer {
+  margin-top: 14px;
+}
+.review-final-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(30, 30, 50, 0.45);
+  font-size: 13px;
+  color: #c4b5fd;
+}
+.review-final-hint strong {
+  color: #e9d5ff;
+}
+.btn-review-detail {
+  flex-shrink: 0;
+}
+
+.review-pipeline {
+  margin-bottom: 14px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #3d3d5c;
+  background: rgba(138, 43, 226, 0.06);
+}
+.review-banner {
+  font-size: 13px;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.review-banner.ok {
+  color: #86efac;
+}
+.review-banner.warn {
+  color: #fca5a5;
+}
+.review-banner .muted {
+  color: #888;
+  font-size: 12px;
+}
+.review-summary {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #e9e9f0;
+}
+.review-issues ul {
+  margin: 6px 0 0 0;
+  padding-left: 0;
+}
+.review-issues li {
+  list-style: none;
+  margin-bottom: 8px;
+  padding-left: 8px;
+  border-left: 2px solid #6366f1;
+  color: #d4d4d8;
+}
+.issue-id {
+  color: #a78bfa;
+  margin-right: 6px;
+  font-size: 12px;
+}
+.sev.high { color: #f87171; margin: 0 6px; font-size: 11px; text-transform: uppercase; }
+.sev.medium { color: #fbbf24; margin: 0 6px; font-size: 11px; }
+.sev.low { color: #94a3b8; margin: 0 6px; font-size: 11px; }
+.cat { color: #64748b; margin-right: 6px; font-size: 12px; }
+.sug { color: #93c5fd; display: block; margin-top: 4px; font-size: 12px; }
+.revision-log-block {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.revision-log-block code {
+  background: #333;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 8px;
+}
+.revision-log-block .action {
+  color: #fbbf24;
+  margin: 0 8px;
+}
+.compare-toolbar {
+  margin-top: 10px;
+}
+.compare-table-wrap {
+  margin-top: 10px;
+  overflow-x: auto;
+}
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.compare-table th,
+.compare-table td {
+  border: 1px solid #444;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+.compare-table th {
+  background: #2a2a2a;
+  color: #aaa;
+}
+.cell-draft {
+  color: #cbd5e1;
+  max-width: 280px;
+}
+.cell-revised {
+  color: #bbf7d0;
+  max-width: 280px;
 }
 </style>
