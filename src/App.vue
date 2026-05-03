@@ -296,6 +296,15 @@
             </template>
           </Suspense>
 
+          <Suspense v-if="activeTab === 'x-influencer-voices'">
+            <template #default>
+              <XInfluencerVoicesPanel />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">X大V情报加载中...</div>
+            </template>
+          </Suspense>
+
           <Suspense v-if="activeTab === 'theme-lag-recommend'">
             <template #default>
               <ThemeLagRecommendPanel />
@@ -375,6 +384,7 @@ const BacktestManager = defineAsyncComponent(() => import('./components/Backtest
 const StrategyStockPool = defineAsyncComponent(() => import('./components/StrategyStockPool.vue'))
 const LimitUpLadder = defineAsyncComponent(() => import('./views/LimitUpLadder.vue'))
 const MarketRiskPanel = defineAsyncComponent(() => import('./views/MarketRiskPanel.vue'))
+const XInfluencerVoicesPanel = defineAsyncComponent(() => import('./views/XInfluencerVoicesPanel.vue'))
 const ThemeLagRecommendPanel = defineAsyncComponent(() => import('./components/ThemeLagRecommendPanel.vue'))
 const SectorConceptAnalysis = defineAsyncComponent(() => import('./components/SectorConceptAnalysis.vue'))
 const HotStockAnalysis = defineAsyncComponent(() => import('./components/HotStockAnalysis.vue'))
@@ -582,6 +592,7 @@ const adminTabs = computed(() => {
   const baseTabs = [
     { id: 'limit-up-ladder', name: '📊 连板天梯' },
     { id: 'market-risk', name: '🚨 风险预警' },
+    { id: 'x-influencer-voices', name: '🐦 X大V情报' },
     { id: 'theme-lag-recommend', name: '📌 主题补涨' },
     { id: 'sector-concept', name: '📈 概念板块' },
     { id: 'hot-stock', name: '🔥 热股分析' },
