@@ -296,6 +296,24 @@
             </template>
           </Suspense>
 
+          <Suspense v-if="activeTab === 'china-macro'">
+            <template #default>
+              <ChinaMacroPanel />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">中国宏观加载中...</div>
+            </template>
+          </Suspense>
+
+          <Suspense v-if="activeTab === 'us-rates'">
+            <template #default>
+              <UsRatesPanel />
+            </template>
+            <template #fallback>
+              <div class="skeleton skeleton-table">美国利率加载中...</div>
+            </template>
+          </Suspense>
+
           <Suspense v-if="activeTab === 'x-influencer-voices'">
             <template #default>
               <XInfluencerVoicesPanel />
@@ -384,6 +402,8 @@ const BacktestManager = defineAsyncComponent(() => import('./components/Backtest
 const StrategyStockPool = defineAsyncComponent(() => import('./components/StrategyStockPool.vue'))
 const LimitUpLadder = defineAsyncComponent(() => import('./views/LimitUpLadder.vue'))
 const MarketRiskPanel = defineAsyncComponent(() => import('./views/MarketRiskPanel.vue'))
+const ChinaMacroPanel = defineAsyncComponent(() => import('./views/ChinaMacroPanel.vue'))
+const UsRatesPanel = defineAsyncComponent(() => import('./views/UsRatesPanel.vue'))
 const XInfluencerVoicesPanel = defineAsyncComponent(() => import('./views/XInfluencerVoicesPanel.vue'))
 const ThemeLagRecommendPanel = defineAsyncComponent(() => import('./components/ThemeLagRecommendPanel.vue'))
 const SectorConceptAnalysis = defineAsyncComponent(() => import('./components/SectorConceptAnalysis.vue'))
@@ -441,7 +461,7 @@ axios.interceptors.response.use(
 const { user, isAuthenticated, validateToken, logout } = useAuth()
 
 // 主导航可见列表：与权益矩阵对齐；sessionStorage 减轻首屏「null=不筛」导致的闪烁与错乱
-const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v1'
+const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v2'
 const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v1'
 const ACTIVE_TAB_KEY = 'activeTab_v2'
 const ACTIVE_TAB_USER_KEY = 'activeTab_username_v2'
@@ -592,6 +612,8 @@ const adminTabs = computed(() => {
   const baseTabs = [
     { id: 'limit-up-ladder', name: '📊 连板天梯' },
     { id: 'market-risk', name: '🚨 风险预警' },
+    { id: 'china-macro', name: '🇨🇳 中国宏观' },
+    { id: 'us-rates', name: '🇺🇸 美国利率' },
     { id: 'x-influencer-voices', name: '🐦 X大V情报' },
     { id: 'theme-lag-recommend', name: '📌 主题补涨' },
     { id: 'sector-concept', name: '📈 概念板块' },
