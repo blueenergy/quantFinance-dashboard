@@ -185,9 +185,10 @@ async function fetchLatestAnalysis() {
   analysis.value = null
 
   try {
-    const response = await request.post('/analyze-market', {
-      type: 'daily_overview',
-      date: selectedDate.value
+    const response = await request.get('/market-analysis', {
+      params: {
+        date: selectedDate.value
+      }
     })
 
     if (response.success) {
