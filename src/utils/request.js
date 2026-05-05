@@ -40,7 +40,10 @@ service.interceptors.response.use(
       localStorage.removeItem('activeTab_v2')
       localStorage.removeItem('activeTab_username_v2')
       sessionStorage.removeItem('nav_visible_tab_ids_v1')
+      sessionStorage.removeItem('nav_visible_tab_ids_v2')
+      sessionStorage.removeItem('nav_visible_tab_ids_v3')
       sessionStorage.removeItem('nav_visible_tab_username_v1')
+      sessionStorage.removeItem('nav_visible_tab_username_v2')
       try {
         window.currentSourceInfo = null
       } catch (e) {

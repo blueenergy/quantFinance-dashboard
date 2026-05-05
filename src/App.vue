@@ -33,12 +33,48 @@
       <div class="main-content">
         <!-- 普通用户显示：AI公告栏和搜索功能 -->
         <template v-if="!user?.is_admin">
-          <!-- 全球市场联动分析 (盘前) -->
-          <GlobalMarketBrief />
-          <!-- 数据脉搏 (系统心跳 + 新闻 + 同步状态) -->
-          <DataPulse />
-          <!-- AI公告栏 (盘中/盘后) -->
-          <MarketAnalysisBulletin />
+          <section class="home-welcome">
+            <div class="welcome-card home-welcome-card">
+              <div class="home-welcome-copy">
+                <p class="welcome-eyebrow">欢迎页</p>
+                <h2>主控室摘要入口</h2>
+                <p>
+                  首页只显示轻量摘要。进入全球市场简报、数据脉搏和 AI 大盘分析时，才按需加载对应模块。
+                </p>
+              </div>
+
+              <div class="home-entry-grid">
+                <button
+                  v-for="card in visibleHomeEntryCards"
+                  :key="card.id"
+                  type="button"
+                  class="home-entry-card"
+                  :class="{
+                    active: activeTab === card.targetTabId,
+                    'is-loading': card.loading,
+                    'is-error': card.loadFailed,
+                  }"
+                  @click="switchTab(card.targetTabId)"
+                >
+                  <div class="home-entry-card__top">
+                    <span class="home-entry-card__icon">{{ card.loading ? '⏳' : card.icon }}</span>
+                    <span class="home-entry-card__badge">{{ card.loading ? '摘要加载中' : card.status }}</span>
+                  </div>
+                  <div class="home-entry-card__body">
+                    <h3>{{ card.title }}</h3>
+                    <p>{{ card.summaryLine }}</p>
+                  </div>
+                  <div class="home-entry-card__meta">
+                    <span>{{ card.updatedAt }}</span>
+                    <span>{{ card.signals.join(' · ') }}</span>
+                  </div>
+                  <span class="home-entry-card__action">
+                    {{ card.loadFailed ? '摘要读取失败，仍可进入' : activeTab === card.targetTabId ? '当前模块' : '点击进入' }}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </section>
           
           <div class="search-section" v-if="false">
             <!-- Legacy search section removed -->
@@ -320,6 +356,45 @@
             </div>
           </template>
 
+          <template v-if="mountedTabs.has('global-market-brief')">
+            <div v-show="activeTab === 'global-market-brief'">
+              <Suspense>
+                <template #default>
+                  <GlobalMarketBrief />
+                </template>
+                <template #fallback>
+                  <div class="skeleton skeleton-table">全球市场简报加载中...</div>
+                </template>
+              </Suspense>
+            </div>
+          </template>
+
+          <template v-if="mountedTabs.has('data-pulse')">
+            <div v-show="activeTab === 'data-pulse'">
+              <Suspense>
+                <template #default>
+                  <DataPulse />
+                </template>
+                <template #fallback>
+                  <div class="skeleton skeleton-table">数据脉搏加载中...</div>
+                </template>
+              </Suspense>
+            </div>
+          </template>
+
+          <template v-if="mountedTabs.has('market-analysis')">
+            <div v-show="activeTab === 'market-analysis'">
+              <Suspense>
+                <template #default>
+                  <MarketAnalysisBulletin />
+                </template>
+                <template #fallback>
+                  <div class="skeleton skeleton-table">AI大盘分析加载中...</div>
+                </template>
+              </Suspense>
+            </div>
+          </template>
+
           <template v-if="mountedTabs.has('limit-up-ladder')">
             <div v-show="activeTab === 'limit-up-ladder'">
               <Suspense>
@@ -453,12 +528,14 @@ import WatchListData from './components/WatchListData.vue'
 import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
 import EtfView from './views/EtfView.vue'
-import DataPulse from './components/DataPulse.vue'
 // Lazy-load heavy views/components to avoid loading them for normal users
 import { defineAsyncComponent, ref, onMounted, computed, watch, nextTick } from 'vue'
+import request from './utils/request'
+import { fetchDataPulseOverview } from './api/dataPulse.js'
 const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
 // StockAnalysis component removed: AI analysis moved to AIAnalysisHistory
 const AIAnalysisHistory = defineAsyncComponent(() => import('./components/AIAnalysisHistory.vue'))
+const DataPulse = defineAsyncComponent(() => import('./components/DataPulse.vue'))
 const MarketAnalysisBulletin = defineAsyncComponent(() => import('./components/MarketAnalysisBulletin.vue'))
 const GlobalMarketBrief = defineAsyncComponent(() => import('./components/GlobalMarketBrief.vue'))
 const AdminDashboard = defineAsyncComponent(() => import('./components/AdminDashboard.vue'))
@@ -488,6 +565,263 @@ const ShenwanIndustryIndex = defineAsyncComponent(() => import('./views/ShenwanI
 const ChatPanel = defineAsyncComponent(() => import('./components/ChatPanel.vue'))
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
+
+const homeEntryCards = [
+  {
+    id: 'global-market-brief',
+    targetTabId: 'global-market-brief',
+    icon: '🌍',
+    status: '盘前观察',
+    title: '全球市场简报',
+    summaryLine: '概览隔夜联动影响与净影响分。',
+    updatedAt: '等待摘要刷新',
+    signals: ['纳指期货', 'VIX 监控'],
+  },
+  {
+    id: 'data-pulse',
+    targetTabId: 'data-pulse',
+    icon: '🛰️',
+    status: '系统快照',
+    title: '数据脉搏',
+    summaryLine: '概览新闻、同步状态与数据健康度。',
+    updatedAt: '等待摘要刷新',
+    signals: ['同步状态', '新闻摘要'],
+  },
+  {
+    id: 'market-analysis',
+    targetTabId: 'market-analysis',
+    icon: '🤖',
+    status: '盘中盘后',
+    title: 'AI大盘分析',
+    summaryLine: '概览盘前预判、盘中跟踪与收盘复盘。',
+    updatedAt: '等待摘要刷新',
+    signals: ['风险等级', '主题主线'],
+  },
+]
+
+function buildInitialHomeCardSummaryState() {
+  return Object.fromEntries(
+    homeEntryCards.map((card) => [
+      card.id,
+      {
+        status: card.status,
+        summaryLine: card.summaryLine,
+        updatedAt: card.updatedAt,
+        signals: card.signals,
+        loading: false,
+        loadFailed: false,
+      },
+    ])
+  )
+}
+
+const homeCardSummaryState = ref(buildInitialHomeCardSummaryState())
+
+function normalizeSignalList(items, fallback = []) {
+  const values = Array.isArray(items) ? items : []
+  const normalized = values
+    .map((item) => {
+      if (!item) return ''
+      if (typeof item === 'string') return item.trim()
+      if (typeof item === 'object') {
+        return String(item.name || item.label || item.title || item.sector || '').trim()
+      }
+      return String(item).trim()
+    })
+    .filter(Boolean)
+  return normalized.slice(0, 2).length ? normalized.slice(0, 2) : fallback
+}
+
+function summarizeText(text, fallback, maxLength = 42) {
+  const value = typeof text === 'string' ? text.trim() : ''
+  if (!value) return fallback
+  return value.length > maxLength ? `${value.slice(0, maxLength).trim()}...` : value
+}
+
+function formatHomeCardTimestamp(value, fallback = '刚刚更新') {
+  if (!value) return fallback
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function setHomeCardSummary(cardId, patch) {
+  const current = homeCardSummaryState.value[cardId] || {}
+  homeCardSummaryState.value = {
+    ...homeCardSummaryState.value,
+    [cardId]: {
+      ...current,
+      ...patch,
+    },
+  }
+}
+
+function setHomeCardLoading(cardId, loading) {
+  setHomeCardSummary(cardId, {
+    loading,
+    loadFailed: loading ? false : homeCardSummaryState.value[cardId]?.loadFailed || false,
+  })
+}
+
+async function refreshGlobalMarketSummary() {
+  setHomeCardLoading('global-market-brief', true)
+  try {
+    const response = await request.get('/global-analysis', { timeout: 30000, silentErrorLog: true })
+    const brief = response?.data?.analysis
+    const analyzedAt = response?.data?.analyzed_at || response?.data?.timestamp
+    if (!response?.success || !brief) {
+      setHomeCardSummary('global-market-brief', {
+        status: '未生成',
+        summaryLine: '今日暂无全球市场简报，进入模块后可查看是否已生成新报告。',
+        updatedAt: response?.error?.includes('今日尚无') ? '等待今日分析生成' : '暂无可用摘要',
+        signals: ['等待生成', '无轮询'],
+        loading: false,
+        loadFailed: false,
+      })
+      return
+    }
+
+    const mood = brief.sentiment_mood || '中性'
+    const netScore = brief.net_impact_score
+    const summaryLine = netScore !== undefined && netScore !== null
+      ? `${mood} | 净影响分 ${Number(netScore) >= 0 ? '+' : ''}${Number(netScore).toFixed(1)}`
+      : summarizeText(brief.summary || brief.net_impact, '全球市场影响摘要已生成')
+    setHomeCardSummary('global-market-brief', {
+      status: '已生成',
+      summaryLine,
+      updatedAt: formatHomeCardTimestamp(analyzedAt, '已生成，等待时间戳'),
+      signals: normalizeSignalList(
+        [...(brief.risk_factors || []), ...(brief.key_sectors || [])],
+        ['全球联动', '等待查看']
+      ),
+      loading: false,
+      loadFailed: false,
+    })
+  } catch (_) {
+    setHomeCardSummary('global-market-brief', {
+      status: '读取失败',
+      summaryLine: '全球市场简报摘要暂时不可用，可直接进入模块查看详情。',
+      updatedAt: '请求失败',
+      signals: ['手动进入模块', '稍后重试'],
+      loading: false,
+      loadFailed: true,
+    })
+  }
+}
+
+async function refreshDataPulseSummary() {
+  setHomeCardLoading('data-pulse', true)
+  try {
+    const response = await fetchDataPulseOverview()
+    const overview = response?.overview
+    const syncHealth = overview?.sync_health
+    const latestFreshness = Array.isArray(overview?.freshness_detail)
+      ? overview.freshness_detail.map((row) => String(row?.latest_value || '')).filter(Boolean).sort().pop()
+      : null
+    if (!response?.success || !overview) {
+      setHomeCardSummary('data-pulse', {
+        status: '暂无摘要',
+        summaryLine: '数据脉搏摘要暂不可用，可进入模块查看同步状态和新闻。',
+        updatedAt: '暂无数据',
+        signals: ['等待同步', '新闻摘要'],
+        loading: false,
+        loadFailed: false,
+      })
+      return
+    }
+
+    const healthPct = Number(syncHealth?.health_pct ?? 0)
+    const healthy = Number(syncHealth?.healthy ?? 0)
+    const total = Number(syncHealth?.total_pipelines ?? 0)
+    const status = healthPct >= 80 ? '正常' : healthPct >= 50 ? '部分延迟' : '异常'
+    const headlineCount = Array.isArray(overview?.news?.headlines) ? overview.news.headlines.length : 0
+    setHomeCardSummary('data-pulse', {
+      status,
+      summaryLine: total > 0
+        ? `${healthy}/${total} 条管线正常，当前健康度 ${healthPct.toFixed(0)}%`
+        : '已获取数据脉搏概览，请进入模块查看细项。',
+      updatedAt: latestFreshness
+        ? `最新数据 ${String(latestFreshness).slice(4, 6)}-${String(latestFreshness).slice(6, 8)}`
+        : '已更新概览',
+      signals: normalizeSignalList([
+        headlineCount > 0 ? `新闻 ${headlineCount} 条` : '',
+        healthPct >= 80 ? '同步正常' : healthPct >= 50 ? '存在延迟' : '需排障',
+      ], ['同步状态', '新闻摘要']),
+      loading: false,
+      loadFailed: false,
+    })
+  } catch (_) {
+    setHomeCardSummary('data-pulse', {
+      status: '读取失败',
+      summaryLine: '数据脉搏摘要获取失败，可直接进入模块检查同步状态。',
+      updatedAt: '请求失败',
+      signals: ['同步状态', '稍后重试'],
+      loading: false,
+      loadFailed: true,
+    })
+  }
+}
+
+async function refreshMarketAnalysisSummary() {
+  setHomeCardLoading('market-analysis', true)
+  try {
+    const today = new Date().toISOString().split('T')[0]
+    const response = await request.get('/market-analysis', {
+      params: { date: today },
+      silentErrorLog: true,
+    })
+    if (!response?.success) {
+      setHomeCardSummary('market-analysis', {
+        status: response?.analysisType || '等待生成',
+        summaryLine: summarizeText(response?.user_tip || response?.error, '今日暂无 AI 大盘分析摘要。', 48),
+        updatedAt: response?.analysis_date || '等待分析生成',
+        signals: normalizeSignalList([
+          response?.riskLevel ? `风险 ${response.riskLevel}` : '',
+          response?.mood || '',
+        ], ['等待生成', '人工查看']),
+        loading: false,
+        loadFailed: false,
+      })
+      return
+    }
+
+    setHomeCardSummary('market-analysis', {
+      status: response.analysisType || '已生成',
+      summaryLine: summarizeText(response.summary, 'AI 大盘分析已生成'),
+      updatedAt: formatHomeCardTimestamp(response.cache_info?.created_at || response.analysis_date, '已生成'),
+      signals: normalizeSignalList([
+        response.riskLevel ? `风险 ${response.riskLevel}` : '',
+        response.mainlineAnalysis || response.macroDrivers || response.mood || '',
+      ], ['风险等级', '主题主线']),
+      loading: false,
+      loadFailed: false,
+    })
+  } catch (_) {
+    setHomeCardSummary('market-analysis', {
+      status: '读取失败',
+      summaryLine: 'AI 大盘分析摘要暂不可用，可直接进入模块查看完整结论。',
+      updatedAt: '请求失败',
+      signals: ['风险等级', '稍后重试'],
+      loading: false,
+      loadFailed: true,
+    })
+  }
+}
+
+async function refreshVisibleHomeSummaries() {
+  if (!isAuthenticated.value || user.value?.is_admin || !tabsShellReady.value) return
+  const visibleIds = new Set(visibleHomeEntryCards.value.map((card) => card.id))
+  const jobs = []
+  if (visibleIds.has('global-market-brief')) jobs.push(refreshGlobalMarketSummary())
+  if (visibleIds.has('data-pulse')) jobs.push(refreshDataPulseSummary())
+  if (visibleIds.has('market-analysis')) jobs.push(refreshMarketAnalysisSummary())
+  await Promise.all(jobs)
+}
 
 // 设置axios请求拦截器，自动添加认证头
 axios.interceptors.request.use(
@@ -535,10 +869,19 @@ axios.interceptors.response.use(
 const { user, isAuthenticated, validateToken, logout } = useAuth()
 
 // 主导航可见列表：与权益矩阵对齐；sessionStorage 减轻首屏「null=不筛」导致的闪烁与错乱
-const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v2'
-const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v1'
+const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v3'
+const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v2'
 const ACTIVE_TAB_KEY = 'activeTab_v2'
 const ACTIVE_TAB_USER_KEY = 'activeTab_username_v2'
+
+const LEGACY_NAV_CACHE_KEYS = [
+  'nav_visible_tab_ids_v1',
+  'nav_visible_tab_ids_v2',
+]
+
+const LEGACY_NAV_CACHE_USER_KEYS = [
+  'nav_visible_tab_username_v1',
+]
 
 function readNavCacheRaw() {
   try {
@@ -570,6 +913,8 @@ function clearNavCache() {
   try {
     sessionStorage.removeItem(NAV_CACHE_USER_KEY)
     sessionStorage.removeItem(NAV_CACHE_IDS_KEY)
+    LEGACY_NAV_CACHE_USER_KEYS.forEach((key) => sessionStorage.removeItem(key))
+    LEGACY_NAV_CACHE_KEYS.forEach((key) => sessionStorage.removeItem(key))
   } catch {
     /* ignore */
   }
@@ -647,6 +992,16 @@ const tabsShellReady = computed(() => {
   return navPolicyResolved.value
 })
 
+const visibleHomeEntryCards = computed(() => {
+  const visibleTabIds = new Set(adminTabs.value.map((tab) => tab.id))
+  return homeEntryCards
+    .filter((card) => visibleTabIds.has(card.targetTabId))
+    .map((card) => ({
+      ...card,
+      ...(homeCardSummaryState.value[card.id] || {}),
+    }))
+})
+
 async function loadNavigationTabs() {
   const token = localStorage.getItem('access_token')
   if (!token || !isAuthenticated.value) {
@@ -695,6 +1050,9 @@ function switchTab(tabId) {
 // 动态标签：管理员固定全量业务 Tab + 后台；普通用户仅按服务端权益矩阵返回的 visible_tab_ids（顺序一致）
 const adminTabs = computed(() => {
   const baseTabs = [
+    { id: 'global-market-brief', name: '🌍 全球市场简报' },
+    { id: 'data-pulse', name: '🛰️ 数据脉搏' },
+    { id: 'market-analysis', name: '🤖 AI大盘分析' },
     { id: 'limit-up-ladder', name: '📊 连板天梯' },
     { id: 'market-risk', name: '🚨 风险预警' },
     { id: 'china-macro', name: '🇨🇳 中国宏观' },
@@ -1222,6 +1580,8 @@ async function handleLoginSuccess(authData) {
   } else {
     activeTab.value = ''
   }
+
+  await refreshVisibleHomeSummaries()
 }
 
 function handleLogout() {
@@ -1232,6 +1592,7 @@ function handleLogout() {
   mountedTabs.value = new Set()
   activeTab.value = ''
   watchlist.value = []
+  homeCardSummaryState.value = buildInitialHomeCardSummaryState()
   logout()
   console.log('用户已登出')
 }
@@ -1299,6 +1660,8 @@ onMounted(async () => {
     // 普通用户未命中有效缓存 tab 时，不默认进入任何业务页，等待用户主动选择。
     activeTab.value = ''
   }
+
+  await refreshVisibleHomeSummaries()
 
   // 恢复 Tab 后若正在图表/自选股，拉一次（activeTab 未变时 watch 不会触发）
   if (activeTab.value === 'chart' || activeTab.value === 'watchlist') {
@@ -1384,6 +1747,134 @@ const hasNext = computed(() => currentIndex.value < watchlist.value.length - 1)
 .main-content {
   padding: 30px;
   background: linear-gradient(135deg, #1e1e3f 0%, #2a2a5e 100%);
+}
+
+.home-welcome {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.home-welcome-card {
+  text-align: left;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 245, 249, 0.96) 100%);
+}
+
+.home-welcome-copy {
+  margin-bottom: 20px;
+}
+
+.welcome-eyebrow {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2563eb;
+}
+
+.home-welcome-copy h2 {
+  margin: 0 0 12px;
+  color: #0f172a;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.home-welcome-copy p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.6;
+  max-width: 760px;
+}
+
+.home-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.home-entry-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 188px;
+  padding: 18px;
+  border: 1px solid #dbe3ef;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.home-entry-card:hover {
+  transform: translateY(-2px);
+  border-color: #93c5fd;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+}
+
+.home-entry-card.active {
+  border-color: #2563eb;
+  box-shadow: 0 16px 32px rgba(37, 99, 235, 0.12);
+}
+
+.home-entry-card.is-loading {
+  opacity: 0.88;
+}
+
+.home-entry-card.is-error {
+  border-color: #f59e0b;
+}
+
+.home-entry-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.home-entry-card__icon {
+  font-size: 24px;
+}
+
+.home-entry-card__badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.home-entry-card__body h3 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.home-entry-card__body p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.home-entry-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.home-entry-card__action {
+  margin-top: 18px;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .search-section {
@@ -1620,6 +2111,18 @@ const hasNext = computed(() => currentIndex.value < watchlist.value.length - 1)
 .skeleton-card { height: 140px; }
 .skeleton-table { height: 220px; }
 .skeleton-chart { height: 300px; }
+
+@media (max-width: 1024px) {
+  .home-entry-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .home-entry-card__meta {
+    gap: 4px;
+  }
+}
 
 /* 滚动条样式 */
 ::-webkit-scrollbar {
