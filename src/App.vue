@@ -1043,6 +1043,10 @@ watch(activeTab, (newTab) => {
  * 通过这一层隔离，确保内容只在用户点击后才首次加载，而不会被 watch immediate 触发。
  */
 function switchTab(tabId) {
+  if (activeTab.value === tabId) {
+    activeTab.value = ''
+    return
+  }
   if (tabId) mountedTabs.value.add(tabId)
   activeTab.value = tabId
 }
