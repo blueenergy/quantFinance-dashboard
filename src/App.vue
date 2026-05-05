@@ -1207,10 +1207,17 @@ async function handleLoginSuccess(authData) {
     writeNavCache(ids, authData.user.username)
   }
 
-  // 根据服务端确认后的用户角色设置默认标签页，避免登录响应中的旧角色值污染
-  // 普通用户登录后不默认选中任何业务标签页，等待用户主动点击再加载。
-  if (user.value?.is_admin) {
-    activeTab.value = 'admin'
+  // 登录成功后，优先恢复当前用户上次访问且仍有权限的 tab，并同步恢复内容挂载。
+  const savedTab = readActiveTabCache()
+  const visibleIds = user.value?.is_admin
+    ? adminTabs.value.map((tab) => tab.id)
+    : (Array.isArray(ids) ? ids : [])
+
+  if (savedTab && visibleIds.includes(savedTab)) {
+    switchTab(savedTab)
+    console.log('登录后恢复上次浏览的页面:', savedTab)
+  } else if (user.value?.is_admin) {
+    switchTab('admin')
     console.log('管理员登录，跳转到系统管理页面')
   } else {
     activeTab.value = ''
@@ -1219,10 +1226,11 @@ async function handleLoginSuccess(authData) {
 
 function handleLogout() {
   clearNavCache()
-  clearActiveTabCache()
   serverVisibleTabIds.value = null
   navPolicyResolved.value = false
   window.currentSourceInfo = null
+  mountedTabs.value = new Set()
+  activeTab.value = ''
   watchlist.value = []
   logout()
   console.log('用户已登出')
@@ -1278,15 +1286,14 @@ onMounted(async () => {
   if (savedTab && adminTabs.value.some(tab => tab.id === savedTab)) {
     // 检查管理员tab的访问权限
     if (savedTab === 'admin' && !user.value?.is_admin) {
-      const tabs = adminTabs.value
-      activeTab.value = tabs.length ? tabs[0].id : 'watchlist'
-      console.log('非管理员用户尝试访问管理后台，跳转到允许的首个 Tab')
+      activeTab.value = ''
+      console.log('非管理员用户尝试访问管理后台，已清空无权限标签页')
     } else {
-      activeTab.value = savedTab
+      switchTab(savedTab)
       console.log('恢复上次浏览的页面:', savedTab)
     }
   } else if (user.value?.is_admin) {
-    activeTab.value = 'admin'
+    switchTab('admin')
     console.log('管理员自动跳转到系统管理页面')
   } else {
     // 普通用户未命中有效缓存 tab 时，不默认进入任何业务页，等待用户主动选择。
