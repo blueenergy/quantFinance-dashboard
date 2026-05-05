@@ -671,10 +671,9 @@ function setHomeCardLoading(cardId, loading) {
 async function refreshGlobalMarketSummary() {
   setHomeCardLoading('global-market-brief', true)
   try {
-    const response = await request.get('/global-analysis', { timeout: 30000, silentErrorLog: true })
-    const brief = response?.data?.analysis
-    const analyzedAt = response?.data?.analyzed_at || response?.data?.timestamp
-    if (!response?.success || !brief) {
+    const response = await request.get('/global-analysis/summary', { timeout: 30000, silentErrorLog: true })
+    const summary = response?.data
+    if (!summary) {
       setHomeCardSummary('global-market-brief', {
         status: '未生成',
         summaryLine: '今日暂无全球市场简报，进入模块后可查看是否已生成新报告。',
@@ -686,21 +685,13 @@ async function refreshGlobalMarketSummary() {
       return
     }
 
-    const mood = brief.sentiment_mood || '中性'
-    const netScore = brief.net_impact_score
-    const summaryLine = netScore !== undefined && netScore !== null
-      ? `${mood} | 净影响分 ${Number(netScore) >= 0 ? '+' : ''}${Number(netScore).toFixed(1)}`
-      : summarizeText(brief.summary || brief.net_impact, '全球市场影响摘要已生成')
     setHomeCardSummary('global-market-brief', {
-      status: '已生成',
-      summaryLine,
-      updatedAt: formatHomeCardTimestamp(analyzedAt, '已生成，等待时间戳'),
-      signals: normalizeSignalList(
-        [...(brief.risk_factors || []), ...(brief.key_sectors || [])],
-        ['全球联动', '等待查看']
-      ),
+      status: summary.status || (response?.success ? '已生成' : '未生成'),
+      summaryLine: summarizeText(summary.summary_line, '全球市场影响摘要已生成'),
+      updatedAt: formatHomeCardTimestamp(summary.updated_at, '已生成，等待时间戳'),
+      signals: normalizeSignalList(summary.signals, ['全球联动', '等待查看']),
       loading: false,
-      loadFailed: false,
+      loadFailed: !response?.success,
     })
   } catch (_) {
     setHomeCardSummary('global-market-brief', {
@@ -771,19 +762,17 @@ async function refreshMarketAnalysisSummary() {
   setHomeCardLoading('market-analysis', true)
   try {
     const today = new Date().toISOString().split('T')[0]
-    const response = await request.get('/market-analysis', {
+    const response = await request.get('/market-analysis/summary', {
       params: { date: today },
       silentErrorLog: true,
     })
-    if (!response?.success) {
+    const summary = response?.data
+    if (!summary) {
       setHomeCardSummary('market-analysis', {
-        status: response?.analysisType || '等待生成',
+        status: '等待生成',
         summaryLine: summarizeText(response?.user_tip || response?.error, '今日暂无 AI 大盘分析摘要。', 48),
-        updatedAt: response?.analysis_date || '等待分析生成',
-        signals: normalizeSignalList([
-          response?.riskLevel ? `风险 ${response.riskLevel}` : '',
-          response?.mood || '',
-        ], ['等待生成', '人工查看']),
+        updatedAt: '等待分析生成',
+        signals: ['等待生成', '人工查看'],
         loading: false,
         loadFailed: false,
       })
@@ -791,15 +780,12 @@ async function refreshMarketAnalysisSummary() {
     }
 
     setHomeCardSummary('market-analysis', {
-      status: response.analysisType || '已生成',
-      summaryLine: summarizeText(response.summary, 'AI 大盘分析已生成'),
-      updatedAt: formatHomeCardTimestamp(response.cache_info?.created_at || response.analysis_date, '已生成'),
-      signals: normalizeSignalList([
-        response.riskLevel ? `风险 ${response.riskLevel}` : '',
-        response.mainlineAnalysis || response.macroDrivers || response.mood || '',
-      ], ['风险等级', '主题主线']),
+      status: summary.status || (response?.success ? '已生成' : '等待生成'),
+      summaryLine: summarizeText(summary.summary_line, 'AI 大盘分析已生成'),
+      updatedAt: formatHomeCardTimestamp(summary.updated_at || summary.analysis_date, '已生成'),
+      signals: normalizeSignalList(summary.signals, ['风险等级', '主题主线']),
       loading: false,
-      loadFailed: false,
+      loadFailed: !response?.success,
     })
   } catch (_) {
     setHomeCardSummary('market-analysis', {
@@ -816,11 +802,59 @@ async function refreshMarketAnalysisSummary() {
 async function refreshVisibleHomeSummaries() {
   if (!isAuthenticated.value || user.value?.is_admin || !tabsShellReady.value) return
   const visibleIds = new Set(visibleHomeEntryCards.value.map((card) => card.id))
-  const jobs = []
-  if (visibleIds.has('global-market-brief')) jobs.push(refreshGlobalMarketSummary())
-  if (visibleIds.has('data-pulse')) jobs.push(refreshDataPulseSummary())
-  if (visibleIds.has('market-analysis')) jobs.push(refreshMarketAnalysisSummary())
-  await Promise.all(jobs)
+  try {
+    const today = new Date().toISOString().split('T')[0]
+    const response = await request.get('/home-summaries', {
+      params: { date: today },
+      timeout: 30000,
+      silentErrorLog: true,
+    })
+    const data = response?.data
+    if (!response?.success || !data) throw new Error(response?.error || 'empty home summaries')
+
+    if (visibleIds.has('global-market-brief')) {
+      const summary = data['global-market-brief']
+      setHomeCardSummary('global-market-brief', {
+        status: summary?.status || '未生成',
+        summaryLine: summarizeText(summary?.summary_line, '全球市场影响摘要已生成'),
+        updatedAt: formatHomeCardTimestamp(summary?.updated_at, '已生成，等待时间戳'),
+        signals: normalizeSignalList(summary?.signals, ['全球联动', '等待查看']),
+        loading: false,
+        loadFailed: !summary?.success,
+      })
+    }
+
+    if (visibleIds.has('data-pulse')) {
+      const summary = data['data-pulse']
+      setHomeCardSummary('data-pulse', {
+        status: summary?.status || '暂无摘要',
+        summaryLine: summarizeText(summary?.summary_line, '已获取数据脉搏概览，请进入模块查看细项。', 48),
+        updatedAt: summary?.updated_at || '已更新概览',
+        signals: normalizeSignalList(summary?.signals, ['同步状态', '新闻摘要']),
+        loading: false,
+        loadFailed: !summary?.success,
+      })
+    }
+
+    if (visibleIds.has('market-analysis')) {
+      const summary = data['market-analysis']
+      setHomeCardSummary('market-analysis', {
+        status: summary?.status || '等待生成',
+        summaryLine: summarizeText(summary?.summary_line, 'AI 大盘分析已生成'),
+        updatedAt: formatHomeCardTimestamp(summary?.updated_at || summary?.analysis_date, '已生成'),
+        signals: normalizeSignalList(summary?.signals, ['风险等级', '主题主线']),
+        loading: false,
+        loadFailed: !summary?.success,
+      })
+    }
+    return
+  } catch (_) {
+    const jobs = []
+    if (visibleIds.has('global-market-brief')) jobs.push(refreshGlobalMarketSummary())
+    if (visibleIds.has('data-pulse')) jobs.push(refreshDataPulseSummary())
+    if (visibleIds.has('market-analysis')) jobs.push(refreshMarketAnalysisSummary())
+    await Promise.all(jobs)
+  }
 }
 
 // 设置axios请求拦截器，自动添加认证头
