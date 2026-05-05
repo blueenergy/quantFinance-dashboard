@@ -1097,22 +1097,25 @@ async function selectStockForChart(stockData) {
 
 async function handleLoginSuccess(authData) {
   console.log('登录成功:', authData.user.username)
-  let ids = null
-  try {
-    const res = await axios.get('/api/user/navigation-tabs', {
-      headers: { Authorization: `Bearer ${authData.access_token}` },
-    })
-    if (res.data?.success && Array.isArray(res.data.data?.visible_tab_ids)) {
-      ids = res.data.data.visible_tab_ids
-    }
-  } catch (e) {
-    console.error('加载主导航策略失败:', e)
-  }
   authService.setAuth(authData)
-  // Immediately refresh full profile so user_info contains service_level and other server-side fields.
-  await validateToken()
   // New session should not inherit stale source context from previous user.
   window.currentSourceInfo = null
+
+  // 并行：刷新完整用户 profile + 拉取导航 tab 列表，减少登录后首屏延迟
+  let ids = null
+  const navReq = axios
+    .get('/api/user/navigation-tabs', {
+      headers: { Authorization: `Bearer ${authData.access_token}` },
+    })
+    .then((res) => {
+      if (res.data?.success && Array.isArray(res.data.data?.visible_tab_ids)) {
+        ids = res.data.data.visible_tab_ids
+      }
+    })
+    .catch((e) => {
+      console.error('加载主导航策略失败:', e)
+    })
+  await Promise.all([navReq, validateToken()])
   serverVisibleTabIds.value = ids
   navPolicyResolved.value = true
   if (ids && authData.user?.username) {
@@ -1173,13 +1176,15 @@ onMounted(async () => {
   // 必须验证 token 获取正确的用户信息，不能依赖 localStorage 中的缓存
   if (!localStorage.getItem('access_token')) return
 
-  // 必须先验证 token，获取正确的用户信息
-  const tokenValid = await validateToken()
+  // 并行发起 token 验证与导航 tab 加载，减少首屏等待时间
+  const [tokenValid] = await Promise.all([
+    validateToken(),
+    loadNavigationTabs(),
+  ])
   if (!tokenValid) {
     console.log('Token已失效,请重新登录')
     return
   }
-  await loadNavigationTabs()
   // 自选股列表由 watch(activeTab) 在进入「自选股 / 图表」时通过 loadAppChartWatchlist 拉取
 
   // 根据用户角色设置默认界面
