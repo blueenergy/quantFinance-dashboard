@@ -1,7 +1,7 @@
 <template>
   <div class="data-pulse-widget">
     <!-- ===== 顶栏: 系统心跳指示 ===== -->
-    <div class="pulse-header" @click="expanded = !expanded">
+    <div class="pulse-header">
       <div class="pulse-indicator">
         <span class="pulse-dot" :class="pulseClass"></span>
         <span class="pulse-label">数据脉搏</span>
@@ -19,116 +19,112 @@
           <span v-if="overview.news.is_fresh" class="fresh-badge">LIVE</span>
         </span>
       </div>
-      <v-icon size="18" color="grey">{{ expanded ? mdiChevronUp : mdiChevronDown }}</v-icon>
     </div>
 
-    <!-- ===== 展开面板 ===== -->
-    <v-expand-transition>
-      <div v-if="expanded" class="pulse-panel">
-        <!-- Tab 切换 -->
-        <div class="panel-tabs">
-          <button 
-            v-for="tab in panelTabs" :key="tab.id"
-            :class="['ptab', { active: panelTab === tab.id }]"
-            @click="panelTab = tab.id"
-          >{{ tab.icon }} {{ tab.label }}</button>
-        </div>
+    <div class="pulse-panel">
+      <!-- Tab 切换 -->
+      <div class="panel-tabs">
+        <button 
+          v-for="tab in panelTabs" :key="tab.id"
+          :class="['ptab', { active: panelTab === tab.id }]"
+          @click="panelTab = tab.id"
+        >{{ tab.icon }} {{ tab.label }}</button>
+      </div>
 
-        <!-- ─── 新闻快讯 ─── -->
-        <div v-if="panelTab === 'news'" class="panel-content">
-          <div v-if="newsLoading" class="panel-loading">
-            <v-progress-circular indeterminate size="20" width="2" color="primary" />
-          </div>
-          <div v-else-if="!newsData || Object.keys(newsData).length === 0" class="panel-empty">
-            暂无新闻数据
-          </div>
-          <div v-else class="news-grid">
-            <div v-for="(items, category) in newsData" :key="category" class="news-category">
-              <div class="category-header">
-                <span class="cat-icon">{{ categoryIcon(category) }}</span>
-                <span class="cat-name">{{ category }}</span>
-              </div>
-              <div v-for="(item, idx) in items" :key="idx" class="news-item">
-                <a
-                  v-if="item.url"
-                  class="news-title news-link"
-                  :href="item.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {{ displayNewsTitle(item) }}
-                </a>
-                <span v-else class="news-title">{{ displayNewsTitle(item) }}</span>
-                <span v-if="showOriginalTitle(item)" class="news-title-original">{{ item.title }}</span>
-                <span class="news-meta">
-                  <span class="news-source">{{ item.source }}</span>
-                  <span v-if="item.published" class="news-time">{{ item.published }}</span>
-                </span>
-              </div>
+      <!-- ─── 新闻快讯 ─── -->
+      <div v-if="panelTab === 'news'" class="panel-content">
+        <div v-if="newsLoading" class="panel-loading">
+          <v-progress-circular indeterminate size="20" width="2" color="primary" />
+        </div>
+        <div v-else-if="!newsData || Object.keys(newsData).length === 0" class="panel-empty">
+          暂无新闻数据
+        </div>
+        <div v-else class="news-grid">
+          <div v-for="(items, category) in newsData" :key="category" class="news-category">
+            <div class="category-header">
+              <span class="cat-icon">{{ categoryIcon(category) }}</span>
+              <span class="cat-name">{{ category }}</span>
             </div>
-          </div>
-          <div v-if="newsFetchedAt" class="panel-footer">
-            数据源: BBC / CNBC / Yahoo Finance · {{ newsFetchedAt }}
+            <div v-for="(item, idx) in items" :key="idx" class="news-item">
+              <a
+                v-if="item.url"
+                class="news-title news-link"
+                :href="item.url"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {{ displayNewsTitle(item) }}
+              </a>
+              <span v-else class="news-title">{{ displayNewsTitle(item) }}</span>
+              <span v-if="showOriginalTitle(item)" class="news-title-original">{{ item.title }}</span>
+              <span class="news-meta">
+                <span class="news-source">{{ item.source }}</span>
+                <span v-if="item.published" class="news-time">{{ item.published }}</span>
+              </span>
+            </div>
           </div>
         </div>
+        <div v-if="newsFetchedAt" class="panel-footer">
+          数据源: BBC / CNBC / Yahoo Finance · {{ newsFetchedAt }}
+        </div>
+      </div>
 
-        <!-- ─── 数据同步状态 ─── -->
-        <div v-if="panelTab === 'sync'" class="panel-content">
-          <div v-if="!overview?.sync_health" class="panel-empty">暂无同步状态</div>
-          <div v-else>
-            <!-- 健康度环 -->
-            <div class="health-ring-row">
-              <div class="health-ring">
-                <svg viewBox="0 0 36 36" class="ring-svg">
-                  <circle cx="18" cy="18" r="15.5" fill="none" stroke="#edf2f7" stroke-width="3" />
-                  <circle cx="18" cy="18" r="15.5" fill="none" :stroke="healthColor"
-                    stroke-width="3" stroke-linecap="round"
-                    :stroke-dasharray="`${healthPct}, 100`"
-                    transform="rotate(-90 18 18)" />
-                </svg>
-                <span class="ring-pct">{{ healthPct }}%</span>
-              </div>
-              <div class="health-label">
-                <strong>系统健康度</strong>
-                <span>{{ overview.sync_health.healthy }} / {{ overview.sync_health.total_pipelines }} 管线正常</span>
-              </div>
+      <!-- ─── 数据同步状态 ─── -->
+      <div v-if="panelTab === 'sync'" class="panel-content">
+        <div v-if="!overview?.sync_health" class="panel-empty">暂无同步状态</div>
+        <div v-else>
+          <!-- 健康度环 -->
+          <div class="health-ring-row">
+            <div class="health-ring">
+              <svg viewBox="0 0 36 36" class="ring-svg">
+                <circle cx="18" cy="18" r="15.5" fill="none" stroke="#edf2f7" stroke-width="3" />
+                <circle cx="18" cy="18" r="15.5" fill="none" :stroke="healthColor"
+                  stroke-width="3" stroke-linecap="round"
+                  :stroke-dasharray="`${healthPct}, 100`"
+                  transform="rotate(-90 18 18)" />
+              </svg>
+              <span class="ring-pct">{{ healthPct }}%</span>
             </div>
-
-            <!-- 各管线状态 -->
-            <div class="sync-jobs">
-              <div v-for="job in overview.sync_health.jobs" :key="job.type" class="sync-job-row">
-                <span class="job-icon" :class="jobIconClass(job.status)">
-                  {{ jobIconText(job.status) }}
-                </span>
-                <span class="job-name">{{ job.label || jobLabel(job.type) }}</span>
-                <span class="job-date">{{ job.latest_date || '--' }}</span>
-              </div>
+            <div class="health-label">
+              <strong>系统健康度</strong>
+              <span>{{ overview.sync_health.healthy }} / {{ overview.sync_health.total_pipelines }} 管线正常</span>
             </div>
+          </div>
 
-            <!-- 数据新鲜度（优先 freshness_detail 保持与目录一致的顺序） -->
-            <div class="freshness-row" v-if="freshnessDisplayItems.length">
-              <h4>📅 数据最后日期</h4>
-              <div class="fresh-items">
-                <div
-                  v-for="item in freshnessDisplayItems"
-                  :key="item._key"
-                  class="fresh-item"
-                >
-                  <span class="f-label">{{ item.label }}</span>
-                  <span class="f-date" :class="{ stale: isStale(item.display) }">{{ item.display || '--' }}</span>
-                  <button
-                    v-if="coverageGapCount(item.row) > 0"
-                    type="button"
-                    class="f-gap-btn"
-                    @click.stop="openCoverageGaps(item.row)"
-                  >缺失 {{ coverageGapCount(item.row) }}</button>
-                </div>
-              </div>
+          <!-- 各管线状态 -->
+          <div class="sync-jobs">
+            <div v-for="job in overview.sync_health.jobs" :key="job.type" class="sync-job-row">
+              <span class="job-icon" :class="jobIconClass(job.status)">
+                {{ jobIconText(job.status) }}
+              </span>
+              <span class="job-name">{{ job.label || jobLabel(job.type) }}</span>
+              <span class="job-date">{{ job.latest_date || '--' }}</span>
+            </div>
+          </div>
+
+          <!-- 数据新鲜度（优先 freshness_detail 保持与目录一致的顺序） -->
+          <div class="freshness-row" v-if="freshnessDisplayItems.length">
+            <h4>📅 数据最后日期</h4>
+            <div class="fresh-items">
+              <div
+                v-for="item in freshnessDisplayItems"
+                :key="item._key"
+                class="fresh-item"
+              >
+                <span class="f-label">{{ item.label }}</span>
+                <span class="f-date" :class="{ stale: isStale(item.display) }">{{ item.display || '--' }}</span>
+                <button
+                  v-if="coverageGapCount(item.row) > 0"
+                  type="button"
+                  class="f-gap-btn"
+                  @click.stop="openCoverageGaps(item.row)"
+                >缺失 {{ coverageGapCount(item.row) }}</button>
+            </div>
             </div>
           </div>
         </div>
       </div>
-    </v-expand-transition>
+    </div>
 
     <v-dialog v-model="gapDialog" max-width="560" scrollable>
       <v-card>
@@ -168,10 +164,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { mdiChevronDown, mdiChevronUp, mdiCheckCircle, mdiAlertCircle } from '@mdi/js'
+import { mdiCheckCircle, mdiAlertCircle } from '@mdi/js'
 import { fetchDataPulseOverview, fetchDataPulseNews, fetchCoverageGaps } from '../api/dataPulse.js'
 
-const expanded = ref(false)
 const panelTab = ref('news')
 const overview = ref(null)
 const newsData = ref(null)
