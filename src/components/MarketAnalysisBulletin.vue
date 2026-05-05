@@ -44,6 +44,9 @@
           <span v-if="analysis.cacheInfo" class="cache-info" :class="getCacheClass(analysis.cacheInfo.from_cache)">
             {{ getCacheIcon(analysis.cacheInfo.from_cache) }} {{ analysis.cacheInfo.reason }}
           </span>
+          <span v-if="analysis.analysisType" class="analysis-type-badge">
+            {{ analysis.analysisType }}
+          </span>
           <span class="market-mood" :class="getMoodClass(analysis.mood)">
             {{ getMoodIcon(analysis.mood) }} {{ analysis.mood }}
           </span>
@@ -57,14 +60,64 @@
           <h4>📊 市场概览</h4>
           <p>{{ analysis.summary }}</p>
         </div>
-        
+
+        <!-- 宏观驱动 -->
+        <div v-if="analysis.macroDrivers" class="dim-block">
+          <h4>🌐 宏观驱动</h4>
+          <p>{{ analysis.macroDrivers }}</p>
+        </div>
+
+        <!-- 量能 + 板块 -->
+        <div v-if="analysis.volumeAnalysis || analysis.sectorPerformance" class="dim-grid-2">
+          <div v-if="analysis.volumeAnalysis" class="dim-card">
+            <div class="dim-card-title">📊 量能分析</div>
+            <p>{{ analysis.volumeAnalysis }}</p>
+          </div>
+          <div v-if="analysis.sectorPerformance" class="dim-card">
+            <div class="dim-card-title">🏭 板块表现</div>
+            <p>{{ analysis.sectorPerformance }}</p>
+          </div>
+        </div>
+
+        <!-- 资金面 -->
+        <div v-if="analysis.northboundFlow || analysis.marginFlow || analysis.capitalFlowInsight || analysis.sectorFundFlow" class="dim-block">
+          <h4>💰 资金面</h4>
+          <div v-if="analysis.northboundFlow || analysis.marginFlow" class="dim-grid-2">
+            <div v-if="analysis.northboundFlow" class="dim-card">
+              <div class="dim-card-title">🔮 北向资金</div>
+              <p>{{ analysis.northboundFlow }}</p>
+            </div>
+            <div v-if="analysis.marginFlow" class="dim-card">
+              <div class="dim-card-title">⚖️ 融资融券</div>
+              <p>{{ analysis.marginFlow }}</p>
+            </div>
+          </div>
+          <p v-if="analysis.capitalFlowInsight" class="dim-summary">{{ analysis.capitalFlowInsight }}</p>
+          <div v-if="analysis.sectorFundFlow" class="dim-sub">
+            <div class="dim-card-title">📈 板块资金流（同花顺）</div>
+            <p>{{ analysis.sectorFundFlow }}</p>
+          </div>
+        </div>
+
         <div class="key-points">
           <h4>🔍 关键要点</h4>
           <ul>
             <li v-for="point in analysis.keyPoints" :key="point">{{ point }}</li>
           </ul>
         </div>
-        
+
+        <!-- 连板天梯 + 主线板块 -->
+        <div v-if="analysis.ladderInsight || analysis.mainlineAnalysis" class="dim-grid-2">
+          <div v-if="analysis.ladderInsight" class="dim-card">
+            <div class="dim-card-title">🪜 连板天梯</div>
+            <p>{{ analysis.ladderInsight }}</p>
+          </div>
+          <div v-if="analysis.mainlineAnalysis" class="dim-card">
+            <div class="dim-card-title">🎯 主线板块</div>
+            <p>{{ analysis.mainlineAnalysis }}</p>
+          </div>
+        </div>
+
         <div class="market-outlook">
           <h4>🔮 市场展望</h4>
           <p>{{ analysis.outlook }}</p>
@@ -79,6 +132,12 @@
           <p class="risk-content" :class="getRiskClass(analysis.riskLevel)">
             风险等级：{{ getRiskText(analysis.riskLevel) }} | {{ analysis.riskNote }}
           </p>
+        </div>
+
+        <!-- 个股异常波动 -->
+        <div v-if="analysis.abnormalStockInsight" class="dim-block dim-block--warn">
+          <h4>🚨 个股异常波动解读</h4>
+          <p>{{ analysis.abnormalStockInsight }}</p>
         </div>
 
         <!-- New Multi-Dim Industry Signals -->
@@ -149,6 +208,17 @@ async function fetchLatestAnalysis() {
           : [],
         riskLevel: response.riskLevel || 'medium',
         riskNote: response.riskNote || '注意控制仓位，分散投资风险。',
+        analysisType: response.analysisType || '',
+        macroDrivers: response.macroDrivers || '',
+        volumeAnalysis: response.volumeAnalysis || '',
+        sectorPerformance: response.sectorPerformance || '',
+        northboundFlow: response.northboundFlow || '',
+        marginFlow: response.marginFlow || '',
+        capitalFlowInsight: response.capitalFlowInsight || '',
+        sectorFundFlow: response.sectorFundFlow || '',
+        ladderInsight: response.ladderInsight || '',
+        mainlineAnalysis: response.mainlineAnalysis || '',
+        abnormalStockInsight: response.abnormalStockInsight || '',
         industry_signals: response.industry_signals || null,
         notice: response.notice || ''
       }
@@ -622,5 +692,111 @@ onMounted(() => {
   margin-left: 8px;
   border: 1px solid rgba(255, 255, 255, 0.4);
   font-weight: 500;
+}
+
+/* ── 新增维度展示区 ── */
+.analysis-type-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #ede9fe;
+  color: #5b21b6;
+  border: 1px solid #c4b5fd;
+}
+
+.dim-block {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.dim-block h4 {
+  margin: 0 0 10px 0;
+  color: #2d3748;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dim-block p {
+  margin: 0;
+  color: #4a5568;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.dim-block--warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.dim-block--warn h4 {
+  color: #92400e;
+}
+
+.dim-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 640px) {
+  .dim-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dim-card {
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+/* dim-grid-2 inside dim-block resets margin */
+.dim-block .dim-grid-2 {
+  margin-bottom: 0;
+  margin-top: 10px;
+}
+
+.dim-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4f46e5;
+  margin-bottom: 6px;
+}
+
+.dim-card p {
+  margin: 0;
+  color: #4a5568;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.dim-summary {
+  margin: 10px 0 0 0;
+  padding: 8px 12px;
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+  border-radius: 0 6px 6px 0;
+  color: #1e40af;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.dim-sub {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.dim-sub p {
+  margin: 4px 0 0 0;
+  color: #4a5568;
+  font-size: 13px;
+  line-height: 1.6;
 }
 </style>
