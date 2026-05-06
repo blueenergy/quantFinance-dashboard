@@ -74,7 +74,7 @@
             class="btn-base btn-sm btn-gradient-orange eval-btn"
           >
             <span v-if="evaluationLoading" class="eval-spinner"></span>
-            {{ evaluationLoading ? '评估中...' : evaluationResult ? '已评估' : '评估质量' }}
+            {{ evaluationLoading ? '评估中...' : evaluationResult ? '重新评估' : '评估质量' }}
           </button>
           <button @click="toggleDetailMaximized" class="btn-base btn-sm btn-gradient-teal detail-fullscreen-btn">
             {{ detailMaximized ? '退出全屏' : '全屏' }}
@@ -261,16 +261,10 @@ async function triggerEvaluation(item) {
   try {
     await axios.post(
       '/api/analysis/evaluate',
-      { history_id: item.id },
+      { history_id: item.id, force: true },
       { headers: { Authorization: `Bearer ${token}` } }
     )
   } catch (e) {
-    if (e.response?.status === 409) {
-      // Already exists — load it
-      evaluationLoading.value = false
-      await loadExistingEvaluation(item.id)
-      return
-    }
     evaluationLoading.value = false
     evaluationError.value = e.response?.data?.detail || '提交评估失败'
     return
