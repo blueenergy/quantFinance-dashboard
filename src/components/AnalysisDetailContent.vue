@@ -1,10 +1,42 @@
 <template>
   <div class="analysis-detail-content" :class="[`analysis-detail-content--${layout}`]">
+    <section v-if="showExpertSynthesis" class="expert-synthesis-block">
+      <div class="expert-synthesis-grid">
+        <article v-if="consensusPoints.length > 0" class="expert-synthesis-card expert-synthesis-card--consensus">
+          <div class="expert-synthesis-header">
+            <h4>一致观点</h4>
+            <span class="expert-synthesis-chip">共识</span>
+          </div>
+          <ul class="analysis-points-list">
+            <li v-for="(point, index) in consensusPoints" :key="`consensus-${index}`">{{ point }}</li>
+          </ul>
+        </article>
+
+        <article v-if="divergencePoints.length > 0" class="expert-synthesis-card expert-synthesis-card--divergence">
+          <div class="expert-synthesis-header">
+            <h4>分歧点</h4>
+            <span class="expert-synthesis-chip">分歧</span>
+          </div>
+          <ul class="analysis-points-list">
+            <li v-for="(point, index) in divergencePoints" :key="`divergence-${index}`">{{ point }}</li>
+          </ul>
+        </article>
+      </div>
+
+      <article v-if="finalConclusion" class="expert-synthesis-card expert-synthesis-card--conclusion">
+        <div class="expert-synthesis-header">
+          <h4>最终结论</h4>
+          <span class="expert-synthesis-chip">结论</span>
+        </div>
+        <p>{{ finalConclusion }}</p>
+      </article>
+    </section>
+
     <section v-if="expertReports.length > 0" class="expert-review-block">
       <div class="expert-review-header">
         <div>
           <h4>多专家会审</h4>
-          <p>以下为各专家的原始观点，综合结论已体现在下方统一分析字段中。</p>
+          <p>以下为各专家的原始观点；上方会先展示共识、分歧与最终结论。</p>
         </div>
         <span class="expert-review-count">{{ expertReports.length }} 位专家</span>
       </div>
@@ -123,6 +155,15 @@ const confidenceText = computed(() => {
   const score = analysis.value.confidence_score
   return score == null || score === '' ? props.emptyText : `${score}%`
 })
+const consensusPoints = computed(() => normalizePoints(analysis.value.consensus_points))
+const divergencePoints = computed(() => normalizePoints(analysis.value.divergence_points))
+const finalConclusion = computed(() => {
+  const value = analysis.value.final_conclusion
+  return typeof value === 'string' ? value.trim() : ''
+})
+const showExpertSynthesis = computed(() => {
+  return consensusPoints.value.length > 0 || divergencePoints.value.length > 0 || !!finalConclusion.value
+})
 
 const expertReports = computed(() => {
   const reports = analysis.value.module_reports
@@ -193,6 +234,19 @@ const detailFields = computed(() => [
 function modeLabel(mode) {
   return mode === 'multi_expert_v1' ? '多专家' : '经典'
 }
+
+function normalizePoints(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || '').trim()).filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(/\n+|；|;/)
+      .map((item) => item.replace(/^[\-•\d\.\s]+/, '').trim())
+      .filter(Boolean)
+  }
+  return []
+}
 </script>
 
 <style scoped>
@@ -200,6 +254,71 @@ function modeLabel(mode) {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.expert-synthesis-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.expert-synthesis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.expert-synthesis-card {
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.expert-synthesis-card--conclusion p {
+  margin: 0;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.expert-synthesis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.expert-synthesis-header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.expert-synthesis-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.expert-synthesis-card--consensus .expert-synthesis-chip {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(74, 222, 128, 0.26);
+}
+
+.expert-synthesis-card--divergence .expert-synthesis-chip {
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(251, 191, 36, 0.26);
+}
+
+.expert-synthesis-card--conclusion .expert-synthesis-chip {
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.14);
+  border-color: rgba(96, 165, 250, 0.26);
 }
 
 .expert-review-block {
@@ -407,6 +526,7 @@ function modeLabel(mode) {
 }
 
 @media (max-width: 768px) {
+  .expert-synthesis-grid,
   .expert-review-header {
     flex-direction: column;
   }
