@@ -68,6 +68,14 @@
             AI分析详情
           </h4>
           <span :class="['mode-badge', 'in-modal', modeClass(selectedItem.analysis_mode)]">{{ modeLabel(selectedItem.analysis_mode) }}</span>
+          <button
+            @click="triggerEvaluation(selectedItem)"
+            :disabled="evaluationLoading"
+            class="btn-base btn-sm btn-gradient-orange eval-btn"
+          >
+            <span v-if="evaluationLoading" class="eval-spinner"></span>
+            {{ evaluationLoading ? '评估中...' : evaluationResult ? '已评估' : '评估质量' }}
+          </button>
           <button @click="toggleDetailMaximized" class="btn-base btn-sm btn-gradient-teal detail-fullscreen-btn">
             {{ detailMaximized ? '退出全屏' : '全屏' }}
           </button>
@@ -80,6 +88,101 @@
             layout="grid"
             :show-mode="true"
           />
+
+          <!-- Evaluation error -->
+          <div v-if="evaluationError" class="eval-error">
+            <span>⚠️ {{ evaluationError }}</span>
+          </div>
+
+          <!-- Evaluation result -->
+          <div v-if="evaluationResult" class="eval-result-block">
+            <h5 class="eval-result-title">分析质量评估</h5>
+
+            <!-- LLM verdict badges -->
+            <div class="eval-badges">
+              <span :class="['eval-badge', 'badge-accuracy', evaluationResult.llm_review?.outcome_accuracy]">
+                预测准确性：{{ accuracyLabel(evaluationResult.llm_review?.outcome_accuracy) }}
+              </span>
+              <span :class="['eval-badge', 'badge-reasoning', evaluationResult.llm_review?.reasoning_quality]">
+                推理质量：{{ reasoningLabel(evaluationResult.llm_review?.reasoning_quality) }}
+              </span>
+              <span :class="['eval-badge', 'badge-risk', evaluationResult.llm_review?.risk_calibration]">
+                风险校准：{{ riskCalibLabel(evaluationResult.llm_review?.risk_calibration) }}
+              </span>
+            </div>
+
+            <!-- Price window metrics table -->
+            <div v-if="evaluationResult.price_windows" class="eval-metrics">
+              <table class="eval-table">
+                <thead>
+                  <tr>
+                    <th>窗口</th>
+                    <th>T0收盘</th>
+                    <th>期末收盘</th>
+                    <th>收益率</th>
+                    <th>最大涨幅</th>
+                    <th>最大回撤</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(wkey, wlabel) in { short: '5交易日', mid: '20交易日', long: '60交易日' }" :key="wkey">
+                    <td class="w-label">
+                      {{ wlabel }}
+                      <span v-if="evaluationResult.price_windows[wkey] && !evaluationResult.price_windows[wkey].complete" class="partial-flag">
+                        (仅{{ evaluationResult.price_windows[wkey].days_available }}天)
+                      </span>
+                    </td>
+                    <td>{{ evaluationResult.t0_close ?? '—' }}</td>
+                    <td>{{ evaluationResult.price_windows[wkey]?.end_price ?? '—' }}</td>
+                    <td :class="returnClass(evaluationResult.price_windows[wkey]?.return_pct)">
+                      {{ formatPct(evaluationResult.price_windows[wkey]?.return_pct) }}
+                    </td>
+                    <td class="upside">{{ formatPct(evaluationResult.price_windows[wkey]?.max_upside_pct) }}</td>
+                    <td class="drawdown">{{ formatPct(evaluationResult.price_windows[wkey]?.max_drawdown_pct) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Validated / falsified points -->
+            <div class="eval-points-row">
+              <div v-if="evaluationResult.llm_review?.validated_points?.length" class="eval-points validated">
+                <p class="points-label">✅ 已证实要点</p>
+                <ul>
+                  <li v-for="(pt, i) in evaluationResult.llm_review.validated_points" :key="i">{{ pt }}</li>
+                </ul>
+              </div>
+              <div v-if="evaluationResult.llm_review?.falsified_points?.length" class="eval-points falsified">
+                <p class="points-label">❌ 已证伪要点</p>
+                <ul>
+                  <li v-for="(pt, i) in evaluationResult.llm_review.falsified_points" :key="i">{{ pt }}</li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- Per-window narrative -->
+            <div v-if="evaluationResult.llm_review" class="eval-narratives">
+              <div v-if="evaluationResult.llm_review.short_review" class="eval-narrative">
+                <span class="narrative-tag short">5日评价</span>
+                <span>{{ evaluationResult.llm_review.short_review }}</span>
+              </div>
+              <div v-if="evaluationResult.llm_review.mid_review" class="eval-narrative">
+                <span class="narrative-tag mid">20日评价</span>
+                <span>{{ evaluationResult.llm_review.mid_review }}</span>
+              </div>
+              <div v-if="evaluationResult.llm_review.long_review" class="eval-narrative">
+                <span class="narrative-tag long">60日评价</span>
+                <span>{{ evaluationResult.llm_review.long_review }}</span>
+              </div>
+            </div>
+
+            <!-- Summary -->
+            <p v-if="evaluationResult.llm_review?.summary" class="eval-summary">
+              {{ evaluationResult.llm_review.summary }}
+            </p>
+
+            <p class="eval-meta">评估时间: {{ formatTime(evaluationResult.evaluated_at) }}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -100,6 +203,112 @@ const historyList = ref([])
 const selectedItem = ref(null)
 const detailMaximized = ref(false)
 
+// Evaluation state
+const evaluationLoading = ref(false)
+const evaluationResult = ref(null)
+const evaluationError = ref('')
+let evalPollTimer = null
+
+const accuracyLabels = { accurate: '准确', mixed: '部分准确', inaccurate: '不准确' }
+const reasoningLabels = { strong: '严谨', partial: '一般', weak: '较弱' }
+const riskCalibLabels = {
+  well_calibrated: '校准良好',
+  under_estimated: '低估风险',
+  over_estimated: '高估风险',
+}
+function accuracyLabel(v) { return accuracyLabels[v] || v || '—' }
+function reasoningLabel(v) { return reasoningLabels[v] || v || '—' }
+function riskCalibLabel(v) { return riskCalibLabels[v] || v || '—' }
+function formatPct(v) {
+  if (v == null) return '—'
+  return (v >= 0 ? '+' : '') + Number(v).toFixed(2) + '%'
+}
+function returnClass(v) {
+  if (v == null) return ''
+  return v > 0 ? 'upside' : v < 0 ? 'drawdown' : ''
+}
+
+function stopPolling() {
+  if (evalPollTimer) {
+    clearInterval(evalPollTimer)
+    evalPollTimer = null
+  }
+}
+
+async function loadExistingEvaluation(historyId) {
+  const token = localStorage.getItem('access_token')
+  if (!token) return
+  try {
+    const res = await axios.get(`/api/analysis/evaluations/${historyId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.data) {
+      evaluationResult.value = res.data
+    }
+  } catch (_) {
+    // 404 is normal when not yet evaluated
+  }
+}
+
+async function triggerEvaluation(item) {
+  if (evaluationLoading.value) return
+  stopPolling()
+  evaluationLoading.value = true
+  evaluationError.value = ''
+  evaluationResult.value = null
+
+  const token = localStorage.getItem('access_token')
+  try {
+    await axios.post(
+      '/api/analysis/evaluate',
+      { history_id: item.id },
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+  } catch (e) {
+    if (e.response?.status === 409) {
+      // Already exists — load it
+      evaluationLoading.value = false
+      await loadExistingEvaluation(item.id)
+      return
+    }
+    evaluationLoading.value = false
+    evaluationError.value = e.response?.data?.detail || '提交评估失败'
+    return
+  }
+
+  // Poll for completion
+  let tries = 0
+  evalPollTimer = setInterval(async () => {
+    tries++
+    if (tries > 40) {
+      stopPolling()
+      evaluationLoading.value = false
+      evaluationError.value = '评估超时，请稍后刷新'
+      return
+    }
+    try {
+      const res = await axios.get(`/api/analysis/evaluations/${item.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const status = res.data?.evaluation_status
+      if (status === 'completed') {
+        stopPolling()
+        evaluationResult.value = res.data
+        evaluationLoading.value = false
+      } else if (status === 'insufficient_data' || status === 'window_not_mature') {
+        stopPolling()
+        evaluationLoading.value = false
+        evaluationError.value =
+          status === 'window_not_mature'
+            ? '价格数据窗口尚未成熟（需至少5个交易日）'
+            : '数据不足，无法评估'
+      }
+    } catch (_) {
+      // Still pending, keep polling
+    }
+  }, 3000)
+}
+
 function formatTime(timeStr) {
   if (!timeStr) return ''
   const date = new Date(timeStr)
@@ -117,11 +326,20 @@ function modeClass(mode) {
 function viewDetails(item) {
   selectedItem.value = item
   detailMaximized.value = false
+  stopPolling()
+  evaluationLoading.value = false
+  evaluationResult.value = null
+  evaluationError.value = ''
+  loadExistingEvaluation(item.id)
 }
 
 function closeDetails() {
   selectedItem.value = null
   detailMaximized.value = false
+  stopPolling()
+  evaluationLoading.value = false
+  evaluationResult.value = null
+  evaluationError.value = ''
 }
 
 function toggleDetailMaximized() {
@@ -253,5 +471,141 @@ onMounted(loadHistory)
     flex-wrap: wrap;
     gap: 8px;
   }
+}
+
+/* Evaluation button */
+.eval-btn { margin-left: 8px; }
+.eval-spinner {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 2px solid rgba(255,255,255,.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* Evaluation result block */
+.eval-error {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.eval-result-block {
+  margin-top: 24px;
+  padding: 20px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 10px;
+}
+.eval-result-title {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #2c3e50;
+}
+.eval-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.eval-badge {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+/* outcome_accuracy */
+.eval-badge.badge-accuracy.accurate   { background: rgba(34,197,94,.15); color: #15803d; border-color: rgba(34,197,94,.3); }
+.eval-badge.badge-accuracy.mixed      { background: rgba(234,179,8,.15);  color: #92400e; border-color: rgba(234,179,8,.3); }
+.eval-badge.badge-accuracy.inaccurate { background: rgba(239,68,68,.15);  color: #b91c1c; border-color: rgba(239,68,68,.3); }
+/* reasoning_quality */
+.eval-badge.badge-reasoning.strong    { background: rgba(99,102,241,.15); color: #4338ca; border-color: rgba(99,102,241,.3); }
+.eval-badge.badge-reasoning.partial   { background: rgba(234,179,8,.15);  color: #92400e; border-color: rgba(234,179,8,.3); }
+.eval-badge.badge-reasoning.weak      { background: rgba(239,68,68,.15);  color: #b91c1c; border-color: rgba(239,68,68,.3); }
+/* risk_calibration */
+.eval-badge.badge-risk.well_calibrated  { background: rgba(6,182,212,.15); color: #0e7490; border-color: rgba(6,182,212,.3); }
+.eval-badge.badge-risk.under_estimated  { background: rgba(239,68,68,.15); color: #b91c1c; border-color: rgba(239,68,68,.3); }
+.eval-badge.badge-risk.over_estimated   { background: rgba(234,179,8,.15); color: #92400e; border-color: rgba(234,179,8,.3); }
+/* default when value not matched */
+.eval-badge { background: #e9ecef; color: #495057; border-color: #dee2e6; }
+
+/* Metrics table */
+.eval-metrics { overflow-x: auto; margin-bottom: 16px; }
+.eval-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.eval-table th, .eval-table td {
+  padding: 7px 12px;
+  border: 1px solid #dee2e6;
+  text-align: right;
+  white-space: nowrap;
+}
+.eval-table th {
+  background: #e9ecef;
+  font-weight: 600;
+  text-align: center;
+  color: #495057;
+}
+.eval-table td.w-label { text-align: left; font-weight: 600; color: #2c3e50; }
+.eval-table .upside   { color: #15803d; font-weight: 600; }
+.eval-table .drawdown { color: #b91c1c; font-weight: 600; }
+.partial-flag { font-size: 11px; color: #6c757d; font-weight: 400; margin-left: 4px; }
+
+/* Validated / falsified points */
+.eval-points-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.eval-points { padding: 10px 14px; border-radius: 8px; }
+.eval-points.validated { background: rgba(34,197,94,.06); border: 1px solid rgba(34,197,94,.2); }
+.eval-points.falsified { background: rgba(239,68,68,.06); border: 1px solid rgba(239,68,68,.2); }
+.points-label { margin: 0 0 6px; font-size: 12px; font-weight: 700; color: #374151; }
+.eval-points ul { margin: 0; padding-left: 18px; }
+.eval-points li { font-size: 13px; line-height: 1.6; color: #495057; }
+
+/* Narratives */
+.eval-narratives { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.eval-narrative { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.6; color: #495057; }
+.narrative-tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.narrative-tag.short { background: rgba(99,102,241,.15); color: #4338ca; }
+.narrative-tag.mid   { background: rgba(6,182,212,.15);  color: #0e7490; }
+.narrative-tag.long  { background: rgba(139,92,246,.15); color: #6d28d9; }
+
+/* Summary + meta */
+.eval-summary {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #374151;
+  font-weight: 500;
+  padding: 10px 14px;
+  background: rgba(102,126,234,.06);
+  border-left: 3px solid #764ba2;
+  border-radius: 0 6px 6px 0;
+}
+.eval-meta { margin: 8px 0 0; font-size: 11px; color: #9ca3af; }
+
+@media (max-width: 600px) {
+  .eval-points-row { grid-template-columns: 1fr; }
 }
 </style>
