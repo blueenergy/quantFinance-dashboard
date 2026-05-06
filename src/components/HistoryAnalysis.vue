@@ -16,41 +16,11 @@
         <span class="history-model">🧠 模型: <b>{{ item.model || 'unknown' }}</b></span>
       </div>
       <div class="history-body">
-        <div v-if="item.analysis?.quant_score_snapshot_tag || item.analysis?.quant_score_cross_check">
-          <span class="label">量化快照:</span> {{ item.analysis?.quant_score_snapshot_tag || '—' }}
-        </div>
-        <div v-if="item.analysis?.quant_score_cross_check">
-          <span class="label">分数与叙述对照:</span> {{ item.analysis?.quant_score_cross_check }}
-        </div>
-        <div><span class="label">📊 技术面分析:</span> {{ item.analysis?.technical_analysis || '无' }}</div>
-        <div><span class="label">⏳ 长期走势预测:</span> {{ item.analysis?.long_term_forecast || '无' }}</div>
-        <div><span class="label">⏳ 中期走势预测:</span> {{ item.analysis?.mid_term_forecast || '无' }}</div>
-        <div><span class="label">⏳ 短期走势预测:</span> {{ item.analysis?.short_term_forecast || '无' }}</div>
-        <div>
-          <span class="label">📋 摘要:</span>
-          <ul v-if="Array.isArray(item.analysis?.key_points)">
-            <li v-for="(point, i) in item.analysis.key_points" :key="i">{{ point }}</li>
-          </ul>
-          <span v-else>{{ item.analysis?.key_points || '无' }}</span>
-        </div>
-        <div>
-          <span class="label">💡 投资建议:</span>
-          <span :class="['advice', item.analysis?.investment_advice]">
-            {{ item.analysis?.investment_advice || '无' }}
-          </span>
-        </div>
-        <div class="risk-row">
-          <span class="label">⚠️ 风险等级:</span>
-          <span :class="['risk', item.analysis?.risk_level]">
-            {{ item.analysis?.risk_level || '未知' }}
-          </span>
-          <span class="label" style="margin-left:12px;">支撑位:</span>
-          <span>{{ item.analysis?.support_level ?? '无' }}</span>
-          <span class="label" style="margin-left:12px;">阻力位:</span>
-          <span>{{ item.analysis?.resistance_level ?? '无' }}</span>
-          <span class="label" style="margin-left:12px;">信心分数:</span>
-          <span>{{ item.analysis?.confidence_score ?? '无' }}</span>
-        </div>
+        <AnalysisDetailContent
+          :analysis="item.analysis"
+          :analysis-mode="item.analysis_mode"
+          layout="stacked"
+        />
 
         <!-- 评审流水线：默认折叠；正文在上，此处仅按需展开查看评审意见 / 初稿对照 -->
         <div v-if="item.analysis?.deep_review_pipeline" class="review-pipeline-outer">
@@ -200,6 +170,7 @@
 <script setup>
 import { reactive, watch, ref } from 'vue'
 import axios from 'axios' 
+import AnalysisDetailContent from './AnalysisDetailContent.vue'
 
 const props = defineProps({
   history: Array
@@ -478,6 +449,33 @@ function toggleMaximize(item) {
   color: #b19cd9;
   font-size: 13px;
 }
+:deep(.analysis-field-card) {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+:deep(.analysis-summary-item) {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+:deep(.analysis-field-card h5),
+:deep(.analysis-field-card p),
+:deep(.analysis-summary-value),
+:deep(.analysis-points-list li) {
+  color: #ddd;
+}
+
+:deep(.analysis-summary-label) {
+  color: #9ca3af;
+}
+
+:deep(.analysis-points-list) {
+  list-style: disc;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .btn-toggle-thinking {
   background: none;
   border: 1px solid #4ade80;

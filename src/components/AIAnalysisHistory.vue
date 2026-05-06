@@ -74,28 +74,12 @@
           <button @click="closeDetails" class="btn-base btn-sm btn-gradient-gray">关闭</button>
         </div>
         <div class="modal-body">
-          <div class="detail-grid">
-            <div class="detail-item">
-              <strong>分析模式:</strong>
-              <p>{{ modeLabel(selectedItem.analysis_mode) }}</p>
-            </div>
-            <div class="detail-item" v-for="block in detailBlocks" :key="block.key">
-              <strong>{{ block.title }}:</strong>
-              <template v-if="block.type === 'levels'">
-                <p>支撑位: {{ selectedItem.analysis?.support_level || '暂无' }}</p>
-                <p>阻力位: {{ selectedItem.analysis?.resistance_level || '暂无' }}</p>
-              </template>
-              <template v-else>
-                <p>{{ block.get(selectedItem) }}</p>
-              </template>
-            </div>
-          </div>
-          <div v-if="selectedItem.analysis?.key_points?.length" class="key-points">
-            <strong>关键要点:</strong>
-            <ul>
-              <li v-for="(point, index) in selectedItem.analysis.key_points" :key="index">{{ point }}</li>
-            </ul>
-          </div>
+          <AnalysisDetailContent
+            :analysis="selectedItem.analysis"
+            :analysis-mode="selectedItem.analysis_mode"
+            layout="grid"
+            :show-mode="true"
+          />
         </div>
       </div>
     </div>
@@ -104,6 +88,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import AnalysisDetailContent from './AnalysisDetailContent.vue'
 
 // Static label maps - 只保留真正需要翻译的标签
 const adviceLabels = { buy: '买入', hold: '持有', sell: '卖出' }
@@ -114,18 +99,6 @@ const error = ref('')
 const historyList = ref([])
 const selectedItem = ref(null)
 const detailMaximized = ref(false)
-
-// Detail block spec (reduces template repetition)
-const detailBlocks = [
-  { key: 'qtag', title: '量化快照标记', get: (it) => it.analysis?.quant_score_snapshot_tag || '暂无' },
-  { key: 'qcross', title: '分数与叙述对照 (stock_scores)', get: (it) => it.analysis?.quant_score_cross_check || '暂无' },
-  { key: 'technical', title: '技术分析', get: (it) => it.analysis?.technical_analysis || '暂无' },
-  { key: 'long', title: '长期预测', get: (it) => it.analysis?.long_term_forecast || '暂无' },
-  { key: 'mid', title: '中期预测', get: (it) => it.analysis?.mid_term_forecast || '暂无' },
-  { key: 'short', title: '短期预测', get: (it) => it.analysis?.short_term_forecast || '暂无' },
-  { key: 'levels', title: '关键价位', type: 'levels' },
-  { key: 'conf', title: '置信度', get: (it) => (it.analysis?.confidence_score || 0) + '%' }
-]
 
 function formatTime(timeStr) {
   if (!timeStr) return ''
@@ -261,14 +234,12 @@ onMounted(loadHistory)
 .modal-stock-name { font-size:16px; font-weight:400; margin-left:8px; opacity:0.9; }
 .modal-body { padding:20px 22px; }
 .detail-fullscreen-btn { margin-left:auto; }
-.detail-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-bottom:20px; }
-.detail-item { background:#f8f9fa; padding:14px; border-radius:8px; border-left:4px solid #667eea; }
-.detail-item strong { display:block; margin-bottom:6px; font-size:14px; color:#2c3e50; }
-.detail-item p { margin:4px 0; font-size:13px; line-height:1.5; color:#495057; }
-.key-points { background:#e9ecef; padding:16px; border-radius:8px; }
-.key-points strong { display:block; margin-bottom:10px; font-size:14px; }
-.key-points ul { margin:0; padding-left:18px; }
-.key-points li { margin-bottom:6px; font-size:13px; line-height:1.5; }
+:deep(.analysis-field-card) { background:#f8f9fa; border-color:rgba(102, 126, 234, 0.16); }
+:deep(.analysis-field-card h5),
+:deep(.analysis-field-card p),
+:deep(.analysis-summary-value),
+:deep(.analysis-points-list li) { color:#495057; }
+:deep(.analysis-summary-label) { color:#6b7280; }
 
 @media (max-width: 768px) {
   .analysis-detail-modal {
