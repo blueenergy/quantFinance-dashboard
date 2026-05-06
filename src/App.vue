@@ -144,8 +144,9 @@ import UserAvatar from './components/UserAvatar.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
 import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
-import { ref, onMounted, computed, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { getRenderableTabViews, getTabProps as buildTabProps, getTabListeners as buildTabListeners } from './utils/tabViews.js'
+import { useAppStartupFlow } from './composables/useAppStartupFlow.js'
 import { useHomeSummaries } from './composables/useHomeSummaries.js'
 import { useChartWorkspace } from './composables/useChartWorkspace.js'
 import { useNavigationShell } from './composables/useNavigationShell.js'
@@ -196,12 +197,6 @@ axios.interceptors.response.use(
 )
 
 const { user, isAuthenticated, validateToken, logout } = useAuth()
-
-// 注册邮件开通、密码重置
-const isAccountActivateMode = ref(false)
-const accountActivateToken = ref('')
-const isResetPasswordMode = ref(false)
-const resetToken = ref('')
 
 const {
   activeTab,
@@ -256,6 +251,32 @@ const {
   adminTabs,
 })
 
+const {
+  isAccountActivateMode,
+  accountActivateToken,
+  isResetPasswordMode,
+  resetToken,
+  handleLoginSuccess,
+  handleLogout,
+  handleResetDone,
+} = useAppStartupFlow({
+  user,
+  adminTabs,
+  activeTab,
+  watchlist,
+  setAuth: (authData) => authService.setAuth(authData),
+  validateToken,
+  logout,
+  loadNavigationTabs,
+  switchTab,
+  applyResolvedNavigationTabs,
+  resetNavigationShell,
+  readSavedActiveTab,
+  refreshVisibleHomeSummaries,
+  loadAppChartWatchlist,
+  resetHomeCardSummaries,
+})
+
 const renderableTabViews = computed(() => {
   return getRenderableTabViews(adminTabs.value)
 })
@@ -287,129 +308,6 @@ function getTabListeners(tabId) {
     handleLoadMore,
   })
 }
-
-async function handleLoginSuccess(authData) {
-  console.log('登录成功:', authData.user.username)
-  authService.setAuth(authData)
-  // New session should not inherit stale source context from previous user.
-  window.currentSourceInfo = null
-
-  // 并行：刷新完整用户 profile + 拉取导航 tab 列表，减少登录后首屏延迟
-  let ids = null
-  const navReq = axios
-    .get('/api/user/navigation-tabs', {
-      headers: { Authorization: `Bearer ${authData.access_token}` },
-    })
-    .then((res) => {
-      if (res.data?.success && Array.isArray(res.data.data?.visible_tab_ids)) {
-        ids = res.data.data.visible_tab_ids
-      }
-    })
-    .catch((e) => {
-      console.error('加载主导航策略失败:', e)
-    })
-  await Promise.all([navReq, validateToken()])
-  applyResolvedNavigationTabs(ids, authData.user?.username)
-
-  // 登录成功后，优先恢复当前用户上次访问且仍有权限的 tab，并同步恢复内容挂载。
-  const savedTab = readSavedActiveTab()
-  const visibleIds = user.value?.is_admin
-    ? adminTabs.value.map((tab) => tab.id)
-    : (Array.isArray(ids) ? ids : [])
-
-  if (savedTab && visibleIds.includes(savedTab)) {
-    switchTab(savedTab)
-    console.log('登录后恢复上次浏览的页面:', savedTab)
-  } else if (user.value?.is_admin) {
-    switchTab('admin')
-    console.log('管理员登录，跳转到系统管理页面')
-  } else {
-    activeTab.value = ''
-  }
-
-  await refreshVisibleHomeSummaries()
-}
-
-function handleLogout() {
-  resetNavigationShell()
-  window.currentSourceInfo = null
-  watchlist.value = []
-  resetHomeCardSummaries()
-  logout()
-  console.log('用户已登出')
-}
-
-function handleResetDone() {
-  // 密码重置完成，返回登录界面
-  isResetPasswordMode.value = false
-  resetToken.value = ''
-  // 清除URL中的token参数
-  window.history.replaceState({}, document.title, window.location.pathname)
-}
-
-onMounted(async () => {
-  // 检查是否是密码重置URL
-  const urlParams = new URLSearchParams(window.location.search)
-  if (window.location.pathname === '/activate') {
-    const t = urlParams.get('token')
-    if (t) {
-      isAccountActivateMode.value = true
-      accountActivateToken.value = t
-    } else {
-      isAccountActivateMode.value = true
-      accountActivateToken.value = ''
-    }
-    return
-  }
-  const resetTokenParam = urlParams.get('token')
-  if (resetTokenParam && window.location.pathname === '/reset-password') {
-    isResetPasswordMode.value = true
-    resetToken.value = resetTokenParam
-    return // 不需要验证token，直接显示重置密码页面
-  }
-
-  // 必须验证 token 获取正确的用户信息，不能依赖 localStorage 中的缓存
-  if (!localStorage.getItem('access_token')) return
-
-  // 并行发起 token 验证与导航 tab 加载，减少首屏等待时间
-  const [tokenValid] = await Promise.all([
-    validateToken(),
-    loadNavigationTabs(),
-  ])
-  if (!tokenValid) {
-    console.log('Token已失效,请重新登录')
-    return
-  }
-  // 自选股列表由 watch(activeTab) 在进入「自选股 / 图表」时通过 loadAppChartWatchlist 拉取
-
-  // 根据用户角色设置默认界面
-  const savedTab = readSavedActiveTab()
-  console.log('尝试恢复tab:', savedTab, '用户:', user.value?.username, '是否管理员:', user.value?.is_admin)
-
-  if (savedTab && adminTabs.value.some(tab => tab.id === savedTab)) {
-    // 检查管理员tab的访问权限
-    if (savedTab === 'admin' && !user.value?.is_admin) {
-      activeTab.value = ''
-      console.log('非管理员用户尝试访问管理后台，已清空无权限标签页')
-    } else {
-      switchTab(savedTab)
-      console.log('恢复上次浏览的页面:', savedTab)
-    }
-  } else if (user.value?.is_admin) {
-    switchTab('admin')
-    console.log('管理员自动跳转到系统管理页面')
-  } else {
-    // 普通用户未命中有效缓存 tab 时，不默认进入任何业务页，等待用户主动选择。
-    activeTab.value = ''
-  }
-
-  await refreshVisibleHomeSummaries()
-
-  // 恢复 Tab 后若正在图表/自选股，拉一次（activeTab 未变时 watch 不会触发）
-  if (activeTab.value === 'chart' || activeTab.value === 'watchlist') {
-    await loadAppChartWatchlist()
-  }
-})
 
 // 角色降级保护：一旦当前用户不是管理员，不允许停留在 admin 标签页
 watch(
