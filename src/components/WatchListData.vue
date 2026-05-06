@@ -184,9 +184,12 @@
 
     <!-- 历史分析弹窗 -->
     <div v-if="showHistoryModal" class="modal-overlay" @click="closeHistoryModal">
-      <div class="modal-content" @click.stop>
+      <div class="modal-content" :class="{ 'modal-content--maximized': historyModalMaximized }" @click.stop>
         <div class="modal-header">
           <h3>🕑 {{ historySymbol }} 历史AI分析</h3>
+          <button @click="toggleHistoryModalMaximized" class="fullscreen-btn">
+            {{ historyModalMaximized ? '退出全屏' : '全屏' }}
+          </button>
           <button @click="closeHistoryModal" class="close-btn">×</button>
         </div>
         <div class="modal-body">
@@ -233,6 +236,7 @@ const migrationComplete = ref(false)
 const showHistoryModal = ref(false)
 const historySymbol = ref('')
 const useRealtimeData = ref(true)  // 默认使用实时数据
+const historyModalMaximized = ref(false)
 
 const DEEP_ANALYSIS_MODE_STORAGE_KEY = 'deep_analysis_mode'
 
@@ -756,6 +760,7 @@ function openHistoryModal(symbol) {
   console.log(`analysisHistory[${symbol}]:`, analysisHistory.value[symbol])
   
   historySymbol.value = symbol
+  historyModalMaximized.value = false
   loadHistory(symbol)
   showHistoryModal.value = true
 }
@@ -764,6 +769,11 @@ function openHistoryModal(symbol) {
 function closeHistoryModal() {
   showHistoryModal.value = false
   historySymbol.value = ''
+  historyModalMaximized.value = false
+}
+
+function toggleHistoryModalMaximized() {
+  historyModalMaximized.value = !historyModalMaximized.value
 }
 
 // 获取单个股票的最新数据
@@ -1397,6 +1407,13 @@ onMounted(async () => {
   border: 1px solid rgba(138, 43, 226, 0.2);
 }
 
+.modal-content--maximized {
+  width: 96vw;
+  max-width: none;
+  height: 92vh;
+  max-height: none;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -1412,6 +1429,24 @@ onMounted(async () => {
   color: #ffffff;
   font-size: 18px;
   text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.fullscreen-btn {
+  background: linear-gradient(135deg, #0891b2 0%, #0f766e 100%);
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-left: auto;
+  margin-right: 10px;
+  transition: all 0.2s ease;
+}
+
+.fullscreen-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(8, 145, 178, 0.35);
 }
 
 .close-btn {
@@ -1508,6 +1543,19 @@ onMounted(async () => {
 
 .modal-content::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(135deg, #9370db, #ba55d3);
+}
+
+@media (max-width: 768px) {
+  .modal-content--maximized {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .modal-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 }
 
 .history-btn {

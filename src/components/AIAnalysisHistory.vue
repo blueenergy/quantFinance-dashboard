@@ -60,7 +60,7 @@
 
     <!-- 详情对话框 -->
     <div v-if="selectedItem" class="modal-overlay" @click="closeDetails">
-      <div class="modal-content analysis-detail-modal" @click.stop>
+      <div class="modal-content analysis-detail-modal" :class="{ 'analysis-detail-modal--maximized': detailMaximized }" @click.stop>
         <div class="modal-header gradient-purple flex-row-center flex-center-between">
           <h4 class="modal-title">
             {{ selectedItem.stock_code }}
@@ -68,6 +68,9 @@
             AI分析详情
           </h4>
           <span :class="['mode-badge', 'in-modal', modeClass(selectedItem.analysis_mode)]">{{ modeLabel(selectedItem.analysis_mode) }}</span>
+          <button @click="toggleDetailMaximized" class="btn-base btn-sm btn-gradient-teal detail-fullscreen-btn">
+            {{ detailMaximized ? '退出全屏' : '全屏' }}
+          </button>
           <button @click="closeDetails" class="btn-base btn-sm btn-gradient-gray">关闭</button>
         </div>
         <div class="modal-body">
@@ -110,6 +113,7 @@ const loading = ref(false)
 const error = ref('')
 const historyList = ref([])
 const selectedItem = ref(null)
+const detailMaximized = ref(false)
 
 // Detail block spec (reduces template repetition)
 const detailBlocks = [
@@ -137,8 +141,20 @@ function modeClass(mode) {
   return mode === 'multi_expert_v1' ? 'multi-expert' : 'classic'
 }
 
-function viewDetails(item) { selectedItem.value = item }
-function closeDetails() { selectedItem.value = null }
+function viewDetails(item) {
+  selectedItem.value = item
+  detailMaximized.value = false
+}
+
+function closeDetails() {
+  selectedItem.value = null
+  detailMaximized.value = false
+}
+
+function toggleDetailMaximized() {
+  detailMaximized.value = !detailMaximized.value
+}
+
 function clearError() { error.value = '' }
 
 async function loadHistory() {
@@ -238,11 +254,13 @@ onMounted(loadHistory)
 .label-muted { font-size:13px; color:#495057; }
 .item-preview { font-size:13px; line-height:1.5; }
 /* Modal */
-.analysis-detail-modal { max-width:800px; max-height:80vh; overflow-y:auto; border-radius:12px; }
+.analysis-detail-modal { width:min(1100px, 92vw); max-height:80vh; overflow-y:auto; border-radius:12px; }
+.analysis-detail-modal--maximized { width:96vw; max-width:none; height:92vh; max-height:none; }
 .modal-header.gradient-purple { background:linear-gradient(135deg,#667eea 0%, #764ba2 100%); color:#fff; padding:16px 20px; border-radius:12px 12px 0 0; }
 .modal-title { margin:0; font-size:18px; font-weight:600; }
 .modal-stock-name { font-size:16px; font-weight:400; margin-left:8px; opacity:0.9; }
 .modal-body { padding:20px 22px; }
+.detail-fullscreen-btn { margin-left:auto; }
 .detail-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-bottom:20px; }
 .detail-item { background:#f8f9fa; padding:14px; border-radius:8px; border-left:4px solid #667eea; }
 .detail-item strong { display:block; margin-bottom:6px; font-size:14px; color:#2c3e50; }
@@ -251,4 +269,21 @@ onMounted(loadHistory)
 .key-points strong { display:block; margin-bottom:10px; font-size:14px; }
 .key-points ul { margin:0; padding-left:18px; }
 .key-points li { margin-bottom:6px; font-size:13px; line-height:1.5; }
+
+@media (max-width: 768px) {
+  .analysis-detail-modal {
+    width: 96vw;
+  }
+
+  .analysis-detail-modal--maximized {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .modal-header.gradient-purple {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
 </style>
