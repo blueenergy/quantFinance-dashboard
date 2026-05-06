@@ -125,7 +125,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(wkey, wlabel) in { short: '5交易日', mid: '20交易日', long: '60交易日' }" :key="wkey">
+                  <tr v-for="(wlabel, wkey) in { short: '5交易日', mid: '20交易日', long: '60交易日' }" :key="wkey">
                     <td class="w-label">
                       {{ wlabel }}
                       <span v-if="evaluationResult.price_windows[wkey] && !evaluationResult.price_windows[wkey].complete" class="partial-flag">
