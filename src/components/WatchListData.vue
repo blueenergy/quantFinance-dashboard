@@ -66,7 +66,7 @@
             </v-list>
           </v-menu>
         </div>
-        <button @click="addStock" :disabled="loading">添加</button>
+        <button @click="addStock" :disabled="loading" class="add-stock-btn">添加</button>
         <button @click="refreshAll" :disabled="loading" class="refresh-btn">
           {{ loading ? '刷新中...' : '🔄 刷新全部' }}
         </button>
@@ -76,6 +76,28 @@
         <button @click="addSampleStock" class="sample-btn">
           📊 添加示例(000001)
         </button>
+        <div class="analysis-mode-toggle" v-if="isAuthenticated">
+          <span class="analysis-mode-label">深度分析模式</span>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: deepAnalysisMode === 'classic' }"
+            @click="setDeepAnalysisMode('classic')"
+          >
+            经典
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: deepAnalysisMode === 'multi_expert_v1' }"
+            @click="setDeepAnalysisMode('multi_expert_v1')"
+          >
+            多专家
+          </button>
+          <span class="analysis-mode-hint">
+            {{ deepAnalysisMode === 'multi_expert_v1' ? '覆盖更全，但通常更慢' : '速度更快，沿用现有单分析师链路' }}
+          </span>
+        </div>
       </div>
     </div>
 
@@ -212,6 +234,23 @@ const showHistoryModal = ref(false)
 const historySymbol = ref('')
 const useRealtimeData = ref(true)  // 默认使用实时数据
 
+const DEEP_ANALYSIS_MODE_STORAGE_KEY = 'deep_analysis_mode'
+
+function readDeepAnalysisMode() {
+  const mode = localStorage.getItem(DEEP_ANALYSIS_MODE_STORAGE_KEY)
+  return mode === 'multi_expert_v1' ? mode : 'classic'
+}
+
+const deepAnalysisMode = ref(readDeepAnalysisMode())
+
+function setDeepAnalysisMode(mode) {
+  deepAnalysisMode.value = mode === 'multi_expert_v1' ? 'multi_expert_v1' : 'classic'
+}
+
+function formatAnalysisModeLabel(mode) {
+  return mode === 'multi_expert_v1' ? '多专家' : '经典'
+}
+
 // 股票搜索相关
 const stockSearchResults = ref([])
 const isSearchingStock = ref(false)
@@ -286,6 +325,10 @@ watch(isAuthenticated, async (newValue, oldValue) => {
   } else if (!newValue && oldValue) {
     await handleUserLogout()
   }
+})
+
+watch(deepAnalysisMode, (mode) => {
+  localStorage.setItem(DEEP_ANALYSIS_MODE_STORAGE_KEY, mode)
 })
 
 // 处理用户登录
@@ -597,16 +640,19 @@ function startDeepAnalysisTaskPoll(taskId, symbol) {
 
       if (st === 'completed') {
         const ok = data.success !== false
+        const modeText = formatAnalysisModeLabel(data.analysis_mode)
         if (ok) {
-          showAppSnackbar(`「${label}」深度分析已完成，可在历史分析中查看。`, 'success', 6000)
+          showAppSnackbar(`「${label}」${modeText}深度分析已完成，可在历史分析中查看。`, 'success', 6000)
         } else {
-          showAppSnackbar(`「${label}」深度分析已结束，但结果异常，请查看历史分析。`, 'warning', 6000)
+          showAppSnackbar(`「${label}」${modeText}深度分析已结束，但结果异常，请查看历史分析。`, 'warning', 6000)
         }
       } else if (st === 'completed_with_parse_error') {
-        showAppSnackbar(`「${label}」深度分析已完成，解析异常，请查看历史分析。`, 'warning', 6000)
+        const modeText = formatAnalysisModeLabel(data.analysis_mode)
+        showAppSnackbar(`「${label}」${modeText}深度分析已完成，解析异常，请查看历史分析。`, 'warning', 6000)
       } else if (st === 'failed') {
         const err = data.error || '分析失败'
-        showAppSnackbar(`「${label}」深度分析失败：${err}`, 'error', 8000)
+        const modeText = formatAnalysisModeLabel(data.analysis_mode)
+        showAppSnackbar(`「${label}」${modeText}深度分析失败：${err}`, 'error', 8000)
       } else {
         showAppSnackbar(`「${label}」分析状态：${st}`, 'info', 5000)
       }
@@ -648,11 +694,13 @@ async function deepAnalyzeStock(symbol) {
   try {
     deepAnalyzingStock.value = symbol
     const token = localStorage.getItem('access_token')
+    const analysisMode = deepAnalysisMode.value
     
     // 调用后端 Producer 接口
     const response = await axios.post('/api/analyze/deep-analysis', {
       symbol: symbol,
-      priority: 1
+      priority: 1,
+      analysis_mode: analysisMode
     }, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -664,8 +712,9 @@ async function deepAnalyzeStock(symbol) {
       const remaining = response.data.quota_remaining
       const pos = response.data.position_in_queue
       const label = formatStockLabel(symbol)
+      const modeText = analysisMode === 'multi_expert_v1' ? '多专家' : '经典'
       showAppSnackbar(
-        `已提交「${label}」深度分析。剩余配额 ${remaining}，排队约 ${pos} 位。分析完成后会在此提醒。`,
+        `已提交「${label}」${modeText}深度分析。剩余配额 ${remaining}，排队约 ${pos} 位。分析完成后会在此提醒。`,
         'success',
         7000
       )
@@ -1026,6 +1075,7 @@ onMounted(async () => {
 
 .add-stock {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   margin-bottom: 20px;
@@ -1063,13 +1113,13 @@ onMounted(async () => {
   font-weight: 500;
 }
 
-.add-stock button:first-of-type {
+.add-stock-btn {
   background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);
   color: white;
   box-shadow: 0 4px 15px rgba(138, 43, 226, 0.3);
 }
 
-.add-stock button:first-of-type:hover:not(:disabled) {
+.add-stock-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #9370db 0%, #ba55d3 100%);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(138, 43, 226, 0.5);
@@ -1104,6 +1154,50 @@ onMounted(async () => {
   background: linear-gradient(135deg, #f7931e 0%, #e67e22 100%);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(255, 107, 53, 0.5);
+}
+
+.analysis-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+}
+
+.analysis-mode-label {
+  color: #cbd5e1;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.analysis-mode-hint {
+  color: #93c5fd;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.mode-btn {
+  min-width: 72px;
+  padding: 8px 12px;
+  background: rgba(51, 65, 85, 0.85);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: none;
+}
+
+.mode-btn:not(.active):hover:not(:disabled) {
+  transform: none;
+  background: rgba(71, 85, 105, 0.95);
+  box-shadow: none;
+}
+
+.mode-btn.active {
+  background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
+  color: #eff6ff;
+  border-color: rgba(125, 211, 252, 0.55);
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.25);
 }
 
 .toggle-source-btn {

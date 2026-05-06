@@ -12,6 +12,7 @@
           <span v-if="item.is_read === false" class="new-tag">NEW</span>
         </span>
         <span class="history-date">{{ formatDateTime(item.created_at || item.timestamp) }}</span>
+        <span :class="['mode-badge', modeClass(item.analysis_mode)]">{{ modeLabel(item.analysis_mode) }}</span>
         <span class="history-model">🧠 模型: <b>{{ item.model || 'unknown' }}</b></span>
       </div>
       <div class="history-body">
@@ -257,6 +258,14 @@ function formatDateTime(timestamp) {
   })
 }
 
+function modeLabel(mode) {
+  return mode === 'multi_expert_v1' ? '多专家' : '经典'
+}
+
+function modeClass(mode) {
+  return mode === 'multi_expert_v1' ? 'multi-expert' : 'classic'
+}
+
 const thinkingStates = reactive({})
 const maximizingStates = reactive({})
 /** 初稿/修订稿对照折叠：key = itemKey */
@@ -419,6 +428,23 @@ function toggleMaximize(item) {
 .history-model {
   font-size: 12px;
   color: #4ade80;
+}
+.mode-badge {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.mode-badge.classic {
+  color: #e0e7ff;
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(129, 140, 248, 0.35);
+}
+.mode-badge.multi-expert {
+  color: #ecfeff;
+  background: rgba(6, 182, 212, 0.16);
+  border-color: rgba(34, 211, 238, 0.38);
 }
 .history-body {
   font-size: 13px;

@@ -28,8 +28,10 @@ export function useAnalysisHistory() {
         analysisHistory.value[symbol] = raw.map((h) => {
           const ar = h.analysis_result || {}
           const analysis = ar.analysis || h.analysis || null
+          const analysisMode = h.analysis_mode || ar.analysis_mode || analysis?.analysis_mode || 'classic'
           return {
             ...h,
+            analysis_mode: analysisMode,
             analysis_result: ar,
             analysis,
             stock_name: h.stock_name || analysis?.stock_name,

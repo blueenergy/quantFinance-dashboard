@@ -34,6 +34,7 @@
             <span class="stock-code">{{ item.stock_code }}</span>
             <span v-if="item.stock_name" class="stock-name">{{ item.stock_name }}</span>
             <span class="provider-chip">{{ item.provider }}</span>
+            <span :class="['mode-badge', modeClass(item.analysis_mode)]">{{ modeLabel(item.analysis_mode) }}</span>
           </div>
           <time class="analysis-time" :datetime="item.created_at">{{ formatTime(item.created_at) }}</time>
         </div>
@@ -66,10 +67,15 @@
             <span v-if="selectedItem.stock_name" class="modal-stock-name">{{ selectedItem.stock_name }}</span>
             AI分析详情
           </h4>
+          <span :class="['mode-badge', 'in-modal', modeClass(selectedItem.analysis_mode)]">{{ modeLabel(selectedItem.analysis_mode) }}</span>
           <button @click="closeDetails" class="btn-base btn-sm btn-gradient-gray">关闭</button>
         </div>
         <div class="modal-body">
           <div class="detail-grid">
+            <div class="detail-item">
+              <strong>分析模式:</strong>
+              <p>{{ modeLabel(selectedItem.analysis_mode) }}</p>
+            </div>
             <div class="detail-item" v-for="block in detailBlocks" :key="block.key">
               <strong>{{ block.title }}:</strong>
               <template v-if="block.type === 'levels'">
@@ -123,6 +129,14 @@ function formatTime(timeStr) {
   return date.toLocaleString('zh-CN')
 }
 
+function modeLabel(mode) {
+  return mode === 'multi_expert_v1' ? '多专家' : '经典'
+}
+
+function modeClass(mode) {
+  return mode === 'multi_expert_v1' ? 'multi-expert' : 'classic'
+}
+
 function viewDetails(item) { selectedItem.value = item }
 function closeDetails() { selectedItem.value = null }
 function clearError() { error.value = '' }
@@ -152,6 +166,7 @@ async function loadHistory() {
     historyList.value = rawData.map((item) => {
       const analysisResult = item.analysis_result || {}
       const analysis = analysisResult.analysis || item.analysis || {}
+      const analysisMode = item.analysis_mode || analysisResult.analysis_mode || analysis.analysis_mode || 'classic'
       
       return {
         id: item.id || item._id,
@@ -160,7 +175,9 @@ async function loadHistory() {
         provider: item.provider || analysisResult.provider || 'unknown',
         model: item.model || analysisResult.model || 'unknown',
         created_at: item.created_at || item.timestamp || new Date().toISOString(),
+        analysis_mode: analysisMode,
         analysis: {
+          analysis_mode: analysisMode,
           quant_score_snapshot_tag: analysis.quant_score_snapshot_tag,
           quant_score_cross_check: analysis.quant_score_cross_check,
           technical_analysis: analysis.technical_analysis,
@@ -213,6 +230,10 @@ onMounted(loadHistory)
 .stock-code { font-size:16px; font-weight:700; color:#2c3e50; }
 .stock-name { font-size:14px; color:#6c757d; font-weight:400; }
 .provider-chip { background:#e9ecef; padding:4px 8px; border-radius:4px; font-size:12px; color:#495057; }
+.mode-badge { padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; border:1px solid transparent; }
+.mode-badge.classic { background:rgba(99,102,241,.12); color:#4338ca; border-color:rgba(129,140,248,.28); }
+.mode-badge.multi-expert { background:rgba(6,182,212,.14); color:#0f766e; border-color:rgba(45,212,191,.32); }
+.mode-badge.in-modal { margin-left:auto; margin-right:12px; }
 .analysis-time { font-size:12px; color:#6c757d; }
 .label-muted { font-size:13px; color:#495057; }
 .item-preview { font-size:13px; line-height:1.5; }
