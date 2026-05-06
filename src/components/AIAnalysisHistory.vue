@@ -35,6 +35,13 @@
             <span v-if="item.stock_name" class="stock-name">{{ item.stock_name }}</span>
             <span class="provider-chip">{{ item.provider }}</span>
             <span :class="['mode-badge', modeClass(item.analysis_mode)]">{{ modeLabel(item.analysis_mode) }}</span>
+            <span
+              v-if="evalBadges[item.id]"
+              :class="['eval-list-badge', evalBadges[item.id].outcome_accuracy]"
+              :title="'推理质量: ' + reasoningLabel(evalBadges[item.id].reasoning_quality)"
+            >
+              {{ accuracyLabel(evalBadges[item.id].outcome_accuracy) }}
+            </span>
           </div>
           <time class="analysis-time" :datetime="item.created_at">{{ formatTime(item.created_at) }}</time>
         </div>
@@ -202,6 +209,7 @@ const error = ref('')
 const historyList = ref([])
 const selectedItem = ref(null)
 const detailMaximized = ref(false)
+const evalBadges = ref({}) // { [history_id]: { outcome_accuracy, reasoning_quality } }
 
 // Evaluation state
 const evaluationLoading = ref(false)
@@ -289,6 +297,17 @@ async function triggerEvaluation(item) {
         stopPolling()
         evaluationResult.value = res.data
         evaluationLoading.value = false
+        // Update list badge immediately without full reload
+        const review = res.data?.llm_review || {}
+        if (review.outcome_accuracy) {
+          evalBadges.value = {
+            ...evalBadges.value,
+            [item.id]: {
+              outcome_accuracy: review.outcome_accuracy,
+              reasoning_quality: review.reasoning_quality,
+            },
+          }
+        }
       } else if (status === 'insufficient_data' || status === 'window_not_mature') {
         stopPolling()
         evaluationLoading.value = false
@@ -342,6 +361,22 @@ function toggleDetailMaximized() {
 
 function clearError() { error.value = '' }
 
+async function loadEvalBadges(ids) {
+  if (!ids.length) return
+  const token = localStorage.getItem('access_token')
+  if (!token) return
+  try {
+    const res = await axios.post(
+      '/api/analysis/evaluations/batch',
+      ids,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    evalBadges.value = res.data || {}
+  } catch (_) {
+    // non-critical; badges just won't show
+  }
+}
+
 async function loadHistory() {
   loading.value = true
   error.value = ''
@@ -387,7 +422,10 @@ async function loadHistory() {
     
     // 按时间降序排列
     historyList.value.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    
+
+    // 批量加载评估徽章
+    await loadEvalBadges(historyList.value.map(i => i.id).filter(Boolean))
+
   } catch (e) {
     console.error('加载历史记录失败:', e)
     error.value = e.message || '加载AI分析回溯记录失败'
@@ -466,6 +504,18 @@ onMounted(loadHistory)
     gap: 8px;
   }
 }
+
+/* Evaluation list badge */
+.eval-list-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+.eval-list-badge.accurate   { background: rgba(34,197,94,.15); color: #15803d; border-color: rgba(34,197,94,.3); }
+.eval-list-badge.mixed      { background: rgba(234,179,8,.15);  color: #92400e; border-color: rgba(234,179,8,.3); }
+.eval-list-badge.inaccurate { background: rgba(239,68,68,.15);  color: #b91c1c; border-color: rgba(239,68,68,.3); }
 
 /* Evaluation button */
 .eval-btn { margin-left: 8px; }
