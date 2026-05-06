@@ -111,406 +111,24 @@
           <div v-if="!activeTab" class="empty">请选择一个功能页</div>
 
           <!-- 每个 Tab 首次被点击时才 mount，之后仅用 v-show 切换，避免反复加载 -->
-
-          <template v-if="mountedTabs.has('watchlist')">
-            <div v-show="activeTab === 'watchlist'" class="watchlist-view">
-              <WatchListData @select-chart="selectStockForChart" />
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('chart')">
-            <div v-show="activeTab === 'chart'" class="chart-view">
-              <Suspense>
-                <template #default>
-                  <StockChart
-                    :symbol="chartSymbol"
-                    :stockName="stockName"
-                    :records="chartRecords"
-                    :moneyFlowRecords="moneyFlowRecords"
-                    :signalDates="signalDates"
-                    :tradeMarkers="tradeMarkers"
-                    :prevStock="prevStock"
-                    :nextStock="nextStock"
-                    :hasPrev="hasPrev"
-                    :hasNext="hasNext"
-                    :watchlist="watchlist"
-                    :currentIndex="currentIndex"
-                    :strategyFrom="currentStrategy"
-                    :presetFrom="currentPreset"
-                    @go-back="goBackToStrategyPool"
-                    @load-more="handleLoadMore"
-                  />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-chart">图表加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('history')">
-            <div v-show="activeTab === 'history'" class="history-view">
-              <Suspense>
-                <template #default>
-                  <AIAnalysisHistory />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">AI分析回溯加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('admin') && user?.is_admin">
-            <div v-show="activeTab === 'admin'" class="admin-view">
-              <Suspense>
-                <template #default>
-                  <AdminDashboard :current-user="user" />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-card">管理面板加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('strategies')">
-            <div v-show="activeTab === 'strategies'" class="strategies-view">
-              <Suspense>
-                <template #default>
-                  <WatchlistStrategyTable />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">策略配置加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('etf')">
-            <div v-show="activeTab === 'etf'">
-              <Suspense>
-                <template #default>
-                  <EtfView />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">ETF模块加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('earnings-hunter')">
-            <div v-show="activeTab === 'earnings-hunter'">
-              <Suspense>
-                <template #default>
-                  <EarningsHunter />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">财报猎手加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('shenwan-index')">
-            <div v-show="activeTab === 'shenwan-index'">
-              <Suspense>
-                <template #default>
-                  <ShenwanIndustryIndex />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">申万行业指数加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('ranking')">
-            <div v-show="activeTab === 'ranking'">
-              <Suspense>
-                <template #default>
-                  <StockRanking @view-chart="selectStockForChart" />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">评分模块加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('spectrum')">
-            <div v-show="activeTab === 'spectrum'">
-              <Suspense>
-                <template #default>
-                  <MarketSpectrum />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-chart">市场阴阳谱加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('securities')">
-            <div v-show="activeTab === 'securities'" class="securities-view">
-              <Suspense>
-                <template #default>
-                  <SecuritiesAccountDashboard />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">账户工作台加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('trade-executions')">
-            <div v-show="activeTab === 'trade-executions'">
-              <Suspense>
-                <template #default>
-                  <TradeExecutionTable />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">交易执行记录加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('trading-manual')">
-            <div v-show="activeTab === 'trading-manual'">
-              <Suspense>
-                <template #default>
-                  <TradingManualPanel />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">手动交易面板加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('strategy-workers')">
-            <div v-show="activeTab === 'strategy-workers'">
-              <Suspense>
-                <template #default>
-                  <StrategyWorkers />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">策略 Workers 加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('strategy-execution-analysis')">
-            <div v-show="activeTab === 'strategy-execution-analysis'">
-              <Suspense>
-                <template #default>
-                  <StrategyExecutionAnalysis />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">策略执行分析加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('user-profile')">
-            <div v-show="activeTab === 'user-profile'">
-              <Suspense>
-                <template #default>
-                  <UserProfile :user="user" />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">用户配置加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('backtest')">
-            <div v-show="activeTab === 'backtest'">
-              <Suspense>
-                <template #default>
-                  <BacktestManager />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">回测管理加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('strategy-pool')">
-            <div v-show="activeTab === 'strategy-pool'">
-              <Suspense>
-                <template #default>
-                  <StrategyStockPool @view-chart="selectStockForChart" />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">策略股池加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('global-market-brief')">
-            <div v-show="activeTab === 'global-market-brief'">
-              <Suspense>
-                <template #default>
-                  <GlobalMarketBrief />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">全球市场简报加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('data-pulse')">
-            <div v-show="activeTab === 'data-pulse'">
-              <Suspense>
-                <template #default>
-                  <DataPulse />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">数据脉搏加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('market-analysis')">
-            <div v-show="activeTab === 'market-analysis'">
-              <Suspense>
-                <template #default>
-                  <MarketAnalysisBulletin />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">AI大盘分析加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('limit-up-ladder')">
-            <div v-show="activeTab === 'limit-up-ladder'">
-              <Suspense>
-                <template #default>
-                  <LimitUpLadder />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">连板天梯加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('market-risk')">
-            <div v-show="activeTab === 'market-risk'">
-              <Suspense>
-                <template #default>
-                  <MarketRiskPanel />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">市场风险预警加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('china-macro')">
-            <div v-show="activeTab === 'china-macro'">
-              <Suspense>
-                <template #default>
-                  <ChinaMacroPanel />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">中国宏观加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('us-rates')">
-            <div v-show="activeTab === 'us-rates'">
-              <Suspense>
-                <template #default>
-                  <UsRatesPanel />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">美国利率加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('x-influencer-voices')">
-            <div v-show="activeTab === 'x-influencer-voices'">
-              <Suspense>
-                <template #default>
-                  <XInfluencerVoicesPanel />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">X大V情报加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('theme-lag-recommend')">
-            <div v-show="activeTab === 'theme-lag-recommend'">
-              <Suspense>
-                <template #default>
-                  <ThemeLagRecommendPanel />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">主题补涨加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('chat')">
-            <div v-show="activeTab === 'chat'">
-              <Suspense>
-                <template #default>
-                  <ChatPanel />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">AI助手加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('sector-concept')">
-            <div v-show="activeTab === 'sector-concept'">
-              <Suspense>
-                <template #default>
-                  <SectorConceptAnalysis />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">概念板块分析加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
-
-          <template v-if="mountedTabs.has('hot-stock')">
-            <div v-show="activeTab === 'hot-stock'">
-              <Suspense>
-                <template #default>
-                  <HotStockAnalysis />
-                </template>
-                <template #fallback>
-                  <div class="skeleton skeleton-table">热股分析加载中...</div>
-                </template>
-              </Suspense>
-            </div>
-          </template>
+            <template v-for="tabView in renderableTabViews" :key="tabView.id">
+              <template v-if="mountedTabs.has(tabView.id) && (!tabView.adminOnly || user?.is_admin)">
+                <div v-show="activeTab === tabView.id" :class="tabView.wrapperClass || undefined">
+                  <Suspense>
+                    <template #default>
+                      <component
+                        :is="tabView.component"
+                        v-bind="getTabProps(tabView.id)"
+                        v-on="getTabListeners(tabView.id)"
+                      />
+                    </template>
+                    <template #fallback>
+                      <div :class="['skeleton', tabView.fallbackClass]">{{ tabView.fallbackText }}</div>
+                    </template>
+                  </Suspense>
+                </div>
+              </template>
+            </template>
         </div>
         <p v-else class="nav-policy-loading">无法加载主导航列表，请刷新页面重试。</p>
         </template>
@@ -524,7 +142,6 @@
 import LoginForm from './components/LoginForm.vue'
 import UserAvatar from './components/UserAvatar.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
-import WatchListData from './components/WatchListData.vue'
 import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
 import EtfView from './views/EtfView.vue'
@@ -532,6 +149,7 @@ import EtfView from './views/EtfView.vue'
 import { defineAsyncComponent, ref, onMounted, computed, watch, nextTick } from 'vue'
 import request from './utils/request'
 import { fetchDataPulseOverview } from './api/dataPulse.js'
+const WatchListData = defineAsyncComponent(() => import('./components/WatchListData.vue'))
 const StockChart = defineAsyncComponent(() => import('./components/StockChart.vue'))
 // StockAnalysis component removed: AI analysis moved to AIAnalysisHistory
 const AIAnalysisHistory = defineAsyncComponent(() => import('./components/AIAnalysisHistory.vue'))
@@ -1141,6 +759,262 @@ const adminTabs = computed(() => {
   }
   return filteredTabs
 })
+
+const tabViewDefinitions = [
+  {
+    id: 'watchlist',
+    component: WatchListData,
+    wrapperClass: 'watchlist-view',
+    fallbackClass: 'skeleton-table',
+    fallbackText: '自选股加载中...',
+  },
+  {
+    id: 'chart',
+    component: StockChart,
+    wrapperClass: 'chart-view',
+    fallbackClass: 'skeleton-chart',
+    fallbackText: '图表加载中...',
+  },
+  {
+    id: 'history',
+    component: AIAnalysisHistory,
+    wrapperClass: 'history-view',
+    fallbackClass: 'skeleton-table',
+    fallbackText: 'AI分析回溯加载中...',
+  },
+  {
+    id: 'admin',
+    component: AdminDashboard,
+    wrapperClass: 'admin-view',
+    fallbackClass: 'skeleton-card',
+    fallbackText: '管理面板加载中...',
+    adminOnly: true,
+  },
+  {
+    id: 'strategies',
+    component: WatchlistStrategyTable,
+    wrapperClass: 'strategies-view',
+    fallbackClass: 'skeleton-table',
+    fallbackText: '策略配置加载中...',
+  },
+  {
+    id: 'etf',
+    component: EtfView,
+    fallbackClass: 'skeleton-table',
+    fallbackText: 'ETF模块加载中...',
+  },
+  {
+    id: 'earnings-hunter',
+    component: EarningsHunter,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '财报猎手加载中...',
+  },
+  {
+    id: 'shenwan-index',
+    component: ShenwanIndustryIndex,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '申万行业指数加载中...',
+  },
+  {
+    id: 'ranking',
+    component: StockRanking,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '评分模块加载中...',
+  },
+  {
+    id: 'spectrum',
+    component: MarketSpectrum,
+    fallbackClass: 'skeleton-chart',
+    fallbackText: '市场阴阳谱加载中...',
+  },
+  {
+    id: 'securities',
+    component: SecuritiesAccountDashboard,
+    wrapperClass: 'securities-view',
+    fallbackClass: 'skeleton-table',
+    fallbackText: '账户工作台加载中...',
+  },
+  {
+    id: 'trade-executions',
+    component: TradeExecutionTable,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '交易执行记录加载中...',
+  },
+  {
+    id: 'trading-manual',
+    component: TradingManualPanel,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '手动交易面板加载中...',
+  },
+  {
+    id: 'strategy-workers',
+    component: StrategyWorkers,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '策略 Workers 加载中...',
+  },
+  {
+    id: 'strategy-execution-analysis',
+    component: StrategyExecutionAnalysis,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '策略执行分析加载中...',
+  },
+  {
+    id: 'user-profile',
+    component: UserProfile,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '用户配置加载中...',
+  },
+  {
+    id: 'backtest',
+    component: BacktestManager,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '回测管理加载中...',
+  },
+  {
+    id: 'strategy-pool',
+    component: StrategyStockPool,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '策略股池加载中...',
+  },
+  {
+    id: 'global-market-brief',
+    component: GlobalMarketBrief,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '全球市场简报加载中...',
+  },
+  {
+    id: 'data-pulse',
+    component: DataPulse,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '数据脉搏加载中...',
+  },
+  {
+    id: 'market-analysis',
+    component: MarketAnalysisBulletin,
+    fallbackClass: 'skeleton-table',
+    fallbackText: 'AI大盘分析加载中...',
+  },
+  {
+    id: 'limit-up-ladder',
+    component: LimitUpLadder,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '连板天梯加载中...',
+  },
+  {
+    id: 'market-risk',
+    component: MarketRiskPanel,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '市场风险预警加载中...',
+  },
+  {
+    id: 'china-macro',
+    component: ChinaMacroPanel,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '中国宏观加载中...',
+  },
+  {
+    id: 'us-rates',
+    component: UsRatesPanel,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '美国利率加载中...',
+  },
+  {
+    id: 'x-influencer-voices',
+    component: XInfluencerVoicesPanel,
+    fallbackClass: 'skeleton-table',
+    fallbackText: 'X大V情报加载中...',
+  },
+  {
+    id: 'theme-lag-recommend',
+    component: ThemeLagRecommendPanel,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '主题补涨加载中...',
+  },
+  {
+    id: 'chat',
+    component: ChatPanel,
+    fallbackClass: 'skeleton-table',
+    fallbackText: 'AI助手加载中...',
+  },
+  {
+    id: 'sector-concept',
+    component: SectorConceptAnalysis,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '概念板块分析加载中...',
+  },
+  {
+    id: 'hot-stock',
+    component: HotStockAnalysis,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '热股分析加载中...',
+  },
+]
+
+const renderableTabViews = computed(() => {
+  const visibleTabIds = new Set(adminTabs.value.map((tab) => tab.id))
+  return tabViewDefinitions.filter((tabView) => {
+    if (tabView.id === 'chart') return true
+    return visibleTabIds.has(tabView.id)
+  })
+})
+
+function getTabProps(tabId) {
+  if (tabId === 'chart') {
+    return {
+      symbol: chartSymbol.value,
+      stockName: stockName.value,
+      records: chartRecords.value,
+      moneyFlowRecords: moneyFlowRecords.value,
+      signalDates: signalDates.value,
+      tradeMarkers: tradeMarkers.value,
+      prevStock,
+      nextStock,
+      hasPrev: hasPrev.value,
+      hasNext: hasNext.value,
+      watchlist: watchlist.value,
+      currentIndex: currentIndex.value,
+      strategyFrom: currentStrategy.value,
+      presetFrom: currentPreset.value,
+    }
+  }
+
+  if (tabId === 'admin') {
+    return {
+      currentUser: user.value,
+    }
+  }
+
+  if (tabId === 'user-profile') {
+    return {
+      user: user.value,
+    }
+  }
+
+  return {}
+}
+
+function getTabListeners(tabId) {
+  if (tabId === 'watchlist') {
+    return {
+      'select-chart': selectStockForChart,
+    }
+  }
+
+  if (tabId === 'chart') {
+    return {
+      'go-back': goBackToStrategyPool,
+      'load-more': handleLoadMore,
+    }
+  }
+
+  if (tabId === 'ranking' || tabId === 'strategy-pool') {
+    return {
+      'view-chart': selectStockForChart,
+    }
+  }
+
+  return {}
+}
 
 watch(adminTabs, (tabs) => {
   const ids = tabs.map((t) => t.id)
