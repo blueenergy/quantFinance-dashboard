@@ -1,5 +1,29 @@
 <template>
   <div class="analysis-detail-content" :class="[`analysis-detail-content--${layout}`]">
+    <section v-if="expertReports.length > 0" class="expert-review-block">
+      <div class="expert-review-header">
+        <div>
+          <h4>多专家会审</h4>
+          <p>以下为各专家的原始观点，综合结论已体现在下方统一分析字段中。</p>
+        </div>
+        <span class="expert-review-count">{{ expertReports.length }} 位专家</span>
+      </div>
+
+      <div class="expert-review-grid">
+        <article
+          v-for="report in expertReports"
+          :key="report.key"
+          class="expert-review-card"
+        >
+          <div class="expert-review-card-header">
+            <h5>{{ report.title }}</h5>
+            <span class="expert-review-chip">{{ report.shortLabel }}</span>
+          </div>
+          <pre>{{ report.content }}</pre>
+        </article>
+      </div>
+    </section>
+
     <div class="analysis-field-list" :class="[`analysis-field-list--${layout}`]">
       <section v-if="showMode" class="analysis-field-card analysis-field-card--meta">
         <h5>分析模式</h5>
@@ -87,12 +111,36 @@ const investmentAdvice = computed(() => analysis.value.investment_advice || 'na'
 const riskLevel = computed(() => analysis.value.risk_level || 'na')
 const supportLevel = computed(() => analysis.value.support_level ?? props.emptyText)
 const resistanceLevel = computed(() => analysis.value.resistance_level ?? props.emptyText)
+const expertLabelMap = {
+  fundamental: { title: '基本面专家', shortLabel: '基本面' },
+  technical: { title: '技术面专家', shortLabel: '技术面' },
+  risk: { title: '风险专家', shortLabel: '风险' },
+}
 
 const investmentAdviceText = computed(() => adviceLabels[investmentAdvice.value] || analysis.value.investment_advice || props.emptyText)
 const riskLevelText = computed(() => riskLabels[riskLevel.value] || analysis.value.risk_level || props.emptyText)
 const confidenceText = computed(() => {
   const score = analysis.value.confidence_score
   return score == null || score === '' ? props.emptyText : `${score}%`
+})
+
+const expertReports = computed(() => {
+  const reports = analysis.value.module_reports
+  if (!reports || typeof reports !== 'object') return []
+
+  return Object.entries(reports)
+    .map(([key, value]) => {
+      const labels = expertLabelMap[key] || { title: `${key} 专家`, shortLabel: key }
+      const content = String(value || '').trim()
+      if (!content) return null
+      return {
+        key,
+        title: labels.title,
+        shortLabel: labels.shortLabel,
+        content,
+      }
+    })
+    .filter(Boolean)
 })
 
 const detailFields = computed(() => [
@@ -152,6 +200,84 @@ function modeLabel(mode) {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.expert-review-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.expert-review-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.expert-review-header h4 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.expert-review-header p {
+  margin: 0;
+  opacity: 0.8;
+  line-height: 1.6;
+}
+
+.expert-review-count {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(14, 165, 233, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.26);
+}
+
+.expert-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.expert-review-card {
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.expert-review-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.expert-review-card-header h5 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.expert-review-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(6, 182, 212, 0.14);
+  border: 1px solid rgba(45, 212, 191, 0.28);
+}
+
+.expert-review-card pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font: inherit;
+  line-height: 1.7;
+  color: inherit;
 }
 
 .analysis-field-list {
@@ -281,6 +407,10 @@ function modeLabel(mode) {
 }
 
 @media (max-width: 768px) {
+  .expert-review-header {
+    flex-direction: column;
+  }
+
   .analysis-summary-row {
     flex-direction: column;
   }

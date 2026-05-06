@@ -454,16 +454,30 @@ function toggleMaximize(item) {
   border-color: rgba(148, 163, 184, 0.2);
 }
 
+:deep(.expert-review-card) {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
 :deep(.analysis-summary-item) {
   background: rgba(255, 255, 255, 0.03);
   border-color: rgba(148, 163, 184, 0.2);
 }
 
+:deep(.expert-review-header h4),
+:deep(.expert-review-card h5),
 :deep(.analysis-field-card h5),
 :deep(.analysis-field-card p),
+:deep(.expert-review-header p),
+:deep(.expert-review-card pre),
 :deep(.analysis-summary-value),
 :deep(.analysis-points-list li) {
   color: #ddd;
+}
+
+:deep(.expert-review-count),
+:deep(.expert-review-chip) {
+  color: #67e8f9;
 }
 
 :deep(.analysis-summary-label) {

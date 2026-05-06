@@ -166,18 +166,8 @@ async function loadHistory() {
         created_at: item.created_at || item.timestamp || new Date().toISOString(),
         analysis_mode: analysisMode,
         analysis: {
+          ...analysis,
           analysis_mode: analysisMode,
-          quant_score_snapshot_tag: analysis.quant_score_snapshot_tag,
-          quant_score_cross_check: analysis.quant_score_cross_check,
-          technical_analysis: analysis.technical_analysis,
-          long_term_forecast: analysis.long_term_forecast,
-          mid_term_forecast: analysis.mid_term_forecast,
-          short_term_forecast: analysis.short_term_forecast,
-          investment_advice: analysis.investment_advice,
-          risk_level: analysis.risk_level,
-          support_level: analysis.support_level,
-          resistance_level: analysis.resistance_level,
-          confidence_score: analysis.confidence_score,
           key_points: analysis.key_points || []
         }
       }
@@ -235,10 +225,17 @@ onMounted(loadHistory)
 .modal-body { padding:20px 22px; }
 .detail-fullscreen-btn { margin-left:auto; }
 :deep(.analysis-field-card) { background:#f8f9fa; border-color:rgba(102, 126, 234, 0.16); }
+:deep(.expert-review-card) { background:#f8f9fa; border-color:rgba(102, 126, 234, 0.16); }
+:deep(.expert-review-header h4),
+:deep(.expert-review-card h5),
 :deep(.analysis-field-card h5),
 :deep(.analysis-field-card p),
+:deep(.expert-review-header p),
+:deep(.expert-review-card pre),
 :deep(.analysis-summary-value),
 :deep(.analysis-points-list li) { color:#495057; }
+:deep(.expert-review-count),
+:deep(.expert-review-chip) { color:#0f766e; }
 :deep(.analysis-summary-label) { color:#6b7280; }
 
 @media (max-width: 768px) {
