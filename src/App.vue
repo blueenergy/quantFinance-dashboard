@@ -147,6 +147,7 @@ import ResetPassword from './components/ResetPassword.vue'
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { getRenderableTabViews, getTabProps as buildTabProps, getTabListeners as buildTabListeners } from './utils/tabViews.js'
 import { useHomeSummaries } from './composables/useHomeSummaries.js'
+import { useNavigationShell } from './composables/useNavigationShell.js'
 import { useAuth, authService } from './services/auth.js'
 import axios from 'axios'
 
@@ -195,93 +196,6 @@ axios.interceptors.response.use(
 
 const { user, isAuthenticated, validateToken, logout } = useAuth()
 
-// 主导航可见列表：与权益矩阵对齐；sessionStorage 减轻首屏「null=不筛」导致的闪烁与错乱
-const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v3'
-const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v2'
-const ACTIVE_TAB_KEY = 'activeTab_v2'
-const ACTIVE_TAB_USER_KEY = 'activeTab_username_v2'
-
-const LEGACY_NAV_CACHE_KEYS = [
-  'nav_visible_tab_ids_v1',
-  'nav_visible_tab_ids_v2',
-]
-
-const LEGACY_NAV_CACHE_USER_KEYS = [
-  'nav_visible_tab_username_v1',
-]
-
-function readNavCacheRaw() {
-  try {
-    const u = sessionStorage.getItem(NAV_CACHE_USER_KEY)
-    const raw = sessionStorage.getItem(NAV_CACHE_IDS_KEY)
-    if (!u || !raw) return null
-    const userJson = localStorage.getItem('user_info')
-    if (!userJson) return null
-    const current = JSON.parse(userJson).username
-    if (current !== u) return null
-    const ids = JSON.parse(raw)
-    return Array.isArray(ids) ? ids : null
-  } catch {
-    return null
-  }
-}
-
-function writeNavCache(ids, username) {
-  try {
-    if (!username || !Array.isArray(ids)) return
-    sessionStorage.setItem(NAV_CACHE_USER_KEY, username)
-    sessionStorage.setItem(NAV_CACHE_IDS_KEY, JSON.stringify(ids))
-  } catch {
-    /* storage quota / private mode */
-  }
-}
-
-function clearNavCache() {
-  try {
-    sessionStorage.removeItem(NAV_CACHE_USER_KEY)
-    sessionStorage.removeItem(NAV_CACHE_IDS_KEY)
-    LEGACY_NAV_CACHE_USER_KEYS.forEach((key) => sessionStorage.removeItem(key))
-    LEGACY_NAV_CACHE_KEYS.forEach((key) => sessionStorage.removeItem(key))
-  } catch {
-    /* ignore */
-  }
-}
-
-function readActiveTabCache() {
-  try {
-    const u = localStorage.getItem(ACTIVE_TAB_USER_KEY)
-    const tab = localStorage.getItem(ACTIVE_TAB_KEY)
-    const userJson = localStorage.getItem('user_info')
-    if (!u || !tab || !userJson) return null
-    const current = JSON.parse(userJson).username
-    if (!current || current !== u) return null
-    return tab
-  } catch {
-    return null
-  }
-}
-
-function writeActiveTabCache(tab, username) {
-  try {
-    if (!tab || !username) return
-    localStorage.setItem(ACTIVE_TAB_USER_KEY, username)
-    localStorage.setItem(ACTIVE_TAB_KEY, tab)
-  } catch {
-    /* ignore */
-  }
-}
-
-function clearActiveTabCache() {
-  try {
-    localStorage.removeItem(ACTIVE_TAB_USER_KEY)
-    localStorage.removeItem(ACTIVE_TAB_KEY)
-    // Clean legacy key to avoid cross-account tab bleed.
-    localStorage.removeItem('activeTab')
-  } catch {
-    /* ignore */
-  }
-}
-
 // 注册邮件开通、密码重置
 const isAccountActivateMode = ref(false)
 const accountActivateToken = ref('')
@@ -292,13 +206,6 @@ const currentIndex = ref(0)
 const watchlist = ref([]) 
 const chartRecords = ref([])
 const moneyFlowRecords = ref([])
-// 不要默认 'watchlist'，否则在 onMounted 用缓存恢复 Tab 前会先挂载 WatchListData 并全量拉自选股
-const activeTab = ref(readActiveTabCache() ?? '')
-/**
- * Once a tab has been visited, keep its component mounted and use v-show to
- * toggle visibility. This prevents repeated API requests on every tab switch.
- */
-const mountedTabs = ref(new Set())
 const stockName = ref('')
 const chartSymbol = computed(() => 
   watchlist.value.length > 0 ? watchlist.value[currentIndex.value] : ''
@@ -308,121 +215,21 @@ const currentStrategy = ref('') // 当前查看股票的策略
 const currentPreset = ref('') // 当前查看股票的preset
 const tradeMarkers = ref([]) // 交易标记点（买入+卖出）
 
-const _cachedNavIds = readNavCacheRaw()
-/** 非管理员：服务端允许的 tab id；null 且 navPolicyResolved 时表示仅本地 VIP 规则 */
-const serverVisibleTabIds = ref(_cachedNavIds)
-/** 是否已具备可信导航策略（避免此前 serverVisibleTabIds===null 时完全跳过矩阵筛选） */
-const navPolicyResolved = ref(!!_cachedNavIds)
-
-const tabsShellReady = computed(() => {
-  if (user.value?.is_admin) return true
-  return navPolicyResolved.value
-})
-
-async function loadNavigationTabs() {
-  const token = localStorage.getItem('access_token')
-  if (!token || !isAuthenticated.value) {
-    serverVisibleTabIds.value = null
-    navPolicyResolved.value = false
-    clearNavCache()
-    return
-  }
-  try {
-    const res = await axios.get('/api/user/navigation-tabs')
-    if (res.data?.success && Array.isArray(res.data.data?.visible_tab_ids)) {
-      serverVisibleTabIds.value = res.data.data.visible_tab_ids
-      const u = user.value?.username
-      if (u) writeNavCache(serverVisibleTabIds.value, u)
-    } else {
-      serverVisibleTabIds.value = null
-    }
-  } catch (e) {
-    console.error('加载主导航策略失败:', e)
-    if (!readNavCacheRaw()) {
-      serverVisibleTabIds.value = null
-    }
-  } finally {
-    navPolicyResolved.value = true
-  }
-}
-
-// 监听activeTab变化，仅负责保存到localStorage（不在此处 mount 内容）
-watch(activeTab, (newTab) => {
-  const username = user.value?.username
-  if (username) {
-    writeActiveTabCache(newTab, username)
-  }
-  console.log('已保存当前tab:', newTab)
-})
-
-/**
- * 用户主动点击 Tab 时调用：将 tab 加入 mountedTabs（首次 mount），再切换 activeTab。
- * 通过这一层隔离，确保内容只在用户点击后才首次加载，而不会被 watch immediate 触发。
- */
-function switchTab(tabId) {
-  if (activeTab.value === tabId) {
-    activeTab.value = ''
-    return
-  }
-  if (tabId) mountedTabs.value.add(tabId)
-  activeTab.value = tabId
-}
-
-// 动态标签：管理员固定全量业务 Tab + 后台；普通用户仅按服务端权益矩阵返回的 visible_tab_ids（顺序一致）
-const adminTabs = computed(() => {
-  const baseTabs = [
-    { id: 'global-market-brief', name: '🌍 全球市场简报' },
-    { id: 'data-pulse', name: '🛰️ 数据脉搏' },
-    { id: 'market-analysis', name: '🤖 AI大盘分析' },
-    { id: 'limit-up-ladder', name: '📊 连板天梯' },
-    { id: 'market-risk', name: '🚨 风险预警' },
-    { id: 'china-macro', name: '🇨🇳 中国宏观' },
-    { id: 'us-rates', name: '🇺🇸 美国利率' },
-    { id: 'x-influencer-voices', name: '🐦 X大V情报' },
-    { id: 'theme-lag-recommend', name: '📌 主题补涨' },
-    { id: 'sector-concept', name: '📈 概念板块' },
-    { id: 'hot-stock', name: '🔥 热股分析' },
-    { id: 'etf', name: '💰 ETF淘金' },
-    { id: 'earnings-hunter', name: '🎯 财报猎手' },
-    { id: 'shenwan-index', name: '📊 申万行业指数' },
-    { id: 'strategy-pool', name: '🎯 策略股池' },
-    { id: 'ranking', name: '金榜' },
-    { id: 'watchlist', name: '自选股' },
-    { id: 'backtest', name: '📊 回测管理' },
-    { id: 'strategies', name: '策略配置' },
-    { id: 'strategy-workers', name: '🚀 实盘交易' },
-    { id: 'trade-executions', name: '交易记录' },
-    { id: 'trading-manual', name: '人工干预' },
-    { id: 'history', name: 'AI分析回溯' },
-    { id: 'strategy-execution-analysis', name: '策略执行分析' },
-    { id: 'spectrum', name: '阴阳谱' },
-    { id: 'securities', name: '账户工作台' },
-    { id: 'user-profile', name: '用户配置' },
-    { id: 'chat', name: '🤖 AI助手' },
-  ]
-
-  if (user.value?.is_admin) {
-    const filteredTabs = baseTabs.map((t) => ({ ...t }))
-    filteredTabs.push({ id: 'admin', name: '管理后台' })
-    return filteredTabs
-  }
-
-  if (!navPolicyResolved.value) {
-    return []
-  }
-
-  const ids = serverVisibleTabIds.value
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return []
-  }
-
-  const tabById = Object.fromEntries(baseTabs.map((t) => [t.id, t]))
-  const filteredTabs = []
-  for (const id of ids) {
-    const row = tabById[id]
-    if (row) filteredTabs.push({ ...row })
-  }
-  return filteredTabs
+const {
+  activeTab,
+  mountedTabs,
+  serverVisibleTabIds,
+  navPolicyResolved,
+  tabsShellReady,
+  adminTabs,
+  loadNavigationTabs,
+  switchTab,
+  applyResolvedNavigationTabs,
+  resetNavigationShell,
+  readSavedActiveTab,
+} = useNavigationShell({
+  user,
+  isAuthenticated,
 })
 
 const {
@@ -467,16 +274,6 @@ function getTabListeners(tabId) {
     handleLoadMore,
   })
 }
-
-watch(adminTabs, (tabs) => {
-  const ids = tabs.map((t) => t.id)
-  if (!ids.length) {
-    return
-  }
-  if (!ids.includes(activeTab.value)) {
-    activeTab.value = ''
-  }
-}, { deep: true })
 
 /** 图表区 prev/next 与自选股 ref；仅切入「自选股 / 图表」Tab 时拉取，避免登录首屏就请求 */
 let _appChartWatchlistInFlight = null
@@ -923,14 +720,10 @@ async function handleLoginSuccess(authData) {
       console.error('加载主导航策略失败:', e)
     })
   await Promise.all([navReq, validateToken()])
-  serverVisibleTabIds.value = ids
-  navPolicyResolved.value = true
-  if (ids && authData.user?.username) {
-    writeNavCache(ids, authData.user.username)
-  }
+  applyResolvedNavigationTabs(ids, authData.user?.username)
 
   // 登录成功后，优先恢复当前用户上次访问且仍有权限的 tab，并同步恢复内容挂载。
-  const savedTab = readActiveTabCache()
+  const savedTab = readSavedActiveTab()
   const visibleIds = user.value?.is_admin
     ? adminTabs.value.map((tab) => tab.id)
     : (Array.isArray(ids) ? ids : [])
@@ -949,12 +742,8 @@ async function handleLoginSuccess(authData) {
 }
 
 function handleLogout() {
-  clearNavCache()
-  serverVisibleTabIds.value = null
-  navPolicyResolved.value = false
+  resetNavigationShell()
   window.currentSourceInfo = null
-  mountedTabs.value = new Set()
-  activeTab.value = ''
   watchlist.value = []
   resetHomeCardSummaries()
   logout()
@@ -1005,7 +794,7 @@ onMounted(async () => {
   // 自选股列表由 watch(activeTab) 在进入「自选股 / 图表」时通过 loadAppChartWatchlist 拉取
 
   // 根据用户角色设置默认界面
-  const savedTab = readActiveTabCache()
+  const savedTab = readSavedActiveTab()
   console.log('尝试恢复tab:', savedTab, '用户:', user.value?.username, '是否管理员:', user.value?.is_admin)
 
   if (savedTab && adminTabs.value.some(tab => tab.id === savedTab)) {
