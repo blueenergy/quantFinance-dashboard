@@ -52,12 +52,18 @@
           v-for="report in expertReports"
           :key="report.key"
           class="expert-review-card"
+          :class="{ 'expert-review-card--open': expandedExperts.has(report.key) }"
         >
-          <div class="expert-review-card-header">
-            <h5>{{ report.title }}</h5>
-            <span class="expert-review-chip">{{ report.shortLabel }}</span>
+          <button class="expert-review-card-header" @click="toggleExpert(report.key)">
+            <div style="display:flex;align-items:center;gap:8px">
+              <h5>{{ report.title }}</h5>
+              <span class="expert-review-chip">{{ report.shortLabel }}</span>
+            </div>
+            <span class="expert-review-toggle-arrow" :class="{ 'expert-review-toggle-arrow--open': expandedExperts.has(report.key) }">▾</span>
+          </button>
+          <div v-show="expandedExperts.has(report.key)" class="expert-review-card-body">
+            <pre>{{ report.content }}</pre>
           </div>
-          <pre>{{ report.content }}</pre>
         </article>
       </div>
     </section>
@@ -150,6 +156,13 @@ const riskLevel = computed(() => analysis.value.risk_level || 'na')
 const supportLevel = computed(() => analysis.value.support_level ?? props.emptyText)
 const resistanceLevel = computed(() => analysis.value.resistance_level ?? props.emptyText)
 const expertReportsExpanded = ref(false)
+const expandedExperts = ref(new Set())
+function toggleExpert(key) {
+  const s = new Set(expandedExperts.value)
+  if (s.has(key)) s.delete(key)
+  else s.add(key)
+  expandedExperts.value = s
+}
 const expertLabelMap = {
   fundamental: { title: '基本面专家',   shortLabel: '基本面' },
   technical:   { title: '技术面专家',   shortLabel: '技术面' },
@@ -412,7 +425,7 @@ function normalizePoints(value) {
   background: rgba(148, 163, 184, 0.08);
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 12px;
-  padding: 14px 16px;
+  overflow: hidden;
 }
 
 .expert-review-card-header {
@@ -420,7 +433,22 @@ function normalizePoints(value) {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  padding: 12px 16px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.expert-review-card-header:hover {
+  background: rgba(148, 163, 184, 0.10);
+}
+
+.expert-review-card--open > .expert-review-card-header {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .expert-review-card-header h5 {
@@ -438,7 +466,11 @@ function normalizePoints(value) {
   border: 1px solid rgba(45, 212, 191, 0.28);
 }
 
-.expert-review-card pre {
+.expert-review-card-body {
+  padding: 14px 16px;
+}
+
+.expert-review-card-body pre {
   margin: 0;
   white-space: pre-wrap;
   font: inherit;
