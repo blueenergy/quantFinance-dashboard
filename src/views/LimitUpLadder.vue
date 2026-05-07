@@ -122,6 +122,46 @@
       </v-col>
     </v-row>
 
+    <!-- 涨停全景市场动向总结 -->
+    <v-row class="mb-4">
+      <v-col cols="12">
+        <v-card style="border: 1px solid rgba(255,255,255,0.1); background: rgba(20,30,50,0.7);">
+          <v-card-title class="d-flex align-center">
+            <span>📝 市场动向总结</span>
+            <v-chip
+              v-if="narrative && narrative.sentiment_signal"
+              :color="sentimentSignalColor(narrative.sentiment_signal)"
+              size="small"
+              class="ml-2"
+            >
+              {{ narrative.sentiment_signal }}
+            </v-chip>
+            <v-spacer />
+            <span v-if="narrative && narrative.model" class="text-caption text-grey">{{ narrative.model }}</span>
+          </v-card-title>
+          <v-card-text>
+            <div v-if="narrativeLoading" class="text-center pa-4">
+              <v-progress-circular indeterminate size="32" color="primary" />
+              <div class="text-caption text-grey mt-2">正在加载...</div>
+            </div>
+            <div v-else-if="narrativePending" class="text-center pa-4">
+              <v-progress-circular indeterminate size="32" color="orange" />
+              <div class="text-caption text-grey mt-2">AI 正在生成分析，请稍后刷新页面</div>
+            </div>
+            <div v-else-if="narrative && narrative.narrative_markdown">
+              <div v-if="narrative.headline" class="text-subtitle-1 font-weight-bold mb-3 text-white">
+                {{ narrative.headline }}
+              </div>
+              <div class="narrative-body" v-html="renderNarrative(narrative.narrative_markdown)" />
+            </div>
+            <v-alert v-else type="info" variant="tonal" density="compact">
+              暂无今日总结
+            </v-alert>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
     <!-- 连板天梯主视图 -->
     <v-row>
       <!-- 左侧：天梯 -->
@@ -441,7 +481,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { getDailyLadder, getIndicators, getSectorRanking, getReasoningDetail, submitReasoningFeedback } from '../api/ladder'
+import { getDailyLadder, getIndicators, getSectorRanking, getReasoningDetail, submitReasoningFeedback, getLimitUpNarrative } from '../api/ladder'
 import { getWatchlistOpportunities, getPositionsOpportunities, getLatestPortfolioAnalysis } from '../api/portfolio'
 import LadderTierCard from '../components/LadderTierCard.vue'
 import AnalysisCard from '../components/AnalysisCard.vue'
@@ -469,6 +509,11 @@ const autoRefresh = ref(false)
 const countdown = ref(60)
 let refreshTimer = null
 let countdownTimer = null
+
+// Narrative State
+const narrative = ref(null)
+const narrativeLoading = ref(false)
+const narrativePending = ref(false)
 
 // Reasoning Dialog State
 const showReasoningDialog = ref(false)
@@ -619,6 +664,32 @@ function getSustainabilityText(text) {
   return text.substring(0, 2)
 }
 
+// 将 Markdown 文本转为简单 HTML（无需外部库）
+function renderNarrative(md) {
+  if (!md) return ''
+  return md
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^### (.+)$/gm, '<h3 class="narrative-h3">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 class="narrative-h2">$1</h2>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<\/li>\n<li>)/g, '</li><li>')
+    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^(?!<[hup])(.+)$/gm, (m) => m.startsWith('<') ? m : m)
+    .replace(/^([^<].*)$/gm, (m) => `<p>${m}</p>`)
+    .replace(/<p><\/p>/g, '')
+}
+
+// sentiment_signal → Vuetify color
+function sentimentSignalColor(signal) {
+  const map = { '强势': 'red', '偏强': 'orange', '中性': 'blue', '偏弱': 'blue-grey', '弱势': 'purple' }
+  return map[signal] || 'grey'
+}
+
 // 加载数据
 async function loadData() {
   loading.value = true
@@ -673,6 +744,32 @@ async function loadData() {
   } finally {
     loading.value = false
     lastUpdatedTime.value = new Date().toLocaleTimeString()
+  }
+
+  // 独立加载叙事摘要（不阻塞主数据）
+  loadNarrative()
+}
+
+async function loadNarrative() {
+  narrativeLoading.value = true
+  narrativePending.value = false
+  narrative.value = null
+  try {
+    // 只在用户主动选了日期时才传 date，否则让后端找最新的 narrative
+    // （不能用 currentLadderDate，天梯可能因回退逻辑落在不同的日期）
+    const dateParam = selectedDate.value
+      ? selectedDate.value.replace(/-/g, '')
+      : null
+    const res = await getLimitUpNarrative(dateParam)
+    if (res.status === 'pending') {
+      narrativePending.value = true
+    } else if (res.success) {
+      narrative.value = res
+    }
+  } catch (e) {
+    console.warn('加载市场动向总结失败:', e)
+  } finally {
+    narrativeLoading.value = false
   }
 }
 
@@ -846,6 +943,45 @@ onUnmounted(() => {
 
 .min-height-0 {
   min-height: 0 !important;
+}
+
+/* 市场动向总结正文 */
+.narrative-body {
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.8;
+  font-size: 14px;
+}
+
+.narrative-body :deep(h2.narrative-h2),
+.narrative-body :deep(h3.narrative-h3) {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
+  margin: 16px 0 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 4px;
+}
+
+.narrative-body :deep(h3.narrative-h3) {
+  font-size: 14px;
+  color: #90caf9;
+}
+
+.narrative-body :deep(ul) {
+  padding-left: 20px;
+  margin: 4px 0;
+}
+
+.narrative-body :deep(li) {
+  margin-bottom: 4px;
+}
+
+.narrative-body :deep(p) {
+  margin: 6px 0;
+}
+
+.narrative-body :deep(strong) {
+  color: #ffcc80;
+  font-weight: 600;
 }
 
 /* Fix date picker text color in dark theme */

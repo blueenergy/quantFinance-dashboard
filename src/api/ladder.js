@@ -126,3 +126,15 @@ export async function getMarketSpectrum(date) {
     if (!res.ok) throw new Error(`Failed to get market spectrum: ${res.status}`);
     return await res.json();
 }
+
+/**
+ * 获取涨停全景市场动向总结（LLM 生成）
+ * @param {string} date - 日期 YYYYMMDD，可选，默认最新有数据的交易日
+ */
+export async function getLimitUpNarrative(date = null) {
+    let url = `${API_BASE}/ladder/narrative`;
+    if (date) url += `?date=${date}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Failed to get narrative: ${res.status}`);
+    return await res.json();
+}
