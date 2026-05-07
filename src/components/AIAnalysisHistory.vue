@@ -181,6 +181,25 @@
               </div>
             </div>
 
+            <!-- Error diagnosis + improvement suggestions -->
+            <div
+              v-if="evaluationResult.llm_review?.error_diagnosis?.length || evaluationResult.llm_review?.improvement_suggestions?.length"
+              class="eval-diagnosis-row"
+            >
+              <div v-if="evaluationResult.llm_review?.error_diagnosis?.length" class="eval-points diagnosis">
+                <p class="points-label">🔍 失误根因诊断</p>
+                <ul>
+                  <li v-for="(pt, i) in evaluationResult.llm_review.error_diagnosis" :key="i">{{ pt }}</li>
+                </ul>
+              </div>
+              <div v-if="evaluationResult.llm_review?.improvement_suggestions?.length" class="eval-points suggestions">
+                <p class="points-label">💡 改进建议</p>
+                <ul>
+                  <li v-for="(pt, i) in evaluationResult.llm_review.improvement_suggestions" :key="i">{{ pt }}</li>
+                </ul>
+              </div>
+            </div>
+
             <!-- Per-window narrative -->
             <div v-if="evaluationResult.llm_review" class="eval-narratives">
               <div v-if="evaluationResult.llm_review.short_review" class="eval-narrative">
@@ -682,6 +701,16 @@ onMounted(loadHistory)
 .eval-points ul { margin: 0; padding-left: 18px; }
 .eval-points li { font-size: 13px; line-height: 1.6; color: #495057; }
 
+/* Error diagnosis + improvement suggestions */
+.eval-diagnosis-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.eval-points.diagnosis    { background: rgba(245,158,11,.06); border: 1px solid rgba(245,158,11,.25); }
+.eval-points.suggestions  { background: rgba(59,130,246,.06); border: 1px solid rgba(59,130,246,.2); }
+
 /* Narratives */
 .eval-narratives { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .eval-narrative { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.6; color: #495057; }
@@ -714,5 +743,6 @@ onMounted(loadHistory)
 
 @media (max-width: 600px) {
   .eval-points-row { grid-template-columns: 1fr; }
+  .eval-diagnosis-row { grid-template-columns: 1fr; }
 }
 </style>
