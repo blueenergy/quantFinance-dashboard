@@ -43,7 +43,15 @@
               {{ accuracyLabel(evalBadges[item.id].outcome_accuracy) }}
             </span>
           </div>
-          <time class="analysis-time" :datetime="item.created_at">{{ formatTime(item.created_at) }}</time>
+          <div class="item-header-right flex-row-center gap-xs">
+            <time class="analysis-time" :datetime="item.created_at">{{ formatTime(item.created_at) }}</time>
+            <button
+              class="btn-base btn-xs btn-delete-history"
+              :disabled="deletingId === item.id"
+              @click.stop="deleteHistory(item)"
+              title="删除此条分析记录"
+            >删除</button>
+          </div>
         </div>
         <div class="item-summary flex-row-center gap-md">
           <div class="flex-row-center gap-xs">
@@ -222,6 +230,7 @@ const evaluationLoading = ref(false)
 const evaluationResult = ref(null)
 const evaluationError = ref('')
 let evalPollTimer = null
+const deletingId = ref(null)
 
 const accuracyLabels = { accurate: '准确', mixed: '部分准确', inaccurate: '不准确' }
 const reasoningLabels = { strong: '严谨', partial: '一般', weak: '较弱' }
@@ -364,6 +373,24 @@ function closeDetails() {
   evaluationError.value = ''
 }
 
+async function deleteHistory(item) {
+  if (!confirm(`确认删除「${item.stock_code}」的这条分析记录？此操作不可恢复。`)) return
+  deletingId.value = item.id
+  const token = localStorage.getItem('access_token')
+  try {
+    await axios.delete(`/api/analysis/history/${item.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    historyList.value = historyList.value.filter(h => h.id !== item.id)
+    delete evalBadges.value[item.id]
+    if (selectedItem.value?.id === item.id) closeDetails()
+  } catch (e) {
+    alert(e.response?.data?.detail || '删除失败，请稍后重试')
+  } finally {
+    deletingId.value = null
+  }
+}
+
 function toggleDetailMaximized() {
   detailMaximized.value = !detailMaximized.value
 }
@@ -473,6 +500,21 @@ onMounted(loadHistory)
 .mode-badge.multi-expert { background:rgba(6,182,212,.14); color:#0f766e; border-color:rgba(45,212,191,.32); }
 .mode-badge.in-modal { margin-left:auto; margin-right:12px; }
 .analysis-time { font-size:12px; color:#6c757d; }
+.item-header-right { flex-shrink: 0; }
+.btn-delete-history {
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid rgba(239,68,68,.4);
+  background: rgba(239,68,68,.07);
+  color: #b91c1c;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.history-item:hover .btn-delete-history { opacity: 1; }
+.btn-delete-history:hover { background: rgba(239,68,68,.18); }
+.btn-delete-history:disabled { opacity: .4; cursor: not-allowed; }
 .label-muted { font-size:13px; color:#495057; }
 .item-preview { font-size:13px; line-height:1.5; }
 /* Modal */
