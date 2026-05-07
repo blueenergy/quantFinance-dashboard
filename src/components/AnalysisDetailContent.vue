@@ -36,12 +36,18 @@
       <div class="expert-review-header">
         <div>
           <h4>多专家会审</h4>
-          <p>以下为各专家的原始观点；上方会先展示共识、分歧与最终结论。</p>
+          <p>以下为各专家的原始观点；上方已展示综合结论。</p>
         </div>
-        <span class="expert-review-count">{{ expertReports.length }} 位专家</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <span class="expert-review-count">{{ expertReports.length }} 位专家</span>
+          <button class="expert-review-toggle" @click="expertReportsExpanded = !expertReportsExpanded">
+            {{ expertReportsExpanded ? '收起' : '展开原始报告' }}
+            <span class="expert-review-toggle-arrow" :class="{ 'expert-review-toggle-arrow--open': expertReportsExpanded }">▾</span>
+          </button>
+        </div>
       </div>
 
-      <div class="expert-review-grid">
+      <div v-show="expertReportsExpanded" class="expert-review-grid">
         <article
           v-for="report in expertReports"
           :key="report.key"
@@ -110,7 +116,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   analysis: {
@@ -143,10 +149,13 @@ const investmentAdvice = computed(() => analysis.value.investment_advice || 'na'
 const riskLevel = computed(() => analysis.value.risk_level || 'na')
 const supportLevel = computed(() => analysis.value.support_level ?? props.emptyText)
 const resistanceLevel = computed(() => analysis.value.resistance_level ?? props.emptyText)
+const expertReportsExpanded = ref(false)
 const expertLabelMap = {
-  fundamental: { title: '基本面专家', shortLabel: '基本面' },
-  technical: { title: '技术面专家', shortLabel: '技术面' },
-  risk: { title: '风险专家', shortLabel: '风险' },
+  fundamental: { title: '基本面专家',   shortLabel: '基本面' },
+  technical:   { title: '技术面专家',   shortLabel: '技术面' },
+  risk:        { title: '风险专家',     shortLabel: '风险' },
+  growth:      { title: '成长性专家',   shortLabel: '成长性' },
+  cycle:       { title: '行业周期专家', shortLabel: '行业周期' },
 }
 
 const investmentAdviceText = computed(() => adviceLabels[investmentAdvice.value] || analysis.value.investment_advice || props.emptyText)
@@ -185,6 +194,16 @@ const expertReports = computed(() => {
 })
 
 const detailFields = computed(() => [
+  {
+    key: 'growth_assessment',
+    title: '成长性判断',
+    value: analysis.value.growth_assessment || props.emptyText,
+  },
+  {
+    key: 'cycle_assessment',
+    title: '行业周期判断',
+    value: analysis.value.industry_cycle_assessment || props.emptyText,
+  },
   {
     key: 'qtag',
     title: '量化快照标记',
@@ -353,6 +372,34 @@ function normalizePoints(value) {
   font-weight: 700;
   background: rgba(14, 165, 233, 0.14);
   border: 1px solid rgba(56, 189, 248, 0.26);
+}
+
+.expert-review-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(148, 163, 184, 0.10);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.expert-review-toggle:hover {
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.expert-review-toggle-arrow {
+  display: inline-block;
+  transition: transform 0.2s;
+}
+
+.expert-review-toggle-arrow--open {
+  transform: rotate(180deg);
 }
 
 .expert-review-grid {
