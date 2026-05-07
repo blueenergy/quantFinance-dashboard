@@ -103,7 +103,13 @@
 
           <!-- Evaluation result -->
           <div v-if="evaluationResult" class="eval-result-block">
-            <h5 class="eval-result-title">分析质量评估</h5>
+            <h5 class="eval-result-title">
+              分析质量评估
+              <span
+                v-if="evaluationResult.evaluation_status"
+                :class="['eval-stage-chip', evaluationResult.evaluation_status]"
+              >{{ stageLabel(evaluationResult.evaluation_status) }}</span>
+            </h5>
 
             <!-- LLM verdict badges -->
             <div class="eval-badges">
@@ -227,6 +233,9 @@ const riskCalibLabels = {
 function accuracyLabel(v) { return accuracyLabels[v] || v || '—' }
 function reasoningLabel(v) { return reasoningLabels[v] || v || '—' }
 function riskCalibLabel(v) { return riskCalibLabels[v] || v || '—' }
+function stageLabel(status) {
+  return { preliminary: '初步评估', stage2_complete: '中期更新', completed: '最终评估' }[status] || status
+}
 function formatPct(v) {
   if (v == null) return '—'
   return (v >= 0 ? '+' : '') + Number(v).toFixed(2) + '%'
@@ -552,7 +561,19 @@ onMounted(loadHistory)
   font-size: 15px;
   font-weight: 700;
   color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+.eval-stage-chip {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.eval-stage-chip.preliminary     { background: rgba(234,179,8,.15);  color: #92400e; }
+.eval-stage-chip.stage2_complete  { background: rgba(99,102,241,.15); color: #4338ca; }
+.eval-stage-chip.completed        { background: rgba(34,197,94,.15);  color: #15803d; }
 .eval-badges {
   display: flex;
   flex-wrap: wrap;
