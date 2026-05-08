@@ -289,104 +289,330 @@ function returnClass(v) {
 function exportToPdf(item) {
   if (!item) return
   const a = item.analysis || {}
-  const title = `${item.stock_code}${item.stock_name ? ' ' + item.stock_name : ''} AI分析报告`
+  const ar = item.analysis_result || {}
+
+  // ── 基础信息 ──────────────────────────────────────────────────────────
+  const stockCode = item.stock_code || '—'
+  const stockName = item.stock_name || ''
   const createdAt = item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : '—'
   const modeText = item.analysis_mode === 'multi_expert_v1' ? '多专家协作' : '经典'
+  const industry = a.industry || ar.industry || '—'
 
+  const ADVICE_MAP = { strong_buy:'强烈买入', buy:'买入', hold:'持有', sell:'卖出', strong_sell:'强烈卖出' }
+  const investAdvice = ADVICE_MAP[a.investment_advice] || a.investment_advice || '—'
+  const riskLevel = a.risk_level || '—'
+  const confidenceScore = a.confidence_score != null ? `${a.confidence_score}%` : '—'
+  const currentPrice = a.price ? `${a.price} 元` : '—'
+
+  // 止损 / 目标价（risk_price_levels 结构化 > support/resistance 文本）
+  const rpl = (typeof a.risk_price_levels === 'object' && a.risk_price_levels) ? a.risk_price_levels : {}
+  const stopLoss       = rpl.stop_loss       ? `${rpl.stop_loss} 元`        : (a.support_level   || '—')
+  const stopLossStrong = rpl.stop_loss_strong ? `${rpl.stop_loss_strong} 元` : '—'
+  const target1        = rpl.target_1        ? `${rpl.target_1} 元`         : (a.resistance_level || '—')
+  const target2        = rpl.target_2        ? `${rpl.target_2} 元`         : '—'
+
+  // ── 专家报告 ───────────────────────────────────────────────────────────
   const EXPERT_ORDER = ['cycle', 'fundamental', 'growth', 'technical', 'risk']
-  const expertLabelMap = {
-    cycle: '行业周期专家', fundamental: '基本面专家',
-    growth: '成长性专家', technical: '技术面专家', risk: '风险专家',
+  const EXPERT_LABEL = {
+    cycle:'行业周期专家', fundamental:'基本面专家',
+    growth:'成长性专家', technical:'技术面专家', risk:'风险专家',
   }
-  const adviceMap = { strong_buy:'强烈买入', buy:'买入', hold:'持有', sell:'卖出', strong_sell:'强烈卖出' }
-
-  function esc(s) {
-    if (s == null) return ''
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-  }
-  function section(title, content) {
-    if (!content) return ''
-    return `<div class="section"><div class="section-title">${esc(title)}</div><div class="section-body">${esc(content)}</div></div>`
-  }
-  function listSection(title, items) {
-    if (!Array.isArray(items) || !items.length) return ''
-    const li = items.map(x => `<li>${esc(typeof x === 'string' ? x : x.point || JSON.stringify(x))}</li>`).join('')
-    return `<div class="section"><div class="section-title">${esc(title)}</div><ul>${li}</ul></div>`
-  }
-
-  // Expert reports
   const reports = a.module_reports || {}
   const expertKeys = [
     ...EXPERT_ORDER.filter(k => reports[k]),
     ...Object.keys(reports).filter(k => !EXPERT_ORDER.includes(k)),
   ]
+
+  // ── HTML 辅助函数 ──────────────────────────────────────────────────────
+  function esc(s) {
+    if (s == null) return ''
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  }
+  function h2(num, text) {
+    return `<h2 class="ch"><span class="ch-num">${esc(num)}</span>${esc(text)}</h2>`
+  }
+  function infoRow(label, value) {
+    const empty = value == null || value === '' || value === '—'
+    return `<tr><th>${esc(label)}</th><td${empty ? ' class="na"' : ''}>${empty ? '—' : esc(String(value))}</td></tr>`
+  }
+  function infoTable(rowsHtml) {
+    return `<table class="info-table"><tbody>${rowsHtml}</tbody></table>`
+  }
+  function textBlock(content) {
+    if (!content) return '<p class="na">（暂无）</p>'
+    return `<div class="text-block">${esc(content)}</div>`
+  }
+  function listBlock(items) {
+    if (!Array.isArray(items) || !items.length) return '<p class="na">（暂无）</p>'
+    const li = items.map(x => {
+      const t = typeof x === 'string' ? x : (x.point || x.text || JSON.stringify(x))
+      return `<li>${esc(t)}</li>`
+    }).join('')
+    return `<ul>${li}</ul>`
+  }
+  function sectionNote(text) {
+    return `<p class="note">${esc(text)}</p>`
+  }
+
+  // ── 财务历史表 ─────────────────────────────────────────────────────────
+  const chartData = Array.isArray(a.financial_chart_data) ? a.financial_chart_data : []
+  let finHtml = ''
+  let cagrNote = ''
+  if (chartData.length) {
+    const rows = chartData.map(d => {
+      const rev = d.revenue   != null ? (d.revenue   / 1e8).toFixed(2) : '—'
+      const np  = d.net_profit != null ? (d.net_profit / 1e8).toFixed(2) : '—'
+      const ry  = d.tr_yoy         != null ? d.tr_yoy         : '—'
+      const ny  = d.netprofit_yoy  != null ? d.netprofit_yoy  : '—'
+      const gm  = d.grossprofit_margin != null ? d.grossprofit_margin : '—'
+      const roe = d.roe        != null ? d.roe        : '—'
+      return `<tr>
+        <td>${esc(d.period)}</td><td>${esc(rev)}</td><td>${esc(np)}</td>
+        <td>${esc(String(ry))}</td><td>${esc(String(ny))}</td>
+        <td>${esc(String(gm))}</td><td>${esc(String(roe))}</td>
+      </tr>`
+    }).join('')
+    finHtml = `<table class="fin-table">
+      <thead><tr>
+        <th>期间</th><th>营收（亿）</th><th>归母净利润（亿）</th>
+        <th>营收YoY%</th><th>净利YoY%</th><th>毛利率%</th><th>ROE%</th>
+      </tr></thead><tbody>${rows}</tbody>
+    </table>`
+    // 粗略 CAGR
+    const first = chartData[0], last = chartData[chartData.length - 1]
+    if (first?.revenue && last?.revenue && first.revenue > 0 && chartData.length >= 4) {
+      const yrs = (chartData.length / 4).toFixed(1)
+      const c = ((Math.pow(last.revenue / first.revenue, 1 / parseFloat(yrs)) - 1) * 100).toFixed(1)
+      cagrNote = `近 ${chartData.length} 期营收年化复合增速约 ${c}%（粗估，供参考）`
+    }
+  } else {
+    finHtml = '<p class="na">（无结构化财务数据，详见专家分析）</p>'
+  }
+
+  // ── SWOT（共识 → S/O，分歧 → W/T）────────────────────────────────────
+  const consensus  = Array.isArray(a.consensus_points)  ? a.consensus_points  : []
+  const divergence = Array.isArray(a.divergence_points) ? a.divergence_points : []
+  const mid = arr => Math.ceil(arr.length / 2)
+  const swotS = consensus.slice(0, mid(consensus))
+  const swotO = consensus.slice(mid(consensus))
+  const swotW = divergence.slice(0, mid(divergence))
+  const swotT = divergence.slice(mid(divergence))
+  function swotCell(letter, color, title, items) {
+    const li = items.length
+      ? items.map(x => `<li>${esc(typeof x==='string'?x:(x.point||x.text||''))}</li>`).join('')
+      : '<li class="na">（暂无）</li>'
+    return `<div class="swot-cell" style="border-top:3px solid ${color}">
+      <span class="swot-letter" style="color:${color}">${letter}</span>
+      <span class="swot-title">${title}</span>
+      <ul>${li}</ul>
+    </div>`
+  }
+
+  // ── 专家报告块 ─────────────────────────────────────────────────────────
   const expertHtml = expertKeys.map(k => {
     const r = reports[k]
-    const content = typeof r === 'string' ? r : (r?.content || r?.report || JSON.stringify(r))
-    return `<div class="expert-block"><div class="expert-title">${esc(expertLabelMap[k] || k)}</div><pre>${esc(content)}</pre></div>`
+    const content = typeof r === 'string' ? r : (r?.content || r?.report || JSON.stringify(r, null, 2))
+    return `<div class="expert-block">
+      <div class="expert-title">${esc(EXPERT_LABEL[k] || k)}</div>
+      <pre>${esc(content)}</pre>
+    </div>`
   }).join('')
 
-  const fields = [
-    ['投资建议', adviceMap[a.investment_advice] || a.investment_advice],
-    ['风险等级', a.risk_level],
-    ['支撑位', a.support_level],
-    ['压力位', a.resistance_level],
-    ['置信度', a.confidence_score != null ? a.confidence_score + '%' : null],
-    ['成长评估', a.growth_assessment],
-    ['行业周期评估', a.industry_cycle_assessment],
-  ].filter(([,v]) => v != null)
+  // 风险专家单独用于第十三章
+  const riskReport = (() => {
+    const r = reports['risk']
+    if (!r) return null
+    return typeof r === 'string' ? r : (r?.content || r?.report || null)
+  })()
 
-  const summaryHtml = fields.map(([k,v]) =>
-    `<div class="kv"><span class="kv-key">${esc(k)}</span><span class="kv-val">${esc(v)}</span></div>`
-  ).join('')
+  // ── 量化评分快照 ────────────────────────────────────────────────────────
+  const qsTag = a.quant_score_snapshot_tag || ''
+  const qsCross = a.quant_score_cross_check || ''
+
+  // ── 完整 HTML 报告 ─────────────────────────────────────────────────────
+  const pageTitle = `${stockCode}${stockName ? ' ' + stockName : ''} 投研报告`
 
   const html = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>${esc(title)}</title>
+<title>${esc(pageTitle)}</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'PingFang SC','Microsoft YaHei',sans-serif; font-size: 13px;
-         color: #1e293b; padding: 20mm 18mm; line-height: 1.7; }
-  h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
-  .meta { color: #64748b; font-size: 12px; margin-bottom: 16px; }
-  .divider { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0; }
-  .kv-row { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-bottom: 14px; }
-  .kv { display: flex; gap: 6px; align-items: baseline; }
-  .kv-key { font-weight: 600; color: #475569; font-size: 12px; white-space: nowrap; }
-  .kv-val { color: #0f172a; }
-  .section { margin-bottom: 12px; }
-  .section-title { font-weight: 700; font-size: 13px; color: #334155;
-                   border-left: 3px solid #6366f1; padding-left: 8px; margin-bottom: 6px; }
-  .section-body { color: #1e293b; white-space: pre-wrap; }
-  ul { padding-left: 18px; }
-  ul li { margin-bottom: 3px; }
-  .expert-block { margin-bottom: 16px; page-break-inside: avoid; }
-  .expert-title { font-weight: 700; font-size: 13px; background: #f1f5f9;
-                  padding: 5px 10px; border-radius: 4px; margin-bottom: 6px; }
-  pre { white-space: pre-wrap; word-break: break-word; font-family: inherit;
-        font-size: 12px; color: #1e293b; }
-  @media print {
-    body { padding: 10mm 12mm; }
-    .expert-block { page-break-inside: avoid; }
-    h1 { font-size: 16px; }
-  }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+     font-size:12.5px;color:#0f172a;line-height:1.8;padding:14mm 18mm 20mm}
+/* ── 封面 ── */
+.cover{text-align:center;padding:20mm 0 14mm;border-bottom:2px solid #1e3a8a;margin-bottom:10mm}
+.cover-badge{font-size:12px;color:#64748b;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px}
+.cover-name{font-size:28px;font-weight:900;color:#1e3a8a;margin:4px 0 12px}
+.cover-rating{display:inline-block;background:#1e3a8a;color:#fff;
+              padding:5px 22px;border-radius:999px;font-size:14px;font-weight:700}
+.cover-meta{margin-top:14px;font-size:11.5px;color:#64748b;line-height:2}
+/* ── 章节标题 ── */
+h2.ch{font-size:13.5px;font-weight:800;color:#1e293b;
+       margin:14px 0 8px;border-bottom:1.5px solid #e2e8f0;padding-bottom:4px}
+.ch-num{display:inline-block;background:#1e3a8a;color:#fff;border-radius:3px;
+        padding:1px 8px;font-size:11px;font-weight:700;margin-right:8px}
+/* ── 信息表 ── */
+.info-table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:12px}
+.info-table th{width:30%;background:#f8fafc;color:#475569;font-weight:600;
+               padding:5px 8px;border:1px solid #e2e8f0;white-space:nowrap;text-align:left}
+.info-table td{padding:5px 8px;border:1px solid #e2e8f0;color:#0f172a}
+.info-table td.na{color:#94a3b8}
+/* ── 财务历史表 ── */
+.fin-table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px}
+.fin-table thead th{background:#1e3a8a;color:#fff;padding:4px 6px;text-align:center}
+.fin-table tbody td{padding:4px 6px;border:1px solid #e2e8f0;text-align:center}
+.fin-table tbody tr:nth-child(even) td{background:#f8fafc}
+/* ── 文本块 ── */
+.text-block{white-space:pre-wrap;font-size:12px;color:#1e293b;
+            background:#f8fafc;padding:8px 10px;border-radius:4px;
+            border-left:3px solid #6366f1;margin-bottom:8px}
+ul{padding-left:18px;margin-bottom:8px}
+ul li{margin-bottom:2px;font-size:12px}
+p.na{color:#94a3b8;font-size:12px;font-style:italic;margin-bottom:8px}
+p.note{font-size:11px;color:#94a3b8;font-style:italic;margin-bottom:6px}
+/* ── SWOT ── */
+.swot-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.swot-cell{padding:8px 10px;background:#f8fafc;border-radius:4px}
+.swot-letter{font-size:18px;font-weight:900;margin-right:6px}
+.swot-title{font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px}
+.swot-cell ul{margin:0}
+/* ── 专家报告 ── */
+.expert-block{margin-bottom:12px;page-break-inside:avoid}
+.expert-title{font-weight:700;font-size:12.5px;background:#1e3a8a;color:#fff;
+              padding:4px 10px;border-radius:3px;margin-bottom:5px}
+pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;
+    font-size:11.5px;color:#1e293b}
+/* ── 免责声明 ── */
+.disclaimer{font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;
+            margin-top:18px;padding-top:8px;line-height:1.6}
+@media print{
+  body{padding:8mm 12mm 12mm}
+  .cover{padding:10mm 0 8mm;margin-bottom:5mm}
+  .cover-name{font-size:22px}
+  .expert-block{page-break-inside:avoid}
+}
 </style>
 </head>
 <body>
-<h1>${esc(title)}</h1>
-<div class="meta">分析时间：${esc(createdAt)} &nbsp;|&nbsp; 模式：${esc(modeText)}</div>
-<hr class="divider">
-<div class="kv-row">${summaryHtml}</div>
-${section('最终结论', a.final_conclusion)}
-${listSection('共识观点', a.consensus_points)}
-${listSection('分歧观点', a.divergence_points)}
-${section('技术分析', a.technical_analysis)}
-${section('长期展望', a.long_term_forecast)}
-${section('中期展望', a.mid_term_forecast)}
-${section('短期展望', a.short_term_forecast)}
-${expertHtml ? '<hr class="divider"><div style="font-weight:700;font-size:14px;margin-bottom:12px;">专家报告</div>' + expertHtml : ''}
+
+<!-- ══ 封面 ══════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-badge">AI 投研报告 · ${esc(modeText)}模式</div>
+  <div class="cover-name">${esc(stockName || stockCode)}（${esc(stockCode)}）</div>
+  <div class="cover-rating">${esc(investAdvice)}</div>
+  <div class="cover-meta">
+    研究日期：${esc(createdAt)}<br>
+    行业板块：${esc(industry)} &nbsp;|&nbsp; 风险等级：${esc(riskLevel)}
+  </div>
+</div>
+
+<!-- ══ 一、报告核心信息 ════════════════════════════════════════════════ -->
+${h2('一', '报告核心信息')}
+${infoTable(
+  infoRow('股票名称 / 代码', `${stockName}（${stockCode}）`) +
+  infoRow('研究日期', createdAt) +
+  infoRow('行业板块', industry) +
+  infoRow('最新股价', currentPrice) +
+  infoRow('投资评级', investAdvice) +
+  infoRow('止损参考', stopLoss) +
+  infoRow('强止损参考', stopLossStrong) +
+  infoRow('目标价 T1', target1) +
+  infoRow('目标价 T2', target2) +
+  infoRow('风险等级', riskLevel) +
+  infoRow('分析置信度', confidenceScore) +
+  infoRow('分析模式', modeText)
+)}
+
+<!-- ══ 二、核心结论 ═══════════════════════════════════════════════════ -->
+${h2('二', '核心结论')}
+${textBlock(a.final_conclusion)}
+
+<!-- ══ 三、市场行情 ═══════════════════════════════════════════════════ -->
+${h2('三', '市场行情与价格区间')}
+${infoTable(
+  infoRow('最新收盘价', currentPrice) +
+  infoRow('支撑位（技术）', a.support_level) +
+  infoRow('压力位（技术）', a.resistance_level) +
+  infoRow('系统止损位', stopLoss) +
+  infoRow('系统强止损位', stopLossStrong) +
+  infoRow('目标价 T1', target1) +
+  infoRow('目标价 T2', target2)
+)}
+
+<!-- ══ 四、估值分析 ═══════════════════════════════════════════════════ -->
+${h2('四', '估值分析')}
+${textBlock(a.valuation_analysis || null)}
+${sectionNote('估值详情请参阅第十一章·基本面专家报告')}
+
+<!-- ══ 五、财务分析（历史数据） ════════════════════════════════════════ -->
+${h2('五', '财务分析（历史数据）')}
+${finHtml}
+${cagrNote ? `<p class="note">${esc(cagrNote)}</p>` : ''}
+
+<!-- ══ 六、成长性分析 ════════════════════════════════════════════════ -->
+${h2('六', '成长性分析')}
+${textBlock(a.growth_assessment)}
+${a.key_points && a.key_points.length ? '<p style="font-weight:600;font-size:12px;margin-bottom:4px">关键点：</p>' + listBlock(a.key_points) : ''}
+
+<!-- ══ 七、技术面分析 ════════════════════════════════════════════════ -->
+${h2('七', '技术面分析')}
+${textBlock(a.technical_analysis)}
+${infoTable(
+  infoRow('短期展望', a.short_term_forecast) +
+  infoRow('中期展望', a.mid_term_forecast) +
+  infoRow('长期展望', a.long_term_forecast)
+)}
+
+<!-- ══ 八、资金流向与股东结构 ════════════════════════════════════════ -->
+${h2('八', '资金流向与股东结构')}
+${textBlock(a.equity_risk_user_visible || a.institutional_deep_user_visible)}
+
+<!-- ══ 九、行业周期 ══════════════════════════════════════════════════ -->
+${h2('九', '行业周期分析')}
+${textBlock(a.industry_cycle_assessment)}
+${sectionNote('申万行业月线详见第十一章·行业周期专家报告')}
+
+<!-- ══ 十、SWOT 分析 ══════════════════════════════════════════════════ -->
+${h2('十', 'SWOT 分析')}
+<div class="swot-grid">
+  ${swotCell('S','#16a34a','优势 Strengths（来自共识观点）', swotS)}
+  ${swotCell('W','#dc2626','劣势 Weaknesses（来自分歧观点）', swotW)}
+  ${swotCell('O','#2563eb','机会 Opportunities（来自共识观点）', swotO)}
+  ${swotCell('T','#d97706','威胁 Threats（来自分歧观点）', swotT)}
+</div>
+${sectionNote('S/O 源自共识观点前半/后半，W/T 源自分歧观点前半/后半，仅作参考。')}
+
+<!-- ══ 十一、专家报告 ════════════════════════════════════════════════ -->
+${expertKeys.length ? h2('十一', '专家报告（多专家协作）') + expertHtml : ''}
+
+<!-- ══ 十二、综合评分与投资建议 ════════════════════════════════════════ -->
+${h2('十二', '综合评分与投资建议')}
+${infoTable(
+  infoRow('投资评级', investAdvice) +
+  infoRow('风险等级', riskLevel) +
+  infoRow('分析置信度', confidenceScore) +
+  infoRow('止损位', stopLoss) +
+  infoRow('强止损位', stopLossStrong) +
+  infoRow('目标价 T1', target1) +
+  infoRow('目标价 T2', target2) +
+  infoRow('量化评分快照', qsTag || '—') +
+  infoRow('量化交叉验证', qsCross || '—')
+)}
+
+<!-- ══ 十三、核心风险提示 ════════════════════════════════════════════ -->
+${h2('十三', '核心风险提示')}
+${riskReport ? textBlock(riskReport) : listBlock(divergence)}
+
+<!-- ══ 免责声明 ═══════════════════════════════════════════════════════ -->
+<div class="disclaimer">
+  <strong>免责声明：</strong>本报告由 AI 系统（${esc(modeText)}模式）自动生成，仅供研究参考，
+  不构成任何投资建议或投资邀约。报告中的数据、分析及观点均基于历史数据和模型推断，
+  存在较大不确定性，且可能存在误差。市场有风险，投资需谨慎。
+  投资者应结合自身风险承受能力，独立作出投资决策并自行承担相应后果。
+</div>
+
 </body></html>`
 
   const win = window.open('', '_blank')
