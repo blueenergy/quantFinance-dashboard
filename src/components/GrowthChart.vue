@@ -32,11 +32,11 @@ let roRate = null
 const COLORS = {
   revenue:   '#60a5fa',  // blue
   netProfit: '#34d399',  // green
-  revenueYoy:      '#93c5fd',
-  netprofitYoy:    '#6ee7b7',
-  dtNetprofitYoy:  '#a5f3fc',
-  grossMargin:     '#fbbf24',
-  roe:             '#f472b6',
+  revenueYoy:      '#60a5fa',  // blue  — 营收YoY
+  netprofitYoy:    '#4ade80',  // green — 净利YoY
+  dtNetprofitYoy:  '#fb923c',  // orange— 扣非净利YoY（明显区别）
+  grossMargin:     '#fbbf24',  // amber — 毛利率
+  roe:             '#f472b6',  // pink  — ROE
   zero:            'rgba(148,163,184,0.3)',
 }
 
@@ -149,7 +149,7 @@ function buildRateOption(series) {
       {
         name: '营收YoY%', type: 'line', smooth: true,
         data: series.map(d => d.tr_yoy),
-        lineStyle: { color: COLORS.revenueYoy, width: 2 },
+        lineStyle: { color: COLORS.revenueYoy, width: 2.5 },
         itemStyle: { color: COLORS.revenueYoy },
         markLine: makeZeroLine(),
         connectNulls: true,
@@ -157,28 +157,28 @@ function buildRateOption(series) {
       {
         name: '净利YoY%', type: 'line', smooth: true,
         data: series.map(d => d.netprofit_yoy),
-        lineStyle: { color: COLORS.netprofitYoy, width: 2 },
+        lineStyle: { color: COLORS.netprofitYoy, width: 2.5 },
         itemStyle: { color: COLORS.netprofitYoy },
         connectNulls: true,
       },
       {
         name: '扣非净利YoY%', type: 'line', smooth: true,
         data: series.map(d => d.dt_netprofit_yoy),
-        lineStyle: { color: COLORS.dtNetprofitYoy, width: 2, type: 'dashed' },
+        lineStyle: { color: COLORS.dtNetprofitYoy, width: 2.5, type: 'dashed' },
         itemStyle: { color: COLORS.dtNetprofitYoy },
         connectNulls: true,
       },
       {
         name: '毛利率%', type: 'line', smooth: true,
         data: series.map(d => d.grossprofit_margin),
-        lineStyle: { color: COLORS.grossMargin, width: 2 },
+        lineStyle: { color: COLORS.grossMargin, width: 1.5 },
         itemStyle: { color: COLORS.grossMargin },
         connectNulls: true,
       },
       {
         name: 'ROE%', type: 'line', smooth: true,
         data: series.map(d => d.roe),
-        lineStyle: { color: COLORS.roe, width: 2 },
+        lineStyle: { color: COLORS.roe, width: 1.5 },
         itemStyle: { color: COLORS.roe },
         connectNulls: true,
       },
