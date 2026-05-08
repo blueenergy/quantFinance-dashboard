@@ -91,6 +91,14 @@
             <span v-if="evaluationLoading" class="eval-spinner"></span>
             {{ evaluationLoading ? '评估中...' : evaluationResult ? '重新评估' : '评估质量' }}
           </button>
+          <button
+            @click="triggerReanalysis(selectedItem)"
+            :disabled="reanalysisLoading"
+            class="btn-base btn-sm btn-reanalysis"
+          >
+            <span v-if="reanalysisLoading" class="eval-spinner"></span>
+            {{ reanalysisLoading ? '提交中...' : '重新分析' }}
+          </button>
           <button @click="toggleDetailMaximized" class="btn-base btn-sm btn-gradient-teal detail-fullscreen-btn">
             {{ detailMaximized ? '退出全屏' : '全屏' }}
           </button>
@@ -250,6 +258,7 @@ const evaluationResult = ref(null)
 const evaluationError = ref('')
 let evalPollTimer = null
 const deletingId = ref(null)
+const reanalysisLoading = ref(false)
 
 const accuracyLabels = { accurate: '准确', mixed: '部分准确', inaccurate: '不准确' }
 const reasoningLabels = { strong: '严谨', partial: '一般', weak: '较弱' }
@@ -271,6 +280,35 @@ function formatPct(v) {
 function returnClass(v) {
   if (v == null) return ''
   return v > 0 ? 'upside' : v < 0 ? 'drawdown' : ''
+}
+
+async function triggerReanalysis(item) {
+  if (!item) return
+  reanalysisLoading.value = true
+  const token = localStorage.getItem('access_token')
+  try {
+    const res = await axios.post(
+      '/api/analyze/deep-analysis',
+      {
+        symbol: item.stock_code,
+        priority: 1,
+        analysis_mode: item.analysis_mode || 'classic',
+      },
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    if (res.data?.success) {
+      const remaining = res.data.quota_remaining
+      const pos = res.data.position_in_queue
+      const modeText = (item.analysis_mode === 'multi_expert_v1') ? '多专家' : '经典'
+      alert(`已重新提交「${item.stock_code}」${modeText}分析。排队约 ${pos} 位，剩余配额 ${remaining}。完成后可在列表中刷新查看。`)
+    } else {
+      alert(`提交失败：${res.data?.message || '未知错误'}`)
+    }
+  } catch (e) {
+    alert(`提交失败：${e.response?.data?.detail || e.message}`)
+  } finally {
+    reanalysisLoading.value = false
+  }
 }
 
 function stopPolling() {
@@ -587,8 +625,18 @@ onMounted(loadHistory)
 .eval-list-badge.mixed      { background: rgba(234,179,8,.15);  color: #92400e; border-color: rgba(234,179,8,.3); }
 .eval-list-badge.inaccurate { background: rgba(239,68,68,.15);  color: #b91c1c; border-color: rgba(239,68,68,.3); }
 
-/* Evaluation button */
+/* Evaluation / reanalysis buttons */
 .eval-btn { margin-left: 8px; }
+.btn-reanalysis {
+  margin-left: 8px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  color: #c7d2fe;
+}
+.btn-reanalysis:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.28);
+}
+.btn-reanalysis:disabled { opacity: .5; cursor: not-allowed; }
 .eval-spinner {
   display: inline-block;
   width: 12px; height: 12px;
