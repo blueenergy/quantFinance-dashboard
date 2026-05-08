@@ -99,6 +99,10 @@
             <span v-if="reanalysisLoading" class="eval-spinner"></span>
             {{ reanalysisLoading ? '提交中...' : '重新分析' }}
           </button>
+          <button
+            @click="exportToPdf(selectedItem)"
+            class="btn-base btn-sm btn-export-pdf"
+          >导出 PDF</button>
           <button @click="toggleDetailMaximized" class="btn-base btn-sm btn-gradient-teal detail-fullscreen-btn">
             {{ detailMaximized ? '退出全屏' : '全屏' }}
           </button>
@@ -280,6 +284,116 @@ function formatPct(v) {
 function returnClass(v) {
   if (v == null) return ''
   return v > 0 ? 'upside' : v < 0 ? 'drawdown' : ''
+}
+
+function exportToPdf(item) {
+  if (!item) return
+  const a = item.analysis || {}
+  const title = `${item.stock_code}${item.stock_name ? ' ' + item.stock_name : ''} AI分析报告`
+  const createdAt = item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : '—'
+  const modeText = item.analysis_mode === 'multi_expert_v1' ? '多专家协作' : '经典'
+
+  const EXPERT_ORDER = ['cycle', 'fundamental', 'growth', 'technical', 'risk']
+  const expertLabelMap = {
+    cycle: '行业周期专家', fundamental: '基本面专家',
+    growth: '成长性专家', technical: '技术面专家', risk: '风险专家',
+  }
+  const adviceMap = { strong_buy:'强烈买入', buy:'买入', hold:'持有', sell:'卖出', strong_sell:'强烈卖出' }
+
+  function esc(s) {
+    if (s == null) return ''
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  }
+  function section(title, content) {
+    if (!content) return ''
+    return `<div class="section"><div class="section-title">${esc(title)}</div><div class="section-body">${esc(content)}</div></div>`
+  }
+  function listSection(title, items) {
+    if (!Array.isArray(items) || !items.length) return ''
+    const li = items.map(x => `<li>${esc(typeof x === 'string' ? x : x.point || JSON.stringify(x))}</li>`).join('')
+    return `<div class="section"><div class="section-title">${esc(title)}</div><ul>${li}</ul></div>`
+  }
+
+  // Expert reports
+  const reports = a.module_reports || {}
+  const expertKeys = [
+    ...EXPERT_ORDER.filter(k => reports[k]),
+    ...Object.keys(reports).filter(k => !EXPERT_ORDER.includes(k)),
+  ]
+  const expertHtml = expertKeys.map(k => {
+    const r = reports[k]
+    const content = typeof r === 'string' ? r : (r?.content || r?.report || JSON.stringify(r))
+    return `<div class="expert-block"><div class="expert-title">${esc(expertLabelMap[k] || k)}</div><pre>${esc(content)}</pre></div>`
+  }).join('')
+
+  const fields = [
+    ['投资建议', adviceMap[a.investment_advice] || a.investment_advice],
+    ['风险等级', a.risk_level],
+    ['支撑位', a.support_level],
+    ['压力位', a.resistance_level],
+    ['置信度', a.confidence_score != null ? a.confidence_score + '%' : null],
+    ['成长评估', a.growth_assessment],
+    ['行业周期评估', a.industry_cycle_assessment],
+  ].filter(([,v]) => v != null)
+
+  const summaryHtml = fields.map(([k,v]) =>
+    `<div class="kv"><span class="kv-key">${esc(k)}</span><span class="kv-val">${esc(v)}</span></div>`
+  ).join('')
+
+  const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>${esc(title)}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'PingFang SC','Microsoft YaHei',sans-serif; font-size: 13px;
+         color: #1e293b; padding: 20mm 18mm; line-height: 1.7; }
+  h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .meta { color: #64748b; font-size: 12px; margin-bottom: 16px; }
+  .divider { border: none; border-top: 1px solid #e2e8f0; margin: 14px 0; }
+  .kv-row { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-bottom: 14px; }
+  .kv { display: flex; gap: 6px; align-items: baseline; }
+  .kv-key { font-weight: 600; color: #475569; font-size: 12px; white-space: nowrap; }
+  .kv-val { color: #0f172a; }
+  .section { margin-bottom: 12px; }
+  .section-title { font-weight: 700; font-size: 13px; color: #334155;
+                   border-left: 3px solid #6366f1; padding-left: 8px; margin-bottom: 6px; }
+  .section-body { color: #1e293b; white-space: pre-wrap; }
+  ul { padding-left: 18px; }
+  ul li { margin-bottom: 3px; }
+  .expert-block { margin-bottom: 16px; page-break-inside: avoid; }
+  .expert-title { font-weight: 700; font-size: 13px; background: #f1f5f9;
+                  padding: 5px 10px; border-radius: 4px; margin-bottom: 6px; }
+  pre { white-space: pre-wrap; word-break: break-word; font-family: inherit;
+        font-size: 12px; color: #1e293b; }
+  @media print {
+    body { padding: 10mm 12mm; }
+    .expert-block { page-break-inside: avoid; }
+    h1 { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+<h1>${esc(title)}</h1>
+<div class="meta">分析时间：${esc(createdAt)} &nbsp;|&nbsp; 模式：${esc(modeText)}</div>
+<hr class="divider">
+<div class="kv-row">${summaryHtml}</div>
+${section('最终结论', a.final_conclusion)}
+${listSection('共识观点', a.consensus_points)}
+${listSection('分歧观点', a.divergence_points)}
+${section('技术分析', a.technical_analysis)}
+${section('长期展望', a.long_term_forecast)}
+${section('中期展望', a.mid_term_forecast)}
+${section('短期展望', a.short_term_forecast)}
+${expertHtml ? '<hr class="divider"><div style="font-weight:700;font-size:14px;margin-bottom:12px;">专家报告</div>' + expertHtml : ''}
+</body></html>`
+
+  const win = window.open('', '_blank')
+  if (!win) { alert('请允许弹出窗口以导出PDF'); return }
+  win.document.write(html)
+  win.document.close()
+  win.onload = () => { win.focus(); win.print() }
 }
 
 async function triggerReanalysis(item) {
@@ -637,6 +751,15 @@ onMounted(loadHistory)
   background: rgba(99, 102, 241, 0.28);
 }
 .btn-reanalysis:disabled { opacity: .5; cursor: not-allowed; }
+.btn-export-pdf {
+  margin-left: 8px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  color: #6ee7b7;
+}
+.btn-export-pdf:hover {
+  background: rgba(16, 185, 129, 0.24);
+}
 .eval-spinner {
   display: inline-block;
   width: 12px; height: 12px;
