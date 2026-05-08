@@ -63,6 +63,11 @@
             <span class="expert-review-toggle-arrow" :class="{ 'expert-review-toggle-arrow--open': expandedExperts.has(report.key) }">▾</span>
           </button>
           <div v-show="expandedExperts.has(report.key)" class="expert-review-card-body">
+            <GrowthChart
+              v-if="report.key === 'growth' && financialChartData.length > 0"
+              :series="financialChartData"
+              class="expert-review-chart"
+            />
             <pre>{{ report.content }}</pre>
           </div>
         </article>
@@ -124,6 +129,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import GrowthChart from './GrowthChart.vue'
 
 const props = defineProps({
   analysis: {
@@ -164,6 +170,11 @@ function toggleExpert(key) {
   else s.add(key)
   expandedExperts.value = s
 }
+const financialChartData = computed(() => {
+  const d = analysis.value.financial_chart_data
+  return Array.isArray(d) && d.length > 0 ? d : []
+})
+
 const expertLabelMap = {
   fundamental: { title: '基本面专家',   shortLabel: '基本面' },
   technical:   { title: '技术面专家',   shortLabel: '技术面' },
@@ -504,6 +515,10 @@ function normalizePoints(value) {
   font: inherit;
   line-height: 1.7;
   color: inherit;
+}
+
+.expert-review-chart {
+  margin-bottom: 16px;
 }
 
 .analysis-field-list {
