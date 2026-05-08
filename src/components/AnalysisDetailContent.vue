@@ -47,17 +47,18 @@
         </div>
       </div>
 
-      <div v-show="expertReportsExpanded" class="expert-review-grid">
+      <div v-show="expertReportsExpanded" class="expert-review-list">
         <article
-          v-for="report in expertReports"
+          v-for="(report, idx) in expertReports"
           :key="report.key"
           class="expert-review-card"
-          :class="{ 'expert-review-card--open': expandedExperts.has(report.key) }"
+          :class="[`expert-review-card--${report.key}`, { 'expert-review-card--open': expandedExperts.has(report.key) }]"
         >
           <button class="expert-review-card-header" @click="toggleExpert(report.key)">
-            <div style="display:flex;align-items:center;gap:8px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="expert-review-index">{{ idx + 1 }}</span>
               <h5>{{ report.title }}</h5>
-              <span class="expert-review-chip">{{ report.shortLabel }}</span>
+              <span class="expert-review-chip" :class="`expert-review-chip--${report.key}`">{{ report.shortLabel }}</span>
             </div>
             <span class="expert-review-toggle-arrow" :class="{ 'expert-review-toggle-arrow--open': expandedExperts.has(report.key) }">▾</span>
           </button>
@@ -170,6 +171,7 @@ const expertLabelMap = {
   growth:      { title: '成长性专家',   shortLabel: '成长性' },
   cycle:       { title: '行业周期专家', shortLabel: '行业周期' },
 }
+const EXPERT_ORDER = ['cycle', 'fundamental', 'growth', 'technical', 'risk']
 
 const investmentAdviceText = computed(() => adviceLabels[investmentAdvice.value] || analysis.value.investment_advice || props.emptyText)
 const riskLevelText = computed(() => riskLabels[riskLevel.value] || analysis.value.risk_level || props.emptyText)
@@ -191,17 +193,17 @@ const expertReports = computed(() => {
   const reports = analysis.value.module_reports
   if (!reports || typeof reports !== 'object') return []
 
-  return Object.entries(reports)
-    .map(([key, value]) => {
+  const orderedKeys = [
+    ...EXPERT_ORDER.filter(k => reports[k] != null),
+    ...Object.keys(reports).filter(k => !EXPERT_ORDER.includes(k)),
+  ]
+  return orderedKeys
+    .map(key => {
+      const value = reports[key]
       const labels = expertLabelMap[key] || { title: `${key} 专家`, shortLabel: key }
       const content = String(value || '').trim()
       if (!content) return null
-      return {
-        key,
-        title: labels.title,
-        shortLabel: labels.shortLabel,
-        content,
-      }
+      return { key, title: labels.title, shortLabel: labels.shortLabel, content }
     })
     .filter(Boolean)
 })
@@ -415,10 +417,10 @@ function normalizePoints(value) {
   transform: rotate(180deg);
 }
 
-.expert-review-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 14px;
+.expert-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .expert-review-card {
@@ -464,6 +466,32 @@ function normalizePoints(value) {
   font-weight: 700;
   background: rgba(6, 182, 212, 0.14);
   border: 1px solid rgba(45, 212, 191, 0.28);
+}
+/* per-expert accent colors */
+.expert-review-chip--cycle       { background: rgba(139, 92, 246, 0.16); border-color: rgba(167, 139, 250, 0.32); color: #c4b5fd; }
+.expert-review-chip--fundamental { background: rgba(59, 130, 246, 0.16); border-color: rgba(96, 165, 250, 0.32);  color: #93c5fd; }
+.expert-review-chip--growth      { background: rgba(34, 197, 94, 0.16);  border-color: rgba(74, 222, 128, 0.32); color: #86efac; }
+.expert-review-chip--technical   { background: rgba(245, 158, 11, 0.16); border-color: rgba(251, 191, 36, 0.32); color: #fde68a; }
+.expert-review-chip--risk        { background: rgba(239, 68, 68, 0.16);  border-color: rgba(248, 113, 113, 0.32); color: #fca5a5; }
+
+.expert-review-card--cycle       { border-left: 3px solid rgba(139, 92, 246, 0.5); }
+.expert-review-card--fundamental { border-left: 3px solid rgba(59, 130, 246, 0.5); }
+.expert-review-card--growth      { border-left: 3px solid rgba(34, 197, 94, 0.5); }
+.expert-review-card--technical   { border-left: 3px solid rgba(245, 158, 11, 0.5); }
+.expert-review-card--risk        { border-left: 3px solid rgba(239, 68, 68, 0.5); }
+
+.expert-review-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
 .expert-review-card-body {
