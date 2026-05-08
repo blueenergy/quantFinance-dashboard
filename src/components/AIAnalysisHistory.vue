@@ -291,7 +291,7 @@ async function triggerReanalysis(item) {
       '/api/analyze/deep-analysis',
       {
         symbol: item.stock_code,
-        priority: 1,
+        priority: 30,
         analysis_mode: item.analysis_mode || 'classic',
       },
       { headers: { Authorization: `Bearer ${token}` } },

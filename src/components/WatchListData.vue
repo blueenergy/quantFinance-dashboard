@@ -703,7 +703,7 @@ async function deepAnalyzeStock(symbol) {
     // 调用后端 Producer 接口
     const response = await axios.post('/api/analyze/deep-analysis', {
       symbol: symbol,
-      priority: 1,
+      priority: 30,
       analysis_mode: analysisMode
     }, {
       headers: {
