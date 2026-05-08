@@ -62,7 +62,7 @@
             </div>
             <span class="expert-review-toggle-arrow" :class="{ 'expert-review-toggle-arrow--open': expandedExperts.has(report.key) }">▾</span>
           </button>
-          <div v-show="expandedExperts.has(report.key)" class="expert-review-card-body">
+          <div v-if="expandedExperts.has(report.key)" class="expert-review-card-body">
             <GrowthChart
               v-if="report.key === 'growth' && financialChartData.length > 0"
               :series="financialChartData"

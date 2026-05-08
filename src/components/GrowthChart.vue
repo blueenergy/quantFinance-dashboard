@@ -26,6 +26,8 @@ const chartAbsRef = ref(null)
 const chartRateRef = ref(null)
 let chartAbs = null
 let chartRate = null
+let roAbs = null
+let roRate = null
 
 const COLORS = {
   revenue:   '#60a5fa',  // blue
@@ -59,7 +61,10 @@ function buildAbsOption(series) {
     legend: {
       data: ['营收', '归母净利润'],
       textStyle: { color: '#94a3b8', fontSize: 11 },
-      top: 4,
+      top: 6,
+      right: 8,
+      itemWidth: 14,
+      itemHeight: 10,
     },
     tooltip: {
       trigger: 'axis',
@@ -74,17 +79,27 @@ function buildAbsOption(series) {
         return s
       },
     },
-    grid: { top: 36, bottom: 32, left: 48, right: 16 },
-    xAxis: { type: 'category', data: labels, axisLabel: { color: '#94a3b8', fontSize: 10 }, axisLine: { lineStyle: { color: '#334155' } } },
-    yAxis: { type: 'value', name: unit, nameTextStyle: { color: '#64748b', fontSize: 10 }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { lineStyle: { color: '#1e293b' } } },
+    grid: { top: 48, bottom: 40, left: 60, right: 16, containLabel: false },
+    xAxis: {
+      type: 'category', data: labels,
+      axisLabel: { color: '#94a3b8', fontSize: 10, rotate: labels.length > 7 ? 30 : 0 },
+      axisLine: { lineStyle: { color: '#334155' } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value', name: unit,
+      nameTextStyle: { color: '#64748b', fontSize: 10, padding: [0, 4, 0, 0] },
+      axisLabel: { color: '#94a3b8', fontSize: 10 },
+      splitLine: { lineStyle: { color: 'rgba(51,65,85,0.6)' } },
+    },
     series: [
       {
-        name: '营收', type: 'bar', barMaxWidth: 28,
+        name: '营收', type: 'bar', barMaxWidth: 32, barGap: '20%',
         data: series.map(d => d.revenue != null ? +(d.revenue / divisor).toFixed(2) : null),
         itemStyle: { color: COLORS.revenue, borderRadius: [3, 3, 0, 0] },
       },
       {
-        name: '归母净利润', type: 'bar', barMaxWidth: 28,
+        name: '归母净利润', type: 'bar', barMaxWidth: 32, barGap: '20%',
         data: series.map(d => d.net_profit != null ? +(d.net_profit / divisor).toFixed(2) : null),
         itemStyle: { color: COLORS.netProfit, borderRadius: [3, 3, 0, 0] },
       },
@@ -103,8 +118,11 @@ function buildRateOption(series) {
     textStyle: { color: '#94a3b8', fontSize: 11 },
     legend: {
       data: ['营收YoY%', '净利YoY%', '扣非净利YoY%', '毛利率%', 'ROE%'],
-      textStyle: { color: '#94a3b8', fontSize: 11 },
-      top: 4,
+      textStyle: { color: '#94a3b8', fontSize: 10 },
+      top: 6,
+      right: 8,
+      itemWidth: 14,
+      itemHeight: 10,
     },
     tooltip: {
       trigger: 'axis',
@@ -119,9 +137,14 @@ function buildRateOption(series) {
         return s
       },
     },
-    grid: { top: 48, bottom: 32, left: 48, right: 16 },
-    xAxis: { type: 'category', data: labels, axisLabel: { color: '#94a3b8', fontSize: 10 }, axisLine: { lineStyle: { color: '#334155' } } },
-    yAxis: { type: 'value', name: '%', nameTextStyle: { color: '#64748b', fontSize: 10 }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { lineStyle: { color: '#1e293b' } } },
+    grid: { top: 56, bottom: 40, left: 60, right: 16, containLabel: false },
+    xAxis: {
+      type: 'category', data: labels,
+      axisLabel: { color: '#94a3b8', fontSize: 10, rotate: labels.length > 7 ? 30 : 0 },
+      axisLine: { lineStyle: { color: '#334155' } },
+      axisTick: { show: false },
+    },
+    yAxis: { type: 'value', name: '%', nameTextStyle: { color: '#64748b', fontSize: 10 }, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(51,65,85,0.6)' } } },
     series: [
       {
         name: '营收YoY%', type: 'line', smooth: true,
@@ -163,15 +186,28 @@ function buildRateOption(series) {
   }
 }
 
+function initChart(el, optFn) {
+  if (!el) return { inst: null, ro: null }
+  const inst = echarts.init(el, null, { renderer: 'canvas' })
+  inst.setOption(optFn(props.series), { notMerge: true })
+  const ro = new ResizeObserver(() => { inst.resize() })
+  ro.observe(el)
+  return { inst, ro }
+}
+
 function renderCharts() {
   if (!props.series || props.series.length === 0) return
   nextTick(() => {
-    if (chartAbsRef.value) {
-      if (!chartAbs) chartAbs = echarts.init(chartAbsRef.value, null, { renderer: 'canvas' })
+    if (chartAbsRef.value && !chartAbs) {
+      const r = initChart(chartAbsRef.value, buildAbsOption)
+      chartAbs = r.inst; roAbs = r.ro
+    } else if (chartAbs) {
       chartAbs.setOption(buildAbsOption(props.series), { notMerge: true })
     }
-    if (chartRateRef.value) {
-      if (!chartRate) chartRate = echarts.init(chartRateRef.value, null, { renderer: 'canvas' })
+    if (chartRateRef.value && !chartRate) {
+      const r = initChart(chartRateRef.value, buildRateOption)
+      chartRate = r.inst; roRate = r.ro
+    } else if (chartRate) {
       chartRate.setOption(buildRateOption(props.series), { notMerge: true })
     }
   })
@@ -191,6 +227,8 @@ watch(() => props.series, renderCharts, { deep: true })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeCharts)
+  roAbs?.disconnect()
+  roRate?.disconnect()
   chartAbs?.dispose()
   chartRate?.dispose()
 })
@@ -205,7 +243,8 @@ onBeforeUnmount(() => {
 }
 .growth-chart {
   width: 100%;
-  height: 200px;
+  height: 260px;
+  min-width: 0;
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.6);
 }
