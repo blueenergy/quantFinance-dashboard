@@ -161,9 +161,17 @@
               <div class="mda-block" v-if="tabAnalysis.iv_snapshot?.available">
                 <div class="signal-title">📊 A股波动率温度计</div>
                 <div class="iv-badge mt-1" :class="'iv-badge--' + tabAnalysis.iv_snapshot.level">
-                  <span class="iv-badge__val">{{ tabAnalysis.iv_snapshot.source === 'IV' ? 'IV' : 'HV20' }} {{ tabAnalysis.iv_snapshot.iv_30 }}%</span>
-                  <span class="iv-badge__label">{{ tabAnalysis.iv_snapshot.level_zh }}</span>
+                  <span class="iv-badge__val">{{ tabAnalysis.iv_snapshot.source === 'HV' ? 'HV20' : 'IV' }} {{ tabAnalysis.iv_snapshot.iv_30 }}%</span>
+                  <span class="iv-badge__label">{{ tabAnalysis.iv_snapshot.underlying }} · {{ tabAnalysis.iv_snapshot.level_zh }}</span>
                   <span class="iv-badge__skew" v-if="tabAnalysis.iv_snapshot.skew_pp !== null">认沽偏度 {{ tabAnalysis.iv_snapshot.skew_pp > 0 ? '+' : '' }}{{ tabAnalysis.iv_snapshot.skew_pp }}pp</span>
+                </div>
+                <div v-if="Object.keys(tabAnalysis.iv_snapshot.indices || {}).length > 1" class="iv-multi-row mt-1">
+                  <span
+                    v-for="(idx, key) in tabAnalysis.iv_snapshot.indices"
+                    :key="key"
+                    class="iv-mini"
+                    :class="'iv-mini--' + idx.level"
+                  >{{ idx.name }}&nbsp;{{ idx.iv_30 }}%</span>
                 </div>
               </div>
               <!-- 重点关注 -->
@@ -1182,4 +1190,10 @@ onMounted(loadOverview)
 .iv-badge--normal   { background: #f0fff4; border-color: #c6f6d5; } .iv-badge--normal   .iv-badge__val { color: #276749; }
 .iv-badge--elevated { background: #fffaf0; border-color: #feebc8; } .iv-badge--elevated .iv-badge__val { color: #c05621; }
 .iv-badge--panic    { background: #fff5f5; border-color: #fed7d7; } .iv-badge--panic    .iv-badge__val { color: #c53030; }
+.iv-multi-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.iv-mini { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; border: 1px solid transparent; }
+.iv-mini--calm     { background: #ebf4ff; border-color: #c3dafe; color: #2b6cb0; }
+.iv-mini--normal   { background: #f0fff4; border-color: #c6f6d5; color: #276749; }
+.iv-mini--elevated { background: #fffaf0; border-color: #feebc8; color: #c05621; }
+.iv-mini--panic    { background: #fff5f5; border-color: #fed7d7; color: #c53030; }
 </style>

@@ -78,13 +78,25 @@
             </v-alert>
 
             <!-- A股IV温度计 -->
-            <div v-if="analysis.iv_snapshot?.available" class="iv-regime-bar mb-4" :class="'iv-regime--' + analysis.iv_snapshot.level">
+            <div v-if="analysis.iv_snapshot?.available" class="iv-regime-bar mb-2" :class="'iv-regime--' + analysis.iv_snapshot.level">
               <span class="iv-regime__icon">📊</span>
               <span class="iv-regime__label">A股波动率环境</span>
-              <span class="iv-regime__val">{{ analysis.iv_snapshot.source === 'IV' ? 'IV' : 'HV20' }} {{ analysis.iv_snapshot.iv_30 }}%</span>
-              <span class="iv-regime__badge">{{ analysis.iv_snapshot.level_zh }}</span>
+              <span class="iv-regime__val">{{ analysis.iv_snapshot.source === 'HV' ? 'HV20' : 'IV' }} {{ analysis.iv_snapshot.iv_30 }}%</span>
+              <span class="iv-regime__badge">{{ analysis.iv_snapshot.underlying }} · {{ analysis.iv_snapshot.level_zh }}</span>
               <span v-if="analysis.iv_snapshot.skew_pp !== null" class="iv-regime__skew">认沽偏度 {{ analysis.iv_snapshot.skew_pp > 0 ? '+' : '' }}{{ analysis.iv_snapshot.skew_pp }}pp</span>
-              <span class="iv-regime__src">（{{ analysis.iv_snapshot.underlying }}）</span>
+            </div>
+            <div v-if="analysis.iv_snapshot?.available && Object.keys(analysis.iv_snapshot.indices || {}).length > 1" class="iv-regime-multi mb-4">
+              <span
+                v-for="(idx, key) in analysis.iv_snapshot.indices"
+                :key="key"
+                class="iv-regime-mini"
+                :class="'iv-regime-mini--' + idx.level"
+              >
+                <span class="iv-regime-mini__name">{{ idx.name }}</span>
+                <span class="iv-regime-mini__val">{{ idx.iv_30 }}%</span>
+                <span class="iv-regime-mini__lvl">{{ idx.level_zh }}</span>
+                <span v-if="idx.skew_pp !== null" class="iv-regime-mini__skew">偏{{ idx.skew_pp > 0 ? '+' : '' }}{{ idx.skew_pp }}</span>
+              </span>
             </div>
 
             <!-- 补涨机会 -->
@@ -389,4 +401,19 @@ onMounted(() => {
 .iv-regime--panic    { background: #fff5f5; border-color: #fed7d7; }
 .iv-regime--panic    .iv-regime__val { color: #c53030; }
 .iv-regime--panic    .iv-regime__badge { background: #fed7d7; color: #742a2a; }
+/* 多指数卡片行 */
+.iv-regime-multi { display: flex; flex-wrap: wrap; gap: 6px; }
+.iv-regime-mini {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 10px; border-radius: 14px; font-size: 11px;
+  border: 1px solid transparent;
+}
+.iv-regime-mini__name { font-weight: 600; }
+.iv-regime-mini__val  { font-weight: 700; }
+.iv-regime-mini__lvl  { opacity: .75; }
+.iv-regime-mini__skew { opacity: .65; }
+.iv-regime-mini--calm     { background: #ebf4ff; border-color: #c3dafe; color: #2b6cb0; }
+.iv-regime-mini--normal   { background: #f0fff4; border-color: #c6f6d5; color: #276749; }
+.iv-regime-mini--elevated { background: #fffaf0; border-color: #feebc8; color: #c05621; }
+.iv-regime-mini--panic    { background: #fff5f5; border-color: #fed7d7; color: #c53030; }
 </style>

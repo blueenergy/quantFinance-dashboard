@@ -54,13 +54,22 @@
             v-if="analysis.ivSnapshot?.available"
             class="iv-chip"
             :class="'iv-chip--' + analysis.ivSnapshot.level"
-            :title="analysis.ivSnapshot.source === 'IV' ? 'CFFEX上证50指数期权隐含波动率（前瞻）' : '上证50指数历史波动率（20日）'"
+            :title="analysis.ivSnapshot.source === 'HV' ? '上证50历史波动率（20日）' : 'A股三大指数期权30日隐含波动率'"
           >
-            📊 {{ analysis.ivSnapshot.source === 'IV' ? 'IV' : 'HV20' }}
+            📊 {{ analysis.ivSnapshot.source === 'HV' ? 'HV20' : 'IV' }}
             {{ analysis.ivSnapshot.iv_30 }}%
+            · {{ analysis.ivSnapshot.underlying }}
             · {{ analysis.ivSnapshot.level_zh }}
             <span v-if="analysis.ivSnapshot.skew_pp !== null">· 看跌溢价 {{ analysis.ivSnapshot.skew_pp }}pp</span>
           </span>
+          <div v-if="analysis.ivSnapshot?.available && Object.keys(analysis.ivSnapshot.indices || {}).length > 1" class="iv-indices">
+            <span
+              v-for="(idx, key) in analysis.ivSnapshot.indices"
+              :key="key"
+              class="iv-idx"
+              :class="'iv-idx--' + idx.level"
+            >{{ idx.name }}&nbsp;{{ idx.iv_30 }}%&thinsp;<em>{{ idx.level_zh }}</em></span>
+          </div>
         </div>
 
         <div v-if="analysis.notice" class="analysis-notice">
@@ -591,6 +600,15 @@ onMounted(() => {
 .iv-chip--normal   { background: #f0fff4; border-color: #c6f6d5; color: #276749; }
 .iv-chip--elevated { background: #fffaf0; border-color: #feebc8; color: #c05621; }
 .iv-chip--panic    { background: #fff5f5; border-color: #fed7d7; color: #c53030; }
+
+/* 多指数行 */
+.iv-indices { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.iv-idx { padding: 2px 8px; border-radius: 12px; font-size: 11px; border: 1px solid transparent; }
+.iv-idx em { font-style: normal; opacity: .75; }
+.iv-idx--calm     { background: #ebf4ff; border-color: #c3dafe; color: #2b6cb0; }
+.iv-idx--normal   { background: #f0fff4; border-color: #c6f6d5; color: #276749; }
+.iv-idx--elevated { background: #fffaf0; border-color: #feebc8; color: #c05621; }
+.iv-idx--panic    { background: #fff5f5; border-color: #fed7d7; color: #c53030; }
 
 .mood-positive {
   background: #d4edda;

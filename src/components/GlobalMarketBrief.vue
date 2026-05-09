@@ -90,11 +90,19 @@
             v-if="brief.iv_snapshot?.available"
             class="score-pill score-iv"
             :class="'score-iv--' + brief.iv_snapshot.level"
-            :title="brief.iv_snapshot.source === 'IV' ? 'CFFEX上证50指数期权隐含波动率（前瞻）' : '上证50指数历史波动率（20日）'"
+            :title="brief.iv_snapshot.source === 'HV' ? '上证50历史波动率（20日）' : 'A股三大指数期权30日隐含波动率'"
           >
-            <span class="pill-label">{{ brief.iv_snapshot.source === 'IV' ? 'A股IV' : 'A股HV20' }}</span>
+            <span class="pill-label">{{ brief.iv_snapshot.source === 'HV' ? 'A股HV20' : 'A股IV' }}</span>
             <span class="pill-value">{{ brief.iv_snapshot.iv_30 }}%</span>
-            <span class="pill-sub">{{ brief.iv_snapshot.level_zh }}<span v-if="brief.iv_snapshot.skew_pp !== null"> · 偏度{{ brief.iv_snapshot.skew_pp > 0 ? '+' : '' }}{{ brief.iv_snapshot.skew_pp }}pp</span></span>
+            <span class="pill-sub">{{ brief.iv_snapshot.underlying }} · {{ brief.iv_snapshot.level_zh }}<span v-if="brief.iv_snapshot.skew_pp !== null"> · 偏度{{ brief.iv_snapshot.skew_pp > 0 ? '+' : '' }}{{ brief.iv_snapshot.skew_pp }}pp</span></span>
+          </div>
+          <div v-if="brief.iv_snapshot?.available && Object.keys(brief.iv_snapshot.indices || {}).length > 1" class="score-iv-multi">
+            <span
+              v-for="(idx, key) in brief.iv_snapshot.indices"
+              :key="key"
+              class="iv-mini-pill"
+              :class="'iv-mini-pill--' + idx.level"
+            >{{ idx.name }}&thinsp;{{ idx.iv_30 }}%</span>
           </div>
           </div>
         </div>
@@ -1072,6 +1080,14 @@ async function refreshAnalysis() {
 .score-iv--elevated .pill-value { color: #c05621; }
 .score-iv--panic   { border-color: #fed7d7; background: #fff5f5; }
 .score-iv--panic   .pill-value { color: #c53030; }
+
+/* 多指数小 chip 行 */
+.score-iv-multi { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.iv-mini-pill { padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 500; border: 1px solid transparent; }
+.iv-mini-pill--calm     { background: #ebf4ff; border-color: #c3dafe; color: #2b6cb0; }
+.iv-mini-pill--normal   { background: #f0fff4; border-color: #c6f6d5; color: #276749; }
+.iv-mini-pill--elevated { background: #fffaf0; border-color: #feebc8; color: #c05621; }
+.iv-mini-pill--panic    { background: #fff5f5; border-color: #fed7d7; color: #c53030; }
 
 .analysis-section.highlight {
   background: linear-gradient(135deg, #ebf8ff 0%, #f0fff4 100%);
