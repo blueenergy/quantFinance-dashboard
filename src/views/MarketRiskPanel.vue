@@ -157,6 +157,15 @@
                 <div class="signal-title">📌 综合建议</div>
                 <p class="mrp-caption mt-1">{{ tabAnalysis.overall_advice }}</p>
               </div>
+              <!-- A股IV温度计 -->
+              <div class="mda-block" v-if="tabAnalysis.iv_snapshot?.available">
+                <div class="signal-title">📊 A股波动率温度计</div>
+                <div class="iv-badge mt-1" :class="'iv-badge--' + tabAnalysis.iv_snapshot.level">
+                  <span class="iv-badge__val">{{ tabAnalysis.iv_snapshot.source === 'IV' ? 'IV' : 'HV20' }} {{ tabAnalysis.iv_snapshot.iv_30 }}%</span>
+                  <span class="iv-badge__label">{{ tabAnalysis.iv_snapshot.level_zh }}</span>
+                  <span class="iv-badge__skew" v-if="tabAnalysis.iv_snapshot.skew_pp !== null">认沽偏度 {{ tabAnalysis.iv_snapshot.skew_pp > 0 ? '+' : '' }}{{ tabAnalysis.iv_snapshot.skew_pp }}pp</span>
+                </div>
+              </div>
               <!-- 重点关注 -->
               <div class="mda-block" v-if="tabAnalysis.key_watchpoints?.length">
                 <div class="signal-title">🔍 重点关注</div>
@@ -1163,4 +1172,14 @@ onMounted(loadOverview)
 .sentiment-extreme { background: #ffebee; color: #c62828; }
 .mda-list { padding-left: 14px; margin: 0; }
 .mda-list li { font-size: 0.78rem; color: #444; line-height: 1.65; }
+
+/* IV badge */
+.iv-badge { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 8px; border: 1px solid #e2e8f0; }
+.iv-badge__val  { font-size: 14px; font-weight: 700; }
+.iv-badge__label{ font-size: 12px; opacity: .75; }
+.iv-badge__skew { font-size: 11px; color: #718096; }
+.iv-badge--calm     { background: #ebf4ff; border-color: #c3dafe; } .iv-badge--calm     .iv-badge__val { color: #2b6cb0; }
+.iv-badge--normal   { background: #f0fff4; border-color: #c6f6d5; } .iv-badge--normal   .iv-badge__val { color: #276749; }
+.iv-badge--elevated { background: #fffaf0; border-color: #feebc8; } .iv-badge--elevated .iv-badge__val { color: #c05621; }
+.iv-badge--panic    { background: #fff5f5; border-color: #fed7d7; } .iv-badge--panic    .iv-badge__val { color: #c53030; }
 </style>

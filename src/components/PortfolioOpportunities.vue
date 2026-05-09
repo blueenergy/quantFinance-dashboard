@@ -77,6 +77,16 @@
               {{ analysis.summary }}
             </v-alert>
 
+            <!-- A股IV温度计 -->
+            <div v-if="analysis.iv_snapshot?.available" class="iv-regime-bar mb-4" :class="'iv-regime--' + analysis.iv_snapshot.level">
+              <span class="iv-regime__icon">📊</span>
+              <span class="iv-regime__label">A股波动率环境</span>
+              <span class="iv-regime__val">{{ analysis.iv_snapshot.source === 'IV' ? 'IV' : 'HV20' }} {{ analysis.iv_snapshot.iv_30 }}%</span>
+              <span class="iv-regime__badge">{{ analysis.iv_snapshot.level_zh }}</span>
+              <span v-if="analysis.iv_snapshot.skew_pp !== null" class="iv-regime__skew">认沽偏度 {{ analysis.iv_snapshot.skew_pp > 0 ? '+' : '' }}{{ analysis.iv_snapshot.skew_pp }}pp</span>
+              <span class="iv-regime__src">（{{ analysis.iv_snapshot.underlying }}）</span>
+            </div>
+
             <!-- 补涨机会 -->
             <div v-if="analysis.catchup_opportunities?.length > 0" class="mb-6">
               <h4 class="text-h6 font-weight-bold mb-3">
@@ -355,4 +365,28 @@ onMounted(() => {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   margin: 0;
 }
+
+/* IV regime bar */
+.iv-regime-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px;
+}
+.iv-regime__icon  { font-size: 14px; }
+.iv-regime__label { color: #718096; }
+.iv-regime__val   { font-weight: 700; }
+.iv-regime__badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.iv-regime__skew  { font-size: 11px; color: #718096; }
+.iv-regime__src   { font-size: 11px; color: #a0aec0; margin-left: auto; }
+.iv-regime--calm     { background: #ebf4ff; border-color: #c3dafe; }
+.iv-regime--calm     .iv-regime__val { color: #2b6cb0; }
+.iv-regime--calm     .iv-regime__badge { background: #bee3f8; color: #2a4365; }
+.iv-regime--normal   { background: #f0fff4; border-color: #c6f6d5; }
+.iv-regime--normal   .iv-regime__val { color: #276749; }
+.iv-regime--normal   .iv-regime__badge { background: #c6f6d5; color: #1c4532; }
+.iv-regime--elevated { background: #fffaf0; border-color: #feebc8; }
+.iv-regime--elevated .iv-regime__val { color: #c05621; }
+.iv-regime--elevated .iv-regime__badge { background: #feebc8; color: #7b341e; }
+.iv-regime--panic    { background: #fff5f5; border-color: #fed7d7; }
+.iv-regime--panic    .iv-regime__val { color: #c53030; }
+.iv-regime--panic    .iv-regime__badge { background: #fed7d7; color: #742a2a; }
 </style>

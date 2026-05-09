@@ -50,6 +50,17 @@
           <span class="market-mood" :class="getMoodClass(analysis.mood)">
             {{ getMoodIcon(analysis.mood) }} {{ analysis.mood }}
           </span>
+          <span
+            v-if="analysis.ivSnapshot?.available"
+            class="iv-chip"
+            :class="'iv-chip--' + analysis.ivSnapshot.level"
+            :title="analysis.ivSnapshot.source === 'IV' ? 'CFFEX上证50指数期权隐含波动率（前瞻）' : '上证50指数历史波动率（20日）'"
+          >
+            📊 {{ analysis.ivSnapshot.source === 'IV' ? 'IV' : 'HV20' }}
+            {{ analysis.ivSnapshot.iv_30 }}%
+            · {{ analysis.ivSnapshot.level_zh }}
+            <span v-if="analysis.ivSnapshot.skew_pp !== null">· 看跌溢价 {{ analysis.ivSnapshot.skew_pp }}pp</span>
+          </span>
         </div>
 
         <div v-if="analysis.notice" class="analysis-notice">
@@ -221,7 +232,8 @@ async function fetchLatestAnalysis() {
         mainlineAnalysis: response.mainlineAnalysis || '',
         abnormalStockInsight: response.abnormalStockInsight || '',
         industry_signals: response.industry_signals || null,
-        notice: response.notice || ''
+        notice: response.notice || '',
+        ivSnapshot: response.iv_snapshot || null
       }
     } else if (response.is_expected) {
       error.value = response.error || '暂无分析数据'
@@ -565,6 +577,20 @@ onMounted(() => {
   font-size: 14px;
   font-weight: 500;
 }
+
+/* IV chip（紧跟情绪标签） */
+.iv-chip {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: default;
+  border: 1px solid transparent;
+}
+.iv-chip--calm     { background: #ebf4ff; border-color: #c3dafe; color: #2b6cb0; }
+.iv-chip--normal   { background: #f0fff4; border-color: #c6f6d5; color: #276749; }
+.iv-chip--elevated { background: #fffaf0; border-color: #feebc8; color: #c05621; }
+.iv-chip--panic    { background: #fff5f5; border-color: #fed7d7; color: #c53030; }
 
 .mood-positive {
   background: #d4edda;

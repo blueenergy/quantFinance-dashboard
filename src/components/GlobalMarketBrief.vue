@@ -86,6 +86,16 @@
             <span class="pill-label">净影响分</span>
             <span class="pill-value">{{ formatScore(brief.net_impact_score) }}</span>
           </div>
+          <div
+            v-if="brief.iv_snapshot?.available"
+            class="score-pill score-iv"
+            :class="'score-iv--' + brief.iv_snapshot.level"
+            :title="brief.iv_snapshot.source === 'IV' ? 'CFFEX上证50指数期权隐含波动率（前瞻）' : '上证50指数历史波动率（20日）'"
+          >
+            <span class="pill-label">{{ brief.iv_snapshot.source === 'IV' ? 'A股IV' : 'A股HV20' }}</span>
+            <span class="pill-value">{{ brief.iv_snapshot.iv_30 }}%</span>
+            <span class="pill-sub">{{ brief.iv_snapshot.level_zh }}<span v-if="brief.iv_snapshot.skew_pp !== null"> · 偏度{{ brief.iv_snapshot.skew_pp > 0 ? '+' : '' }}{{ brief.iv_snapshot.skew_pp }}pp</span></span>
+          </div>
           </div>
         </div>
         
@@ -1050,6 +1060,18 @@ async function refreshAnalysis() {
 .score-international .pill-value { color: #c53030; }
 .score-domestic .pill-value { color: #2b6cb0; }
 .score-net .pill-value { color: #2f855a; }
+
+/* IV pill */
+.score-iv { flex-direction: column; align-items: flex-start; gap: 2px; }
+.score-iv .pill-sub { font-size: 11px; color: #718096; }
+.score-iv--calm    { border-color: #c3dafe; background: #ebf4ff; }
+.score-iv--calm    .pill-value { color: #2b6cb0; }
+.score-iv--normal  { border-color: #c6f6d5; background: #f0fff4; }
+.score-iv--normal  .pill-value { color: #276749; }
+.score-iv--elevated{ border-color: #feebc8; background: #fffaf0; }
+.score-iv--elevated .pill-value { color: #c05621; }
+.score-iv--panic   { border-color: #fed7d7; background: #fff5f5; }
+.score-iv--panic   .pill-value { color: #c53030; }
 
 .analysis-section.highlight {
   background: linear-gradient(135deg, #ebf8ff 0%, #f0fff4 100%);
