@@ -63,8 +63,16 @@
             🇨🇳 A股板块
             <span class="tab-count">{{ aShareSectors.length }}</span>
           </button>
+          <button
+            class="market-tab"
+            :class="{ 'market-tab-active': marketTab === 'iv' }"
+            @click="switchMarketTab('iv')"
+          >
+            📈 波动率分析
+          </button>
           <div class="tab-spacer" />
           <button
+            v-if="marketTab !== 'iv'"
             class="mrp-btn-sm mrp-btn-dark"
             :disabled="triggeringMarket"
             @click="triggerMarketDaily"
@@ -74,8 +82,8 @@
       </v-col>
     </v-row>
 
-    <!-- A股波动率分析卡片（A股Tab专属，置顶） -->
-    <v-row v-if="!overviewLoading && marketTab === 'a'" class="mb-2">
+    <!-- 波动率分析 Tab -->
+    <v-row v-if="marketTab === 'iv'" class="mb-2">
       <v-col cols="12">
         <IVAnalysisCard />
       </v-col>
@@ -117,7 +125,7 @@
     </v-row>
 
     <!-- 全市场日报解读 -->
-    <v-row v-if="tabAnalysis" class="mt-3 mb-1">
+    <v-row v-if="tabAnalysis && marketTab !== 'iv'" class="mt-3 mb-1">
       <v-col cols="12">
         <div class="detail-paper">
           <div class="detail-header">
@@ -419,7 +427,11 @@ const snackbar = ref({ show: false, message: '', color: 'success' })
 // ---------------------------------------------------------------------------
 const aShareSectors = computed(() => sectors.value.filter(s => !s.sector.startsWith('us_')))
 const usSectors     = computed(() => sectors.value.filter(s => s.sector.startsWith('us_')))
-const visibleSectors = computed(() => marketTab.value === 'us' ? usSectors.value : aShareSectors.value)
+const visibleSectors = computed(() => {
+  if (marketTab.value === 'us') return usSectors.value
+  if (marketTab.value === 'a')  return aShareSectors.value
+  return []
+})
 
 // Filter market daily analysis to match the active tab
 const tabAnalysis = computed(() => {

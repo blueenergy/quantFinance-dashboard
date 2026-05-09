@@ -10,16 +10,16 @@
         </span>
       </div>
       <div class="iv-card__actions">
-        <button class="iv-btn iv-btn--ghost" :disabled="loading" @click="reload" title="刷新快照">↻</button>
+        <button class="iv-btn iv-btn--ghost" :disabled="loading" @click="reload" title="刷新页面数据（只读缓存，不重新计算）">↻ 刷新</button>
         <button
           class="iv-btn iv-btn--primary"
           :disabled="interpreting"
           @click="triggerInterpret"
-          :title="!ivSnap ? '数据就绪后 quantAnalyzer 将自动解读' : 'LLM 分析（异步，约30-60秒）'"
+          title="从 Tushare 重新拉取期权数据，计算大跌预警 + LLM 解读（约30-60秒）"
         >
           <span v-if="interpreting === 'submitted'">⏳ 已提交</span>
           <span v-else-if="interpreting === 'polling'">↻ 刷新中</span>
-          <span v-else>🤖 LLM 解读</span>
+          <span v-else>⚡ 触发分析</span>
         </button>
       </div>
     </div>
@@ -30,11 +30,49 @@
 
     <!-- 无数据 -->
     <div v-else-if="!ivSnap" class="iv-card__empty">
-      暂无波动率数据，点击「LLM 解读」按钮触发分析任务（quantAnalyzer 将从 Tushare 拉取数据并生成解读）
+        暂无波动率数据，点击「触发分析」按钮触发分析任务（quantAnalyzer 将从 Tushare 拉取数据并生成解读）
     </div>
 
     <!-- 主体 -->
     <div v-else class="iv-card__body">
+      <!-- 大跌预警 banner -->
+      <div v-if="alert" class="iv-alert" :class="'iv-alert--' + alert.level">
+        <div class="iv-alert__top">
+          <span class="iv-alert__icon">{{
+            {safe:'✅', caution:'⚠️', warning:'🔔', danger:'🚨'}[alert.level] || '❓'
+          }}</span>
+          <span class="iv-alert__label">大跌预警</span>
+          <span class="iv-alert__level">{{ alert.level_zh }}</span>
+          <span class="iv-alert__score">{{ alert.score }}/{{ alert.max_score }} 预警信号</span>
+          <button class="iv-alert__toggle" @click="alertExpanded = !alertExpanded">
+            {{ alertExpanded ? '收起' : '展开信号' }}
+          </button>
+        </div>
+        <div v-if="alertExpanded" class="iv-alert__signals">
+          <div
+            v-for="sig in alert.signals"
+            :key="sig.id"
+            class="iv-signal"
+            :class="sig.triggered ? 'iv-signal--on' : 'iv-signal--off'"
+          >
+            <span class="iv-signal__dot">{{ sig.triggered ? '●' : '○' }}</span>
+            <div class="iv-signal__body">
+              <div class="iv-signal__name">{{ sig.name }}
+                <span class="iv-signal__threshold">（阈值：{{ sig.threshold }}）</span>
+              </div>
+              <div class="iv-signal__value" v-if="sig.triggered && sig.value">
+                {{ sig.value }}
+              </div>
+              <div class="iv-signal__desc">{{ sig.desc }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-else class="iv-alert iv-alert--pending">
+        <span class="iv-alert__icon">🔍</span>
+        <span class="iv-alert__label">大跌预警</span>
+        <span class="iv-alert__score">尚未计算 — 点击「触发分析」后自动生成</span>
+      </div>
       <!-- 主指数大卡 -->
       <div class="iv-primary-row">
         <div class="iv-primary-badge" :class="'iv-primary--' + ivSnap.level">
@@ -114,6 +152,8 @@ const snapshotDate   = ref(null)
 const snapshotSource = ref(null)   // 'live' | 'mem_cache' | 'db_cache' | 'market_daily_fallback'
 const interpretation = ref(null)
 const interpretedAt  = ref(null)
+const alert          = ref(null)   // {level, level_zh, score, max_score, signals}
+const alertExpanded  = ref(false)
 
 const hasMultiIndex = computed(() =>
   ivSnap.value && Object.keys(ivSnap.value.indices || {}).length > 1
@@ -135,6 +175,8 @@ async function reload() {
     snapshotDate.value   = data.snapshot_date || null
     snapshotSource.value = data.snapshot_source || null
     interpretation.value = data.interpretation || null
+    alert.value          = data.alert || null
+    if (data.alert && data.alert.score > 0) alertExpanded.value = true
     interpretedAt.value  = data.interpreted_at
       ? data.interpreted_at.slice(0, 16).replace('T', ' ')
       : null
@@ -173,6 +215,7 @@ async function triggerInterpret() {
           snapshotDate.value   = snap.snapshot_date || snapshotDate.value
           snapshotSource.value = snap.snapshot_source || snapshotSource.value
           interpretation.value = newInterp
+          alert.value          = snap.alert || alert.value
           interpretedAt.value  = snap.interpreted_at
             ? snap.interpreted_at.slice(0, 16).replace('T', ' ')
             : null
@@ -345,4 +388,60 @@ onMounted(reload)
   line-height: 1.75;
   white-space: pre-wrap;
 }
+
+/* ── 大跌预警 banner ── */
+.iv-alert {
+  border-radius: 10px;
+  border: 1.5px solid transparent;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+.iv-alert--safe    { background: #f0fff4; border-color: #9ae6b4; color: #276749; }
+.iv-alert--caution { background: #fffff0; border-color: #faf089; color: #744210; }
+.iv-alert--warning { background: #fffaf0; border-color: #f6ad55; color: #7b341e; }
+.iv-alert--danger  { background: #fff5f5; border-color: #fc8181; color: #9b2c2c; }
+.iv-alert--pending { background: #f7fafc; border-color: #e2e8f0; color: #a0aec0; }
+
+.iv-alert__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.iv-alert__icon   { font-size: 16px; }
+.iv-alert__label  { font-size: 12px; font-weight: 600; opacity: .6; letter-spacing: .03em; }
+.iv-alert__level  { font-size: 15px; font-weight: 700; }
+.iv-alert__score  { font-size: 12px; opacity: .75; flex: 1; }
+.iv-alert__toggle {
+  font-size: 11px;
+  cursor: pointer;
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 2px 8px;
+  color: inherit;
+  opacity: .7;
+}
+.iv-alert__toggle:hover { opacity: 1; }
+
+.iv-alert__signals {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.iv-signal {
+  display: flex;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.iv-signal--on  { background: rgba(0,0,0,.06); }
+.iv-signal--off { opacity: .55; }
+.iv-signal__dot  { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.iv-signal__body { flex: 1; }
+.iv-signal__name { font-weight: 600; }
+.iv-signal__threshold { font-weight: 400; opacity: .7; }
+.iv-signal__value { margin-top: 2px; font-weight: 500; }
+.iv-signal__desc  { margin-top: 2px; opacity: .7; line-height: 1.5; }
 </style>
