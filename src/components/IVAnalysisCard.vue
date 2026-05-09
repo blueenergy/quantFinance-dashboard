@@ -5,15 +5,20 @@
       <div class="iv-card__title">
         📈 A股波动率分析
         <span v-if="snapshotDate" class="iv-card__date">{{ snapshotDate }}</span>
+        <span v-if="snapshotSource" class="iv-src-badge" :class="'iv-src--' + snapshotSource">
+          {{ {'live':'实时','mem_cache':'缓存','db_cache':'DB缓存','market_daily_fallback':'日报副产品'}[snapshotSource] || snapshotSource }}
+        </span>
       </div>
       <div class="iv-card__actions">
         <button class="iv-btn iv-btn--ghost" :disabled="loading" @click="reload" title="刷新快照">↻</button>
         <button
           class="iv-btn iv-btn--primary"
-          :disabled="interpreting || !ivSnap"
+          :disabled="interpreting"
           @click="triggerInterpret"
+          :title="!ivSnap ? '数据就绪后 quantAnalyzer 将自动解读' : 'LLM 分析（异步，约30-60秒）'"
         >
-          <span v-if="interpreting">🤖 解读中…</span>
+          <span v-if="interpreting === 'submitted'">⏳ 已提交</span>
+          <span v-else-if="interpreting === 'polling'">↻ 刷新中</span>
           <span v-else>🤖 LLM 解读</span>
         </button>
       </div>
@@ -25,7 +30,7 @@
 
     <!-- 无数据 -->
     <div v-else-if="!ivSnap" class="iv-card__empty">
-      暂无波动率数据，请先触发 A股日报解读以生成快照
+      暂无波动率数据，点击「LLM 解读」按钮触发分析任务（quantAnalyzer 将从 Tushare 拉取数据并生成解读）
     </div>
 
     <!-- 主体 -->
@@ -82,7 +87,9 @@
           <span v-if="interpretedAt" class="iv-interp__time">{{ interpretedAt }}</span>
         </div>
         <div v-if="interpreting" class="iv-interp__loading">
-          <span class="iv-interp__spinner">⏳</span> 正在生成解读，请稍候…
+          <span class="iv-interp__spinner">⏳</span>
+          <span v-if="interpreting === 'submitted'">分析任务已提交，quantAnalyzer 正在处理（约30-60秒）…</span>
+          <span v-else>刷新中…</span>
         </div>
         <div v-else class="iv-interp__text">{{ interpretation }}</div>
       </div>
@@ -98,11 +105,13 @@ import { ref, computed, onMounted } from 'vue'
 import { getIVSnapshot, interpretIVSnapshot } from '../api/riskReport.js'
 
 const loading      = ref(false)
-const interpreting = ref(false)
+const interpreting = ref(null)  // null | 'submitted' | 'polling'
 const error        = ref('')
+const taskMsg      = ref('')
 
-const ivSnap        = ref(null)
-const snapshotDate  = ref(null)
+const ivSnap         = ref(null)
+const snapshotDate   = ref(null)
+const snapshotSource = ref(null)   // 'live' | 'mem_cache' | 'db_cache' | 'market_daily_fallback'
 const interpretation = ref(null)
 const interpretedAt  = ref(null)
 
@@ -122,8 +131,9 @@ async function reload() {
   error.value = ''
   try {
     const data = await getIVSnapshot()
-    ivSnap.value       = data.iv_snapshot   || null
-    snapshotDate.value = data.snapshot_date || null
+    ivSnap.value         = data.iv_snapshot   || null
+    snapshotDate.value   = data.snapshot_date || null
+    snapshotSource.value = data.snapshot_source || null
     interpretation.value = data.interpretation || null
     interpretedAt.value  = data.interpreted_at
       ? data.interpreted_at.slice(0, 16).replace('T', ' ')
@@ -136,19 +146,46 @@ async function reload() {
 }
 
 async function triggerInterpret() {
-  interpreting.value = true
+  interpreting.value = 'submitted'
   error.value = ''
+  taskMsg.value = ''
   try {
     const data = await interpretIVSnapshot()
-    interpretation.value = data.interpretation || ''
-    interpretedAt.value  = data.interpreted_at
-      ? data.interpreted_at.slice(0, 16).replace('T', ' ')
-      : null
-    if (data.iv_snapshot) ivSnap.value = data.iv_snapshot
+    // 后端现在返回 {task_id, status, message} — 任务异步执行
+    taskMsg.value = data.message || 'IV分析任务已提交'
+    // 30s 内每5s轮询一次，直到拿到新的解读结果
+    let attempts = 0
+    const maxAttempts = 8
+    const poll = async () => {
+      if (attempts >= maxAttempts) {
+        interpreting.value = null
+        return
+      }
+      attempts++
+      interpreting.value = attempts === 1 ? 'submitted' : 'polling'
+      await new Promise(r => setTimeout(r, 5000))
+      try {
+        const snap = await getIVSnapshot()
+        const newInterp = snap.interpretation || null
+        if (newInterp && newInterp !== interpretation.value) {
+          // 拿到新解读，更新并停止轮询
+          ivSnap.value         = snap.iv_snapshot   || ivSnap.value
+          snapshotDate.value   = snap.snapshot_date || snapshotDate.value
+          snapshotSource.value = snap.snapshot_source || snapshotSource.value
+          interpretation.value = newInterp
+          interpretedAt.value  = snap.interpreted_at
+            ? snap.interpreted_at.slice(0, 16).replace('T', ' ')
+            : null
+          interpreting.value = null
+          return
+        }
+      } catch (_) { /* ignore, keep polling */ }
+      poll()
+    }
+    poll()
   } catch (e) {
-    error.value = `解读失败：${e.message}`
-  } finally {
-    interpreting.value = false
+    error.value = `提交失败：${e.message}`
+    interpreting.value = null
   }
 }
 
@@ -185,6 +222,16 @@ onMounted(reload)
   font-weight: 400;
   color: #718096;
 }
+.iv-src-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+.iv-src--live      { background: #f0fff4; border-color: #9ae6b4; color: #276749; }
+.iv-src--mem_cache { background: #ebf4ff; border-color: #bee3f8; color: #2b6cb0; }
+.iv-src--db_cache  { background: #fffaf0; border-color: #fbd38d; color: #c05621; }
 .iv-card__actions { display: flex; gap: 8px; align-items: center; }
 .iv-card__divider { height: 1px; background: #edf2f7; margin: 12px 0; }
 .iv-card__loading, .iv-card__empty { color: #a0aec0; font-size: 14px; padding: 12px 0; }
