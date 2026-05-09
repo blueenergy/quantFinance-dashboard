@@ -111,3 +111,24 @@ export async function triggerUsMarketDailyAnalysis(date = null) {
     if (!res.ok) throw new Error(`triggerUsMarketDailyAnalysis failed: ${res.status}`);
     return await res.json();
 }
+
+/**
+ * 获取A股波动率快照（含缓存的 LLM 解读文本）
+ */
+export async function getIVSnapshot() {
+    const res = await fetch(`${API_BASE}/risk-reports/iv-snapshot`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`getIVSnapshot failed: ${res.status}`);
+    return await res.json();
+}
+
+/**
+ * 触发A股波动率 LLM 专业解读（同步，约10-20秒）
+ */
+export async function interpretIVSnapshot() {
+    const res = await fetch(`${API_BASE}/risk-reports/iv-snapshot/interpret`, {
+        method: "POST",
+        headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error(`interpretIVSnapshot failed: ${res.status}`);
+    return await res.json();
+}

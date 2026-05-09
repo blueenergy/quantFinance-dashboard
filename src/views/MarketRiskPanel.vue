@@ -74,6 +74,13 @@
       </v-col>
     </v-row>
 
+    <!-- A股波动率分析卡片（A股Tab专属，置顶） -->
+    <v-row v-if="!overviewLoading && marketTab === 'a'" class="mb-2">
+      <v-col cols="12">
+        <IVAnalysisCard />
+      </v-col>
+    </v-row>
+
     <!-- 行业卡片概览 -->
     <v-row v-if="!overviewLoading && sectors.length > 0">
       <v-col
@@ -368,6 +375,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { mdiChartTimelineVariant } from '@mdi/js'
+import IVAnalysisCard from '../components/IVAnalysisCard.vue'
 import {
   getRiskOverview,
   getRiskDetail,
