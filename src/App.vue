@@ -144,7 +144,7 @@ import UserAvatar from './components/UserAvatar.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
 import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
-import { computed, watch } from 'vue'
+import { computed, watch, onMounted, onUnmounted } from 'vue'
 import { getRenderableTabViews, getTabProps as buildTabProps, getTabListeners as buildTabListeners } from './utils/tabViews.js'
 import { useAppStartupFlow } from './composables/useAppStartupFlow.js'
 import { useHomeSummaries } from './composables/useHomeSummaries.js'
@@ -322,6 +322,17 @@ watch(
     console.log('检测到非管理员用户处于管理后台，已退出管理页面并等待用户重新选择标签页')
   }
 )
+
+// 申万行业研究 → 个股深度分析 跨 Tab 跳转
+function onShenwanOpenDeepAnalysis () {
+  switchTab('history')
+}
+onMounted(() => {
+  window.addEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
+})
+onUnmounted(() => {
+  window.removeEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
+})
 </script>
 
 <style scoped>

@@ -330,7 +330,7 @@
   </div>
 </template>
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import AnalysisDetailContent from './AnalysisDetailContent.vue'
 
@@ -1045,15 +1045,27 @@ async function loadHistory() {
   }
 }
 
-// 监听全局事件，当有新的分析时刷新
+function onShenwanOpenDeepAnalysis (e) {
+  const sym = e?.detail?.symbol
+  if (sym) inputSymbol.value = sym
+}
+
+onMounted(() => {
+  loadHistory()
+  window.addEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
+  clearInterval(livePollTimer)
+  clearInterval(evalPollTimer)
+})
+
 if (typeof window !== 'undefined') {
   window.addEventListener('ai-analysis:updated', () => {
-    console.log('检测到新的 AI 分析，刷新历史记录')
     loadHistory()
   })
 }
-
-onMounted(loadHistory)
 </script>
 
 <style scoped>

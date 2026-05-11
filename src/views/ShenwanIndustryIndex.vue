@@ -96,6 +96,38 @@
           <code>run_sw_industry_backfill</code> 回补 <code>sw_index_classify</code> 与
           <code>sw_daily</code> 后再试。
         </p>
+
+        <!-- PE/PB 估值走势 -->
+        <div v-if="pepbData.length" class="pepb-section">
+          <h4 class="section-title">PE / PB 估值走势</h4>
+          <div class="pepb-box" ref="pepbBoxRef">
+            <div ref="pepbElRef" class="pepb-canvas" />
+          </div>
+        </div>
+
+        <!-- 成分股列表 -->
+        <div class="member-section">
+          <h4 class="section-title">
+            成分股
+            <span v-if="memberList.length" class="member-count">{{ memberList.length }} 只</span>
+          </h4>
+          <div v-if="memberLoading" class="muted">加载成分股…</div>
+          <div v-else-if="memberError" class="err-msg">{{ memberError }}</div>
+          <div v-else-if="!klineIndexCode" class="muted">请先选择行业</div>
+          <div v-else-if="memberList.length === 0" class="muted">暂无成分股数据</div>
+          <div v-else class="member-grid">
+            <div
+              v-for="m in memberList"
+              :key="m.con_code"
+              class="member-chip"
+              :title="'点击前往个股深度分析：' + m.name"
+              @click="openDeepAnalysis(m)"
+            >
+              <span class="member-name">{{ m.name }}</span>
+              <span class="member-code">{{ m.con_code }}</span>
+            </div>
+          </div>
+        </div>
       </section>
     </div>
   </div>
@@ -108,6 +140,95 @@ import { buildShenwanKlineOption } from '../utils/echarts/shenwanKlineOption.js'
 
 const SRC = 'SW2021'
 const klineLimit = 800
+
+// ── 成分股 ────────────────────────────────────────────────────────────────
+const memberList = ref([])
+const memberLoading = ref(false)
+const memberError = ref('')
+
+async function loadMembers (indexCode) {
+  if (!indexCode) { memberList.value = []; return }
+  memberLoading.value = true
+  memberError.value = ''
+  memberList.value = []
+  try {
+    const token = localStorage.getItem('access_token')
+    const { data } = await axios.get('/api/shenwan-index/members', {
+      params: { index_code: indexCode, src: SRC, current_only: true },
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    memberList.value = data?.data || []
+  } catch (e) {
+    memberError.value = '成分股加载失败'
+  } finally {
+    memberLoading.value = false
+  }
+}
+
+function openDeepAnalysis (member) {
+  const symbol = member.con_code || ''
+  if (!symbol) return
+  window.dispatchEvent(new CustomEvent('shenwan:open-deep-analysis', {
+    detail: { symbol, name: member.name || '' },
+  }))
+}
+
+// ── PE/PB 图 ───────────────────────────────────────────────────────────────
+const pepbBoxRef = ref(null)
+const pepbElRef = ref(null)
+let pepbInstance = null
+
+const pepbData = computed(() => {
+  return klineData.value
+    .filter(r => r.trade_date && (r.pe != null || r.pb != null))
+    .map(r => ({
+      date: fmtAxis(r.trade_date),
+      pe: r.pe != null ? +r.pe : null,
+      pb: r.pb != null ? +r.pb : null,
+    }))
+})
+
+function disposePepb () {
+  if (pepbInstance) {
+    try { pepbInstance.dispose() } catch (e) { /* */ }
+    pepbInstance = null
+  }
+}
+
+async function drawPepb () {
+  const rows = pepbData.value
+  if (!rows.length) { disposePepb(); return }
+  await nextTick()
+  await new Promise(r => requestAnimationFrame(r))
+  if (!pepbElRef.value) return
+  if (!echarts) {
+    const mod = await import('echarts')
+    echarts = mod.default || mod
+  }
+  if (!pepbInstance) pepbInstance = echarts.init(pepbElRef.value, 'dark')
+  const dates = rows.map(r => r.date)
+  const peVals = rows.map(r => r.pe)
+  const pbVals = rows.map(r => r.pb)
+  const hasPe = peVals.some(v => v != null)
+  const hasPb = pbVals.some(v => v != null)
+  const series = []
+  if (hasPe) series.push({ name: 'PE', type: 'line', data: peVals, smooth: true, symbol: 'none', lineStyle: { color: '#ffd54f', width: 1.5 }, connectNulls: true })
+  if (hasPb) series.push({ name: 'PB', type: 'line', data: pbVals, smooth: true, symbol: 'none', lineStyle: { color: '#80cbc4', width: 1.5 }, connectNulls: true, yAxisIndex: hasPe ? 1 : 0 })
+  const yAxes = hasPe && hasPb
+    ? [{ type: 'value', name: 'PE', nameTextStyle: { color: '#ffd54f' }, axisLabel: { color: '#aaa', fontSize: 10 }, splitLine: { lineStyle: { color: '#2a2a2a' } } },
+       { type: 'value', name: 'PB', nameTextStyle: { color: '#80cbc4' }, axisLabel: { color: '#aaa', fontSize: 10 }, splitLine: { show: false } }]
+    : [{ type: 'value', axisLabel: { color: '#aaa', fontSize: 10 }, splitLine: { lineStyle: { color: '#2a2a2a' } } }]
+  pepbInstance.setOption({
+    backgroundColor: '#121212',
+    tooltip: { trigger: 'axis', backgroundColor: '#1e1e2e', borderColor: '#444', textStyle: { color: '#eee', fontSize: 11 } },
+    legend: { data: series.map(s => s.name), textStyle: { color: '#aaa', fontSize: 11 }, top: 4 },
+    grid: { top: 32, bottom: 28, left: 48, right: hasPe && hasPb ? 48 : 12 },
+    xAxis: { type: 'category', data: dates, axisLabel: { color: '#777', fontSize: 10, rotate: 30 }, axisLine: { lineStyle: { color: '#333' } } },
+    yAxis: yAxes,
+    series,
+  }, true)
+  pepbInstance.resize()
+}
 
 const l1List = ref([])
 const l2List = ref([])
@@ -415,9 +536,15 @@ function onPickL3 (it) {
 watch([klineIndexCode, tf, startD, endD], () => {
   if (klineIndexCode.value) {
     reloadKline()
+    loadMembers(klineIndexCode.value)
   } else {
     clearKlineState()
+    memberList.value = []
   }
+})
+
+watch(pepbData, () => {
+  drawPepb()
 })
 
 onMounted(() => {
@@ -436,6 +563,7 @@ onBeforeUnmount(() => {
   }
   ro = null
   disposeChart()
+  disposePepb()
 })
 </script>
 
@@ -526,4 +654,36 @@ onBeforeUnmount(() => {
 }
 .overlay.err { color: #f88; }
 .overlay.hint { color: #fb8; padding: 1rem; text-align: center; }
+
+/* PE/PB */
+.pepb-section { margin-top: 1rem; }
+.section-title { font-size: 13px; font-weight: 600; color: #bbb; margin: 0 0 0.4rem; }
+.pepb-box { width: 100%; height: 180px; background: #121212; border: 1px solid #2a2a2a; border-radius: 6px; position: relative; }
+.pepb-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* 成分股 */
+.member-section { margin-top: 1rem; }
+.member-count { font-size: 11px; font-weight: 400; color: #666; margin-left: 6px; }
+.member-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.member-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: .15s;
+  min-width: 96px;
+}
+.member-chip:hover { background: #1e3a5f; border-color: #42a5f5; }
+.member-name { font-size: 12px; color: #e0e0e0; font-weight: 600; white-space: nowrap; }
+.member-code { font-size: 10px; color: #888; margin-top: 1px; }
 </style>
