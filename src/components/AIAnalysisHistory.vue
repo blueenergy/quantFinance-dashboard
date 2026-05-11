@@ -1,15 +1,75 @@
 <template>
   <div class="ai-analysis-history">
-    <div class="history-header flex-row-center flex-center-between gap-sm">
-      <h3 class="history-title">AI分析回溯记录</h3>
-      <button @click="loadHistory" :disabled="loading" class="btn-base btn-sm btn-gradient-purple">
-        {{ loading ? '加载中...' : '刷新' }}
-      </button>
+
+    <!-- ① 主功能：直接输入分析 -->
+    <div class="deep-input-panel">
+      <h3 class="history-title">🔍 个股深度分析</h3>
+      <div class="input-row">
+        <input
+          v-model="inputSymbol"
+          class="symbol-input"
+          placeholder="输入股票代码，如 600519 或 600519.SH"
+          @keyup.enter="submitAnalysis"
+        />
+        <div class="mode-toggle">
+          <button
+            :class="['mode-btn', { active: inputMode === 'classic' }]"
+            @click="inputMode = 'classic'"
+          >经典</button>
+          <button
+            :class="['mode-btn', { active: inputMode === 'multi_expert_v1' }]"
+            @click="inputMode = 'multi_expert_v1'"
+          >多专家</button>
+        </div>
+        <button
+          class="btn-base btn-sm btn-gradient-purple"
+          :disabled="!inputSymbol.trim() || submitLoading"
+          @click="submitAnalysis"
+        >
+          {{ submitLoading ? '提交中...' : '开始分析' }}
+        </button>
+      </div>
+      <div v-if="submitError" class="error-box submit-error">{{ submitError }}</div>
+      <div v-if="submitStatusMsg" class="submit-status">{{ submitStatusMsg }}</div>
     </div>
+
+    <!-- ② 内联分析结果 -->
+    <div v-if="liveResult" class="live-result-panel">
+      <div class="live-result-header flex-row-center flex-center-between">
+        <div class="flex-row-center gap-sm">
+          <span class="stock-code">{{ liveResult.stock_code }}</span>
+          <span v-if="liveResult.stock_name" class="stock-name">{{ liveResult.stock_name }}</span>
+          <span :class="['mode-badge', modeClass(liveResult.analysis_mode)]">{{ modeLabel(liveResult.analysis_mode) }}</span>
+        </div>
+        <div class="flex-row-center gap-xs">
+          <button class="btn-base btn-sm btn-export-pdf" @click="exportToPdf(liveResult)">导出 PDF</button>
+          <button class="btn-base btn-sm btn-gradient-gray" @click="liveResult = null">清除</button>
+        </div>
+      </div>
+      <AnalysisDetailContent
+        :analysis="liveResult.analysis"
+        :analysis-mode="liveResult.analysis_mode"
+        layout="grid"
+        :show-mode="true"
+      />
+    </div>
+
+    <!-- ③ 历史记录（折叠） -->
+    <div class="history-section">
+      <div class="history-toggle-row flex-row-center flex-center-between">
+        <button class="history-toggle-btn" @click="historyExpanded = !historyExpanded">
+          📋 历史记录 <span class="toggle-arrow" :class="{ open: historyExpanded }">▾</span>
+        </button>
+        <button @click="loadHistory" :disabled="loading" class="btn-base btn-sm btn-gradient-purple">
+          {{ loading ? '加载中...' : '刷新' }}
+        </button>
+      </div>
+
+      <div v-show="historyExpanded">
 
     <div v-if="loading" class="loading">
       <div class="spinner"></div>
-      <p>正在加载AI分析回溯记录...</p>
+      <p>正在加载分析历史...</p>
     </div>
 
     <div v-if="error" class="error-box">
@@ -18,8 +78,7 @@
     </div>
 
     <div v-if="!loading && historyList.length === 0" class="empty">
-      <p>暂无AI分析回溯记录</p>
-      <p>去进行一次AI股票分析吧！</p>
+      <p>暂无历史记录</p>
     </div>
 
     <div v-if="historyList.length > 0" class="history-list">
@@ -72,6 +131,9 @@
         </div>
       </div>
     </div>
+
+      </div><!-- end v-show historyExpanded -->
+    </div><!-- end history-section -->
 
     <!-- 详情对话框 -->
     <div v-if="selectedItem" class="modal-overlay" @click="closeDetails">
@@ -263,6 +325,82 @@ const evaluationError = ref('')
 let evalPollTimer = null
 const deletingId = ref(null)
 const reanalysisLoading = ref(false)
+
+// 主输入区状态
+const inputSymbol = ref('')
+const inputMode = ref('multi_expert_v1')
+const submitLoading = ref(false)
+const submitError = ref('')
+const submitStatusMsg = ref('')
+const liveResult = ref(null)
+const historyExpanded = ref(false)
+let livePollTimer = null
+
+async function submitAnalysis() {
+  const sym = inputSymbol.value.trim()
+  if (!sym) return
+  clearInterval(livePollTimer)
+  submitLoading.value = true
+  submitError.value = ''
+  submitStatusMsg.value = ''
+  liveResult.value = null
+  const token = localStorage.getItem('access_token')
+  try {
+    const res = await axios.post(
+      '/api/analyze/deep-analysis',
+      { symbol: sym, priority: 30, analysis_mode: inputMode.value },
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    if (!res.data?.success) {
+      submitError.value = res.data?.message || '提交失败'
+      submitLoading.value = false
+      return
+    }
+    const taskId = res.data.task_id
+    const pos = res.data.position_in_queue
+    submitStatusMsg.value = `已提交，排队第 ${pos ?? '?'} 位，分析中…`
+    let tries = 0
+    livePollTimer = setInterval(async () => {
+      tries++
+      if (tries > 120) {
+        clearInterval(livePollTimer)
+        submitStatusMsg.value = '等待超时，请稍后在历史记录中查看'
+        submitLoading.value = false
+        return
+      }
+      try {
+        const poll = await axios.get(`/api/analyze/task/${taskId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const st = poll.data?.status
+        if (st === 'completed') {
+          clearInterval(livePollTimer)
+          submitStatusMsg.value = ''
+          submitLoading.value = false
+          const analysis = poll.data?.analysis || {}
+          const analysisMode = poll.data?.analysis_mode || analysis.analysis_mode || 'classic'
+          liveResult.value = {
+            stock_code: sym,
+            stock_name: analysis.stock_name || '',
+            analysis_mode: analysisMode,
+            analysis: { ...analysis, analysis_mode: analysisMode },
+            // 供 exportToPdf 使用
+            analysis_result: {},
+          }
+          loadHistory()
+        } else if (st === 'failed' || st === 'completed_with_parse_error') {
+          clearInterval(livePollTimer)
+          submitError.value = poll.data?.error || '分析失败'
+          submitStatusMsg.value = ''
+          submitLoading.value = false
+        }
+      } catch (_) { /* 继续轮询 */ }
+    }, 3000)
+  } catch (e) {
+    submitError.value = e.response?.data?.detail || e.message || '提交失败'
+    submitLoading.value = false
+  }
+}
 
 const accuracyLabels = { accurate: '准确', mixed: '部分准确', inaccurate: '不准确' }
 const reasoningLabels = { strong: '严谨', partial: '一般', weak: '较弱' }
@@ -881,7 +1019,54 @@ onMounted(loadHistory)
 
 <style scoped>
 .ai-analysis-history { background:#fff; padding:24px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.08); margin:20px 0; }
-.history-title { margin:0; font-size:22px; font-weight:700; color:#2c3e50; }
+.history-title { margin:0 0 16px; font-size:22px; font-weight:700; color:#2c3e50; }
+
+/* 主输入区 */
+.deep-input-panel { margin-bottom:20px; }
+.input-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.symbol-input {
+  flex:1; min-width:200px; max-width:340px;
+  padding:8px 14px; border-radius:8px;
+  border:1px solid #ced4da; font-size:15px;
+  outline:none; transition:.2s;
+}
+.symbol-input:focus { border-color:#764ba2; box-shadow:0 0 0 3px rgba(118,75,162,.12); }
+.mode-toggle { display:flex; gap:0; border:1px solid #ced4da; border-radius:8px; overflow:hidden; }
+.mode-btn {
+  padding:6px 14px; font-size:13px; font-weight:600;
+  border:none; background:#f8f9fa; color:#6c757d; cursor:pointer; transition:.15s;
+}
+.mode-btn.active { background:#764ba2; color:#fff; }
+.mode-btn:hover:not(.active) { background:#e9ecef; }
+.submit-error { margin-top:10px; }
+.submit-status {
+  margin-top:10px; padding:8px 14px; border-radius:8px;
+  background:rgba(99,102,241,.08); color:#4338ca;
+  font-size:13px; border:1px solid rgba(129,140,248,.25);
+}
+
+/* 内联结果区 */
+.live-result-panel {
+  margin-bottom:20px; border:1px solid rgba(118,75,162,.2);
+  border-radius:10px; overflow:hidden;
+}
+.live-result-header {
+  padding:12px 16px;
+  background:linear-gradient(135deg,rgba(102,126,234,.1) 0%,rgba(118,75,162,.1) 100%);
+  border-bottom:1px solid rgba(118,75,162,.15);
+}
+
+/* 历史折叠 */
+.history-section { margin-top:8px; }
+.history-toggle-row { margin-bottom:10px; }
+.history-toggle-btn {
+  background:none; border:none; cursor:pointer;
+  font-size:15px; font-weight:600; color:#495057;
+  padding:4px 0; display:flex; align-items:center; gap:6px;
+}
+.history-toggle-btn:hover { color:#764ba2; }
+.toggle-arrow { display:inline-block; transition:transform .2s; font-size:14px; }
+.toggle-arrow.open { transform:rotate(180deg); }
 .loading, .empty { text-align:center; padding:40px; }
 .spinner { width:32px; height:32px; border:3px solid #f3f3f3; border-top:3px solid #764ba2; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 16px; }
 @keyframes spin { 0%{ transform:rotate(0deg);} 100%{ transform:rotate(360deg);} }

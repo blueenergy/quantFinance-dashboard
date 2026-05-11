@@ -51,7 +51,7 @@ export const tabViewDefinitions = [
     component: AIAnalysisHistory,
     wrapperClass: 'history-view',
     fallbackClass: 'skeleton-table',
-    fallbackText: 'AI分析回溯加载中...',
+    fallbackText: '个股深度分析加载中...',
   },
   {
     id: 'admin',
@@ -84,7 +84,7 @@ export const tabViewDefinitions = [
     id: 'shenwan-index',
     component: ShenwanIndustryIndex,
     fallbackClass: 'skeleton-table',
-    fallbackText: '申万行业指数加载中...',
+    fallbackText: '申万行业研究加载中...',
   },
   {
     id: 'ranking',
