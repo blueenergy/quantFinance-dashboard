@@ -144,7 +144,7 @@ import UserAvatar from './components/UserAvatar.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
 import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
-import { computed, watch, onMounted, onUnmounted } from 'vue'
+import { computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getRenderableTabViews, getTabProps as buildTabProps, getTabListeners as buildTabListeners } from './utils/tabViews.js'
 import { useAppStartupFlow } from './composables/useAppStartupFlow.js'
 import { useHomeSummaries } from './composables/useHomeSummaries.js'
@@ -324,8 +324,13 @@ watch(
 )
 
 // 申万行业研究 → 个股深度分析 跨 Tab 跳转
-function onShenwanOpenDeepAnalysis () {
+async function onShenwanOpenDeepAnalysis (e) {
   switchTab('history')
+  // history tab may not be mounted yet; wait for nextTick + a frame so
+  // AIAnalysisHistory.vue has time to mount and register its listener
+  await nextTick()
+  await new Promise(r => requestAnimationFrame(r))
+  window.dispatchEvent(new CustomEvent('deep-analysis:set-symbol', { detail: e.detail }))
 }
 onMounted(() => {
   window.addEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)

@@ -1052,11 +1052,11 @@ function onShenwanOpenDeepAnalysis (e) {
 
 onMounted(() => {
   loadHistory()
-  window.addEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
+  window.addEventListener('deep-analysis:set-symbol', onShenwanOpenDeepAnalysis)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
+  window.removeEventListener('deep-analysis:set-symbol', onShenwanOpenDeepAnalysis)
   clearInterval(livePollTimer)
   clearInterval(evalPollTimer)
 })
