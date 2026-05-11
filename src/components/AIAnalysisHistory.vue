@@ -32,6 +32,30 @@
       <div v-if="submitError" class="error-box submit-error">{{ submitError }}</div>
       <div v-if="submitStatusMsg" class="submit-status">{{ submitStatusMsg }}</div>
 
+      <!-- 申万行业归属面包屑 -->
+      <div v-if="stockIndustry" class="industry-crumb">
+        <span class="crumb-label">申万行业：</span>
+        <span
+          class="crumb-item crumb-l1"
+          :title="'点击前往申万行业研究：' + stockIndustry.l1_name"
+          @click="goToIndustry(stockIndustry.l1_code)"
+        >{{ stockIndustry.l1_name }}</span>
+        <span v-if="stockIndustry.l2_name" class="crumb-sep">›</span>
+        <span
+          v-if="stockIndustry.l2_name"
+          class="crumb-item crumb-l2"
+          :title="'点击前往申万行业研究：' + stockIndustry.l2_name"
+          @click="goToIndustry(stockIndustry.l2_code)"
+        >{{ stockIndustry.l2_name }}</span>
+        <span v-if="stockIndustry.l3_name" class="crumb-sep">›</span>
+        <span
+          v-if="stockIndustry.l3_name"
+          class="crumb-item crumb-l3"
+          :title="'点击前往申万行业研究：' + stockIndustry.l3_name"
+          @click="goToIndustry(stockIndustry.l3_code)"
+        >{{ stockIndustry.l3_name }}</span>
+      </div>
+
       <!-- 该股历史分析记录 -->
       <div v-if="recentForInput.length" class="symbol-history-preview">
         <p class="symbol-history-label">该股历史分析（{{ recentForInput.length }} 条）</p>
@@ -330,7 +354,7 @@
   </div>
 </template>
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import AnalysisDetailContent from './AnalysisDetailContent.vue'
 
@@ -374,6 +398,42 @@ const recentForInput = computed(() => {
     })
     .slice(0, 8)
 })
+
+// 申万行业归属
+const stockIndustry = ref(null)   // { l1_code, l1_name, l2_code, l2_name, l3_code, l3_name }
+let industryDebounceTimer = null
+
+async function fetchStockIndustry (sym) {
+  if (!sym || sym.length < 4) { stockIndustry.value = null; return }
+  const token = localStorage.getItem('access_token')
+  try {
+    const res = await axios.get('/api/shenwan-index/stock-industry', {
+      params: { symbol: sym },
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    stockIndustry.value = res.data?.success ? res.data : null
+  } catch (_) {
+    stockIndustry.value = null
+  }
+}
+
+watch(inputSymbol, (val) => {
+  clearTimeout(industryDebounceTimer)
+  const sym = val.trim()
+  if (!sym) { stockIndustry.value = null; return }
+  industryDebounceTimer = setTimeout(() => fetchStockIndustry(sym), 600)
+})
+
+function goToIndustry (code) {
+  if (!code || !stockIndustry.value) return
+  window.dispatchEvent(new CustomEvent('shenwan:select-industry', {
+    detail: {
+      index_code: code,
+      l1_code: stockIndustry.value.l1_code,
+      l2_code: stockIndustry.value.l2_code,
+    },
+  }))
+}
 
 async function submitAnalysis() {
   const sym = inputSymbol.value.trim()
@@ -1128,6 +1188,33 @@ if (typeof window !== 'undefined') {
 .symbol-history-time { font-size:12px; color:#9ca3af; min-width:120px; flex-shrink:0; }
 .symbol-history-name { font-size:13px; font-weight:700; color:#2c3e50; min-width:56px; flex-shrink:0; }
 .symbol-history-code { font-size:12px; font-weight:400; color:#9ca3af; margin-left:5px; }
+
+/* 申万行业面包屑 */
+.industry-crumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 7px 12px;
+  background: rgba(118,75,162,.06);
+  border: 1px solid rgba(118,75,162,.18);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.crumb-label { color: #9ca3af; flex-shrink: 0; }
+.crumb-sep { color: #c4b5fd; font-size: 12px; }
+.crumb-item {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-weight: 600;
+  transition: .15s;
+}
+.crumb-l1 { color: #4f46e5; background: rgba(99,102,241,.1); }
+.crumb-l2 { color: #0891b2; background: rgba(6,182,212,.1); }
+.crumb-l3 { color: #059669; background: rgba(5,150,105,.1); }
+.crumb-item:hover { filter: brightness(1.2); }
 
 /* 内联结果区 */
 .live-result-panel {
