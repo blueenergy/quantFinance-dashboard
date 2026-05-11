@@ -332,11 +332,21 @@ async function onShenwanOpenDeepAnalysis (e) {
   await new Promise(r => requestAnimationFrame(r))
   window.dispatchEvent(new CustomEvent('deep-analysis:set-symbol', { detail: e.detail }))
 }
+
+async function onShenwanSelectIndustry (e) {
+  switchTab('shenwan-index')
+  // wait for ShenwanIndustryIndex to mount before forwarding (same pattern as deep-analysis)
+  await nextTick()
+  await new Promise(r => requestAnimationFrame(r))
+  window.dispatchEvent(new CustomEvent('shenwan:navigate-to-industry', { detail: e.detail }))
+}
 onMounted(() => {
   window.addEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
+  window.addEventListener('shenwan:select-industry', onShenwanSelectIndustry)
 })
 onUnmounted(() => {
   window.removeEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
+  window.removeEventListener('shenwan:select-industry', onShenwanSelectIndustry)
 })
 </script>
 

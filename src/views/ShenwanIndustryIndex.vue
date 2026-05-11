@@ -555,9 +555,11 @@ onMounted(() => {
   endD.value = ed
   startD.value = sd
   loadL1()
+  window.addEventListener('shenwan:navigate-to-industry', onNavigateToIndustry)
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('shenwan:navigate-to-industry', onNavigateToIndustry)
   if (ro && chartBoxRef.value) {
     try { ro.unobserve(chartBoxRef.value) } catch (e) { /* */ }
   }
@@ -565,6 +567,60 @@ onBeforeUnmount(() => {
   disposeChart()
   disposePepb()
 })
+
+// 等待某个 loading ref 变为 false
+function waitDone (loadingRef) {
+  return new Promise(r => {
+    if (!loadingRef.value) { r(); return }
+    const t = setInterval(() => { if (!loadingRef.value) { clearInterval(t); r() } }, 80)
+  })
+}
+
+// 跳转并自动选中行业节点
+async function onNavigateToIndustry (e) {
+  const code = e?.detail?.index_code
+  if (!code) return
+
+  // — 等 L1 列表加载完成 —
+  await waitDone(l1Loading)
+
+  // 用事件携带的 l1_code 定位 L1；若直接点击 L1 则 l1_code === code
+  const targetL1Code = e.detail?.l1_code || code
+  const l1Match = l1List.value.find(it => it.index_code === targetL1Code)
+  if (!l1Match) return
+
+  if (selectedL1.value?.index_code !== l1Match.index_code) {
+    onPickL1(l1Match)
+    await nextTick()
+    await waitDone(l2Loading)
+  } else {
+    // 已选中但 L2 可能仍在加载
+    await waitDone(l2Loading)
+  }
+
+  // 如果目标就是 L1，完成
+  if (l1Match.index_code === code) return
+
+  // 用事件携带的 l2_code 定位 L2；若直接点击 L2 则 l2_code === code
+  const targetL2Code = e.detail?.l2_code || code
+  const l2Match = l2List.value.find(it => it.index_code === targetL2Code)
+  if (!l2Match) return
+
+  if (selectedL2.value?.index_code !== l2Match.index_code) {
+    onPickL2(l2Match)
+    await nextTick()
+    await waitDone(l3Loading)
+  } else {
+    await waitDone(l3Loading)
+  }
+
+  // 如果目标就是 L2，完成
+  if (l2Match.index_code === code) return
+
+  // 用原始 code 定位 L3
+  const l3Match = l3List.value.find(it => it.index_code === code)
+  if (l3Match) onPickL3(l3Match)
+}
 </script>
 
 <style scoped>
