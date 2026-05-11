@@ -107,36 +107,106 @@
 
         <!-- 成分股列表 -->
         <div class="member-section">
-          <h4 class="section-title">
-            成分股
-            <span v-if="memberList.length" class="member-count">{{ memberList.length }} 只</span>
-          </h4>
+          <div class="member-section-header">
+            <h4 class="section-title">
+              成分股
+              <span v-if="memberList.length" class="member-count">{{ memberList.length }} 只</span>
+            </h4>
+            <div v-if="memberList.length" class="member-sort-btns">
+              <button :class="{ on: memberSort === 'default' }" @click="memberSort = 'default'">代码</button>
+              <button :class="{ on: memberSort === 'mv' }" @click="memberSort = 'mv'">市值↓</button>
+            </div>
+          </div>
           <div v-if="memberLoading" class="muted">加载成分股…</div>
           <div v-else-if="memberError" class="err-msg">{{ memberError }}</div>
           <div v-else-if="!klineIndexCode" class="muted">请先选择行业</div>
           <div v-else-if="memberList.length === 0" class="muted">暂无成分股数据</div>
           <div v-else class="member-grid">
             <div
-              v-for="m in memberList"
+              v-for="m in sortedMemberList"
               :key="m.con_code"
               class="member-chip"
-              :title="'点击前往个股深度分析：' + m.name"
               @click="openDeepAnalysis(m)"
+              @mouseenter="onChipEnter($event, m)"
+              @mouseleave="onChipLeave"
             >
               <span class="member-name">{{ m.name }}</span>
               <span class="member-code">{{ m.con_code }}</span>
             </div>
           </div>
         </div>
+
+        <!-- AI 行业分析 -->
+        <div v-if="klineIndexCode" class="industry-analysis-section">
+          <div class="industry-analysis-header">
+            <h4 class="section-title">AI 行业研究</h4>
+            <button
+              class="btn-analyze"
+              :disabled="industryAnalysisLoading"
+              @click="submitIndustryAnalysis"
+            >
+              {{ industryAnalysisLoading ? '分析中…' : industryAnalysisResult ? '重新分析' : '开始分析' }}
+            </button>
+            <span v-if="industryAnalysisAgeText && !industryAnalysisLoading" class="ia-age">{{ industryAnalysisAgeText }}</span>
+          </div>
+          <div v-if="industryAnalysisStatus === 'processing' || (industryAnalysisLoading && industryAnalysisStatus === 'pending')" class="muted ia-status">
+            正在生成行业分析报告，请稍候…
+          </div>
+          <div v-if="industryAnalysisError" class="err-msg">{{ industryAnalysisError }}</div>
+          <AnalysisDetailContent
+            v-if="industryAnalysisResult && !industryAnalysisLoading"
+            :analysis="industryAnalysisResult"
+            analysis-mode="industry_v1"
+            mode="industry"
+            layout="stacked"
+          />
+        </div>
       </section>
     </div>
   </div>
+
+  <Teleport to="body">
+    <div
+      v-if="tooltip.visible"
+      class="member-tooltip"
+      :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px' }"
+      @mouseenter="onTipEnter"
+      @mouseleave="onTipLeave"
+    >
+      <div class="mt-header">
+        <span class="mt-name">{{ tooltip.member?.name }}</span>
+        <span class="mt-code">{{ tooltip.member?.con_code }}</span>
+        <button class="mt-close" @click.stop="closeTooltip">×</button>
+      </div>
+      <div v-if="tooltip.member?.l1_name" class="mt-industry">
+        {{ tooltip.member.l1_name }}
+        <template v-if="tooltip.member.l2_name"> › {{ tooltip.member.l2_name }}</template>
+        <template v-if="tooltip.member.l3_name"> › {{ tooltip.member.l3_name }}</template>
+      </div>
+      <div class="mt-body">
+        <div class="mt-row">
+          <span class="mt-label">总市值</span>
+          <span class="mt-val">{{ tooltip.member?.total_mv != null ? (tooltip.member.total_mv / 10000).toFixed(0) + ' 亿' : '—' }}</span>
+        </div>
+        <div class="mt-row">
+          <span class="mt-label">PE(TTM)</span>
+          <span class="mt-val">{{ tooltip.member?.pe_ttm != null ? Number(tooltip.member.pe_ttm).toFixed(1) : '—' }}</span>
+        </div>
+        <div class="mt-row">
+          <span class="mt-label">PB</span>
+          <span class="mt-val">{{ tooltip.member?.pb != null ? Number(tooltip.member.pb).toFixed(2) : '—' }}</span>
+        </div>
+      </div>
+      <button class="mt-goto" @click.stop="openDeepAnalysis(tooltip.member); closeTooltip()">前往个股分析 →</button>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, reactive } from 'vue'
 import axios from 'axios'
 import { buildShenwanKlineOption } from '../utils/echarts/shenwanKlineOption.js'
+import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
 
 const SRC = 'SW2021'
 const klineLimit = 800
@@ -145,6 +215,23 @@ const klineLimit = 800
 const memberList = ref([])
 const memberLoading = ref(false)
 const memberError = ref('')
+const memberSort = ref('mv')
+
+const sortedMemberList = computed(() => {
+  const arr = [...memberList.value]
+  if (memberSort.value === 'mv') {
+    arr.sort((a, b) => {
+      const av = a.total_mv != null ? Number(a.total_mv) : null
+      const bv = b.total_mv != null ? Number(b.total_mv) : null
+      if (av === null && bv === null) return 0
+      if (av === null) return 1
+      if (bv === null) return -1
+      return bv - av
+    })
+  }
+  // 'default': 保持后端返回的默认顺序（con_code 升序）
+  return arr
+})
 
 async function loadMembers (indexCode) {
   if (!indexCode) { memberList.value = []; return }
@@ -172,6 +259,125 @@ function openDeepAnalysis (member) {
     detail: { symbol, name: member.name || '' },
   }))
 }
+
+// ── 成分股 Tooltip ────────────────────────────────────────────────────────
+const tooltip = reactive({ visible: false, x: 0, y: 0, member: null })
+let _tipLeaveTimer = null
+
+function onChipEnter (e, member) {
+  clearTimeout(_tipLeaveTimer)
+  const rect = e.currentTarget.getBoundingClientRect()
+  // 弹窗宽 240px，优先向右，贴近屏幕边时向左
+  const x = rect.right + 8 + 240 > window.innerWidth
+    ? rect.left - 248
+    : rect.right + 8
+  const y = Math.min(rect.top, window.innerHeight - 220)
+  tooltip.x = Math.round(x)
+  tooltip.y = Math.round(y)
+  tooltip.member = member
+  tooltip.visible = true
+}
+
+function onChipLeave () {
+  _tipLeaveTimer = setTimeout(() => { tooltip.visible = false }, 150)
+}
+
+function onTipEnter () { clearTimeout(_tipLeaveTimer) }
+function onTipLeave () { _tipLeaveTimer = setTimeout(() => { tooltip.visible = false }, 150) }
+function closeTooltip () { tooltip.visible = false }
+
+// ── AI 行业分析 ───────────────────────────────────────────────────────────
+const industryAnalysisResult = ref(null)
+const industryAnalysisLoading = ref(false)
+const industryAnalysisError = ref('')
+const industryAnalysisStatus = ref('')  // pending / processing / completed / failed
+const industryAnalysisCreatedAt = ref(null)  // ISO string from server
+let industryPollTimer = null
+let industryPollCount = 0
+
+const industryAnalysisAgeText = computed(() => {
+  const ts = industryAnalysisCreatedAt.value
+  if (!ts) return ''
+  const diff = Date.now() - new Date(ts).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins} 分钟前`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} 小时前`
+  const days = Math.floor(hrs / 24)
+  return `${days} 天前`
+})
+
+async function loadLatestIndustryAnalysis (indexCode) {
+  if (!indexCode) return
+  try {
+    const token = localStorage.getItem('access_token')
+    const { data } = await axios.get('/api/shenwan-index/industry-analysis/latest', {
+      params: { index_code: indexCode },
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (data?.success && data.analysis) {
+      industryAnalysisResult.value = { ...data.analysis, _index_code: indexCode }
+      industryAnalysisStatus.value = 'completed'
+      industryAnalysisCreatedAt.value = data.created_at || null
+    }
+  } catch (_) { /* no prior result is normal */ }
+}
+
+async function submitIndustryAnalysis () {
+  const code = klineIndexCode.value
+  if (!code || industryAnalysisLoading.value) return
+  industryAnalysisLoading.value = true
+  industryAnalysisError.value = ''
+  industryAnalysisStatus.value = 'pending'
+  industryAnalysisResult.value = null
+  industryPollCount = 0
+  clearInterval(industryPollTimer)
+  try {
+    const token = localStorage.getItem('access_token')
+    const { data } = await axios.post('/api/shenwan-index/industry-analysis',
+      { index_code: code },
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    if (!data?.task_id) throw new Error('未返回 task_id')
+    const taskId = data.task_id
+    industryPollTimer = setInterval(async () => {
+      industryPollCount++
+      if (industryPollCount > 120) {
+        clearInterval(industryPollTimer)
+        industryAnalysisLoading.value = false
+        industryAnalysisError.value = '分析超时，请稍后重试'
+        industryAnalysisStatus.value = 'failed'
+        return
+      }
+      try {
+        const { data: td } = await axios.get(`/api/analyze/task/${taskId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (td.status === 'completed') {
+          clearInterval(industryPollTimer)
+          industryAnalysisLoading.value = false
+          industryAnalysisStatus.value = 'completed'
+          industryAnalysisResult.value = { ...(td.analysis || {}), _index_code: code }
+          industryAnalysisCreatedAt.value = td.task_meta?.completed_at || null
+        } else if (td.status === 'failed' || td.status === 'completed_with_parse_error') {
+          clearInterval(industryPollTimer)
+          industryAnalysisLoading.value = false
+          industryAnalysisStatus.value = 'failed'
+          industryAnalysisError.value = td.error || '分析失败'
+        } else {
+          industryAnalysisStatus.value = 'processing'
+        }
+      } catch (_) { /* poll errors are transient */ }
+    }, 3000)
+  } catch (e) {
+    industryAnalysisLoading.value = false
+    industryAnalysisStatus.value = 'failed'
+    industryAnalysisError.value = e?.response?.data?.detail || e.message || '提交失败'
+  }
+}
+
+onBeforeUnmount(() => { clearInterval(industryPollTimer) })
 
 // ── PE/PB 图 ───────────────────────────────────────────────────────────────
 const pepbBoxRef = ref(null)
@@ -533,6 +739,17 @@ function onPickL3 (it) {
   clearKlineState()
 }
 
+// auto-load latest industry analysis when user selects an industry
+watch(klineIndexCode, (newCode) => {
+  if (newCode !== (industryAnalysisResult.value?._index_code)) {
+    industryAnalysisResult.value = null
+    industryAnalysisError.value = ''
+    industryAnalysisStatus.value = ''
+    industryAnalysisCreatedAt.value = null
+    loadLatestIndustryAnalysis(newCode)
+  }
+})
+
 watch([klineIndexCode, tf, startD, endD], () => {
   if (klineIndexCode.value) {
     reloadKline()
@@ -719,6 +936,16 @@ async function onNavigateToIndustry (e) {
 
 /* 成分股 */
 .member-section { margin-top: 1rem; }
+.member-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.member-section-header .section-title { margin: 0; }
+
 .member-count { font-size: 11px; font-weight: 400; color: #666; margin-left: 6px; }
 .member-grid {
   display: flex;
@@ -740,6 +967,100 @@ async function onNavigateToIndustry (e) {
   min-width: 96px;
 }
 .member-chip:hover { background: #1e3a5f; border-color: #42a5f5; }
+.member-sort-btns { display: flex; gap: 4px; }
+.member-sort-btns button {
+  padding: 3px 10px;
+  font-size: 11px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #1a1a2e;
+  color: #aaa;
+  cursor: pointer;
+  transition: .15s;
+}
+.member-sort-btns button.on,
+.member-sort-btns button:hover { background: #1e3a5f; border-color: #42a5f5; color: #e0e0e0; }
 .member-name { font-size: 12px; color: #e0e0e0; font-weight: 600; white-space: nowrap; }
 .member-code { font-size: 10px; color: #888; margin-top: 1px; }
+
+/* AI 行业分析区 */
+.industry-analysis-section {
+  margin-top: 1.5rem;
+  background: #fff;
+  color: #1a1a1a;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  padding: 20px 24px;
+}
+.industry-analysis-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.industry-analysis-header .section-title { margin: 0; color: #2c3e50; }
+.btn-analyze {
+  padding: 5px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  transition: .15s;
+}
+.btn-analyze:hover:not(:disabled) { filter: brightness(1.15); }
+.btn-analyze:disabled { opacity: .5; cursor: not-allowed; }
+.ia-status { margin-bottom: 8px; font-size: 13px; color: #555; }
+.ia-age { font-size: 12px; color: #888; margin-left: 4px; }
+
+/* chip 文字色在白底下的可读性修正（原色为暗底设计） */
+.industry-analysis-section :deep(.analysis-chip--hold)     { color: #92400e; }
+.industry-analysis-section :deep(.analysis-chip--na),
+.industry-analysis-section :deep(.analysis-chip--risk-na)  { color: #475569; }
+.industry-analysis-section :deep(.analysis-chip--risk-medium) { color: #92400e; }
+.industry-analysis-section :deep(.expert-review-chip--cycle)       { color: #7c3aed; }
+.industry-analysis-section :deep(.expert-review-chip--fundamental) { color: #1d4ed8; }
+.industry-analysis-section :deep(.expert-review-chip--growth)      { color: #166534; }
+.industry-analysis-section :deep(.expert-review-chip--technical)   { color: #92400e; }
+.industry-analysis-section :deep(.expert-review-chip--risk)        { color: #991b1b; }
+
+/* ── 成分股 Tooltip ──────────────────────────────────────────────────────── */
+.member-tooltip {
+  position: fixed;
+  z-index: 9999;
+  width: 240px;
+  background: #1e2130;
+  border: 1px solid #3a3f5c;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.55);
+  padding: 12px 14px 10px;
+  pointer-events: auto;
+  font-size: 13px;
+  color: #e0e0e0;
+}
+.mt-header { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+.mt-name { font-weight: 700; font-size: 14px; flex: 1; }
+.mt-code { font-size: 11px; color: #888; }
+.mt-close {
+  margin-left: auto;
+  background: none; border: none;
+  color: #666; font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px;
+}
+.mt-close:hover { color: #e0e0e0; }
+.mt-industry {
+  font-size: 11px; color: #7b8ab8; margin-bottom: 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mt-body { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.mt-row { display: flex; justify-content: space-between; }
+.mt-label { color: #8892b0; }
+.mt-val { font-weight: 600; color: #cdd6f4; }
+.mt-goto {
+  width: 100%; padding: 5px 0; font-size: 12px;
+  border: 1px solid #4a6fa5; border-radius: 6px;
+  background: transparent; color: #7eb3f5; cursor: pointer; transition: .15s;
+}
+.mt-goto:hover { background: #1e3a5f; color: #e0e0e0; }
 </style>

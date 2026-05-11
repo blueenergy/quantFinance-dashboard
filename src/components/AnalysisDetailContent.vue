@@ -108,7 +108,7 @@
 
     <div class="analysis-summary-row">
       <div class="analysis-summary-item">
-        <span class="analysis-summary-label">投资建议</span>
+        <span class="analysis-summary-label">{{ isIndustry ? '配置建议' : '投资建议' }}</span>
         <span :class="['analysis-chip', `analysis-chip--${investmentAdvice}`]">
           {{ investmentAdviceText }}
         </span>
@@ -151,13 +151,19 @@ const props = defineProps({
   emptyText: {
     type: String,
     default: '暂无'
+  },
+  mode: {
+    type: String,
+    default: 'stock'  // 'stock' | 'industry'
   }
 })
 
 const adviceLabels = { buy: '买入', hold: '持有', sell: '卖出' }
 const riskLabels = { low: '低风险', medium: '中风险', high: '高风险' }
+const industryAdviceLabels = { buy: '超配', hold: '中性', sell: '低配' }
 
 const analysis = computed(() => props.analysis || {})
+const isIndustry = computed(() => props.mode === 'industry')
 const investmentAdvice = computed(() => analysis.value.investment_advice || 'na')
 const riskLevel = computed(() => analysis.value.risk_level || 'na')
 const supportLevel = computed(() => analysis.value.support_level ?? props.emptyText)
@@ -176,15 +182,19 @@ const financialChartData = computed(() => {
 })
 
 const expertLabelMap = {
-  fundamental: { title: '基本面专家',   shortLabel: '基本面' },
-  technical:   { title: '技术面专家',   shortLabel: '技术面' },
-  risk:        { title: '风险专家',     shortLabel: '风险' },
-  growth:      { title: '成长性专家',   shortLabel: '成长性' },
-  cycle:       { title: '行业周期专家', shortLabel: '行业周期' },
+  fundamental:      { title: '基本面专家',         shortLabel: '基本面' },
+  technical:        { title: '技术面专家',         shortLabel: '技术面' },
+  risk:             { title: '风险专家',           shortLabel: '风险' },
+  growth:           { title: '成长性专家',         shortLabel: '成长性' },
+  cycle:            { title: '行业周期专家',       shortLabel: '行业周期' },
+  industry_report:  { title: '行业研究报告（原文）', shortLabel: '行业研究' },
 }
 const EXPERT_ORDER = ['cycle', 'fundamental', 'growth', 'technical', 'risk']
 
-const investmentAdviceText = computed(() => adviceLabels[investmentAdvice.value] || analysis.value.investment_advice || props.emptyText)
+const investmentAdviceText = computed(() => {
+  const labels = isIndustry.value ? industryAdviceLabels : adviceLabels
+  return labels[investmentAdvice.value] || analysis.value.investment_advice || props.emptyText
+})
 const riskLevelText = computed(() => riskLabels[riskLevel.value] || analysis.value.risk_level || props.emptyText)
 const confidenceText = computed(() => {
   const score = analysis.value.confidence_score
@@ -219,62 +229,118 @@ const expertReports = computed(() => {
     .filter(Boolean)
 })
 
-const detailFields = computed(() => [
-  {
-    key: 'growth_assessment',
-    title: '成长性判断',
-    value: analysis.value.growth_assessment || props.emptyText,
-  },
-  {
-    key: 'cycle_assessment',
-    title: '行业周期判断',
-    value: analysis.value.industry_cycle_assessment || props.emptyText,
-  },
-  {
-    key: 'qtag',
-    title: '量化快照标记',
-    value: analysis.value.quant_score_snapshot_tag || props.emptyText,
-  },
-  {
-    key: 'qcross',
-    title: '分数与叙述对照',
-    value: analysis.value.quant_score_cross_check || props.emptyText,
-    wide: true,
-  },
-  {
-    key: 'technical',
-    title: '技术分析',
-    value: analysis.value.technical_analysis || props.emptyText,
-    wide: true,
-  },
-  {
-    key: 'long',
-    title: '长期预测',
-    value: analysis.value.long_term_forecast || props.emptyText,
-  },
-  {
-    key: 'mid',
-    title: '中期预测',
-    value: analysis.value.mid_term_forecast || props.emptyText,
-  },
-  {
-    key: 'short',
-    title: '短期预测',
-    value: analysis.value.short_term_forecast || props.emptyText,
-  },
-  {
-    key: 'levels',
-    title: '关键价位',
-    type: 'levels',
-  },
-  {
-    key: 'points',
-    title: '关键要点',
-    type: 'list',
-    value: analysis.value.key_points,
-    wide: true,
-  },
-])
+const detailFields = computed(() => {
+  if (isIndustry.value) {
+    return [
+      {
+        key: 'cycle_assessment',
+        title: '行业周期判断',
+        value: analysis.value.industry_cycle_assessment || props.emptyText,
+        wide: true,
+      },
+      {
+        key: 'valuation_assessment',
+        title: '估值分析',
+        value: analysis.value.valuation_assessment || props.emptyText,
+        wide: true,
+      },
+      {
+        key: 'momentum_assessment',
+        title: '动量分析',
+        value: analysis.value.momentum_assessment || props.emptyText,
+      },
+      {
+        key: 'member_financials_assessment',
+        title: '成分股财务概况',
+        value: analysis.value.member_financials_assessment || props.emptyText,
+        wide: true,
+      },
+      {
+        key: 'top_stocks_note',
+        title: '龙头标的',
+        value: analysis.value.top_stocks_note || props.emptyText,
+      },
+      {
+        key: 'long',
+        title: '长期展望',
+        value: analysis.value.long_term_forecast || props.emptyText,
+      },
+      {
+        key: 'mid',
+        title: '中期展望',
+        value: analysis.value.mid_term_forecast || props.emptyText,
+      },
+      {
+        key: 'short',
+        title: '短期展望',
+        value: analysis.value.short_term_forecast || props.emptyText,
+      },
+      {
+        key: 'points',
+        title: '关键要点',
+        type: 'list',
+        value: analysis.value.key_points,
+        wide: true,
+      },
+    ]
+  }
+  return [
+    {
+      key: 'growth_assessment',
+      title: '成长性判断',
+      value: analysis.value.growth_assessment || props.emptyText,
+    },
+    {
+      key: 'cycle_assessment',
+      title: '行业周期判断',
+      value: analysis.value.industry_cycle_assessment || props.emptyText,
+    },
+    {
+      key: 'qtag',
+      title: '量化快照标记',
+      value: analysis.value.quant_score_snapshot_tag || props.emptyText,
+    },
+    {
+      key: 'qcross',
+      title: '分数与叙述对照',
+      value: analysis.value.quant_score_cross_check || props.emptyText,
+      wide: true,
+    },
+    {
+      key: 'technical',
+      title: '技术分析',
+      value: analysis.value.technical_analysis || props.emptyText,
+      wide: true,
+    },
+    {
+      key: 'long',
+      title: '长期预测',
+      value: analysis.value.long_term_forecast || props.emptyText,
+    },
+    {
+      key: 'mid',
+      title: '中期预测',
+      value: analysis.value.mid_term_forecast || props.emptyText,
+    },
+    {
+      key: 'short',
+      title: '短期预测',
+      value: analysis.value.short_term_forecast || props.emptyText,
+    },
+    {
+      key: 'levels',
+      title: '关键价位',
+      type: 'levels',
+    },
+    {
+      key: 'points',
+      title: '关键要点',
+      type: 'list',
+      value: analysis.value.key_points,
+      wide: true,
+    },
+  ]
+})
 
 function modeLabel(mode) {
   return mode === 'multi_expert_v1' ? '多专家' : '经典'
