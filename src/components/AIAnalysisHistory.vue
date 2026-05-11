@@ -31,6 +31,33 @@
       </div>
       <div v-if="submitError" class="error-box submit-error">{{ submitError }}</div>
       <div v-if="submitStatusMsg" class="submit-status">{{ submitStatusMsg }}</div>
+
+      <!-- 该股历史分析记录 -->
+      <div v-if="recentForInput.length" class="symbol-history-preview">
+        <p class="symbol-history-label">该股历史分析（{{ recentForInput.length }} 条）</p>
+        <div class="symbol-history-list">
+          <div
+            v-for="item in recentForInput"
+            :key="item.id"
+            class="symbol-history-row"
+            @click="viewDetails(item)"
+          >
+            <span class="symbol-history-name">{{ item.stock_name || item.stock_code }}<span class="symbol-history-code">{{ item.stock_code }}</span></span>
+            <time class="symbol-history-time">{{ formatTime(item.created_at) }}</time>
+            <span :class="['mode-badge', modeClass(item.analysis_mode)]">{{ modeLabel(item.analysis_mode) }}</span>
+            <span class="tag" :class="'tag-' + (item.analysis?.investment_advice || 'na')">
+              {{ adviceLabels[item.analysis?.investment_advice] || item.analysis?.investment_advice || '—' }}
+            </span>
+            <span class="tag" :class="'tag-risk-' + (item.analysis?.risk_level || 'na')">
+              {{ riskLabels[item.analysis?.risk_level] || item.analysis?.risk_level || '—' }}
+            </span>
+            <span
+              v-if="evalBadges[item.id]"
+              :class="['eval-list-badge', evalBadges[item.id].outcome_accuracy]"
+            >{{ accuracyLabel(evalBadges[item.id].outcome_accuracy) }}</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ② 内联分析结果 -->
@@ -303,7 +330,7 @@
   </div>
 </template>
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import AnalysisDetailContent from './AnalysisDetailContent.vue'
 
@@ -335,6 +362,18 @@ const submitStatusMsg = ref('')
 const liveResult = ref(null)
 const historyExpanded = ref(false)
 let livePollTimer = null
+
+// 输入框匹配的历史记录（最多 8 条，最新优先）
+const recentForInput = computed(() => {
+  const sym = inputSymbol.value.trim().toUpperCase().replace(/\.(SH|SZ|BJ)$/i, '')
+  if (!sym) return []
+  return historyList.value
+    .filter(item => {
+      const code = (item.stock_code || '').toUpperCase().replace(/\.(SH|SZ|BJ)$/i, '')
+      return code === sym || code.startsWith(sym)
+    })
+    .slice(0, 8)
+})
 
 async function submitAnalysis() {
   const sym = inputSymbol.value.trim()
@@ -1044,6 +1083,39 @@ onMounted(loadHistory)
   background:rgba(99,102,241,.08); color:#4338ca;
   font-size:13px; border:1px solid rgba(129,140,248,.25);
 }
+
+/* 该股历史预览 */
+.symbol-history-preview {
+  margin-top:14px;
+  border:1px solid rgba(118,75,162,.15);
+  border-radius:8px;
+  overflow:hidden;
+}
+.symbol-history-label {
+  margin:0;
+  padding:6px 14px;
+  font-size:12px;
+  font-weight:600;
+  color:#6b7280;
+  background:rgba(118,75,162,.05);
+  border-bottom:1px solid rgba(118,75,162,.1);
+}
+.symbol-history-list { display:flex; flex-direction:column; }
+.symbol-history-row {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:7px 14px;
+  cursor:pointer;
+  transition:.15s;
+  border-bottom:1px solid #f1f3f5;
+  flex-wrap:wrap;
+}
+.symbol-history-row:last-child { border-bottom:none; }
+.symbol-history-row:hover { background:rgba(118,75,162,.06); }
+.symbol-history-time { font-size:12px; color:#9ca3af; min-width:120px; flex-shrink:0; }
+.symbol-history-name { font-size:13px; font-weight:700; color:#2c3e50; min-width:56px; flex-shrink:0; }
+.symbol-history-code { font-size:12px; font-weight:400; color:#9ca3af; margin-left:5px; }
 
 /* 内联结果区 */
 .live-result-panel {
