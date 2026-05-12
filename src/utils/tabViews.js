@@ -27,6 +27,7 @@ const XInfluencerVoicesPanel = defineAsyncComponent(() => import('../views/XInfl
 const ThemeLagRecommendPanel = defineAsyncComponent(() => import('../components/ThemeLagRecommendPanel.vue'))
 const SectorConceptAnalysis = defineAsyncComponent(() => import('../components/SectorConceptAnalysis.vue'))
 const HotStockAnalysis = defineAsyncComponent(() => import('../components/HotStockAnalysis.vue'))
+const KLineComparison = defineAsyncComponent(() => import('../views/KLineComparison.vue'))
 const EarningsHunter = defineAsyncComponent(() => import('../views/EarningsHunter.vue'))
 const ShenwanIndustryIndex = defineAsyncComponent(() => import('../views/ShenwanIndustryIndex.vue'))
 const ChatPanel = defineAsyncComponent(() => import('../components/ChatPanel.vue'))
@@ -218,6 +219,12 @@ export const tabViewDefinitions = [
     component: HotStockAnalysis,
     fallbackClass: 'skeleton-table',
     fallbackText: '热股分析加载中...',
+  },
+  {
+    id: 'kline-comparison',
+    component: KLineComparison,
+    fallbackClass: 'skeleton-chart',
+    fallbackText: '走势对比加载中...',
   },
 ]
 

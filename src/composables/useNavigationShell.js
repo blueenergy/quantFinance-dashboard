@@ -118,6 +118,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'securities', name: '账户工作台' },
       { id: 'user-profile', name: '用户配置' },
       { id: 'chat', name: '🤖 AI助手' },
+      { id: 'kline-comparison', name: '📈 走势对比' },
     ]
 
     if (user.value?.is_admin) {
