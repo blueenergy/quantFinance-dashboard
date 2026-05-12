@@ -160,8 +160,8 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
       xAxis: [xAxis0(times), xAxisH(times, 1), xAxisSubBottom(times, 2)],
       yAxis: [
         ...yMain,
-        { type: 'value', name: '量(手)', nameTextStyle: { color: '#888' }, scale: true, gridIndex: 1, splitLine: { show: true, lineStyle: { color: '#2a2a2a' } } },
-        { type: 'value', name: '额(亿)', nameTextStyle: { color: '#888' }, scale: true, gridIndex: 2, splitLine: { show: true, lineStyle: { color: '#2a2a2a' } } }
+        { type: 'value', name: '量(手)', nameLocation: 'end', nameGap: 0, nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] }, scale: true, gridIndex: 1, splitLine: { show: true, lineStyle: { color: '#2a2a2a' } } },
+        { type: 'value', name: '额(亿)', nameLocation: 'end', nameGap: 0, nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] }, scale: true, gridIndex: 2, splitLine: { show: true, lineStyle: { color: '#2a2a2a' } } }
       ],
       xZoomIdx: [0, 1, 2]
     }
@@ -180,7 +180,7 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
     xAxis: [xAxis0(times), xAxisSubBottom(times, 1)],
     yAxis: [
       ...yMainSingle,
-      { type: 'value', name: hasVol ? '量(手)' : '额(亿)', nameTextStyle: { color: '#888' }, scale: true, gridIndex: 1, splitLine: { show: true, lineStyle: { color: '#2a2a2a' } } }
+      { type: 'value', name: hasVol ? '量(手)' : '额(亿)', nameLocation: 'end', nameGap: 0, nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] }, scale: true, gridIndex: 1, splitLine: { show: true, lineStyle: { color: '#2a2a2a' } } }
     ],
     xZoomIdx: [0, 1]
   }
