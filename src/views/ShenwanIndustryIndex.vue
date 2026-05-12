@@ -418,8 +418,8 @@ async function drawPepb () {
   const hasPe = peVals.some(v => v != null)
   const hasPb = pbVals.some(v => v != null)
   const series = []
-  if (hasPe) series.push({ name: 'PE', type: 'line', data: peVals, smooth: true, symbol: 'none', lineStyle: { color: '#ffd54f', width: 1.5 }, connectNulls: true })
-  if (hasPb) series.push({ name: 'PB', type: 'line', data: pbVals, smooth: true, symbol: 'none', lineStyle: { color: '#80cbc4', width: 1.5 }, connectNulls: true, yAxisIndex: hasPe ? 1 : 0 })
+  if (hasPe) series.push({ name: 'PE', type: 'line', data: peVals, smooth: true, symbol: 'none', color: '#ffd54f', lineStyle: { width: 1.5 }, itemStyle: { color: '#ffd54f' }, connectNulls: true })
+  if (hasPb) series.push({ name: 'PB', type: 'line', data: pbVals, smooth: true, symbol: 'none', color: '#80cbc4', lineStyle: { width: 1.5 }, itemStyle: { color: '#80cbc4' }, connectNulls: true, yAxisIndex: hasPe ? 1 : 0 })
   const yAxes = hasPe && hasPb
     ? [{ type: 'value', name: 'PE', nameTextStyle: { color: '#ffd54f' }, axisLabel: { color: '#aaa', fontSize: 10 }, splitLine: { lineStyle: { color: '#2a2a2a' } } },
        { type: 'value', name: 'PB', nameTextStyle: { color: '#80cbc4' }, axisLabel: { color: '#aaa', fontSize: 10 }, splitLine: { show: false } }]
