@@ -45,7 +45,7 @@
               <td class="mono">{{ row.date || '—' }}</td>
               <td><span :class="statusClass(row.status)">{{ row.status }}</span></td>
               <td>{{ row.records_changed ?? '—' }}</td>
-              <td class="mono small">{{ row.completed_at || '—' }}</td>
+              <td class="mono small">{{ fmtBj(row.completed_at) }}</td>
               <td class="err-cell">{{ row.error || '—' }}</td>
             </tr>
           </tbody>
@@ -79,6 +79,41 @@
         </table>
       </div>
       <p v-else-if="!loadingOverview" class="empty-state">暂无新鲜度数据</p>
+    </div>
+
+    <!-- Tab: 流水线图 -->
+    <div v-show="activeTab === 'dag'" class="tab-panel">
+      <div class="dag-toolbar">
+        <span class="qr-label">查询日期:</span>
+        <input type="date" v-model="dagDate" class="dag-date-input" @change="loadDag" />
+        <button @click="loadDag" :disabled="loadingDag" class="dag-refresh-btn">
+          {{ loadingDag ? '加载中...' : '刷新' }}
+        </button>
+        <div class="dag-legend">
+          <span class="leg-item"><span class="leg-dot leg-complete"></span>complete</span>
+          <span class="leg-item"><span class="leg-dot leg-failed"></span>failed</span>
+          <span class="leg-item"><span class="leg-dot leg-skipped"></span>skipped</span>
+          <span class="leg-item"><span class="leg-dot leg-norecord"></span>no_record</span>
+        </div>
+      </div>
+      <div ref="dagRef" class="dag-chart"></div>
+      <div v-if="dagSelected" class="dag-detail-card">
+        <div class="dag-detail-header">
+          <span class="dag-detail-title">{{ dagSelected.label }}</span>
+          <span :class="statusClass(dagSelected.status)" style="margin-left:8px;font-size:12px">{{ dagSelected.status }}</span>
+          <button @click="dagSelected = null" class="dag-close-btn">✕</button>
+        </div>
+        <div class="dag-detail-body">
+          <div class="dk-row"><span class="dk">分组</span><span>{{ dagSelected.group }}</span></div>
+          <div class="dk-row"><span class="dk">运行日</span><span class="mono">{{ dagSelected.date || '—' }}</span></div>
+          <div class="dk-row"><span class="dk">完成时间</span><span class="mono small">{{ fmtBj(dagSelected.completed_at) }}</span></div>
+          <div class="dk-row"><span class="dk">记录数</span><span>{{ dagSelected.records_changed ?? '—' }}</span></div>
+          <div class="dk-row"><span class="dk">上游依赖</span><span>{{ dagSelected.depends_on?.length ? dagSelected.depends_on.join(', ') : '无' }}</span></div>
+          <div class="dk-row"><span class="dk">触发模式</span><span>{{ dagSelected.trigger_on_complete ? '上游完成自动触发' : 'cron / 手动' }}</span></div>
+          <div class="dk-row" v-if="dagSelected.error"><span class="dk">错误</span><span class="err-cell">{{ dagSelected.error }}</span></div>
+          <div class="dk-row" style="grid-column:1/-1"><span class="dk">调度</span><span class="muted small">{{ dagSelected.schedule_hint || '—' }}</span></div>
+        </div>
+      </div>
     </div>
 
     <!-- Tab: 分钟线明细（原有） -->
@@ -185,7 +220,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 
 const loading = ref(false)
@@ -201,6 +236,7 @@ const activeTab = ref('pipelines')
 const tabs = [
   { id: 'pipelines', label: '管线健康', icon: '⚡' },
   { id: 'freshness', label: '数据新鲜度', icon: '📅' },
+  { id: 'dag', label: '流水线图', icon: '🔀' },
   { id: 'minute', label: '分钟线明细', icon: '📈' },
 ]
 
@@ -239,8 +275,189 @@ async function refreshData() {
 }
 
 async function refreshAll() {
+  // DAG is a daily view — do not auto-refresh it on the 30s interval
+  // (user can hit the 刷新 button in the DAG toolbar manually)
   await Promise.all([loadOverview(), refreshData()])
 }
+
+// ── DAG ──────────────────────────────────────────────────────────────────────
+const dagRef = ref(null)
+let dagInstance = null
+let dagEcharts = null
+const dagData = ref(null)
+const loadingDag = ref(false)
+const dagSelected = ref(null)
+const dagDate = ref(new Date().toISOString().slice(0, 10))
+
+const DAG_STATUS_COLOR = {
+  complete: '#2e7d32',
+  failed: '#c62828',
+  skipped: '#f57c00',
+  processing: '#1565c0',
+  partial: '#f9a825',
+  no_record: '#bdbdbd',
+}
+function dagStatusColor(s) { return DAG_STATUS_COLOR[s] || '#9e9e9e' }
+
+async function loadDag() {
+  loadingDag.value = true
+  try {
+    const d = dagDate.value?.replace(/-/g, '') || ''
+    const res = await axios.get(`/api/data-pulse/dag${d ? '?date=' + d : ''}`)
+    dagData.value = res.data
+    if (activeTab.value === 'dag') {
+      await nextTick()
+      renderDag()
+    }
+  } catch (e) {
+    console.error('DAG load failed', e)
+  } finally {
+    loadingDag.value = false
+  }
+}
+
+function handleDagResize() { dagInstance?.resize() }
+
+async function ensureDagEcharts() {
+  if (!dagEcharts) {
+    const mod = await import('echarts')
+    dagEcharts = mod.default || mod
+  }
+  if (!dagInstance && dagRef.value) {
+    dagInstance = dagEcharts.init(dagRef.value)
+    dagInstance.on('click', (params) => {
+      if (params.dataType === 'node') dagSelected.value = params.data._raw || null
+    })
+    window.addEventListener('resize', handleDagResize)
+  }
+}
+
+async function renderDag() {
+  await ensureDagEcharts()
+  if (!dagInstance || !dagData.value?.nodes) return
+
+  const { nodes, edges } = dagData.value
+  const LAYER_ORDER = ['layer0', 'layer1', 'layer2', 'layer3']
+  // left-to-right: each layer is a vertical column
+  const LAYER_X     = { layer0: 170, layer1: 490, layer2: 810, layer3: 1110 }
+  const LAYER_LABEL = { layer0: 'L0 · 独立采集', layer1: 'L1 · 依赖L0', layer2: 'L2 · 依赖L1', layer3: 'L3 · 分析层' }
+  const NODE_W = 132, NODE_H = 44, GAP_Y = 64
+
+  const byGroup = {}
+  for (const n of nodes) {
+    const g = n.group || 'layer0'
+    ;(byGroup[g] = byGroup[g] || []).push(n)
+  }
+
+  const maxCount = Math.max(...LAYER_ORDER.map(g => (byGroup[g] || []).length))
+  const HEADER_H = 52
+  const canvasH = HEADER_H + maxCount * (NODE_H + GAP_Y) - GAP_Y + 60
+  const canvasW = 1280
+
+  const eNodes = []
+
+  // layer header labels as silent annotation nodes at top of each column
+  for (const g of LAYER_ORDER) {
+    if (!byGroup[g]?.length) continue
+    eNodes.push({
+      id: `__lbl_${g}`,
+      name: LAYER_LABEL[g],
+      x: LAYER_X[g] || 140,
+      y: 18,
+      symbol: 'rect',
+      symbolSize: [NODE_W + 14, 26],
+      label: { show: true, formatter: LAYER_LABEL[g], fontSize: 12, color: '#555', fontStyle: 'italic' },
+      itemStyle: { color: 'rgba(240,240,240,0.7)', borderColor: '#ccc', borderWidth: 1 },
+      emphasis: { scale: false, itemStyle: { color: 'rgba(240,240,240,0.7)' } },
+      silent: true,
+    })
+  }
+
+  for (const g of LAYER_ORDER) {
+    const layerNodes = byGroup[g] || []
+    const totalH = layerNodes.length * (NODE_H + GAP_Y) - GAP_Y
+    // center each column's nodes vertically within the content area
+    const startY = HEADER_H + (canvasH - HEADER_H - 30 - totalH) / 2
+    const cx = LAYER_X[g] || 140
+    layerNodes.forEach((n, i) => {
+      eNodes.push({
+        id: n.id,
+        name: n.label,
+        x: cx,
+        y: startY + i * (NODE_H + GAP_Y) + NODE_H / 2,
+        symbol: 'roundRect',
+        symbolSize: [NODE_W, NODE_H],
+        label: { show: true, formatter: n.label, fontSize: 12, color: '#fff', overflow: 'truncate', width: NODE_W - 10 },
+        itemStyle: {
+          color: dagStatusColor(n.status),
+          borderColor: n.status === 'complete' ? '#1b5e20' : '#bbb',
+          borderWidth: 1,
+        },
+        emphasis: { scale: false, itemStyle: { opacity: 0.85 } },
+        _raw: n,
+      })
+    })
+  }
+
+  // Build a quick id→status map so edges can inherit source node color
+  const statusById = Object.fromEntries(nodes.map(n => [n.id, n.status]))
+
+  const eEdges = edges.map(e => {
+    const color = dagStatusColor(statusById[e.source]) || '#aaa'
+    return {
+      source: e.source,
+      target: e.target,
+      lineStyle: { color, width: 2, curveness: 0.12, opacity: 0.55 },
+      emphasis: { lineStyle: { width: 3.5, opacity: 1 } },
+    }
+  })
+
+  // auto-fit: compute zoom so the full canvas fits the chart container
+  const chartH = dagRef.value?.clientHeight || 860
+  const chartW = dagRef.value?.clientWidth || 1100
+  // don't zoom below 0.9 — keep node gaps readable; user can pan with roam
+  const zoom = Math.min((chartW - 20) / canvasW, 0.95)
+
+  dagInstance.setOption({
+    backgroundColor: '#fafafa',
+    tooltip: {
+      trigger: 'item',
+      formatter: (p) => {
+        if (p.dataType !== 'node') return ''
+        const d = p.data._raw
+        if (!d) return ''
+        return [
+          `<b>${d.label}</b>`,
+          `状态: ${d.status || '—'}`,
+          `运行日: ${d.date || '—'}`,
+          `完成(北京): ${fmtBj(d.completed_at)}`,
+          d.records_changed != null ? `记录数: ${d.records_changed}` : '',
+          d.error ? `<span style="color:#c62828">✕ ${String(d.error).slice(0, 80)}</span>` : '',
+        ].filter(Boolean).join('<br/>')
+      },
+    },
+    series: [{
+      type: 'graph',
+      layout: 'none',
+      nodes: eNodes,
+      edges: eEdges,
+      roam: true,
+      zoom,
+      center: [canvasW / 2, HEADER_H + (4 * (NODE_H + GAP_Y)) / 2],
+      edgeSymbol: ['circle', 'arrow'],
+      edgeSymbolSize: [6, 12],
+      lineStyle: { opacity: 0.55 },
+    }],
+  }, true)
+  dagInstance.resize()
+}
+
+watch(activeTab, async (tab) => {
+  if (tab === 'dag') {
+    if (!dagData.value) await loadDag()
+    else { await nextTick(); renderDag() }
+  }
+})
 
 function statusClass(status) {
   if (status === 'complete') return 'st-ok'
@@ -301,6 +518,24 @@ function formatMinutesAgo(minutes) {
   if (hours < 24) return `${hours}小时前`
   return `${Math.floor(hours / 24)}天前`
 }
+
+// 将后端返回的 ISO 时间字符串（已含 +08:00）格式化为 MM-DD HH:mm (北京时间)
+function fmtBj(iso) {
+  if (!iso) return '—'
+  try {
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return iso
+    // 后端已转 +08:00，直接用 UTC+8 偏移输出
+    const bj = new Date(d.getTime() + (d.getTimezoneOffset() + 480) * 60000)
+    const mm = String(bj.getMonth() + 1).padStart(2, '0')
+    const dd = String(bj.getDate()).padStart(2, '0')
+    const hh = String(bj.getHours()).padStart(2, '0')
+    const mi = String(bj.getMinutes()).padStart(2, '0')
+    return `${mm}-${dd} ${hh}:${mi}`
+  } catch {
+    return iso
+  }
+}
 function getUpdateStatusClass(minutes) {
   if (minutes === null) return 'text-muted'
   if (minutes < 5) return 'update-fresh'
@@ -316,6 +551,9 @@ onMounted(() => {
 })
 onUnmounted(() => {
   if (intervalId) clearInterval(intervalId)
+  window.removeEventListener('resize', handleDagResize)
+  dagInstance?.dispose()
+  dagInstance = null
 })
 </script>
 
@@ -589,4 +827,61 @@ onUnmounted(() => {
   color: #666;
   font-size: 14px;
 }
+
+/* ── DAG ── */
+.dag-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.dag-date-input {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.dag-refresh-btn {
+  padding: 4px 12px;
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.dag-refresh-btn:disabled { background: #ccc; cursor: not-allowed; }
+.dag-legend { display: flex; gap: 12px; align-items: center; font-size: 12px; color: #555; }
+.leg-item { display: flex; align-items: center; gap: 4px; }
+.leg-dot { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+.leg-complete { background: #2e7d32; }
+.leg-failed   { background: #c62828; }
+.leg-skipped  { background: #f57c00; }
+.leg-norecord { background: #bdbdbd; }
+.dag-chart {
+  width: 100%;
+  height: 860px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: #fafafa;
+}
+.dag-detail-card {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+.dag-detail-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.dag-detail-title { font-weight: 600; font-size: 14px; }
+.dag-close-btn { margin-left: auto; background: none; border: none; cursor: pointer; font-size: 16px; color: #666; }
+.dag-detail-body { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; }
+.dk-row { display: flex; gap: 8px; font-size: 13px; align-items: flex-start; }
+.dk { color: #888; min-width: 64px; flex-shrink: 0; }
+.qr-label { font-size: 13px; color: #666; }
 </style>
