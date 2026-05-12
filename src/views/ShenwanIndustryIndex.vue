@@ -58,12 +58,12 @@
 
         <div class="toolbar">
           <div class="tf-btns">
-            <button type="button" :class="{ on: tf === '1d' }" @click="tf = '1d'">日 K</button>
-            <button type="button" :class="{ on: tf === '1w' }" @click="tf = '1w'">周 K</button>
-            <button type="button" :class="{ on: tf === '1m' }" @click="tf = '1m'">月 K</button>
+            <button type="button" :class="{ on: tf === '1d' }" @click="onTfClick('1d')">日 K</button>
+            <button type="button" :class="{ on: tf === '1w' }" @click="onTfClick('1w')">周 K</button>
+            <button type="button" :class="{ on: tf === '1m' }" @click="onTfClick('1m')">月 K</button>
           </div>
           <div class="dates">
-            <label>开始             <input v-model="startD" class="d-inp" type="date" /></label>
+            <label>开始             <input v-model="startD" class="d-inp" type="date" @change="_startDIsDefault = false" /></label>
             <label>结束 <input v-model="endD" class="d-inp" type="date" /></label>
             <span class="muted sm">不填起止则由服务端拉足够长的日线后截断到最近 {{ klineLimit }} 根</span>
           </div>
@@ -449,6 +449,27 @@ const selectedL2 = ref(null)
 const selectedL3 = ref(null)
 
 const tf = ref('1d')
+
+// tf 对应的默认回看年数
+const TF_DEFAULT_YEARS = { '1d': 3, '1w': 5, '1m': 10 }
+
+// 根据当前 tf 生成默认 startD（YYYY-MM-DD）
+function defaultStartForTf (tfVal) {
+  const t = new Date()
+  t.setFullYear(t.getFullYear() - (TF_DEFAULT_YEARS[tfVal] ?? 3))
+  return t.toISOString().slice(0, 10)
+}
+
+// 标记 startD 是否还是程序自动设置的默认值（未被用户手动修改）
+let _startDIsDefault = true
+
+// 切换 tf 时，如果 startD 仍是默认值则自动调整回看区间
+function onTfClick (newTf) {
+  if (_startDIsDefault) {
+    startD.value = defaultStartForTf(newTf)
+  }
+  tf.value = newTf
+}
 const startD = ref('')
 const endD = ref('')
 const klineData = ref([])
@@ -767,10 +788,9 @@ watch(pepbData, () => {
 onMounted(() => {
   const t = new Date()
   const ed = t.toISOString().slice(0, 10)
-  t.setFullYear(t.getFullYear() - 3)
-  const sd = t.toISOString().slice(0, 10)
   endD.value = ed
-  startD.value = sd
+  startD.value = defaultStartForTf(tf.value)
+  _startDIsDefault = true
   loadL1()
   window.addEventListener('shenwan:navigate-to-industry', onNavigateToIndustry)
 })
