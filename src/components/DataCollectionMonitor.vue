@@ -96,7 +96,12 @@
           <span class="leg-item"><span class="leg-dot leg-norecord"></span>no_record</span>
         </div>
       </div>
-      <div ref="dagRef" class="dag-chart"></div>
+      <PipelineDag
+        :dag-data="dagData"
+        :status-color="dagStatusColor"
+        :fmt-bj="fmtBj"
+        @node-click="dagSelected = $event"
+      />
       <div v-if="dagSelected" class="dag-detail-card">
         <div class="dag-detail-header">
           <span class="dag-detail-title">{{ dagSelected.label }}</span>
@@ -222,6 +227,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import PipelineDag from './PipelineDag.vue'
 
 const loading = ref(false)
 const loadingOverview = ref(false)
@@ -281,9 +287,6 @@ async function refreshAll() {
 }
 
 // ── DAG ──────────────────────────────────────────────────────────────────────
-const dagRef = ref(null)
-let dagInstance = null
-let dagEcharts = null
 const dagData = ref(null)
 const loadingDag = ref(false)
 const dagSelected = ref(null)
@@ -305,10 +308,6 @@ async function loadDag() {
     const d = dagDate.value?.replace(/-/g, '') || ''
     const res = await axios.get(`/api/data-pulse/dag${d ? '?date=' + d : ''}`)
     dagData.value = res.data
-    if (activeTab.value === 'dag') {
-      await nextTick()
-      renderDag()
-    }
   } catch (e) {
     console.error('DAG load failed', e)
   } finally {
@@ -316,147 +315,8 @@ async function loadDag() {
   }
 }
 
-function handleDagResize() { dagInstance?.resize() }
-
-async function ensureDagEcharts() {
-  if (!dagEcharts) {
-    const mod = await import('echarts')
-    dagEcharts = mod.default || mod
-  }
-  if (!dagInstance && dagRef.value) {
-    dagInstance = dagEcharts.init(dagRef.value)
-    dagInstance.on('click', (params) => {
-      if (params.dataType === 'node') dagSelected.value = params.data._raw || null
-    })
-    window.addEventListener('resize', handleDagResize)
-  }
-}
-
-async function renderDag() {
-  await ensureDagEcharts()
-  if (!dagInstance || !dagData.value?.nodes) return
-
-  const { nodes, edges } = dagData.value
-  const LAYER_ORDER = ['layer0', 'layer1', 'layer2', 'layer3']
-  // left-to-right: each layer is a vertical column
-  const LAYER_X     = { layer0: 170, layer1: 490, layer2: 810, layer3: 1110 }
-  const LAYER_LABEL = { layer0: 'L0 · 独立采集', layer1: 'L1 · 依赖L0', layer2: 'L2 · 依赖L1', layer3: 'L3 · 分析层' }
-  const NODE_W = 132, NODE_H = 44, GAP_Y = 64
-
-  const byGroup = {}
-  for (const n of nodes) {
-    const g = n.group || 'layer0'
-    ;(byGroup[g] = byGroup[g] || []).push(n)
-  }
-
-  const maxCount = Math.max(...LAYER_ORDER.map(g => (byGroup[g] || []).length))
-  const HEADER_H = 52
-  const canvasH = HEADER_H + maxCount * (NODE_H + GAP_Y) - GAP_Y + 60
-  const canvasW = 1280
-
-  const eNodes = []
-
-  // layer header labels as silent annotation nodes at top of each column
-  for (const g of LAYER_ORDER) {
-    if (!byGroup[g]?.length) continue
-    eNodes.push({
-      id: `__lbl_${g}`,
-      name: LAYER_LABEL[g],
-      x: LAYER_X[g] || 140,
-      y: 18,
-      symbol: 'rect',
-      symbolSize: [NODE_W + 14, 26],
-      label: { show: true, formatter: LAYER_LABEL[g], fontSize: 12, color: '#555', fontStyle: 'italic' },
-      itemStyle: { color: 'rgba(240,240,240,0.7)', borderColor: '#ccc', borderWidth: 1 },
-      emphasis: { scale: false, itemStyle: { color: 'rgba(240,240,240,0.7)' } },
-      silent: true,
-    })
-  }
-
-  for (const g of LAYER_ORDER) {
-    const layerNodes = byGroup[g] || []
-    const totalH = layerNodes.length * (NODE_H + GAP_Y) - GAP_Y
-    // center each column's nodes vertically within the content area
-    const startY = HEADER_H + (canvasH - HEADER_H - 30 - totalH) / 2
-    const cx = LAYER_X[g] || 140
-    layerNodes.forEach((n, i) => {
-      eNodes.push({
-        id: n.id,
-        name: n.label,
-        x: cx,
-        y: startY + i * (NODE_H + GAP_Y) + NODE_H / 2,
-        symbol: 'roundRect',
-        symbolSize: [NODE_W, NODE_H],
-        label: { show: true, formatter: n.label, fontSize: 12, color: '#fff', overflow: 'truncate', width: NODE_W - 10 },
-        itemStyle: {
-          color: dagStatusColor(n.status),
-          borderColor: n.status === 'complete' ? '#1b5e20' : '#bbb',
-          borderWidth: 1,
-        },
-        emphasis: { scale: false, itemStyle: { opacity: 0.85 } },
-        _raw: n,
-      })
-    })
-  }
-
-  // Build a quick id→status map so edges can inherit source node color
-  const statusById = Object.fromEntries(nodes.map(n => [n.id, n.status]))
-
-  const eEdges = edges.map(e => {
-    const color = dagStatusColor(statusById[e.source]) || '#aaa'
-    return {
-      source: e.source,
-      target: e.target,
-      lineStyle: { color, width: 2, curveness: 0.12, opacity: 0.55 },
-      emphasis: { lineStyle: { width: 3.5, opacity: 1 } },
-    }
-  })
-
-  // auto-fit: compute zoom so the full canvas fits the chart container
-  const chartH = dagRef.value?.clientHeight || 860
-  const chartW = dagRef.value?.clientWidth || 1100
-  // don't zoom below 0.9 — keep node gaps readable; user can pan with roam
-  const zoom = Math.min((chartW - 20) / canvasW, 0.95)
-
-  dagInstance.setOption({
-    backgroundColor: '#fafafa',
-    tooltip: {
-      trigger: 'item',
-      formatter: (p) => {
-        if (p.dataType !== 'node') return ''
-        const d = p.data._raw
-        if (!d) return ''
-        return [
-          `<b>${d.label}</b>`,
-          `状态: ${d.status || '—'}`,
-          `运行日: ${d.date || '—'}`,
-          `完成(北京): ${fmtBj(d.completed_at)}`,
-          d.records_changed != null ? `记录数: ${d.records_changed}` : '',
-          d.error ? `<span style="color:#c62828">✕ ${String(d.error).slice(0, 80)}</span>` : '',
-        ].filter(Boolean).join('<br/>')
-      },
-    },
-    series: [{
-      type: 'graph',
-      layout: 'none',
-      nodes: eNodes,
-      edges: eEdges,
-      roam: true,
-      zoom,
-      center: [canvasW / 2, HEADER_H + (4 * (NODE_H + GAP_Y)) / 2],
-      edgeSymbol: ['circle', 'arrow'],
-      edgeSymbolSize: [6, 12],
-      lineStyle: { opacity: 0.55 },
-    }],
-  }, true)
-  dagInstance.resize()
-}
-
 watch(activeTab, async (tab) => {
-  if (tab === 'dag') {
-    if (!dagData.value) await loadDag()
-    else { await nextTick(); renderDag() }
-  }
+  if (tab === 'dag' && !dagData.value) await loadDag()
 })
 
 function statusClass(status) {
@@ -551,9 +411,6 @@ onMounted(() => {
 })
 onUnmounted(() => {
   if (intervalId) clearInterval(intervalId)
-  window.removeEventListener('resize', handleDagResize)
-  dagInstance?.dispose()
-  dagInstance = null
 })
 </script>
 
@@ -859,13 +716,7 @@ onUnmounted(() => {
 .leg-failed   { background: #c62828; }
 .leg-skipped  { background: #f57c00; }
 .leg-norecord { background: #bdbdbd; }
-.dag-chart {
-  width: 100%;
-  height: 860px;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  background: #fafafa;
-}
+/* dag-chart replaced by <PipelineDag> component */
 .dag-detail-card {
   margin-top: 12px;
   padding: 12px 16px;
