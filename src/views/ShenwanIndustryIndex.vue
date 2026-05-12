@@ -451,7 +451,7 @@ const selectedL3 = ref(null)
 const tf = ref('1d')
 
 // tf 对应的默认回看年数
-const TF_DEFAULT_YEARS = { '1d': 3, '1w': 5, '1m': 10 }
+const TF_DEFAULT_YEARS = { '1d': 3, '1w': 5, '1m': 20 }
 
 // 根据当前 tf 生成默认 startD（YYYY-MM-DD）
 function defaultStartForTf (tfVal) {
