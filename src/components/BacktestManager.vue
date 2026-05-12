@@ -150,18 +150,14 @@
               <label>开始日期 *</label>
               <input 
                 v-model="newTask.start_date" 
-                type="text" 
-                placeholder="YYYYMMDD"
-                maxlength="8"
+                type="date"
               />
             </div>
             <div class="form-group">
               <label>结束日期 *</label>
               <input 
                 v-model="newTask.end_date" 
-                type="text" 
-                placeholder="YYYYMMDD"
-                maxlength="8"
+                type="date"
               />
             </div>
           </div>
@@ -690,8 +686,8 @@ export default {
       newTask.value = {
         symbol: symbol,
         strategy_key: strategyKey,
-        start_date: yyyymmdd(startDt),
-        end_date: yyyymmdd(endDt),
+        start_date: startDt.toISOString().split('T')[0],
+        end_date: endDt.toISOString().split('T')[0],
         initial_cash: initialCash,
         preset: createPreferredPreset.value || selectedTask.value?.preset || '',
         strategy_params: { ...params }
@@ -744,7 +740,9 @@ export default {
         // Use normalized symbol
         const taskData = {
           ...newTask.value,
-          symbol: normalizedSymbol.value
+          symbol: normalizedSymbol.value,
+          start_date: (newTask.value.start_date || '').replace(/-/g, ''),
+          end_date: (newTask.value.end_date || '').replace(/-/g, '')
         }
         
         console.log('[DEBUG] Creating backtest task with params:', taskData.strategy_params)
