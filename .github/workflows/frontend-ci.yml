@@ -84,7 +84,7 @@ jobs:
              sudo systemctl reload nginx || sudo systemctl restart nginx"
 
   docker:
-    name: Build & Push Docker image to ghcr.io
+    name: Build & Push Docker image (ghcr.io + ACR)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
@@ -101,11 +101,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Aliyun Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com
+          username: ${{ secrets.ALIYUN_USER }}
+          password: ${{ secrets.ALIYUN_TOKEN }}
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/blueenergy/quant-dashboard
+          images: |
+            ghcr.io/blueenergy/quant-dashboard
+            crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com/wukongquant/quant-dashboard
           tags: |
             type=sha,prefix=sha-,format=short
             type=raw,value=latest
