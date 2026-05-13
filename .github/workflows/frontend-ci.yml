@@ -65,15 +65,19 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan ${{ secrets.VOLC_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Upload dist to server
-        run: |
-          rsync -az --delete \
-            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
-            dist/ \
-            ${{ secrets.VOLC_USER }}@${{ secrets.VOLC_HOST }}:/home/shuyolin/quantFinance-dashboard/dist/
+      - name: Pack dist
+        run: tar -czf dist.tar.gz -C dist .
 
-      - name: Reload web server
+      - name: Upload and deploy dist
         run: |
-          ssh -i ~/.ssh/id_ed25519 \
+          scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
+            dist.tar.gz \
+            ${{ secrets.VOLC_USER }}@${{ secrets.VOLC_HOST }}:/home/shuyolin/quantFinance-dashboard/dist.tar.gz
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
             ${{ secrets.VOLC_USER }}@${{ secrets.VOLC_HOST }} \
-            "sudo systemctl reload nginx || sudo systemctl restart nginx"
+            "cd /home/shuyolin/quantFinance-dashboard && \
+             rm -rf dist.new && mkdir dist.new && \
+             tar -xzf dist.tar.gz -C dist.new && \
+             rm -rf dist && mv dist.new dist && \
+             rm dist.tar.gz && \
+             sudo systemctl reload nginx || sudo systemctl restart nginx"
