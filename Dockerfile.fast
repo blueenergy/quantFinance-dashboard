@@ -35,16 +35,24 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 RUN apk add --no-cache bash gettext
 
 # 3. Config
-ENV BACKEND_URL=http://backend:3001
+# BACKEND_URL: FastAPI backend address (default: same host port 3001)
+# WS_WORKER_HOST: remote worker IP for /ws/<port> proxy (optional)
+# SSL_CERT / SSL_KEY: cert paths, mount via -v at runtime (optional)
+ENV BACKEND_URL=http://localhost:3001 \
+    WS_WORKER_HOST="" \
+    SSL_CERT="" \
+    SSL_KEY=""
 COPY --from=build /app/dist /usr/share/nginx/html
 RUN mkdir -p /etc/nginx/templates
 COPY nginx.template.conf /etc/nginx/templates/default.conf.template
+COPY nginx.http.template.conf /etc/nginx/templates/http.conf.template
 
 # 4. Entrypoint
 COPY docker-entrypoint.sh /docker-entrypoint.d/10-envsubst.sh
 RUN chmod +x /docker-entrypoint.d/10-envsubst.sh
 
-EXPOSE 80
+# Cert dir — mount at runtime if using HTTPS: -v /etc/nginx/cert:/etc/nginx/cert:ro
+EXPOSE 80 443
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget -q -O - http://localhost/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
