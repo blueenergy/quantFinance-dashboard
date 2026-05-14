@@ -48,16 +48,22 @@ jobs:
           path: build_info.txt
 
   deploy:
-    name: Deploy to VolcEngine
+    name: Deploy to VolcEngine (docker run)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     needs: test-build
     steps:
-      - name: Download dist artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist/
+      - name: Checkout
+        uses: actions/checkout@v4
+
+qq      - name: Build docker image and save to tar
+        run: |
+          docker build \
+            --build-arg VITE_API_BASE=/api \
+            -t quant-dashboard:deploy \
+            -f Dockerfile.fast .
+          docker save quant-dashboard:deploy | gzip > quant-dashboard.tar.gz
+          docker rmi quant-dashboard:deploy
 
       - name: Set up SSH key
         run: |
@@ -66,22 +72,31 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan ${{ secrets.VOLC_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Pack dist
-        run: tar -czf dist.tar.gz -C dist .
-
-      - name: Upload and deploy dist
+      - name: Transfer image and deploy
         run: |
           scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
-            dist.tar.gz \
-            ${{ secrets.VOLC_USER }}@${{ secrets.VOLC_HOST }}:/home/shuyolin/quantFinance-dashboard/dist.tar.gz
+            quant-dashboard.tar.gz \
+            ${{ secrets.VOLC_USER }}@${{ secrets.VOLC_HOST }}:/tmp/quant-dashboard.tar.gz
+
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
             ${{ secrets.VOLC_USER }}@${{ secrets.VOLC_HOST }} \
-            "cd /home/shuyolin/quantFinance-dashboard && \
-             rm -rf dist.new && mkdir dist.new && \
-             tar -xzf dist.tar.gz -C dist.new && \
-             rm -rf dist && mv dist.new dist && \
-             rm dist.tar.gz && \
-             sudo systemctl reload nginx || sudo systemctl restart nginx"
+            "docker load -i /tmp/quant-dashboard.tar.gz && \
+             rm /tmp/quant-dashboard.tar.gz && \
+             docker stop quant-web 2>/dev/null || true && \
+             docker rm   quant-web 2>/dev/null || true && \
+             docker run -d \
+               --name quant-web \
+               --restart unless-stopped \
+               --add-host=host.docker.internal:host-gateway \
+               -p 80:80 \
+               -p 443:443 \
+               -v /etc/nginx/cert:/etc/nginx/cert:ro \
+               -e BACKEND_URL=http://host.docker.internal:3001 \
+               -e WS_WORKER_HOST=115.190.172.95 \
+               -e SSL_CERT=/etc/nginx/cert/wukongquant.top.pem \
+               -e SSL_KEY=/etc/nginx/cert/wukongquant.top.key \
+               quant-dashboard:deploy && \
+             docker image prune -f"
 
   docker:
     name: Build & Push Docker image (ghcr.io + ACR)
