@@ -686,8 +686,8 @@ export default {
       newTask.value = {
         symbol: symbol,
         strategy_key: strategyKey,
-        start_date: startDt.toISOString().split('T')[0],
-        end_date: endDt.toISOString().split('T')[0],
+        start_date: startDt.toISOString().split('T')[0].replace(/-/g, ''),
+        end_date: endDt.toISOString().split('T')[0].replace(/-/g, ''),
         initial_cash: initialCash,
         preset: createPreferredPreset.value || selectedTask.value?.preset || '',
         strategy_params: { ...params }
