@@ -135,6 +135,9 @@
           <pre>{{ JSON.stringify(selectedEvent.evidence || {}, null, 2) }}</pre>
           <template v-if="selectedSectorSeries.length">
             <h5>板块趋势</h5>
+            <div v-if="selectedSectorSeriesSimulated" class="simulated-note">
+              当前真实快照不足，以下趋势为基于最新快照的非持久化模拟序列，仅用于周末/盘后调试界面和规则。
+            </div>
             <div class="trend-chart">
               <svg viewBox="0 0 320 120" preserveAspectRatio="none">
                 <polyline :points="trendPoints" fill="none" stroke="#2563eb" stroke-width="2" />
@@ -173,6 +176,7 @@ const events = ref([])
 const selectedEvent = ref(null)
 const sectorStrength = ref([])
 const selectedSectorSeries = ref([])
+const selectedSectorSeriesSimulated = ref(false)
 
 const trendPoints = computed(() => {
   const rows = selectedSectorSeries.value
@@ -220,6 +224,7 @@ async function loadSectorStrength() {
   })
   sectorStrength.value = res.data?.data || []
   selectedSectorSeries.value = []
+  selectedSectorSeriesSimulated.value = false
 }
 
 async function loadAll() {
@@ -256,9 +261,11 @@ async function loadSectorSeries(row) {
       level: row.level || sectorLevel.value,
       sector_code: row.sector_code,
       limit: 120,
+      simulate_if_sparse: true,
     },
   })
   selectedSectorSeries.value = res.data?.data || []
+  selectedSectorSeriesSimulated.value = !!res.data?.is_simulated
 }
 
 async function selectSector(row) {
@@ -515,6 +522,15 @@ pre {
   border-radius: 8px;
   margin-top: 8px;
   padding: 8px;
+}
+.simulated-note {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  color: #9a3412;
+  font-size: 12px;
+  margin-top: 8px;
+  padding: 7px 8px;
 }
 .trend-chart svg {
   display: block;
