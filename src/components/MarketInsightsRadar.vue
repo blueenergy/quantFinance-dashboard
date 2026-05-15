@@ -63,6 +63,38 @@
       </div>
     </section>
 
+    <section class="focus-panel">
+      <div class="panel-title">
+        <h4>今日焦点</h4>
+        <span>最多 {{ focusItems.length }} 个优先观察项</span>
+      </div>
+      <div v-if="focusItems.length" class="focus-grid">
+        <button
+          v-for="item in focusItems"
+          :key="`${item.subject_name}-${item.event_label}`"
+          type="button"
+          :class="['focus-card', { active: item.primary_event?._id && selectedEvent?._id === item.primary_event?._id }]"
+          @click="selectFocus(item)"
+        >
+          <div class="focus-top">
+            <span class="focus-score">{{ score(item.attention_score) }}</span>
+            <span>{{ item.category || item.event_label }}</span>
+          </div>
+          <h4>{{ item.title }}</h4>
+          <p>{{ item.summary }}</p>
+          <div class="focus-reason">
+            <strong>为什么先看</strong>
+            <span>{{ item.why_focus }}</span>
+          </div>
+          <div class="focus-action">
+            <strong>下一步</strong>
+            <span>{{ item.next_action }}</span>
+          </div>
+        </button>
+      </div>
+      <div v-else class="empty compact">暂无焦点，可先生成洞察事件。</div>
+    </section>
+
     <section class="guide-panel">
       <div class="panel-title">
         <h4>事件说明书</h4>
@@ -258,6 +290,7 @@ const loading = ref(false)
 const error = ref('')
 const message = ref('')
 const overview = ref(null)
+const focusItems = ref([])
 const events = ref([])
 const selectedEvent = ref(null)
 const eventTypeMeta = ref({})
@@ -387,6 +420,11 @@ async function loadEventTypes() {
   }
 }
 
+async function loadFocus() {
+  const res = await axios.get('/api/market-insights/focus', { params: { trade_date: compactDate(), limit: 5 } })
+  focusItems.value = res.data?.data || []
+}
+
 async function loadEvents() {
   const params = { trade_date: compactDate(), limit: 100 }
   if (eventType.value) params.event_type = eventType.value
@@ -414,7 +452,7 @@ async function loadAll() {
   error.value = ''
   message.value = ''
   try {
-    await Promise.all([loadEventTypes(), loadOverview(), loadEvents(), loadSectorStrength()])
+    await Promise.all([loadEventTypes(), loadOverview(), loadFocus(), loadEvents(), loadSectorStrength()])
   } catch (err) {
     setError(err, '加载火眼金睛数据失败')
   } finally {
@@ -433,6 +471,22 @@ async function generateEvents() {
     setError(err, '生成洞察事件失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function selectFocus(item) {
+  selectedEvent.value = item.primary_event || null
+  selectedSectorSeries.value = []
+  selectedSectorSeriesSimulated.value = false
+  const event = item.primary_event || {}
+  if (event.subject_type !== 'sector' || !event.subject_code) return
+  try {
+    await loadSectorSeries({
+      level: event.level || sectorLevel.value,
+      sector_code: event.subject_code,
+    })
+  } catch (err) {
+    setError(err, '加载焦点趋势失败')
   }
 }
 
@@ -604,6 +658,64 @@ select {
   font-size: 20px;
   margin-top: 4px;
 }
+.focus-panel {
+  background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+.focus-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 10px;
+}
+.focus-card {
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  cursor: pointer;
+  padding: 12px;
+  text-align: left;
+}
+.focus-card.active,
+.focus-card:hover {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+.focus-top {
+  align-items: center;
+  color: #64748b;
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.focus-score {
+  background: #2563eb;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+.focus-card h4 {
+  font-size: 15px;
+}
+.focus-card p,
+.focus-reason,
+.focus-action {
+  color: #475569;
+  font-size: 13px;
+  margin-top: 7px;
+}
+.focus-reason strong,
+.focus-action strong {
+  color: #1d4ed8;
+  display: block;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
 .guide-panel {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -728,6 +840,9 @@ tbody tr:hover {
   padding: 20px;
   text-align: center;
 }
+.empty.compact {
+  padding: 10px;
+}
 .kv {
   display: grid;
   gap: 6px 12px;
@@ -801,6 +916,7 @@ pre {
 @media (max-width: 1100px) {
   .layout,
   .overview,
+  .focus-grid,
   .guide-grid {
     grid-template-columns: 1fr;
   }
