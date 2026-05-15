@@ -133,6 +133,23 @@
           </ul>
           <h5>核心指标</h5>
           <pre>{{ JSON.stringify(selectedEvent.evidence || {}, null, 2) }}</pre>
+          <template v-if="selectedSectorSeries.length">
+            <h5>板块趋势</h5>
+            <div class="trend-chart">
+              <svg viewBox="0 0 320 120" preserveAspectRatio="none">
+                <polyline :points="trendPoints" fill="none" stroke="#2563eb" stroke-width="2" />
+              </svg>
+              <div class="trend-axis">
+                <span>{{ formatSnapshot(selectedSectorSeries[0]?.snapshot_time) }}</span>
+                <span>{{ formatSnapshot(selectedSectorSeries[selectedSectorSeries.length - 1]?.snapshot_time) }}</span>
+              </div>
+            </div>
+            <div class="trend-kpis">
+              <span>首值 {{ percent(selectedSectorSeries[0]?.positive_ratio) }}</span>
+              <span>最新 {{ percent(selectedSectorSeries[selectedSectorSeries.length - 1]?.positive_ratio) }}</span>
+              <span>样本 {{ selectedSectorSeries.length }}</span>
+            </div>
+          </template>
         </template>
         <div v-else class="empty">点击左侧事件查看证据链。</div>
       </div>
@@ -141,7 +158,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 
 const today = new Date().toISOString().slice(0, 10)
@@ -155,6 +172,24 @@ const overview = ref(null)
 const events = ref([])
 const selectedEvent = ref(null)
 const sectorStrength = ref([])
+const selectedSectorSeries = ref([])
+
+const trendPoints = computed(() => {
+  const rows = selectedSectorSeries.value
+  if (!rows.length) return ''
+  const values = rows.map((row) => Number(row.positive_ratio)).filter((n) => Number.isFinite(n))
+  if (!values.length) return ''
+  const min = Math.min(...values, 0)
+  const max = Math.max(...values, 1)
+  const range = max - min || 1
+  return rows
+    .map((row, index) => {
+      const x = rows.length === 1 ? 160 : (index / (rows.length - 1)) * 320
+      const y = 110 - ((Number(row.positive_ratio) - min) / range) * 100
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+})
 
 function compactDate() {
   return (tradeDate.value || '').replaceAll('-', '')
@@ -184,6 +219,7 @@ async function loadSectorStrength() {
     params: { trade_date: compactDate(), level: sectorLevel.value, window: 15, limit: 50 },
   })
   sectorStrength.value = res.data?.data || []
+  selectedSectorSeries.value = []
 }
 
 async function loadAll() {
@@ -213,7 +249,19 @@ async function generateEvents() {
   }
 }
 
-function selectSector(row) {
+async function loadSectorSeries(row) {
+  const res = await axios.get('/api/market-insights/sector-strength/series', {
+    params: {
+      trade_date: compactDate(),
+      level: row.level || sectorLevel.value,
+      sector_code: row.sector_code,
+      limit: 120,
+    },
+  })
+  selectedSectorSeries.value = res.data?.data || []
+}
+
+async function selectSector(row) {
   selectedEvent.value = {
     event_type: 'SECTOR_STRUCTURE',
     severity: 'info',
@@ -226,6 +274,11 @@ function selectSector(row) {
     counter_points: ['需要结合事件流判断变化方向'],
     watch_conditions: ['观察 15 分钟变化和成交质量是否持续'],
     evidence: row,
+  }
+  try {
+    await loadSectorSeries(row)
+  } catch (err) {
+    setError(err, '加载板块趋势失败')
   }
 }
 
@@ -456,6 +509,25 @@ pre {
   max-height: 280px;
   overflow: auto;
   padding: 10px;
+}
+.trend-chart {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-top: 8px;
+  padding: 8px;
+}
+.trend-chart svg {
+  display: block;
+  height: 120px;
+  width: 100%;
+}
+.trend-axis,
+.trend-kpis {
+  color: #64748b;
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+  margin-top: 6px;
 }
 @media (max-width: 1100px) {
   .layout,
