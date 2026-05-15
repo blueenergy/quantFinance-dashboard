@@ -38,6 +38,7 @@
         </select>
         <button class="btn primary" :disabled="loading" @click="loadAll">刷新</button>
         <button class="btn" :disabled="loading" @click="generateEvents">生成洞察</button>
+        <button class="btn" :disabled="loading" @click="reviewFocus">验证焦点</button>
       </div>
     </div>
 
@@ -84,6 +85,9 @@
           </div>
           <div v-if="item.feedback?.action" class="focus-feedback-current">
             已标记：{{ item.feedback.label || feedbackActionLabel(item.feedback.action) }}
+          </div>
+          <div v-if="item.review?.status" :class="['focus-review', item.review.status]">
+            验证：{{ item.review.label || reviewStatusLabel(item.review.status) }}
           </div>
           <div v-if="item.relevance?.labels?.length" class="focus-tags">
             <span v-for="label in item.relevance.labels" :key="label">{{ label }}</span>
@@ -487,6 +491,22 @@ async function generateEvents() {
   }
 }
 
+async function reviewFocus() {
+  loading.value = true
+  error.value = ''
+  try {
+    const res = await axios.post('/api/market-insights/focus/review', null, {
+      params: { trade_date: compactDate(), horizon_minutes: 60 },
+    })
+    message.value = `已验证 ${res.data?.written || 0} 个焦点`
+    await loadFocus()
+  } catch (err) {
+    setError(err, '验证焦点失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 async function selectFocus(item) {
   selectedEvent.value = item.primary_event || null
   selectedSectorSeries.value = []
@@ -509,6 +529,15 @@ function feedbackActionLabel(action) {
     ignore: '忽略',
     false_positive: '误报',
   }[action] || action || ''
+}
+
+function reviewStatusLabel(status) {
+  return {
+    confirmed: '已验证',
+    faded: '反证',
+    unconfirmed: '未验证',
+    insufficient_data: '待观察',
+  }[status] || status || ''
 }
 
 async function submitFocusFeedback(item, action) {
@@ -763,6 +792,32 @@ select {
   font-size: 12px;
   margin-bottom: 8px;
   padding: 5px 7px;
+}
+.focus-review {
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 8px;
+  padding: 5px 7px;
+}
+.focus-review.confirmed {
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+.focus-review.faded {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+.focus-review.unconfirmed {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+}
+.focus-review.insufficient_data {
+  background: #fef9c3;
+  border: 1px solid #fde68a;
+  color: #854d0e;
 }
 .focus-feedback-actions {
   display: flex;
