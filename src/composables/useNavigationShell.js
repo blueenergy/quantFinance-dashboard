@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import axios from 'axios'
 
-const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v3'
+const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v4'
 const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v2'
 const ACTIVE_TAB_KEY = 'activeTab_v2'
 const ACTIVE_TAB_USER_KEY = 'activeTab_username_v2'
@@ -9,6 +9,7 @@ const ACTIVE_TAB_USER_KEY = 'activeTab_username_v2'
 const LEGACY_NAV_CACHE_KEYS = [
   'nav_visible_tab_ids_v1',
   'nav_visible_tab_ids_v2',
+  'nav_visible_tab_ids_v3',
 ]
 
 const LEGACY_NAV_CACHE_USER_KEYS = [
@@ -115,6 +116,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'trading-manual', name: '人工干预' },
       { id: 'strategy-execution-analysis', name: '策略执行分析' },
       { id: 'spectrum', name: '阴阳谱' },
+      { id: 'intraday-t0', name: '日内T+0' },
       { id: 'securities', name: '账户工作台' },
       { id: 'user-profile', name: '用户配置' },
       { id: 'chat', name: '🤖 AI助手' },

@@ -10,6 +10,7 @@ const GlobalMarketBrief = defineAsyncComponent(() => import('../components/Globa
 const AdminDashboard = defineAsyncComponent(() => import('../components/AdminDashboard.vue'))
 const StockRanking = defineAsyncComponent(() => import('../components/StockRanking.vue'))
 const MarketSpectrum = defineAsyncComponent(() => import('../components/MarketSpectrum.vue'))
+const IntradayT0 = defineAsyncComponent(() => import('../components/IntradayT0.vue'))
 const WatchlistStrategyTable = defineAsyncComponent(() => import('../components/WatchlistStrategyTable.vue'))
 const TradeExecutionTable = defineAsyncComponent(() => import('../components/TradeExecutionTable.vue'))
 const TradingManualPanel = defineAsyncComponent(() => import('../components/TradingManualPanel.vue'))
@@ -98,6 +99,12 @@ export const tabViewDefinitions = [
     component: MarketSpectrum,
     fallbackClass: 'skeleton-chart',
     fallbackText: '市场阴阳谱加载中...',
+  },
+  {
+    id: 'intraday-t0',
+    component: IntradayT0,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '日内T+0加载中...',
   },
   {
     id: 'securities',
