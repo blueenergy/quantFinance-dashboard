@@ -69,16 +69,21 @@
         <span>最多 {{ focusItems.length }} 个优先观察项</span>
       </div>
       <div v-if="focusItems.length" class="focus-grid">
-        <button
+        <div
           v-for="item in focusItems"
           :key="`${item.subject_name}-${item.event_label}`"
-          type="button"
+          role="button"
+          tabindex="0"
           :class="['focus-card', { active: item.primary_event?._id && selectedEvent?._id === item.primary_event?._id }]"
           @click="selectFocus(item)"
+          @keydown.enter="selectFocus(item)"
         >
           <div class="focus-top">
             <span class="focus-score">{{ score(item.attention_score) }}</span>
             <span>{{ item.category || item.event_label }}</span>
+          </div>
+          <div v-if="item.feedback?.action" class="focus-feedback-current">
+            已标记：{{ item.feedback.label || feedbackActionLabel(item.feedback.action) }}
           </div>
           <div v-if="item.relevance?.labels?.length" class="focus-tags">
             <span v-for="label in item.relevance.labels" :key="label">{{ label }}</span>
@@ -93,7 +98,12 @@
             <strong>下一步</strong>
             <span>{{ item.next_action }}</span>
           </div>
-        </button>
+          <div class="focus-feedback-actions" @click.stop>
+            <button type="button" :disabled="loading" @click="submitFocusFeedback(item, 'valuable')">有价值</button>
+            <button type="button" :disabled="loading" @click="submitFocusFeedback(item, 'ignore')">忽略</button>
+            <button type="button" :disabled="loading" @click="submitFocusFeedback(item, 'false_positive')">误报</button>
+          </div>
+        </div>
       </div>
       <div v-else class="empty compact">暂无焦点，可先生成洞察事件。</div>
     </section>
@@ -493,6 +503,31 @@ async function selectFocus(item) {
   }
 }
 
+function feedbackActionLabel(action) {
+  return {
+    valuable: '有价值',
+    ignore: '忽略',
+    false_positive: '误报',
+  }[action] || action || ''
+}
+
+async function submitFocusFeedback(item, action) {
+  if (!item.focus_key) return
+  error.value = ''
+  try {
+    const res = await axios.post('/api/market-insights/focus/feedback', {
+      focus_key: item.focus_key,
+      action,
+      trade_date: compactDate(),
+    })
+    item.feedback = res.data?.data || { action, label: feedbackActionLabel(action) }
+    message.value = `已标记为${feedbackActionLabel(action)}`
+    await loadFocus()
+  } catch (err) {
+    setError(err, '保存焦点反馈失败')
+  }
+}
+
 async function loadSectorSeries(row) {
   const res = await axios.get('/api/market-insights/sector-strength/series', {
     params: {
@@ -687,6 +722,10 @@ select {
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
+.focus-card:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
 .focus-top {
   align-items: center;
   color: #64748b;
@@ -715,6 +754,35 @@ select {
   color: #166534;
   font-size: 11px;
   padding: 2px 7px;
+}
+.focus-feedback-current {
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  color: #92400e;
+  font-size: 12px;
+  margin-bottom: 8px;
+  padding: 5px 7px;
+}
+.focus-feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.focus-feedback-actions button {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #334155;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 9px;
+}
+.focus-feedback-actions button:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
 .focus-card h4 {
   font-size: 15px;
