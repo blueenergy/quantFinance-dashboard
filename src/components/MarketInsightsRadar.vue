@@ -11,6 +11,7 @@
           <option value="">全部事件</option>
           <option value="MARKET_BREADTH_RECOVERY">广度修复</option>
           <option value="MARKET_BREADTH_DIVERGENCE">广度背离</option>
+          <option value="COUNTER_TREND_SECTOR_STRENGTH">逆势扩散</option>
           <option value="EARLY_SECTOR_DIFFUSION">早期扩散</option>
           <option value="SECTOR_DIFFUSION">板块扩散</option>
           <option value="SECTOR_FALSE_STRENGTH">板块假强</option>
