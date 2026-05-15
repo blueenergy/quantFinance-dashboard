@@ -13,6 +13,24 @@
             {{ type.label }}
           </option>
         </select>
+        <select v-model="eventCategory" @change="loadEvents">
+          <option value="">全部类别</option>
+          <option v-for="category in eventCategoryOptions" :key="category" :value="category">
+            {{ category }}
+          </option>
+        </select>
+        <select v-model="eventSeverity" @change="loadEvents">
+          <option value="">全部级别</option>
+          <option value="high">高</option>
+          <option value="medium">中</option>
+          <option value="low">低</option>
+        </select>
+        <select v-model="minConfidence" @change="loadEvents">
+          <option value="">全部置信度</option>
+          <option value="90">90 分以上</option>
+          <option value="80">80 分以上</option>
+          <option value="70">70 分以上</option>
+        </select>
         <select v-model="sectorLevel" @change="loadSectorStrength">
           <option value="L1">L1</option>
           <option value="L2">L2</option>
@@ -232,6 +250,9 @@ import axios from 'axios'
 const today = new Date().toISOString().slice(0, 10)
 const tradeDate = ref(today)
 const eventType = ref('')
+const eventCategory = ref('')
+const eventSeverity = ref('')
+const minConfidence = ref('')
 const sectorLevel = ref('L2')
 const loading = ref(false)
 const error = ref('')
@@ -317,6 +338,11 @@ const eventTypeOptions = computed(() => {
   return Object.entries(meta).map(([id, item]) => ({ id, label: item.label || id, category: item.category || '' }))
 })
 
+const eventCategoryOptions = computed(() => {
+  const categories = eventTypeOptions.value.map((item) => item.category).filter(Boolean)
+  return [...new Set(categories)].sort()
+})
+
 const selectedEventMeta = computed(() => {
   if (!selectedEvent.value?.event_type) return null
   return eventTypeMeta.value[selectedEvent.value.event_type] || fallbackEventTypeMeta[selectedEvent.value.event_type] || null
@@ -364,6 +390,9 @@ async function loadEventTypes() {
 async function loadEvents() {
   const params = { trade_date: compactDate(), limit: 100 }
   if (eventType.value) params.event_type = eventType.value
+  if (eventCategory.value) params.category = eventCategory.value
+  if (eventSeverity.value) params.severity = eventSeverity.value
+  if (minConfidence.value) params.min_confidence = Number(minConfidence.value)
   const res = await axios.get('/api/market-insights/events', { params })
   events.value = res.data?.data || []
   if (!selectedEvent.value || !events.value.some((e) => e._id === selectedEvent.value?._id)) {
