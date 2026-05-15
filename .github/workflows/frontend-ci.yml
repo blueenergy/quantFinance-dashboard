@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies (ci)
         run: npm ci
       - name: Run unit tests
-        run: npm test -- --coverage=false || true
+        run: npm test -- --coverage=false
       - name: Build
         run: npm run build
       - name: Upload dist artifact
