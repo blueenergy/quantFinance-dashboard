@@ -11,6 +11,7 @@ const AdminDashboard = defineAsyncComponent(() => import('../components/AdminDas
 const StockRanking = defineAsyncComponent(() => import('../components/StockRanking.vue'))
 const MarketSpectrum = defineAsyncComponent(() => import('../components/MarketSpectrum.vue'))
 const IntradayT0 = defineAsyncComponent(() => import('../components/IntradayT0.vue'))
+const MarketInsightsRadar = defineAsyncComponent(() => import('../components/MarketInsightsRadar.vue'))
 const WatchlistStrategyTable = defineAsyncComponent(() => import('../components/WatchlistStrategyTable.vue'))
 const TradeExecutionTable = defineAsyncComponent(() => import('../components/TradeExecutionTable.vue'))
 const TradingManualPanel = defineAsyncComponent(() => import('../components/TradingManualPanel.vue'))
@@ -105,6 +106,12 @@ export const tabViewDefinitions = [
     component: IntradayT0,
     fallbackClass: 'skeleton-table',
     fallbackText: '日内T+0加载中...',
+  },
+  {
+    id: 'market-insights',
+    component: MarketInsightsRadar,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '火眼金睛加载中...',
   },
   {
     id: 'securities',
