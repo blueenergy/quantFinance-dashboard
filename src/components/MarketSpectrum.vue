@@ -23,8 +23,18 @@
       </div>
       <div v-if="mode === 'minute'" class="mode-toggle flex-row-center gap-sm wrap">
         <span class="qr-label">曲线:</span>
-        <button @click="setCurveType('daily_realtime')" :disabled="loading || curveType === 'daily_realtime'" class="btn-base btn-xs btn-gradient-blue">日线实时</button>
-        <button @click="setCurveType('minute')" :disabled="loading || curveType === 'minute'" class="btn-base btn-xs btn-gradient-orange">分钟MA</button>
+        <button
+          @click="setCurveType('daily_realtime')"
+          :disabled="loading"
+          :class="['btn-base', 'btn-xs', 'btn-gradient-blue', { active: curveType === 'daily_realtime' }]"
+          :aria-pressed="curveType === 'daily_realtime'"
+        >日线实时</button>
+        <button
+          @click="setCurveType('minute')"
+          :disabled="loading"
+          :class="['btn-base', 'btn-xs', 'btn-gradient-orange', { active: curveType === 'minute' }]"
+          :aria-pressed="curveType === 'minute'"
+        >分钟MA</button>
       </div>
       <div class="mode-toggle flex-row-center gap-sm wrap">
         <span class="qr-label">叠加指数:</span>
@@ -262,7 +272,19 @@ function ymd(dateStr) { return dateStr.replace(/-/g,'') }
 
 function buildMinuteRange() {
   const start = ymd(startDate.value) + '0930'
-  const end = ymd(endDate.value) + '1500'
+  let endMinute = '1500'
+  // During after-hours testing, realtime daily-K snapshots may be written after 15:00.
+  // Keep historical ranges capped at 15:00, but allow today's query to include current test snapshots.
+  if (endDate.value === today) {
+    const now = new Date()
+    const hh = String(now.getHours()).padStart(2, '0')
+    const mm = String(now.getMinutes()).padStart(2, '0')
+    const currentMinute = `${hh}${mm}`
+    if (currentMinute > endMinute) {
+      endMinute = currentMinute
+    }
+  }
+  const end = ymd(endDate.value) + endMinute
   return { start, end }
 }
 
@@ -342,7 +364,12 @@ function setMode(m) {
 }
 
 function setCurveType(t) {
-  if (curveType.value === t) return
+  if (curveType.value === t) {
+    if (mode.value === 'minute') {
+      refreshCurrent()
+    }
+    return
+  }
   curveType.value = t
   if (mode.value === 'minute') {
     refreshCurrent()
@@ -514,6 +541,10 @@ onBeforeUnmount(() => {
 .overlay-sel { padding:4px 8px; border:1px solid #ccc; border-radius:4px; font-size:13px; }
 .hint { font-size:12px; color:#666; }
 .mode-toggle .btn-xs { padding:2px 6px; font-size:11px; }
+.mode-toggle .btn-base.active {
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, .35);
+  filter: saturate(1.15);
+}
 .loading, .empty { padding:20px; text-align:center; color:#555; }
 .spectrum-chart { width:100%; height:320px; margin-bottom:16px; border:1px solid #e2e8f0; border-radius:6px; }
 .spectrum-table { width:100%; border-collapse:collapse; }
