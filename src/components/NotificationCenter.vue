@@ -245,6 +245,18 @@ export default {
       showPanel.value = !showPanel.value
       if (showPanel.value) {
         loadNotifications()
+        // Start polling when the panel is opened
+        if (!pollInterval) {
+          pollInterval = setInterval(() => {
+            loadNotifications()
+          }, 60000) // Set interval to 1 minute
+        }
+      } else {
+        // Stop polling when the panel is closed
+        if (pollInterval) {
+          clearInterval(pollInterval)
+          pollInterval = null
+        }
       }
     }
 
@@ -351,12 +363,8 @@ export default {
 
     onMounted(() => {
       loadSettings()
+      // Initial load of notifications without starting polling
       loadNotifications()
-      
-      // Poll for new notifications every 30 seconds
-      pollInterval = setInterval(() => {
-        loadNotifications()
-      }, 30000)
     })
 
     onUnmounted(() => {
