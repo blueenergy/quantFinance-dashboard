@@ -27,6 +27,23 @@
         {{ triggerHint }}
       </div>
 
+      <!-- 时段切换 (HHMM slot tabs) -->
+      <div v-if="availableSlots.length > 0" class="slot-tabs">
+        <button
+          v-for="slot in PRESET_SLOTS"
+          :key="slot"
+          class="slot-tab"
+          :class="{
+            'slot-tab--active': currentSlot === slot,
+            'slot-tab--disabled': !availableSlots.includes(slot)
+          }"
+          :disabled="!availableSlots.includes(slot) || loading"
+          @click="switchSlot(slot)"
+        >
+          {{ formatSlot(slot) }}
+        </button>
+      </div>
+
       <div v-if="loading" class="loading">
         <div class="spinner"></div>
         <p>AI正在分析最新市场情况...</p>
@@ -75,7 +92,48 @@
         <div v-if="analysis.notice" class="analysis-notice">
           {{ analysis.notice }}
         </div>
-        
+
+        <!-- 与上一交易日同时段对比 -->
+        <div v-if="comparisonRows.length > 0" class="comparison-card">
+          <div class="comparison-header" @click="comparisonExpanded = !comparisonExpanded">
+            <span class="comparison-title">
+              📐 vs {{ analysis.previousMeta?.analysis_date }} {{ formatSlot(analysis.previousMeta?.time_slot) }}
+              <span v-if="analysis.previousMeta?.lag_minutes != null" class="comparison-lag">
+                (差 {{ analysis.previousMeta.lag_minutes }} 分钟)
+              </span>
+            </span>
+            <span class="comparison-toggle">{{ comparisonExpanded ? '收起▲' : '展开▼' }}</span>
+          </div>
+          <div class="comparison-body">
+            <div
+              v-for="row in primaryComparisonRows"
+              :key="row.label"
+              class="comparison-row"
+            >
+              <span class="comparison-label">{{ row.label }}</span>
+              <span class="comparison-value">
+                <span class="comparison-current">{{ row.current }}</span>
+                <span class="comparison-prev">前: {{ row.previous }}</span>
+                <span class="comparison-delta" :class="row.deltaClass">{{ row.deltaText }}</span>
+              </span>
+            </div>
+            <div v-if="comparisonExpanded">
+              <div
+                v-for="row in detailComparisonRows"
+                :key="row.label"
+                class="comparison-row comparison-row--detail"
+              >
+                <span class="comparison-label">{{ row.label }}</span>
+                <span class="comparison-value">
+                  <span class="comparison-current">{{ row.current }}</span>
+                  <span class="comparison-prev">前: {{ row.previous }}</span>
+                  <span class="comparison-delta" :class="row.deltaClass">{{ row.deltaText }}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="analysis-summary">
           <h4>📊 市场概览</h4>
           <p>{{ analysis.summary }}</p>
@@ -190,10 +248,28 @@ const errorTip = ref('')
 const triggerHint = ref('')
 const analysis = ref(null)
 const selectedDate = ref(new Date().toISOString().split('T')[0])
+const currentSlot = ref(null)
+const availableSlots = ref([])
+const comparisonExpanded = ref(false)
+const PRESET_SLOTS = ['1000', '1130', '1630']
 const { user } = useAuth()
 const canTriggerMarketAnalysis = computed(() => canUseProFeature(user.value))
 
+function formatSlot(slot) {
+  if (!slot) return ''
+  const s = String(slot).padStart(4, '0')
+  return `${s.slice(0, 2)}:${s.slice(2)}`
+}
+
+function switchSlot(slot) {
+  if (!availableSlots.value.includes(slot) || slot === currentSlot.value) return
+  currentSlot.value = slot
+  fetchLatestAnalysis()
+}
+
 function handleDateChange() {
+  // Date change resets slot — let backend pick latest available for the new date.
+  currentSlot.value = null
   fetchLatestAnalysis()
 }
 
@@ -205,13 +281,17 @@ async function fetchLatestAnalysis() {
   analysis.value = null
 
   try {
-    const response = await request.get('/market-analysis', {
-      params: {
-        date: selectedDate.value
-      }
-    })
+    const params = { date: selectedDate.value }
+    if (currentSlot.value) {
+      params.time_slot = currentSlot.value
+    }
+    const response = await request.get('/market-analysis', { params })
+
+    // Capture slot metadata regardless of success — failure case may still expose the slot list.
+    availableSlots.value = Array.isArray(response.available_slots) ? response.available_slots : []
 
     if (response.success) {
+      currentSlot.value = response.time_slot || currentSlot.value
       analysis.value = {
         timestamp: response.cache_info?.created_at || new Date().toISOString(),
         analysisDate: response.analysis_date || '未知日期',
@@ -242,7 +322,11 @@ async function fetchLatestAnalysis() {
         abnormalStockInsight: response.abnormalStockInsight || '',
         industry_signals: response.industry_signals || null,
         notice: response.notice || '',
-        ivSnapshot: response.iv_snapshot || null
+        ivSnapshot: response.iv_snapshot || null,
+        snapshot: response.snapshot || null,
+        previousSnapshot: response.previous_snapshot || null,
+        previousMeta: response.previous_snapshot_meta || null,
+        timeSlot: response.time_slot || null,
       }
     } else if (response.is_expected) {
       error.value = response.error || '暂无分析数据'
@@ -402,11 +486,67 @@ function getCacheIcon(fromCache) {
   return fromCache ? '💾' : '🔄'
 }
 
+// === 与上一交易日同时段对比 ===
+function _fmtNum(n, unit = '') {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return 'N/A'
+  return `${Number(n).toFixed(2)}${unit}`
+}
+
+function _buildRow(label, cur, prev, unit = '亿') {
+  const curNum = cur === null || cur === undefined ? null : Number(cur)
+  const prevNum = prev === null || prev === undefined ? null : Number(prev)
+  let deltaText = '—'
+  let deltaClass = 'delta-flat'
+  if (curNum !== null && prevNum !== null && !Number.isNaN(curNum) && !Number.isNaN(prevNum)) {
+    const diff = curNum - prevNum
+    const pct = prevNum !== 0 ? (diff / Math.abs(prevNum)) * 100 : null
+    const sign = diff > 0 ? '+' : ''
+    const pctText = pct !== null ? ` (${sign}${pct.toFixed(1)}%)` : ''
+    deltaText = `${sign}${diff.toFixed(2)}${unit}${pctText}`
+    deltaClass = diff > 0 ? 'delta-up' : diff < 0 ? 'delta-down' : 'delta-flat'
+  }
+  return {
+    label,
+    current: _fmtNum(curNum, unit),
+    previous: _fmtNum(prevNum, unit),
+    deltaText,
+    deltaClass,
+  }
+}
+
+const comparisonRows = computed(() => {
+  const cur = analysis.value?.snapshot
+  const prev = analysis.value?.previousSnapshot
+  if (!cur || !prev) return []
+  const rows = []
+  // 主指标（默认可见）
+  rows.push(_buildRow('两市总成交额', cur.total_market_amount_yi, prev.total_market_amount_yi, '亿'))
+  rows.push(_buildRow('北向净流入', cur.capital_flow?.northbound_net_yi, prev.capital_flow?.northbound_net_yi, '亿'))
+  rows.push(_buildRow('涨停家数', cur.ladder?.total_limit_up, prev.ladder?.total_limit_up, '只'))
+  rows.push(_buildRow('情绪得分', cur.ladder?.sentiment_score, prev.ladder?.sentiment_score, ''))
+  // 详细行（折叠后可见）
+  const curAmounts = Array.isArray(cur.market_amounts) ? cur.market_amounts : []
+  const prevAmounts = Array.isArray(prev.market_amounts) ? prev.market_amounts : []
+  const prevByCode = new Map(prevAmounts.map((it) => [it.code, it]))
+  for (const item of curAmounts) {
+    const p = prevByCode.get(item.code)
+    rows.push({
+      ..._buildRow(`${item.name}成交额`, item.amount_yi, p?.amount_yi, '亿'),
+      _detail: true,
+    })
+  }
+  rows.push({ ..._buildRow('融资融券余额', cur.capital_flow?.margin_balance_yi, prev.capital_flow?.margin_balance_yi, '亿'), _detail: true })
+  rows.push({ ..._buildRow('最高连板', cur.ladder?.max_streak, prev.ladder?.max_streak, '板'), _detail: true })
+  return rows
+})
+
+const primaryComparisonRows = computed(() => comparisonRows.value.filter((r) => !r._detail))
+const detailComparisonRows = computed(() => comparisonRows.value.filter((r) => r._detail))
+
 // 自动加载时调用
 onMounted(() => {
   fetchLatestAnalysis()
-})
-</script>
+})</script>
 
 <style scoped>
 .bulletin-board {
@@ -844,4 +984,106 @@ onMounted(() => {
   font-size: 13px;
   line-height: 1.6;
 }
+
+/* === Slot Tabs === */
+.slot-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 0 12px 0;
+  flex-wrap: wrap;
+}
+.slot-tab {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 16px;
+  padding: 4px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #374151;
+  transition: all 0.15s ease;
+}
+.slot-tab:hover:not(:disabled) {
+  border-color: #4f46e5;
+  color: #4f46e5;
+}
+.slot-tab--active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+.slot-tab--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* === Comparison Card === */
+.comparison-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin: 12px 0;
+  overflow: hidden;
+}
+.comparison-header {
+  background: #f9fafb;
+  padding: 8px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+.comparison-lag {
+  color: #6b7280;
+  font-weight: 400;
+  margin-left: 6px;
+}
+.comparison-toggle {
+  font-size: 12px;
+  color: #6b7280;
+}
+.comparison-body {
+  padding: 8px 14px;
+}
+.comparison-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0;
+  font-size: 13px;
+  border-bottom: 1px dashed #f3f4f6;
+}
+.comparison-row:last-child {
+  border-bottom: none;
+}
+.comparison-row--detail {
+  color: #6b7280;
+}
+.comparison-label {
+  color: #374151;
+  min-width: 100px;
+}
+.comparison-value {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+.comparison-current {
+  color: #111827;
+  font-weight: 600;
+}
+.comparison-prev {
+  color: #9ca3af;
+  font-size: 12px;
+}
+.comparison-delta {
+  font-weight: 600;
+  font-size: 12px;
+}
+.delta-up { color: #dc2626; }
+.delta-down { color: #16a34a; }
+.delta-flat { color: #6b7280; }
 </style>
