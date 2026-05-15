@@ -80,6 +80,9 @@
             <span class="focus-score">{{ score(item.attention_score) }}</span>
             <span>{{ item.category || item.event_label }}</span>
           </div>
+          <div v-if="item.relevance?.labels?.length" class="focus-tags">
+            <span v-for="label in item.relevance.labels" :key="label">{{ label }}</span>
+          </div>
           <h4>{{ item.title }}</h4>
           <p>{{ item.summary }}</p>
           <div class="focus-reason">
@@ -698,6 +701,20 @@ select {
   color: #fff;
   font-weight: 700;
   padding: 2px 8px;
+}
+.focus-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+.focus-tags span {
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  color: #166534;
+  font-size: 11px;
+  padding: 2px 7px;
 }
 .focus-card h4 {
   font-size: 15px;
