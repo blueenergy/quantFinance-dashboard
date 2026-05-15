@@ -9,14 +9,9 @@
         <input v-model="tradeDate" type="date" />
         <select v-model="eventType" @change="loadEvents">
           <option value="">全部事件</option>
-          <option value="MARKET_BREADTH_RECOVERY">广度修复</option>
-          <option value="MARKET_BREADTH_DIVERGENCE">广度背离</option>
-          <option value="COUNTER_TREND_SECTOR_STRENGTH">逆势扩散</option>
-          <option value="EARLY_SECTOR_DIFFUSION">早期扩散</option>
-          <option value="SECTOR_DIFFUSION">板块扩散</option>
-          <option value="SECTOR_FALSE_STRENGTH">板块假强</option>
-          <option value="SECTOR_FADE">板块退潮</option>
-          <option value="VOLUME_QUALITY_SHIFT">成交质量变化</option>
+          <option v-for="type in eventTypeOptions" :key="type.id" :value="type.id">
+            {{ type.label }}
+          </option>
         </select>
         <select v-model="sectorLevel" @change="loadSectorStrength">
           <option value="L1">L1</option>
@@ -50,6 +45,44 @@
       </div>
     </section>
 
+    <section class="guide-panel">
+      <div class="panel-title">
+        <h4>事件说明书</h4>
+        <span>帮助理解每类洞察该怎么用</span>
+      </div>
+      <div class="guide-grid">
+        <button
+          v-for="type in eventTypeOptions"
+          :key="type.id"
+          type="button"
+          :class="['guide-card', { active: activeGuideType === type.id }]"
+          @click="activeGuideType = activeGuideType === type.id ? '' : type.id"
+        >
+          <div class="guide-card-head">
+            <strong>{{ type.label }}</strong>
+            <span>{{ type.category }}</span>
+          </div>
+          <p>{{ eventMeta(type.id)?.meaning || '用于识别对应的市场结构变化。' }}</p>
+          <div v-if="activeGuideType === type.id" class="guide-detail">
+            <div>
+              <b>为什么重要</b>
+              <p>{{ eventMeta(type.id)?.why_it_matters || '-' }}</p>
+            </div>
+            <div>
+              <b>怎么看证据</b>
+              <ul>
+                <li v-for="item in eventMeta(type.id)?.evidence_guide || []" :key="item">{{ item }}</li>
+              </ul>
+            </div>
+            <div>
+              <b>可能误判点</b>
+              <p>{{ eventMeta(type.id)?.false_positive || '-' }}</p>
+            </div>
+          </div>
+        </button>
+      </div>
+    </section>
+
     <section class="layout">
       <div class="panel events">
         <div class="panel-title">
@@ -67,7 +100,7 @@
             @click="selectedEvent = event"
           >
             <div class="event-top">
-              <span :class="['badge', event.severity]">{{ event.event_type }}</span>
+              <span :class="['badge', event.severity]">{{ eventLabel(event.event_type) }}</span>
               <span>{{ score(event.confidence) }}</span>
             </div>
             <strong>{{ event.title }}</strong>
@@ -117,10 +150,39 @@
           <h3>{{ selectedEvent.title }}</h3>
           <p class="summary">{{ selectedEvent.summary }}</p>
           <div class="kv">
+            <span>类型</span><strong>{{ eventLabel(selectedEvent.event_type) }}</strong>
+            <span>分类</span><strong>{{ selectedEventMeta?.category || '-' }}</strong>
             <span>置信度</span><strong>{{ score(selectedEvent.confidence) }}</strong>
             <span>严重程度</span><strong>{{ selectedEvent.severity }}</strong>
             <span>主体</span><strong>{{ selectedEvent.subject_name }}</strong>
             <span>时间</span><strong>{{ formatSnapshot(selectedEvent.snapshot_time) }}</strong>
+          </div>
+          <div v-if="selectedEventMeta?.meaning" class="usage-card">
+            <h5>如何使用这个事件</h5>
+            <div class="usage-row">
+              <strong>它是什么意思</strong>
+              <p>{{ selectedEventMeta.meaning }}</p>
+            </div>
+            <div class="usage-row">
+              <strong>为什么重要</strong>
+              <p>{{ selectedEventMeta.why_it_matters }}</p>
+            </div>
+            <div class="usage-row">
+              <strong>怎么看证据</strong>
+              <ul>
+                <li v-for="item in selectedEventMeta.evidence_guide || []" :key="item">{{ item }}</li>
+              </ul>
+            </div>
+            <div class="usage-row">
+              <strong>可能误判点</strong>
+              <p>{{ selectedEventMeta.false_positive }}</p>
+            </div>
+            <div class="usage-row">
+              <strong>下一步观察</strong>
+              <ul>
+                <li v-for="item in selectedEventMeta.next_watch || []" :key="item">{{ item }}</li>
+              </ul>
+            </div>
           </div>
           <h5>支持证据</h5>
           <ul>
@@ -177,9 +239,88 @@ const message = ref('')
 const overview = ref(null)
 const events = ref([])
 const selectedEvent = ref(null)
+const eventTypeMeta = ref({})
+const activeGuideType = ref('')
 const sectorStrength = ref([])
 const selectedSectorSeries = ref([])
 const selectedSectorSeriesSimulated = ref(false)
+
+const fallbackEventTypeMeta = {
+  MARKET_BREADTH_RECOVERY: {
+    label: '广度修复',
+    category: '市场状态类',
+    meaning: '全市场阳谱在短时间内回升，说明上涨家数正在从低位修复。',
+    why_it_matters: '它反映市场内部参与度改善，而不只是指数价格上涨。',
+    evidence_guide: ['重点看 yang_spectrum_now', '比较 delta_yang_spectrum_15m 是否持续为正'],
+    false_positive: '如果修复只持续一两个快照，可能只是盘中反抽。',
+  },
+  MARKET_BREADTH_DIVERGENCE: {
+    label: '广度走弱',
+    category: '市场状态类',
+    meaning: '全市场阳谱短时间下降，市场内部上涨家数减少。',
+    why_it_matters: '它可以提醒用户指数表面稳定时，内部结构可能已经变弱。',
+    evidence_guide: ['重点看 yang_spectrum_now 是否低于中性区', '看 delta_yang_spectrum_15m 是否明显为负'],
+    false_positive: '午间或尾盘流动性变化可能放大短时波动。',
+  },
+  COUNTER_TREND_SECTOR_STRENGTH: {
+    label: '逆势扩散',
+    category: '板块扩散类',
+    meaning: '全市场广度偏弱时，某个局部板块仍然逆势扩散。',
+    why_it_matters: '它帮助用户发现弱市中仍有资金聚集的方向。',
+    evidence_guide: ['看 market_weak', '看 market_yang_spectrum', '看板块 positive_ratio 和 relative_positive_ratio'],
+    false_positive: '逆势扩散可能是短线避险轮动，不一定能持续。',
+  },
+  EARLY_SECTOR_DIFFUSION: {
+    label: '早期扩散',
+    category: '板块扩散类',
+    meaning: 'L3 细分行业已经开始扩散，但所属 L2/L1 大行业还没有同步确认。',
+    why_it_matters: '这可能是结构变化的早期信号，说明资金先在更细分方向试探。',
+    evidence_guide: ['看 L3 positive_ratio', '看 parent_l2_positive_ratio', '看 parent_confirmed 是否为 false'],
+    false_positive: '如果父级行业迟迟不扩散，可能只是细分方向的短线脉冲。',
+  },
+  SECTOR_DIFFUSION: {
+    label: '板块扩散',
+    category: '板块扩散类',
+    meaning: '某个板块内部上涨家数快速增加，并且强于全市场。',
+    why_it_matters: '扩散说明资金不只集中在少数个股，板块内部共振更真实。',
+    evidence_guide: ['看 positive_ratio_now', '看 delta_positive_ratio_15m', '看 relative_positive_ratio'],
+    false_positive: '如果成交质量没有同步增强，可能只是短线轮动。',
+  },
+  SECTOR_FALSE_STRENGTH: {
+    label: '板块假强',
+    category: '去妄存真类',
+    meaning: '板块看起来强，但内部上涨家数不足，可能只是少数权重股或核心股撑起来。',
+    why_it_matters: '它帮助用户识别表面强势和真实扩散之间的差异。',
+    evidence_guide: ['看 positive_ratio_now 是否低于 50%', '比较 avg_pct_chg 和 median_pct_chg', '看 relative_positive_ratio'],
+    false_positive: '强势初期也可能先由龙头带动，后续扩散后会转为真强。',
+  },
+  SECTOR_FADE: {
+    label: '板块退潮',
+    category: '板块扩散类',
+    meaning: '板块内部上涨家数快速下降，扩散状态开始收缩。',
+    why_it_matters: '它提示板块热度或承接开始减弱，避免只看少数仍上涨个股。',
+    evidence_guide: ['看 positive_ratio_now 是否跌破中性区', '看 delta_positive_ratio_15m 是否明显为负'],
+    false_positive: '强势板块盘中洗盘也可能造成短时退潮。',
+  },
+  VOLUME_QUALITY_SHIFT: {
+    label: '成交质量变化',
+    category: '质量识别类',
+    meaning: '板块均笔成交额等质量指标出现变化，但方向尚未完全确认。',
+    why_it_matters: '它提示资金行为可能正在变化，适合作为后续扩散的观察线索。',
+    evidence_guide: ['看 avg_trade_size_yuan', '结合 positive_ratio 判断是否转化为扩散'],
+    false_positive: '大单成交可能来自个别股票，不能单独作为方向信号。',
+  },
+}
+
+const eventTypeOptions = computed(() => {
+  const meta = Object.keys(eventTypeMeta.value || {}).length ? eventTypeMeta.value : fallbackEventTypeMeta
+  return Object.entries(meta).map(([id, item]) => ({ id, label: item.label || id, category: item.category || '' }))
+})
+
+const selectedEventMeta = computed(() => {
+  if (!selectedEvent.value?.event_type) return null
+  return eventTypeMeta.value[selectedEvent.value.event_type] || fallbackEventTypeMeta[selectedEvent.value.event_type] || null
+})
 
 const trendPoints = computed(() => {
   const rows = selectedSectorSeries.value
@@ -211,6 +352,15 @@ async function loadOverview() {
   overview.value = res.data
 }
 
+async function loadEventTypes() {
+  try {
+    const res = await axios.get('/api/market-insights/event-types')
+    eventTypeMeta.value = res.data?.data || {}
+  } catch (err) {
+    eventTypeMeta.value = fallbackEventTypeMeta
+  }
+}
+
 async function loadEvents() {
   const params = { trade_date: compactDate(), limit: 100 }
   if (eventType.value) params.event_type = eventType.value
@@ -235,7 +385,7 @@ async function loadAll() {
   error.value = ''
   message.value = ''
   try {
-    await Promise.all([loadOverview(), loadEvents(), loadSectorStrength()])
+    await Promise.all([loadEventTypes(), loadOverview(), loadEvents(), loadSectorStrength()])
   } catch (err) {
     setError(err, '加载火眼金睛数据失败')
   } finally {
@@ -295,6 +445,14 @@ async function selectSector(row) {
 function percent(value) {
   const n = Number(value)
   return Number.isFinite(n) ? `${(n * 100).toFixed(1)}%` : '-'
+}
+
+function eventLabel(type) {
+  return eventTypeMeta.value[type]?.label || fallbackEventTypeMeta[type]?.label || type || '-'
+}
+
+function eventMeta(type) {
+  return eventTypeMeta.value[type] || fallbackEventTypeMeta[type] || null
 }
 
 function score(value) {
@@ -417,6 +575,49 @@ select {
   font-size: 20px;
   margin-top: 4px;
 }
+.guide-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+.guide-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 10px;
+}
+.guide-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 9px;
+  text-align: left;
+}
+.guide-card.active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+.guide-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.guide-card-head span {
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.guide-card p,
+.guide-detail {
+  color: #475569;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.guide-detail b {
+  color: #334155;
+}
 .layout {
   display: grid;
   grid-template-columns: minmax(260px, 0.9fr) minmax(420px, 1.35fr) minmax(320px, 1fr);
@@ -507,6 +708,26 @@ tbody tr:hover {
 .kv span {
   color: #64748b;
 }
+.usage-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin: 12px 0;
+  padding: 10px;
+}
+.usage-row {
+  margin-top: 8px;
+}
+.usage-row strong {
+  color: #334155;
+  display: block;
+  font-size: 13px;
+  margin-bottom: 3px;
+}
+.usage-row p {
+  color: #475569;
+  font-size: 13px;
+}
 ul {
   margin: 6px 0 12px 18px;
   padding: 0;
@@ -550,7 +771,8 @@ pre {
 }
 @media (max-width: 1100px) {
   .layout,
-  .overview {
+  .overview,
+  .guide-grid {
     grid-template-columns: 1fr;
   }
 }
