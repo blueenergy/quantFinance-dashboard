@@ -92,6 +92,16 @@
           <div v-if="item.relevance?.labels?.length" class="focus-tags">
             <span v-for="label in item.relevance.labels" :key="label">{{ label }}</span>
           </div>
+          <div v-if="focusExplainTags(item).length" class="focus-explain-tags">
+            <span
+              v-for="tag in focusExplainTags(item)"
+              :key="tag.text"
+              :class="['focus-explain-tag', tag.tone]"
+              :title="tag.detail"
+            >
+              {{ tag.text }}
+            </span>
+          </div>
           <h4>{{ item.title }}</h4>
           <p>{{ item.summary }}</p>
           <div class="focus-reason">
@@ -540,6 +550,40 @@ function reviewStatusLabel(status) {
   }[status] || status || ''
 }
 
+function focusExplainTags(item) {
+  const breakdown = item?.score_breakdown || {}
+  const tags = []
+  const preferenceWeight = Number(breakdown.preference_weight || 0)
+  const globalQualityWeight = Number(breakdown.global_quality_weight || 0)
+  if (preferenceWeight >= 1) {
+    tags.push({
+      text: '根据您的反馈加权',
+      tone: 'positive',
+      detail: '您过往更认可这类焦点，所以排序略微前移。',
+    })
+  } else if (preferenceWeight <= -1) {
+    tags.push({
+      text: '根据您的反馈降权',
+      tone: 'negative',
+      detail: '您过往较少认可这类焦点，所以排序略微后移。',
+    })
+  }
+  if (globalQualityWeight >= 1) {
+    tags.push({
+      text: '同类历史验证较好',
+      tone: 'positive',
+      detail: '同类焦点在盘后复盘中更常被验证。',
+    })
+  } else if (globalQualityWeight <= -1) {
+    tags.push({
+      text: '同类历史验证偏弱',
+      tone: 'warning',
+      detail: '同类焦点在盘后复盘中验证质量偏弱，建议更重视证据链。',
+    })
+  }
+  return tags
+}
+
 async function submitFocusFeedback(item, action) {
   if (!item.focus_key) return
   error.value = ''
@@ -783,6 +827,32 @@ select {
   color: #166534;
   font-size: 11px;
   padding: 2px 7px;
+}
+.focus-explain-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+.focus-explain-tag {
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 2px 7px;
+}
+.focus-explain-tag.positive {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+}
+.focus-explain-tag.negative {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+.focus-explain-tag.warning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
 }
 .focus-feedback-current {
   background: #fef3c7;
