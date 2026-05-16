@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.19.4'
           cache: 'npm'
       - name: Install dependencies (ci)
         run: npm ci
@@ -77,6 +77,7 @@ jobs:
                -p 443:443 \
                -v /etc/nginx/cert:/etc/nginx/cert:ro \
                -e BACKEND_URL=http://host.docker.internal:3001 \
+               -e ASSISTANT_URL=http://115.190.172.95:8002 \
                -e WS_WORKER_HOST=115.190.172.95 \
                -e SSL_CERT=/etc/nginx/cert/wukongquant.top.pem \
                -e SSL_KEY=/etc/nginx/cert/wukongquant.top.key \

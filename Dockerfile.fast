@@ -36,10 +36,12 @@ RUN apk add --no-cache bash gettext
 
 # 3. Config
 # BACKEND_URL: FastAPI backend address (default: same host port 3001)
-# WS_WORKER_HOST: remote worker IP for /ws/<port> proxy (optional)
+# ASSISTANT_URL: quant-assistant service address for /assistant/* proxying
+# WS_WORKER_HOST: worker host for /ws/<port> proxy
 # SSL_CERT / SSL_KEY: cert paths, mount via -v at runtime (optional)
 ENV BACKEND_URL=http://localhost:3001 \
-    WS_WORKER_HOST="" \
+    ASSISTANT_URL=http://localhost:8002 \
+    WS_WORKER_HOST=127.0.0.1 \
     SSL_CERT="" \
     SSL_KEY=""
 COPY --from=build /app/dist /usr/share/nginx/html
