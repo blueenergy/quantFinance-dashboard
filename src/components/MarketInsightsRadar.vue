@@ -160,6 +160,49 @@
       </div>
     </section>
 
+    <section class="quality-panel">
+      <div class="panel-title">
+        <div>
+          <h4>复盘效果</h4>
+          <span>同类事件的历史验证表现，用于辅助判断规则质量</span>
+        </div>
+        <div class="quality-actions">
+          <select v-model="qualityDimension" @change="loadQuality">
+            <option value="event_type">按事件类型</option>
+            <option value="category">按事件类别</option>
+            <option value="subject_type">按主体类型</option>
+          </select>
+          <button class="btn" :disabled="loading" @click="refreshQuality">刷新质量评分</button>
+        </div>
+      </div>
+      <table v-if="qualityItems.length" class="quality-table">
+        <thead>
+          <tr>
+            <th>{{ qualityDimensionLabel }}</th>
+            <th>确认</th>
+            <th>反证</th>
+            <th>确认率</th>
+            <th>有效样本</th>
+            <th>质量权重</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in qualityItems" :key="`${item.dimension}-${item.key}`">
+            <td>
+              <strong>{{ qualityItemLabel(item) }}</strong>
+              <div class="muted">{{ item.key }}</div>
+            </td>
+            <td>{{ item.confirmed_count || 0 }}</td>
+            <td>{{ item.faded_count || 0 }}</td>
+            <td>{{ percent(item.confirmation_rate) }}</td>
+            <td>{{ item.decisive_count || 0 }}</td>
+            <td :class="numClass(item.weight)">{{ signedNumber(item.weight) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else class="empty compact">暂无复盘质量数据，可先执行盘后验证。</div>
+    </section>
+
     <section class="layout">
       <div class="panel events">
         <div class="panel-title">
@@ -325,6 +368,8 @@ const activeGuideType = ref('')
 const sectorStrength = ref([])
 const selectedSectorSeries = ref([])
 const selectedSectorSeriesSimulated = ref(false)
+const qualityDimension = ref('event_type')
+const qualityItems = ref([])
 
 const fallbackEventTypeMeta = {
   MARKET_BREADTH_RECOVERY: {
@@ -425,6 +470,12 @@ const trendPoints = computed(() => {
     .join(' ')
 })
 
+const qualityDimensionLabel = computed(() => ({
+  event_type: '事件类型',
+  category: '事件类别',
+  subject_type: '主体类型',
+}[qualityDimension.value] || '维度'))
+
 function compactDate() {
   return (tradeDate.value || '').replaceAll('-', '')
 }
@@ -474,12 +525,19 @@ async function loadSectorStrength() {
   selectedSectorSeriesSimulated.value = false
 }
 
+async function loadQuality() {
+  const res = await axios.get('/api/market-insights/quality', {
+    params: { dimension: qualityDimension.value, limit: 20 },
+  })
+  qualityItems.value = res.data?.data || []
+}
+
 async function loadAll() {
   loading.value = true
   error.value = ''
   message.value = ''
   try {
-    await Promise.all([loadEventTypes(), loadOverview(), loadFocus(), loadEvents(), loadSectorStrength()])
+    await Promise.all([loadEventTypes(), loadOverview(), loadFocus(), loadEvents(), loadSectorStrength(), loadQuality()])
   } catch (err) {
     setError(err, '加载火眼金睛数据失败')
   } finally {
@@ -509,9 +567,23 @@ async function reviewFocus() {
       params: { trade_date: compactDate(), horizon_minutes: 60 },
     })
     message.value = `已验证 ${res.data?.written || 0} 个焦点`
-    await loadFocus()
+    await Promise.all([loadFocus(), loadQuality()])
   } catch (err) {
     setError(err, '验证焦点失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function refreshQuality() {
+  loading.value = true
+  error.value = ''
+  try {
+    const res = await axios.post('/api/market-insights/quality/refresh')
+    message.value = `已刷新 ${res.data?.count || 0} 条质量评分`
+    await loadQuality()
+  } catch (err) {
+    setError(err, '刷新复盘质量评分失败')
   } finally {
     loading.value = false
   }
@@ -582,6 +654,19 @@ function focusExplainTags(item) {
     })
   }
   return tags
+}
+
+function qualityItemLabel(item) {
+  if (!item) return '-'
+  if (item.dimension === 'event_type') return eventLabel(item.key)
+  if (item.dimension === 'subject_type') {
+    return {
+      market: '全市场',
+      sector: '板块',
+      stock: '个股',
+    }[item.key] || item.key || '-'
+  }
+  return item.key || '-'
 }
 
 async function submitFocusFeedback(item, action) {
@@ -659,6 +744,12 @@ function yuan(value) {
   if (!Number.isFinite(n)) return '-'
   if (n >= 10000) return `${(n / 10000).toFixed(1)}万`
   return n.toFixed(0)
+}
+
+function signedNumber(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n === 0) return '0.0'
+  return `${n > 0 ? '+' : ''}${n.toFixed(1)}`
 }
 
 function numClass(value) {
@@ -968,6 +1059,33 @@ select {
 }
 .guide-detail b {
   color: #334155;
+}
+.quality-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+.quality-panel .panel-title {
+  align-items: flex-start;
+}
+.quality-panel .panel-title span {
+  color: #64748b;
+  display: block;
+  font-size: 12px;
+  margin-top: 2px;
+}
+.quality-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.quality-table td:last-child {
+  font-weight: 700;
+}
+.quality-table tbody tr {
+  cursor: default;
 }
 .layout {
   display: grid;
