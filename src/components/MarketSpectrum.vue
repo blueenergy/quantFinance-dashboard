@@ -28,7 +28,7 @@
           <option v-for="p in OVERLAY_INDICES" :key="p.symbol" :value="p.symbol">{{ p.name }}</option>
         </select>
       </div>
-      <div v-if="mode === 'daily'" class="mode-toggle flex-row-center gap-sm wrap">
+      <div v-if="hasSectorPanel" class="mode-toggle flex-row-center gap-sm wrap">
         <span class="qr-label">板块层级:</span>
         <button
           @click="setSectorLevel('L1')"
@@ -124,11 +124,11 @@
   <!-- 折线图展示：使用 v-show 保持 DOM，避免 ref 在首次更新时不存在 -->
   <div ref="chartRef" class="spectrum-chart" v-show="records.length > 0"></div>
 
-  <section v-if="mode === 'daily'" class="sector-panel">
+  <section v-if="hasSectorPanel" class="sector-panel">
     <div class="sector-panel-header">
       <div>
         <h4>{{ sectorLevel }} 板块阴阳谱</h4>
-        <p>表格只取最新交易日以保证加载速度。点击板块后，再按需叠加该板块的区间曲线。</p>
+        <p>{{ sectorPanelHint }}</p>
       </div>
       <span class="sector-date">{{ sectorLoading ? '板块加载中...' : `最新: ${formatDate(latestSectorDate)}` }}</span>
     </div>
@@ -140,7 +140,7 @@
           <th>板块</th>
           <th>阳谱%</th>
           <th>阴谱%</th>
-          <th>上涨/样本</th>
+          <th>MA上方/样本</th>
           <th>相对全市场</th>
         </tr>
       </thead>
@@ -314,6 +314,12 @@ let chartInstance = null
 
 
 const mode = ref(props.defaultMode)
+const hasSectorPanel = computed(() => mode.value === 'daily' || mode.value === 'minute')
+const sectorPanelHint = computed(() => (
+  mode.value === 'minute'
+    ? '表格只取最新实时快照以保证加载速度。点击板块后，再按需叠加该板块的实时区间曲线。'
+    : '表格只取最新交易日以保证加载速度。点击板块后，再按需叠加该板块的区间曲线。'
+))
 
 const latestSectorDate = computed(() => {
   const dates = sectorRecords.value.map(row => row.trade_date).filter(Boolean).sort()
@@ -404,7 +410,7 @@ async function fetchOverlay() {
 }
 
 async function fetchSectorSpectrum() {
-  if (mode.value !== 'daily') {
+  if (!hasSectorPanel.value) {
     sectorRecords.value = []
     selectedSectorSeries.value = []
     selectedSectorCode.value = ''
@@ -417,7 +423,10 @@ async function fetchSectorSpectrum() {
   }
   sectorLoading.value = true
   try {
-    const res = await axios.get(`/api/market-spectrum/sectors?start_date=${latestDate}&end_date=${latestDate}&level=${sectorLevel.value}&ma_period=5&limit=120`)
+    const url = mode.value === 'minute'
+      ? `/api/market-spectrum/realtime-sectors?start_time=${latestDate}&end_time=${latestDate}&level=${sectorLevel.value}&ma_period=5&limit=120`
+      : `/api/market-spectrum/sectors?start_date=${latestDate}&end_date=${latestDate}&level=${sectorLevel.value}&ma_period=5&limit=120`
+    const res = await axios.get(url)
     const arr = Array.isArray(res.data?.data) ? res.data.data : []
     arr.sort((a, b) => String(a.trade_date).localeCompare(String(b.trade_date)) || String(a.sector_code).localeCompare(String(b.sector_code)))
     sectorRecords.value = arr
@@ -436,15 +445,22 @@ async function fetchSectorSpectrum() {
 }
 
 async function fetchSelectedSectorSeries(code) {
-  if (!code || mode.value !== 'daily') {
+  if (!code || !hasSectorPanel.value) {
     selectedSectorSeries.value = []
     return
   }
   sectorSeriesLoading.value = true
-  const sd = ymd(startDate.value)
-  const ed = ymd(endDate.value)
   try {
-    const res = await axios.get(`/api/market-spectrum/sectors?start_date=${sd}&end_date=${ed}&level=${sectorLevel.value}&ma_period=5&limit=300&sector_code=${encodeURIComponent(code)}`)
+    let url
+    if (mode.value === 'minute') {
+      const { start, end } = buildMinuteRange()
+      url = `/api/market-spectrum/realtime-sectors?start_time=${start}&end_time=${end}&level=${sectorLevel.value}&ma_period=5&limit=300&sector_code=${encodeURIComponent(code)}`
+    } else {
+      const sd = ymd(startDate.value)
+      const ed = ymd(endDate.value)
+      url = `/api/market-spectrum/sectors?start_date=${sd}&end_date=${ed}&level=${sectorLevel.value}&ma_period=5&limit=300&sector_code=${encodeURIComponent(code)}`
+    }
+    const res = await axios.get(url)
     const arr = Array.isArray(res.data?.data) ? res.data.data : []
     arr.sort((a, b) => String(a.trade_date).localeCompare(String(b.trade_date)))
     selectedSectorSeries.value = arr
@@ -557,7 +573,7 @@ async function updateChart() {
     selectedSectorRows.value.map(row => [formatDate(row.trade_date), row.yang_spectrum])
   )
   const selectedSectorVals = dates.map(d => selectedSectorMap[d] ?? null)
-  const hasSectorOverlay = mode.value === 'daily' && selectedSectorCode.value && selectedSectorRows.value.length > 0
+  const hasSectorOverlay = hasSectorPanel.value && selectedSectorCode.value && selectedSectorRows.value.length > 0
 
   // 叠加指数：将指数收盘价对齐到阴阳谱的日期轴
   const hasOverlay = overlayData.value.length > 0 && mode.value === 'daily'
@@ -658,7 +674,7 @@ async function updateChart() {
         let s = `<b>${params[0]?.axisValue}</b><br/>`
         for (const p of params) {
           if (p.value == null) continue
-          const isSpectrum = p.seriesName === '阳谱' || p.seriesName === '阴谱'
+          const isSpectrum = p.seriesName === '阳谱' || p.seriesName === '阴谱' || p.seriesName === selectedSectorName.value
           const val = isSpectrum ? (p.value * 100).toFixed(2) + '%' : p.value.toFixed(2)
           s += `${p.marker}${p.seriesName}: ${val}<br/>`
         }
