@@ -117,6 +117,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'trading-manual', name: '人工干预' },
       { id: 'strategy-execution-analysis', name: '策略执行分析' },
       { id: 'spectrum', name: '阴阳谱' },
+      { id: 'realtime-spectrum', name: '实时阴阳谱' },
       { id: 'intraday-t0', name: '日内T+0' },
       { id: 'market-insights', name: '火眼金睛' },
       { id: 'securities', name: '账户工作台' },

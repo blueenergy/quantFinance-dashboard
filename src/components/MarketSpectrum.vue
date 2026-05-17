@@ -1,6 +1,6 @@
 <template>
   <div class="market-spectrum-page">
-    <h3 class="page-title">市场阴阳谱</h3>
+    <h3 class="page-title">{{ pageTitle }}</h3>
   <div class="controls flex-column gap-sm">
   <div class="date-range flex-row-center gap-sm wrap">
         <label>开始日期:</label>
@@ -16,32 +16,30 @@
         <button @click="setQuickRange(30)" :disabled="loading" class="btn-base btn-sm btn-gradient-orange">最近30天</button>
         <button @click="setQuickRange(90)" :disabled="loading" class="btn-base btn-sm btn-gradient-orange">最近90天</button>
       </div>
-      <div class="mode-toggle flex-row-center gap-sm wrap">
+      <div v-if="!lockedMode" class="mode-toggle flex-row-center gap-sm wrap">
         <span class="qr-label">周期:</span>
         <button @click="setMode('daily')" :disabled="loading || mode === 'daily'" class="btn-base btn-sm btn-gradient-blue">日线</button>
         <button @click="setMode('minute')" :disabled="loading || mode === 'minute'" class="btn-base btn-sm btn-gradient-teal">分钟线</button>
       </div>
-      <div v-if="mode === 'minute'" class="mode-toggle flex-row-center gap-sm wrap">
-        <span class="qr-label">曲线:</span>
-        <button
-          @click="setCurveType('daily_realtime')"
-          :disabled="loading"
-          :class="['btn-base', 'btn-xs', 'btn-gradient-blue', { active: curveType === 'daily_realtime' }]"
-          :aria-pressed="curveType === 'daily_realtime'"
-        >日线实时</button>
-        <button
-          @click="setCurveType('minute')"
-          :disabled="loading"
-          :class="['btn-base', 'btn-xs', 'btn-gradient-orange', { active: curveType === 'minute' }]"
-          :aria-pressed="curveType === 'minute'"
-        >分钟MA</button>
-      </div>
-      <div class="mode-toggle flex-row-center gap-sm wrap">
+      <div v-if="mode === 'daily'" class="mode-toggle flex-row-center gap-sm wrap">
         <span class="qr-label">叠加指数:</span>
         <select v-model="overlaySymbol" @change="onOverlayChange" class="overlay-sel">
           <option value="">— 不叠加 —</option>
           <option v-for="p in OVERLAY_INDICES" :key="p.symbol" :value="p.symbol">{{ p.name }}</option>
         </select>
+      </div>
+      <div v-if="mode === 'daily'" class="mode-toggle flex-row-center gap-sm wrap">
+        <span class="qr-label">板块层级:</span>
+        <button
+          @click="setSectorLevel('L1')"
+          :disabled="loading"
+          :class="['btn-base', 'btn-xs', 'btn-gradient-blue', { active: sectorLevel === 'L1' }]"
+        >申万 L1</button>
+        <button
+          @click="setSectorLevel('L2')"
+          :disabled="loading"
+          :class="['btn-base', 'btn-xs', 'btn-gradient-orange', { active: sectorLevel === 'L2' }]"
+        >申万 L2</button>
       </div>
       <div class="hint">阳谱(yang_spectrum) 是上涨占比, 阴谱(yin_spectrum) 是下跌/未达标占比</div>
     </div>
@@ -126,6 +124,45 @@
   <!-- 折线图展示：使用 v-show 保持 DOM，避免 ref 在首次更新时不存在 -->
   <div ref="chartRef" class="spectrum-chart" v-show="records.length > 0"></div>
 
+  <section v-if="mode === 'daily'" class="sector-panel">
+    <div class="sector-panel-header">
+      <div>
+        <h4>{{ sectorLevel }} 板块阴阳谱</h4>
+        <p>表格只取最新交易日以保证加载速度。点击板块后，再按需叠加该板块的区间曲线。</p>
+      </div>
+      <span class="sector-date">{{ sectorLoading ? '板块加载中...' : `最新: ${formatDate(latestSectorDate)}` }}</span>
+    </div>
+    <div v-if="sectorLoading" class="loading text-subtle">板块阴阳谱加载中...</div>
+    <div v-else-if="latestSectorRows.length === 0" class="empty text-subtle">暂无板块阴阳谱数据</div>
+    <table v-else class="spectrum-table sector-table">
+      <thead>
+        <tr>
+          <th>板块</th>
+          <th>阳谱%</th>
+          <th>阴谱%</th>
+          <th>上涨/样本</th>
+          <th>相对全市场</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-for="row in latestSectorRows"
+          :key="row.sector_code"
+          :class="{ selected: selectedSectorCode === row.sector_code }"
+          @click="selectSector(row.sector_code)"
+        >
+          <td>{{ row.sector_name }}</td>
+          <td>{{ toPercent(row.yang_spectrum) }}</td>
+          <td>{{ toPercent(row.yin_spectrum) }}</td>
+          <td>{{ row.above_ma_count }}/{{ row.total_stocks }}</td>
+          <td :class="relativeClass(row.yang_spectrum - latestMarketYang)">
+            {{ signedPercent(row.yang_spectrum - latestMarketYang) }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
   <div v-if="loading" class="loading text-subtle">加载中...</div>
   <div v-else-if="records.length === 0" class="empty text-subtle">暂无数据, 请调整日期范围</div>
 
@@ -166,6 +203,22 @@ import axios from 'axios'
 // Lazy-load ECharts to reduce initial bundle size
 let echarts
 import { chartColors } from '../theme/chartTheme.js'
+
+const props = defineProps({
+  defaultMode: {
+    type: String,
+    default: 'daily',
+    validator: (value) => ['daily', 'minute'].includes(value),
+  },
+  lockedMode: {
+    type: Boolean,
+    default: false,
+  },
+  title: {
+    type: String,
+    default: '市场阴阳谱',
+  },
+})
 
 const OVERLAY_INDICES = [
   { symbol: '000300.SH', name: '沪深300' },
@@ -241,6 +294,13 @@ const today = todayDate.toISOString().slice(0,10)
 const startDate = ref(startDateObj.toISOString().slice(0,10))
 const endDate = ref(today)
 const records = ref([])
+const sectorRecords = ref([])
+const selectedSectorSeries = ref([])
+const sectorLevel = ref('L1')
+const selectedSectorCode = ref('')
+const sectorLoading = ref(false)
+const sectorSeriesLoading = ref(false)
+const pageTitle = computed(() => props.title)
 const displayRecords = computed(() => {
   return records.value.map(r => ({
     ...r,
@@ -253,8 +313,38 @@ const chartRef = ref(null)
 let chartInstance = null
 
 
-const mode = ref('daily')
-const curveType = ref('daily_realtime')
+const mode = ref(props.defaultMode)
+
+const latestSectorDate = computed(() => {
+  const dates = sectorRecords.value.map(row => row.trade_date).filter(Boolean).sort()
+  return dates.length ? dates[dates.length - 1] : ''
+})
+
+const latestMarketYang = computed(() => {
+  const row = records.value.find(item => item.trade_date === latestSectorDate.value)
+  return row?.yang_spectrum ?? 0
+})
+
+const latestSectorRows = computed(() => {
+  const date = latestSectorDate.value
+  return sectorRecords.value
+    .filter(row => row.trade_date === date)
+    .slice()
+    .sort((a, b) => (b.yang_spectrum ?? 0) - (a.yang_spectrum ?? 0))
+})
+
+const selectedSectorRows = computed(() => {
+  if (!selectedSectorCode.value) return []
+  return selectedSectorSeries.value
+    .filter(row => row.sector_code === selectedSectorCode.value)
+    .slice()
+    .sort((a, b) => String(a.trade_date).localeCompare(String(b.trade_date)))
+})
+
+const selectedSectorName = computed(() => {
+  const row = sectorRecords.value.find(item => item.sector_code === selectedSectorCode.value)
+  return row?.sector_name || ''
+})
 
 function formatDate(ymd) {
   if (!ymd) return ''
@@ -268,6 +358,15 @@ function formatDate(ymd) {
   return datePart
 }
 function toPercent(v) { return (v * 100).toFixed(2) + '%' }
+function signedPercent(v) {
+  const n = Number(v || 0)
+  return `${n >= 0 ? '+' : ''}${(n * 100).toFixed(2)}%`
+}
+function relativeClass(v) {
+  if (v >= 0.05) return 'relative-strong'
+  if (v <= -0.05) return 'relative-weak'
+  return 'relative-neutral'
+}
 function ymd(dateStr) { return dateStr.replace(/-/g,'') }
 
 function buildMinuteRange() {
@@ -304,6 +403,59 @@ async function fetchOverlay() {
   }
 }
 
+async function fetchSectorSpectrum() {
+  if (mode.value !== 'daily') {
+    sectorRecords.value = []
+    selectedSectorSeries.value = []
+    selectedSectorCode.value = ''
+    return
+  }
+  const latestDate = records.value[records.value.length - 1]?.trade_date
+  if (!latestDate) {
+    sectorRecords.value = []
+    return
+  }
+  sectorLoading.value = true
+  try {
+    const res = await axios.get(`/api/market-spectrum/sectors?start_date=${latestDate}&end_date=${latestDate}&level=${sectorLevel.value}&ma_period=5&limit=120`)
+    const arr = Array.isArray(res.data?.data) ? res.data.data : []
+    arr.sort((a, b) => String(a.trade_date).localeCompare(String(b.trade_date)) || String(a.sector_code).localeCompare(String(b.sector_code)))
+    sectorRecords.value = arr
+    if (!arr.some(row => row.sector_code === selectedSectorCode.value)) {
+      selectedSectorCode.value = ''
+      selectedSectorSeries.value = []
+    }
+  } catch (e) {
+    console.error('获取板块阴阳谱失败', e)
+    sectorRecords.value = []
+    selectedSectorSeries.value = []
+    selectedSectorCode.value = ''
+  } finally {
+    sectorLoading.value = false
+  }
+}
+
+async function fetchSelectedSectorSeries(code) {
+  if (!code || mode.value !== 'daily') {
+    selectedSectorSeries.value = []
+    return
+  }
+  sectorSeriesLoading.value = true
+  const sd = ymd(startDate.value)
+  const ed = ymd(endDate.value)
+  try {
+    const res = await axios.get(`/api/market-spectrum/sectors?start_date=${sd}&end_date=${ed}&level=${sectorLevel.value}&ma_period=5&limit=300&sector_code=${encodeURIComponent(code)}`)
+    const arr = Array.isArray(res.data?.data) ? res.data.data : []
+    arr.sort((a, b) => String(a.trade_date).localeCompare(String(b.trade_date)))
+    selectedSectorSeries.value = arr
+  } catch (e) {
+    console.error('获取板块区间曲线失败', e)
+    selectedSectorSeries.value = []
+  } finally {
+    sectorSeriesLoading.value = false
+  }
+}
+
 function onOverlayChange() {
   if (!overlaySymbol.value) {
     overlayData.value = []
@@ -322,7 +474,7 @@ async function fetchSpectrum() {
       url = `/api/market-spectrum?start_date=${ymd(startDate.value)}&end_date=${ymd(endDate.value)}`
     } else {
       const { start, end } = buildMinuteRange()
-      url = `/api/market-spectrum-minute?start_time=${start}&end_time=${end}&ma_period=5&type=${curveType.value}`
+      url = `/api/market-spectrum-minute?start_time=${start}&end_time=${end}&ma_period=5`
     }
     const resp = await axios.get(url)
     const arr = Array.isArray(resp.data?.data) ? resp.data.data : []
@@ -332,6 +484,7 @@ async function fetchSpectrum() {
     await fetchOverlay()
     await nextTick() // 确保 chartRef 已渲染
     updateChart()
+    fetchSectorSpectrum().then(() => updateChart())
   } catch (e) {
     console.error('获取阴阳谱失败', e)
     records.value = []
@@ -358,24 +511,30 @@ function setQuickRange(days) {
 
 function setMode(m) {
   if (mode.value === m) return
+  if (props.lockedMode) return
   mode.value = m
   // 切换模式后自动刷新当前选择区间
   refreshCurrent()
 }
 
-function setCurveType(t) {
-  if (curveType.value === t) {
-    if (mode.value === 'minute') {
-      refreshCurrent()
-    }
-    return
-  }
-  curveType.value = t
-  if (mode.value === 'minute') {
-    refreshCurrent()
-  }
+function setSectorLevel(level) {
+  if (sectorLevel.value === level) return
+  sectorLevel.value = level
+  selectedSectorCode.value = ''
+  selectedSectorSeries.value = []
+  fetchSectorSpectrum().then(() => updateChart())
 }
 
+function selectSector(code) {
+  if (selectedSectorCode.value === code) {
+    selectedSectorCode.value = ''
+    selectedSectorSeries.value = []
+    updateChart()
+    return
+  }
+  selectedSectorCode.value = code
+  fetchSelectedSectorSeries(code).then(() => updateChart())
+}
 
 async function updateChart() {
   if (!chartRef.value) return
@@ -394,6 +553,11 @@ async function updateChart() {
   const dates = records.value.map(r => formatDate(r.trade_date))
   const yangVals = records.value.map(r => r.yang_spectrum)
   const yinVals = records.value.map(r => r.yin_spectrum)
+  const selectedSectorMap = Object.fromEntries(
+    selectedSectorRows.value.map(row => [formatDate(row.trade_date), row.yang_spectrum])
+  )
+  const selectedSectorVals = dates.map(d => selectedSectorMap[d] ?? null)
+  const hasSectorOverlay = mode.value === 'daily' && selectedSectorCode.value && selectedSectorRows.value.length > 0
 
   // 叠加指数：将指数收盘价对齐到阴阳谱的日期轴
   const hasOverlay = overlayData.value.length > 0 && mode.value === 'daily'
@@ -407,6 +571,8 @@ async function updateChart() {
   }
 
   const legendData = ['阳谱', '阴谱']
+  if (hasSectorOverlay) legendData.push(selectedSectorName.value)
+  if (sectorSeriesLoading.value) legendData.push('板块曲线加载中')
   if (hasOverlay) legendData.push(overlayName)
 
   const yAxisArr = [
@@ -458,6 +624,18 @@ async function updateChart() {
       areaStyle: { opacity: 0.10, color: chartColors.yinArea }
     }
   ]
+  if (hasSectorOverlay) {
+    seriesArr.push({
+      name: selectedSectorName.value,
+      type: 'line',
+      smooth: true,
+      yAxisIndex: 0,
+      data: selectedSectorVals,
+      connectNulls: false,
+      lineStyle: { width: 2, color: '#f59e0b' },
+      areaStyle: { opacity: 0.08, color: '#f59e0b' },
+    })
+  }
   if (hasOverlay) {
     seriesArr.push({
       name: overlayName,
@@ -550,6 +728,18 @@ onBeforeUnmount(() => {
 .spectrum-table { width:100%; border-collapse:collapse; }
 .spectrum-table th, .spectrum-table td { border:1px solid #e2e8f0; padding:6px 8px; font-size:13px; text-align:center; }
 .spectrum-table th { background:#f1f5f9; }
+.sector-panel { margin:0 0 16px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
+.sector-panel-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+.sector-panel-header h4 { margin:0 0 4px; font-size:15px; }
+.sector-panel-header p { margin:0; font-size:12px; color:#64748b; }
+.sector-date { font-size:12px; color:#64748b; white-space:nowrap; }
+.sector-table { margin:0; }
+.sector-table tbody tr { cursor:pointer; }
+.sector-table tbody tr:hover { background:#fff7ed; }
+.sector-table tbody tr.selected { background:#ffedd5; }
+.relative-strong { color:#dc2626; font-weight:700; }
+.relative-weak { color:#2563eb; font-weight:700; }
+.relative-neutral { color:#64748b; }
 .signal { font-weight:700; display:inline-flex; align-items:center; gap:4px; }
 .signal.gold { color:#d4af37; }
 .signal.silver { color:#a9a9a9; }

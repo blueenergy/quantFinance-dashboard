@@ -102,6 +102,12 @@ export const tabViewDefinitions = [
     fallbackText: '市场阴阳谱加载中...',
   },
   {
+    id: 'realtime-spectrum',
+    component: MarketSpectrum,
+    fallbackClass: 'skeleton-chart',
+    fallbackText: '实时阴阳谱加载中...',
+  },
+  {
     id: 'intraday-t0',
     component: IntradayT0,
     fallbackClass: 'skeleton-table',
@@ -279,6 +285,22 @@ export function getTabProps(tabId, context) {
   if (tabId === 'user-profile') {
     return {
       user: context.user,
+    }
+  }
+
+  if (tabId === 'spectrum') {
+    return {
+      defaultMode: 'daily',
+      lockedMode: true,
+      title: '市场阴阳谱',
+    }
+  }
+
+  if (tabId === 'realtime-spectrum') {
+    return {
+      defaultMode: 'minute',
+      lockedMode: true,
+      title: '实时阴阳谱',
     }
   }
 
