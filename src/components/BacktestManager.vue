@@ -7,7 +7,7 @@
   >
     <div class="header">
       <h2>📊 回测管理</h2>
-      <button class="create-btn" @click="showCreateModal = true">
+      <button class="create-btn" @click="openCreateTask">
         ➕ 创建回测任务
       </button>
     </div>
@@ -48,7 +48,10 @@
             <div class="task-title">
               <div class="symbol-block">
                 <div class="symbol">{{ task.symbol }}</div>
-                <div v-if="task.stock_name" class="stock-name">{{ task.stock_name }}</div>
+                <div class="stock-name">
+                  <span class="asset-type">{{ assetTypeLabel(task.asset_type) }}</span>
+                  <span v-if="task.stock_name">{{ task.stock_name }}</span>
+                </div>
               </div>
               <span class="strategy">
                 {{ task.strategy_key }}
@@ -119,16 +122,45 @@
         
         <div class="modal-body">
           <div class="form-group">
-            <label>股票代码 *</label>
+            <label>标的类型 *</label>
+            <select v-model="newTask.asset_type" @change="normalizeSymbol">
+              <option value="stock">股票</option>
+              <option value="etf">ETF / 指数基金</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>{{ newTask.asset_type === 'etf' ? 'ETF代码 *' : '股票代码 *' }}</label>
             <input 
               v-model="newTask.symbol" 
               type="text" 
-              placeholder="例如: 000858 或 000858.SZ"
+              :placeholder="newTask.asset_type === 'etf' ? '例如: 510300 或 510300.SH' : '例如: 000858 或 000858.SZ'"
               @blur="normalizeSymbol"
             />
             <small v-if="normalizedSymbol" class="hint">
               将使用: {{ normalizedSymbol }}
             </small>
+            <div v-if="newTask.asset_type === 'etf'" class="etf-shortcuts">
+              <div
+                v-for="group in featuredEtfGroups"
+                :key="group.title"
+                class="etf-shortcut-group"
+              >
+                <div class="shortcut-title">{{ group.title }}</div>
+                <div class="shortcut-list">
+                  <button
+                    v-for="etf in group.items"
+                    :key="etf.code"
+                    type="button"
+                    class="shortcut-chip"
+                    @click="selectFeaturedEtf(etf.code)"
+                  >
+                    <span>{{ etf.name }}</span>
+                    <small>{{ etf.code }}</small>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="form-group">
@@ -389,6 +421,7 @@ export default {
     
     const newTask = ref({
       symbol: '',
+      asset_type: 'stock',
       strategy_key: '',
       ...getDefaultDates(),
       initial_cash: 1000000,
@@ -400,6 +433,41 @@ export default {
     const createError = ref('')
     const normalizedSymbol = ref('')
     const createPreferredPreset = ref('')
+    const featuredEtfGroups = [
+      {
+        title: '宽基指数',
+        items: [
+          { code: '510300.SH', name: '沪深300' },
+          { code: '510500.SH', name: '中证500' },
+          { code: '512100.SH', name: '中证1000' },
+          { code: '510050.SH', name: '上证50' },
+          { code: '588000.SH', name: '科创50' },
+          { code: '159949.SZ', name: '创业板100' },
+          { code: '159852.SZ', name: 'A500' }
+        ]
+      },
+      {
+        title: '行业主题',
+        items: [
+          { code: '512760.SH', name: '半导体' },
+          { code: '159995.SZ', name: '芯片' },
+          { code: '515790.SH', name: '新能源车' },
+          { code: '512880.SH', name: '证券' },
+          { code: '512800.SH', name: '银行' },
+          { code: '512690.SH', name: '白酒' },
+          { code: '159928.SZ', name: '消费' },
+          { code: '516160.SH', name: '光伏' }
+        ]
+      },
+      {
+        title: '跨境',
+        items: [
+          { code: '159941.SZ', name: '纳斯达克' },
+          { code: '513100.SH', name: '纳指ETF' },
+          { code: '513500.SH', name: '标普500' }
+        ]
+      }
+    ]
 
     // Used to seed params without being overwritten by default params watcher
     const skipDefaultParamsOnce = ref(false)
@@ -499,7 +567,18 @@ export default {
 
     const poolOpenListenerAttached = ref(false)
 
+    const assetTypeLabel = (assetType) => {
+      return (assetType || 'stock') === 'etf' ? 'ETF' : '股票'
+    }
+
     // Methods
+    const openCreateTask = () => {
+      resetNewTask()
+      createError.value = ''
+      createPreferredPreset.value = ''
+      showCreateModal.value = true
+    }
+
     const normalizeSymbol = () => {
       if (!newTask.value.symbol) {
         normalizedSymbol.value = ''
@@ -507,10 +586,22 @@ export default {
       }
       
       let symbol = newTask.value.symbol.trim().toUpperCase()
+      const assetType = newTask.value.asset_type || 'stock'
       
       // 如果已经带有后缀，直接使用
       if (symbol.includes('.')) {
         normalizedSymbol.value = symbol
+        return
+      }
+
+      if (assetType === 'etf') {
+        if (symbol.startsWith('15') || symbol.startsWith('16')) {
+          normalizedSymbol.value = symbol + '.SZ'
+        } else if (symbol.startsWith('5')) {
+          normalizedSymbol.value = symbol + '.SH'
+        } else {
+          normalizedSymbol.value = symbol
+        }
         return
       }
       
@@ -528,6 +619,12 @@ export default {
         // 其他情况，默认不加后缀
         normalizedSymbol.value = symbol
       }
+    }
+
+    const selectFeaturedEtf = (code) => {
+      newTask.value.asset_type = 'etf'
+      newTask.value.symbol = code
+      normalizeSymbol()
     }
     
     const loadTasks = async () => {
@@ -685,9 +782,10 @@ export default {
       skipDefaultParamsOnce.value = true
       newTask.value = {
         symbol: symbol,
+        asset_type: selectedTask.value?.asset_type || result.value?.asset_type || 'stock',
         strategy_key: strategyKey,
-        start_date: startDt.toISOString().split('T')[0].replace(/-/g, ''),
-        end_date: endDt.toISOString().split('T')[0].replace(/-/g, ''),
+        start_date: startDt.toISOString().split('T')[0],
+        end_date: endDt.toISOString().split('T')[0],
         initial_cash: initialCash,
         preset: createPreferredPreset.value || selectedTask.value?.preset || '',
         strategy_params: { ...params }
@@ -723,16 +821,10 @@ export default {
       // Normalize symbol before submitting
       normalizeSymbol()
       if (!normalizedSymbol.value) {
-        createError.value = '股票代码格式不正确'
+        createError.value = '标的代码格式不正确'
         return
       }
       
-      // 验证策略参数（已由 StrategyParamsEditor 组件设置）
-      if (!newTask.value.strategy_params || Object.keys(newTask.value.strategy_params).length === 0) {
-        createError.value = '请配置策略参数'
-        return
-      }
-
       creating.value = true
       try {
         const token = localStorage.getItem('access_token')
@@ -741,6 +833,7 @@ export default {
         const taskData = {
           ...newTask.value,
           symbol: normalizedSymbol.value,
+          asset_type: newTask.value.asset_type || 'stock',
           start_date: (newTask.value.start_date || '').replace(/-/g, ''),
           end_date: (newTask.value.end_date || '').replace(/-/g, '')
         }
@@ -774,9 +867,9 @@ export default {
     const resetNewTask = () => {
       newTask.value = {
         symbol: '',
+        asset_type: 'stock',
         strategy_key: '',
-        start_date: '',
-        end_date: '',
+        ...getDefaultDates(),
         initial_cash: 1000000,
         preset: '',
         strategy_params: {}
@@ -914,6 +1007,7 @@ export default {
         // Build a BacktestManager-like selectedTask object for deployToLive()/prefill
         selectedTask.value = {
           symbol: normSymbol,
+          asset_type: 'stock',
           strategy_key: strategy,
           strategy_params: strategyParams,
           initial_cash: 1000000,
@@ -1049,6 +1143,10 @@ export default {
     // 部署到实盘
     const deployToLive = async (task) => {
       if (!task) return
+      if ((task.asset_type || 'stock') !== 'stock') {
+        alert('ETF 回测暂不支持一键部署到实盘。')
+        return
+      }
       
       const confirmed = confirm(
         `确定要将此回测配置部署到实盘吗？\n\n` +
@@ -1139,6 +1237,8 @@ export default {
       displayStrategyParamsJson,
       displayBacktestRange,
       getTaskPresetName,
+      assetTypeLabel,
+      featuredEtfGroups,
       loadingResult,
       loadingResultMessage,
       resultError,
@@ -1146,7 +1246,9 @@ export default {
       strategyMeta,
       strategyTemplates,
       availableStrategies,
+      openCreateTask,
       normalizeSymbol,
+      selectFeaturedEtf,
       loadTasks,
       loadStrategyMeta,
       createTask,
@@ -1296,6 +1398,16 @@ export default {
   font-size: 14px;
   font-weight: normal;
   color: #606266;
+}
+
+.asset-type {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #eef5ff;
+  color: #337ecc;
+  font-size: 11px;
 }
 
 .symbol {
@@ -1502,6 +1614,54 @@ export default {
   margin-top: 4px;
   color: #409eff;
   font-size: 12px;
+}
+
+.etf-shortcuts {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.etf-shortcut-group + .etf-shortcut-group {
+  margin-top: 10px;
+}
+
+.shortcut-title {
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.shortcut-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.shortcut-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #fff;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.shortcut-chip:hover {
+  background: #eff6ff;
+  border-color: #60a5fa;
+}
+
+.shortcut-chip small {
+  color: #64748b;
+  font-size: 11px;
 }
 
 .strategy-params-section {
