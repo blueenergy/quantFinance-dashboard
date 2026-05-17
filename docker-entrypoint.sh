@@ -17,9 +17,10 @@ else
   fi
 fi
 echo "  BACKEND_URL=${BACKEND_URL}" >&2
+echo "  MCP_URL=${MCP_URL:-<not set>}" >&2
 echo "  ASSISTANT_URL=${ASSISTANT_URL:-<not set>}" >&2
 echo "  WS_WORKER_HOST=${WS_WORKER_HOST:-<not set>}" >&2
-envsubst '$BACKEND_URL $ASSISTANT_URL $WS_WORKER_HOST $SSL_CERT $SSL_KEY' \
+envsubst '$BACKEND_URL $MCP_URL $ASSISTANT_URL $WS_WORKER_HOST $SSL_CERT $SSL_KEY' \
   < "$TMPL" \
   > /etc/nginx/conf.d/default.conf
 
