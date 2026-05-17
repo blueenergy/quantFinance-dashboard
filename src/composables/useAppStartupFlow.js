@@ -60,7 +60,7 @@ export function useAppStartupFlow({
       activeTab.value = ''
     }
 
-    await refreshVisibleHomeSummaries()
+    refreshVisibleHomeSummaries()
   }
 
   function handleLogout() {
@@ -123,7 +123,7 @@ export function useAppStartupFlow({
       activeTab.value = ''
     }
 
-    await refreshVisibleHomeSummaries()
+    refreshVisibleHomeSummaries()
 
     if (activeTab.value === 'chart' || activeTab.value === 'watchlist') {
       await loadAppChartWatchlist()
