@@ -456,8 +456,9 @@ async function submitAnalysis() {
       return
     }
     const taskId = res.data.task_id
-    const pos = res.data.position_in_queue
-    submitStatusMsg.value = `已提交，排队第 ${pos ?? '?'} 位，分析中…`
+    const ahead = res.data.queue_ahead
+    const waitHint = res.data.wait_hint
+    submitStatusMsg.value = `已提交，前方 ${ahead ?? '?'} 个任务。${waitHint || '分析中…'}`
     let tries = 0
     livePollTimer = setInterval(async () => {
       tries++
@@ -492,6 +493,10 @@ async function submitAnalysis() {
           submitError.value = poll.data?.error || '分析失败'
           submitStatusMsg.value = ''
           submitLoading.value = false
+        } else if (st === 'pending') {
+          submitStatusMsg.value = `排队中，前方 ${poll.data?.queue_ahead ?? '?'} 个任务。${poll.data?.wait_hint || '预计等待时间计算中'}`
+        } else if (st === 'processing') {
+          submitStatusMsg.value = poll.data?.wait_hint || '正在分析，LLM 响应时间可能有波动'
         }
       } catch (_) { /* 继续轮询 */ }
     }, 3000)

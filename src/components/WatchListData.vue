@@ -636,6 +636,12 @@ function startDeepAnalysisTaskPoll(taskId, symbol) {
       })
       const st = (data.status || '').toLowerCase()
       if (st === 'pending' || st === 'processing') {
+        if (attempts === 1 || attempts % 4 === 0) {
+          const queueText = st === 'pending'
+            ? `前方 ${data.queue_ahead ?? '?'} 个任务，${data.wait_hint || '预计等待时间计算中'}`
+            : (data.wait_hint || '正在分析，LLM 响应时间可能有波动')
+          showAppSnackbar(`「${label}」${queueText}`, 'info', 3500)
+        }
         return
       }
       const intervalId = activeDeepTaskPolls.get(taskId)
@@ -714,11 +720,12 @@ async function deepAnalyzeStock(symbol) {
     
     if (response.data && response.data.success) {
       const remaining = response.data.quota_remaining
-      const pos = response.data.position_in_queue
+      const ahead = response.data.queue_ahead
+      const waitHint = response.data.wait_hint
       const label = formatStockLabel(symbol)
       const modeText = analysisMode === 'multi_expert_v1' ? '多专家' : '经典'
       showAppSnackbar(
-        `已提交「${label}」${modeText}深度分析。剩余配额 ${remaining}，排队约 ${pos} 位。分析完成后会在此提醒。`,
+        `已提交「${label}」${modeText}深度分析。剩余配额 ${remaining}，前方 ${ahead ?? '?'} 个任务，${waitHint || '等待分析'}。`,
         'success',
         7000
       )

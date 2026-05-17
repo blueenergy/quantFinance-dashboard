@@ -4,6 +4,7 @@ import EtfView from '../views/EtfView.vue'
 const WatchListData = defineAsyncComponent(() => import('../components/WatchListData.vue'))
 const StockChart = defineAsyncComponent(() => import('../components/StockChart.vue'))
 const AIAnalysisHistory = defineAsyncComponent(() => import('../components/AIAnalysisHistory.vue'))
+const AnalysisTaskQueue = defineAsyncComponent(() => import('../components/AnalysisTaskQueue.vue'))
 const DataPulse = defineAsyncComponent(() => import('../components/DataPulse.vue'))
 const MarketAnalysisBulletin = defineAsyncComponent(() => import('../components/MarketAnalysisBulletin.vue'))
 const GlobalMarketBrief = defineAsyncComponent(() => import('../components/GlobalMarketBrief.vue'))
@@ -55,6 +56,12 @@ export const tabViewDefinitions = [
     wrapperClass: 'history-view',
     fallbackClass: 'skeleton-table',
     fallbackText: '个股深度分析加载中...',
+  },
+  {
+    id: 'analysis-task-queue',
+    component: AnalysisTaskQueue,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '分析任务队列加载中...',
   },
   {
     id: 'admin',
