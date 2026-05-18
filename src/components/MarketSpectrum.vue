@@ -143,33 +143,39 @@
     </div>
     <div v-if="sectorLoading" class="loading text-subtle">板块阴阳谱加载中...</div>
     <div v-else-if="latestSectorRows.length === 0" class="empty text-subtle">暂无板块阴阳谱数据</div>
-    <table v-else class="spectrum-table sector-table">
-      <thead>
-        <tr>
-          <th>板块</th>
-          <th>阳谱%</th>
-          <th>阴谱%</th>
-          <th>MA上方/样本</th>
-          <th>相对全市场</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="row in latestSectorRows"
-          :key="row.sector_code"
-          :class="{ selected: selectedSectorCode === row.sector_code }"
-          @click="selectSector(row.sector_code)"
-        >
-          <td>{{ row.sector_name }}</td>
-          <td>{{ toPercent(row.yang_spectrum) }}</td>
-          <td>{{ toPercent(row.yin_spectrum) }}</td>
-          <td>{{ row.above_ma_count }}/{{ row.total_stocks }}</td>
-          <td :class="relativeClass(row.yang_spectrum - latestMarketYang)">
-            {{ signedPercent(row.yang_spectrum - latestMarketYang) }}
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <details v-else class="spectrum-fold spectrum-fold--nested">
+      <summary class="spectrum-fold-summary">
+        {{ sectorLevel }} 板块阴阳谱明细 · 共 {{ latestSectorRows.length }} 行
+        <span class="spectrum-fold-hint">（默认折叠，点击展开）</span>
+      </summary>
+      <table class="spectrum-table sector-table spectrum-fold-table">
+        <thead>
+          <tr>
+            <th>板块</th>
+            <th>阳谱%</th>
+            <th>阴谱%</th>
+            <th>MA上方/样本</th>
+            <th>相对全市场</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="row in latestSectorRows"
+            :key="row.sector_code"
+            :class="{ selected: selectedSectorCode === row.sector_code }"
+            @click="selectSector(row.sector_code)"
+          >
+            <td>{{ row.sector_name }}</td>
+            <td>{{ toPercent(row.yang_spectrum) }}</td>
+            <td>{{ toPercent(row.yin_spectrum) }}</td>
+            <td>{{ row.above_ma_count }}/{{ row.total_stocks }}</td>
+            <td :class="relativeClass(row.yang_spectrum - latestMarketYang)">
+              {{ signedPercent(row.yang_spectrum - latestMarketYang) }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </details>
 
     <div v-if="selectedSectorCode" class="sector-contributors">
       <h5 class="contrib-title">贡献股拆解 · {{ selectedSectorName }}</h5>
@@ -179,7 +185,11 @@
       </p>
       <div v-if="contributorsLoading" class="loading text-subtle">贡献股加载中...</div>
       <div v-else-if="contributorsError" class="empty text-subtle">{{ contributorsError }}</div>
-      <template v-else-if="contributorsPayload && contributorsPayload.success">
+      <details v-else-if="contributorsPayload && contributorsPayload.success" class="spectrum-fold spectrum-fold--nested spectrum-fold--contrib">
+        <summary class="spectrum-fold-summary">
+          贡献股拆解表格 · {{ selectedSectorName }} · Top {{ contributorTopN }} × 2
+          <span class="spectrum-fold-hint">（默认折叠，点击展开）</span>
+        </summary>
         <div class="contrib-grid">
           <div class="contrib-col">
             <h6 class="contrib-col-title">站上均线 · Top {{ contributorTopN }}</h6>
@@ -228,14 +238,19 @@
             </table>
           </div>
         </div>
-      </template>
+      </details>
     </div>
   </section>
 
   <div v-if="loading" class="loading text-subtle">加载中...</div>
   <div v-else-if="records.length === 0" class="empty text-subtle">暂无数据, 请调整日期范围</div>
-
-    <table v-else class="spectrum-table">
+  <details v-else class="spectrum-fold">
+    <summary class="spectrum-fold-summary">
+      <template v-if="isRealtimeSpectrumTab">全市场实时快照明细 · 共 {{ displayRecords.length }} 条</template>
+      <template v-else>全市场阴阳谱明细 · 共 {{ displayRecords.length }} 条</template>
+      <span class="spectrum-fold-hint">（默认折叠，点击展开）</span>
+    </summary>
+    <table class="spectrum-table spectrum-fold-table">
       <thead>
         <tr>
           <th>时间</th>
@@ -263,6 +278,7 @@
         </tr>
       </tbody>
     </table>
+  </details>
   </div>
 </template>
 
@@ -388,6 +404,8 @@ let chartInstance = null
 
 
 const mode = ref(props.defaultMode)
+/** 实时阴阳谱 Tab：lockedMode + 分钟(实时日K) 曲线 */
+const isRealtimeSpectrumTab = computed(() => props.lockedMode && mode.value === 'minute')
 const hasSectorPanel = computed(() => mode.value === 'daily' || mode.value === 'minute')
 const sectorPanelHint = computed(() => (
   mode.value === 'minute'
@@ -882,6 +900,15 @@ onBeforeUnmount(() => {
 .spectrum-table { width:100%; border-collapse:collapse; }
 .spectrum-table th, .spectrum-table td { border:1px solid #e2e8f0; padding:6px 8px; font-size:13px; text-align:center; }
 .spectrum-table th { background:#f1f5f9; }
+.spectrum-fold { margin:0 0 16px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; background:#fff; }
+.spectrum-fold-summary { padding:10px 14px; cursor:pointer; background:#f8fafc; font-size:13px; font-weight:600; color:#334155; border-bottom:1px solid #e2e8f0; list-style:none; user-select:none; }
+.spectrum-fold-summary::-webkit-details-marker { display:none; }
+.spectrum-fold-summary::marker { content:''; }
+.spectrum-fold-hint { font-weight:400; color:#64748b; font-size:12px; margin-left:6px; }
+.spectrum-fold:not([open]) .spectrum-fold-summary { border-bottom:none; }
+.spectrum-fold-table { margin:0; }
+.spectrum-fold--nested { margin:0; border:none; border-radius:0; background:transparent; overflow:visible; }
+.sector-contributors .spectrum-fold--contrib > .spectrum-fold-summary { border-top:1px solid #e2e8f0; margin-top:2px; padding-top:10px; }
 .sector-panel { margin:0 0 16px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
 .sector-panel-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
 .sector-panel-header h4 { margin:0 0 4px; font-size:15px; }
