@@ -325,7 +325,88 @@
             </p>
             <div v-if="sectorContributorsLoading" class="empty compact">贡献股加载中…</div>
             <div v-else-if="sectorContributorsError" class="alert error">{{ sectorContributorsError }}</div>
-            <div v-else-if="sectorContributorsPayload?.success" class="insight-contrib-grid">
+            <div v-else-if="sectorContributorsPayload?.success" class="insight-contrib-wrap">
+              <div
+                v-if="(sectorContributorsPayload.leader_amount_top || []).length"
+                class="insight-contrib-leaders"
+              >
+                <p class="insight-contrib-leaders-intro muted">
+                  同一快照下列出三种视角（非单一龙头定义）；与下方 MA 分桶表独立，请自行对照。
+                </p>
+                <div class="insight-contrib-leader-cols">
+                  <div class="insight-contrib-leader-block">
+                    <div class="insight-contrib-leader-label">资金引领 · 成交额 Top {{ sectorContributorsPayload.leader_preview_k || 5 }}</div>
+                    <table class="insight-contrib-table insight-leader-table">
+                      <thead>
+                        <tr>
+                          <th>代码</th>
+                          <th>名称</th>
+                          <th>股价</th>
+                          <th>涨跌%</th>
+                          <th>成交额(万)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="r in sectorContributorsPayload.leader_amount_top" :key="'ila-' + r.symbol">
+                          <td>{{ r.symbol }}</td>
+                          <td>{{ r.name }}</td>
+                          <td>{{ formatPrice(r.close) }}</td>
+                          <td>{{ formatPct(r.pct_chg) }}</td>
+                          <td>{{ formatAmountWan(r.amount_yuan) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="insight-contrib-leader-block">
+                    <div class="insight-contrib-leader-label">价格引领 · 涨跌幅 Top {{ sectorContributorsPayload.leader_preview_k || 5 }}</div>
+                    <table class="insight-contrib-table insight-leader-table">
+                      <thead>
+                        <tr>
+                          <th>代码</th>
+                          <th>名称</th>
+                          <th>股价</th>
+                          <th>涨跌%</th>
+                          <th>成交额(万)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="r in sectorContributorsPayload.leader_pct_chg_top" :key="'ilp-' + r.symbol">
+                          <td>{{ r.symbol }}</td>
+                          <td>{{ r.name }}</td>
+                          <td>{{ formatPrice(r.close) }}</td>
+                          <td>{{ formatPct(r.pct_chg) }}</td>
+                          <td>{{ formatAmountWan(r.amount_yuan) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="insight-contrib-leader-block">
+                    <div class="insight-contrib-leader-label">情绪/辨识度 · |涨跌幅| Top {{ sectorContributorsPayload.leader_preview_k || 5 }}</div>
+                    <p class="insight-contrib-leader-hint muted">按涨跌幅绝对值排序（无连板标签）。</p>
+                    <table class="insight-contrib-table insight-leader-table">
+                      <thead>
+                        <tr>
+                          <th>代码</th>
+                          <th>名称</th>
+                          <th>股价</th>
+                          <th>涨跌%</th>
+                          <th>成交额(万)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="r in sectorContributorsPayload.leader_volatility_top" :key="'ilv-' + r.symbol">
+                          <td>{{ r.symbol }}</td>
+                          <td>{{ r.name }}</td>
+                          <td>{{ formatPrice(r.close) }}</td>
+                          <td>{{ formatPct(r.pct_chg) }}</td>
+                          <td>{{ formatAmountWan(r.amount_yuan) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div class="insight-contrib-grid">
               <div class="insight-contrib-col">
                 <h6 class="insight-contrib-col-title">站上均线 · Top {{ insightContributorTopN }}</h6>
                 <table class="insight-contrib-table">
@@ -376,6 +457,7 @@
                   </tbody>
                 </table>
               </div>
+            </div>
             </div>
             <div v-else-if="sectorContributorsPayload && !sectorContributorsPayload.success" class="empty compact">
               {{ sectorContributorsPayload.error || '暂无贡献股数据' }}
@@ -1425,11 +1507,47 @@ pre {
 .insight-contrib-table tbody tr:hover {
   background: #fff;
 }
+.insight-contrib-leaders-intro {
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0 0 10px;
+}
+.insight-contrib-leader-cols {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+.insight-contrib-leader-block {
+  min-width: 0;
+}
+.insight-contrib-leader-label {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.insight-contrib-leader-hint {
+  font-size: 11px;
+  line-height: 1.35;
+  margin: -2px 0 6px;
+}
+.insight-leader-table {
+  margin-top: 0;
+}
+.insight-leader-table th,
+.insight-leader-table td {
+  font-size: 11px;
+  padding: 4px 5px;
+}
 @media (max-width: 1100px) {
   .layout,
   .overview,
   .focus-grid,
   .guide-grid {
+    grid-template-columns: 1fr;
+  }
+  .insight-contrib-leader-cols {
     grid-template-columns: 1fr;
   }
 }

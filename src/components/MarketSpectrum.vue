@@ -230,6 +230,86 @@
           <span class="spectrum-fold-hint">（默认折叠；选中板块后会自动展开）</span>
         </summary>
         <div class="contrib-grid">
+          <div
+            v-if="(contributorsPayload.leader_amount_top || []).length"
+            class="contrib-leader-previews"
+          >
+            <p class="contrib-leader-intro text-subtle">
+              同一快照下列出三种视角（非单一龙头定义）；与下方 MA 分桶表独立，请自行对照。
+            </p>
+            <div class="contrib-leader-cols">
+              <div class="contrib-leader-block">
+                <div class="contrib-leader-label">资金引领 · 成交额 Top {{ contributorsPayload.leader_preview_k || 5 }}</div>
+                <table class="spectrum-table contrib-table contrib-leader-table">
+                  <thead>
+                    <tr>
+                      <th>代码</th>
+                      <th>名称</th>
+                      <th>股价</th>
+                      <th>涨跌%</th>
+                      <th>成交额(万)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="r in contributorsPayload.leader_amount_top" :key="'la-' + r.symbol">
+                      <td>{{ r.symbol }}</td>
+                      <td>{{ r.name }}</td>
+                      <td>{{ formatPrice(r.close) }}</td>
+                      <td>{{ formatPct(r.pct_chg) }}</td>
+                      <td>{{ formatAmountWan(r.amount_yuan) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="contrib-leader-block">
+                <div class="contrib-leader-label">价格引领 · 涨跌幅 Top {{ contributorsPayload.leader_preview_k || 5 }}</div>
+                <table class="spectrum-table contrib-table contrib-leader-table">
+                  <thead>
+                    <tr>
+                      <th>代码</th>
+                      <th>名称</th>
+                      <th>股价</th>
+                      <th>涨跌%</th>
+                      <th>成交额(万)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="r in contributorsPayload.leader_pct_chg_top" :key="'lp-' + r.symbol">
+                      <td>{{ r.symbol }}</td>
+                      <td>{{ r.name }}</td>
+                      <td>{{ formatPrice(r.close) }}</td>
+                      <td>{{ formatPct(r.pct_chg) }}</td>
+                      <td>{{ formatAmountWan(r.amount_yuan) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="contrib-leader-block">
+                <div class="contrib-leader-label">情绪/辨识度 · |涨跌幅| Top {{ contributorsPayload.leader_preview_k || 5 }}</div>
+                <p class="contrib-leader-hint text-subtle">按涨跌幅绝对值排序，近似波动与关注度（无连板标签）。</p>
+                <table class="spectrum-table contrib-table contrib-leader-table">
+                  <thead>
+                    <tr>
+                      <th>代码</th>
+                      <th>名称</th>
+                      <th>股价</th>
+                      <th>涨跌%</th>
+                      <th>成交额(万)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="r in contributorsPayload.leader_volatility_top" :key="'lv-' + r.symbol">
+                      <td>{{ r.symbol }}</td>
+                      <td>{{ r.name }}</td>
+                      <td>{{ formatPrice(r.close) }}</td>
+                      <td>{{ formatPct(r.pct_chg) }}</td>
+                      <td>{{ formatAmountWan(r.amount_yuan) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
           <div class="contrib-col">
             <h6 class="contrib-col-title">站上均线 · Top {{ contributorTopN }}</h6>
             <table class="spectrum-table contrib-table">
@@ -1080,7 +1160,15 @@ onBeforeUnmount(() => {
 .contrib-title { margin:0 0 6px; font-size:14px; }
 .contrib-sub { margin:0 0 10px; line-height:1.45; }
 .contrib-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-@media (max-width: 900px) { .contrib-grid { grid-template-columns:1fr; } }
+.contrib-leader-previews { grid-column: 1 / -1; margin-bottom: 4px; }
+.contrib-leader-intro { font-size:12px; line-height:1.45; margin:0 0 10px; }
+.contrib-leader-cols { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
+.contrib-leader-block { min-width:0; }
+.contrib-leader-label { font-size:12px; font-weight:600; color:#475569; margin:0 0 6px; }
+.contrib-leader-hint { font-size:11px; margin:-2px 0 6px; line-height:1.35; }
+.contrib-leader-table { margin-top:0; }
+.contrib-leader-table th, .contrib-leader-table td { font-size:11px; padding:4px 5px; }
+@media (max-width: 900px) { .contrib-grid { grid-template-columns:1fr; } .contrib-leader-cols { grid-template-columns:1fr; } }
 .contrib-col-title { margin:0 0 6px; font-size:12px; color:#475569; font-weight:600; }
 .contrib-table th, .contrib-table td { font-size:12px; padding:5px 6px; }
 </style>
