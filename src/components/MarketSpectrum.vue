@@ -223,6 +223,7 @@
       :ma-period="contributorMaPeriod"
       :data-key="selectedSectorContributorsKey"
       loading-text="贡献股加载中..."
+      @show-reasoning="showLimitUpReasoning"
     />
   </section>
 
@@ -263,6 +264,17 @@
       </tbody>
     </table>
   </details>
+  <LimitUpReasoningDialog
+    :open="limitUpReasoningOpen"
+    :loading="limitUpReasoningLoading"
+    :error="limitUpReasoningError"
+    :symbol="limitUpReasoningStock?.symbol || ''"
+    :stock-name="limitUpReasoningStock?.name || ''"
+    :trade-date="limitUpReasoningTradeDate"
+    :reasoning="limitUpReasoning"
+    :news-context="limitUpReasoningNewsContext"
+    @close="closeLimitUpReasoning"
+  />
   </div>
 </template>
 
@@ -270,6 +282,8 @@
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 import axios from 'axios'
 import SectorContributorsPanel from './SectorContributorsPanel.vue'
+import LimitUpReasoningDialog from './LimitUpReasoningDialog.vue'
+import { useLimitUpReasoningDialog } from '../composables/useLimitUpReasoningDialog'
 // Lazy-load ECharts to reduce initial bundle size
 let echarts
 import { chartColors } from '../theme/chartTheme.js'
@@ -381,6 +395,17 @@ const contributorsDescription = computed(() => (
 const selectedSectorContributorsKey = computed(() => (
   `${selectedSectorCode.value}-${String(contributorsPayload.value?.trade_date || contributorsPayload.value?.snapshot_time || '')}`
 ))
+const {
+  limitUpReasoningOpen,
+  limitUpReasoningLoading,
+  limitUpReasoningError,
+  limitUpReasoningStock,
+  limitUpReasoning,
+  limitUpReasoningNewsContext,
+  limitUpReasoningTradeDate,
+  showLimitUpReasoning,
+  closeLimitUpReasoning,
+} = useLimitUpReasoningDialog()
 const pageTitle = computed(() => props.title)
 const displayRecords = computed(() => {
   return records.value.map(r => ({

@@ -570,12 +570,15 @@ async function handleShowReasoning(stock) {
     if (res.success) {
       selectedStockReasoning.value = res.data
     } else {
-      // If no detail found, show basic info from stock object if available
-       selectedStockReasoning.value = {
+      selectedStockReasoning.value = {
           name: stock.name,
           symbol: stock.symbol,
-          reasoning: stock.analysis || { tag: '未知', reason: '暂无详细分析', analysis: res.error }
-       }
+          reasoning: {
+            tag: '未生成',
+            reason: '系统尚未生成该股涨停归因',
+            analysis: res.error || 'quant_analyzer.limit_up_analysis 暂无对应记录',
+          }
+      }
     }
   } catch (e) {
     console.error(e)

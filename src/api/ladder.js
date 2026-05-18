@@ -11,6 +11,18 @@ function authHeaders() {
     return headers;
 }
 
+function normalizeTsCode(symbol) {
+    const raw = String(symbol || "").trim();
+    if (!raw) return raw;
+    if (raw.includes(".")) return raw;
+    const bare = raw.split(".")[0];
+    if (bare.length !== 6) return raw;
+    if (bare.startsWith("30") || bare.startsWith("00") || bare.startsWith("12")) return `${bare}.SZ`;
+    if (bare.startsWith("60") || bare.startsWith("68") || bare.startsWith("11")) return `${bare}.SH`;
+    if (bare.startsWith("8") || bare.startsWith("4") || bare.startsWith("92")) return `${bare}.BJ`;
+    return raw;
+}
+
 /**
  * 获取每日连板天梯
  * @param {string} date - 日期 YYYYMMDD，可选，默认今天
@@ -83,7 +95,7 @@ export async function getLadderHistory(startDate, endDate) {
  * @param {string} date - 日期 YYYYMMDD，可选
  */
 export async function getReasoningDetail(symbol, date = null) {
-    let url = `${API_BASE}/ladder/reasoning/${symbol}`;
+    let url = `${API_BASE}/ladder/reasoning/${encodeURIComponent(normalizeTsCode(symbol))}`;
     if (date) url += `?date=${date}`;
 
     const res = await fetch(url, { headers: authHeaders() });

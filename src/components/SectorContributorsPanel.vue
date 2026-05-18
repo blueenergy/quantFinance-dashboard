@@ -91,6 +91,7 @@ const props = defineProps({
   loadingText: { type: String, default: '贡献股加载中…' },
   emptyText: { type: String, default: '暂无贡献股数据' },
 })
+const emit = defineEmits(['show-reasoning'])
 
 const effectiveMaPeriod = computed(() => props.payload?.ma_period || props.maPeriod)
 const leaderAmountRows = computed(() => props.payload?.leader_amount_top || [])
@@ -120,6 +121,40 @@ function formatMargin(m) {
   return Number(m).toFixed(3)
 }
 
+function showReasoning(row) {
+  emit('show-reasoning', {
+    ...row,
+    trade_date: props.payload?.trade_date || props.payload?.snapshot_time || '',
+  })
+}
+
+function renderReasoningCell(row) {
+  if (!row?.limit_up_seen && !row?.limit_up_reasoning_available) {
+    return h('td', { class: 'sector-contrib-link-cell sector-contrib-link-cell--empty' }, '—')
+  }
+  if (!row?.limit_up_reasoning_available) {
+    const label = row?.limit_up_status === 'broken' ? '炸板无解读' : '未就绪'
+    return h('td', { class: 'sector-contrib-link-cell' }, [
+      h('span', { class: 'sector-contrib-link-muted', title: '系统暂未找到可用的涨停归因 LLM 解读' }, label),
+    ])
+  }
+  return h('td', { class: 'sector-contrib-link-cell' }, [
+    h(
+      'button',
+      {
+        class: 'sector-contrib-link-btn',
+        type: 'button',
+        title: '查看系统已有的涨停归因与 LLM 解读',
+        onClick: (event) => {
+          event.stopPropagation()
+          showReasoning(row)
+        },
+      },
+      '涨停归因',
+    ),
+  ])
+}
+
 function renderCells(row, includeMargin) {
   const cells = [
     row.symbol,
@@ -129,7 +164,10 @@ function renderCells(row, includeMargin) {
     formatAmountWan(row.amount_yuan),
   ]
   if (includeMargin) cells.push(formatMargin(row.margin_to_ma))
-  return cells.map((value) => h('td', value))
+  return [
+    ...cells.map((value) => h('td', value)),
+    renderReasoningCell(row),
+  ]
 }
 
 const ContributorLeaderTable = defineComponent({
@@ -139,7 +177,7 @@ const ContributorLeaderTable = defineComponent({
     return () => h('div', { class: 'sector-contrib-table-scroll' }, [
       h('table', { class: 'sector-contrib-table sector-contrib-table--leader' }, [
         h('thead', [
-          h('tr', ['代码', '名称', '股价', '涨跌%', '成交额(万)'].map((label) => h('th', label))),
+          h('tr', ['代码', '名称', '股价', '涨跌%', '成交额(万)', '联动'].map((label) => h('th', label))),
         ]),
         h('tbody', tableProps.rows.map((row) => h('tr', { key: row.symbol }, renderCells(row, false)))),
       ]),
@@ -154,7 +192,7 @@ const ContributorMaTable = defineComponent({
     return () => h('div', { class: 'sector-contrib-table-scroll' }, [
       h('table', { class: 'sector-contrib-table sector-contrib-table--ma' }, [
         h('thead', [
-          h('tr', ['代码', '名称', '股价', '涨跌%', '成交额(万)', '距均线'].map((label) => h('th', label))),
+          h('tr', ['代码', '名称', '股价', '涨跌%', '成交额(万)', '距均线', '联动'].map((label) => h('th', label))),
         ]),
         h('tbody', tableProps.rows.map((row) => h('tr', { key: row.symbol }, renderCells(row, true)))),
       ]),
@@ -295,11 +333,11 @@ const ContributorMaTable = defineComponent({
 }
 .sector-contrib-table--leader,
 :deep(.sector-contrib-table--leader) {
-  min-width: 420px;
+  min-width: 500px;
 }
 .sector-contrib-table--ma,
 :deep(.sector-contrib-table--ma) {
-  min-width: 520px;
+  min-width: 600px;
 }
 .sector-contrib-table th,
 .sector-contrib-table td,
@@ -334,6 +372,37 @@ const ContributorMaTable = defineComponent({
 .sector-contrib-table tbody tr:hover,
 :deep(.sector-contrib-table tbody tr:hover) {
   background: #fff;
+}
+.sector-contrib-link-cell,
+:deep(.sector-contrib-link-cell) {
+  min-width: 70px;
+}
+.sector-contrib-link-cell--empty,
+:deep(.sector-contrib-link-cell--empty) {
+  color: #94a3b8;
+}
+.sector-contrib-link-muted,
+:deep(.sector-contrib-link-muted) {
+  color: #94a3b8;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.sector-contrib-link-btn,
+:deep(.sector-contrib-link-btn) {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 999px;
+  color: #c2410c;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+.sector-contrib-link-btn:hover,
+:deep(.sector-contrib-link-btn:hover) {
+  background: #ffedd5;
+  border-color: #fb923c;
 }
 @media (max-width: 900px) {
   .sector-contrib-ma-grid {

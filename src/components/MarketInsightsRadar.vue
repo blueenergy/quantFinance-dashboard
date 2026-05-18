@@ -329,6 +329,7 @@
             :top-n="insightContributorTopN"
             :ma-period="5"
             :data-key="sectorContributorsDataKey"
+            @show-reasoning="showLimitUpReasoning"
           />
           <template v-if="selectedSectorSeries.length">
             <h5>板块趋势</h5>
@@ -354,6 +355,17 @@
         <div v-else class="empty">点击左侧事件查看证据链。</div>
       </div>
     </section>
+    <LimitUpReasoningDialog
+      :open="limitUpReasoningOpen"
+      :loading="limitUpReasoningLoading"
+      :error="limitUpReasoningError"
+      :symbol="limitUpReasoningStock?.symbol || ''"
+      :stock-name="limitUpReasoningStock?.name || ''"
+      :trade-date="limitUpReasoningTradeDate"
+      :reasoning="limitUpReasoning"
+      :news-context="limitUpReasoningNewsContext"
+      @close="closeLimitUpReasoning"
+    />
   </div>
 </template>
 
@@ -361,6 +373,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import SectorContributorsPanel from './SectorContributorsPanel.vue'
+import LimitUpReasoningDialog from './LimitUpReasoningDialog.vue'
+import { useLimitUpReasoningDialog } from '../composables/useLimitUpReasoningDialog'
 
 const today = new Date().toISOString().slice(0, 10)
 const tradeDate = ref(today)
@@ -395,6 +409,17 @@ const sectorContributorsTitle = computed(() => (
 const sectorContributorsDataKey = computed(() => (
   `${selectedEvent.value?.subject_code || ''}-${String(sectorContributorsPayload.value?.snapshot_time || sectorContributorsPayload.value?.trade_date || '')}`
 ))
+const {
+  limitUpReasoningOpen,
+  limitUpReasoningLoading,
+  limitUpReasoningError,
+  limitUpReasoningStock,
+  limitUpReasoning,
+  limitUpReasoningNewsContext,
+  limitUpReasoningTradeDate,
+  showLimitUpReasoning,
+  closeLimitUpReasoning,
+} = useLimitUpReasoningDialog()
 
 const fallbackEventTypeMeta = {
   MARKET_BREADTH_RECOVERY: {
