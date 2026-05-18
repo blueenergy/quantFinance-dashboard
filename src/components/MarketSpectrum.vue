@@ -42,6 +42,15 @@
         >申万 L2</button>
       </div>
       <div class="hint">阳谱(yang_spectrum) 是上涨占比, 阴谱(yin_spectrum) 是下跌/未达标占比</div>
+      <div v-if="isRealtimeSpectrumTab" class="realtime-spectrum-notes">
+        <p class="realtime-spectrum-notes-title">实时阴阳谱 · 数据与 MA 说明</p>
+        <ul class="realtime-spectrum-notes-list">
+          <li>曲线与表格为盘中按任务写入的<strong>实时日 K 快照</strong>；横轴时间为 <code>YYYYMMDDHHMM</code>，仅在交易时段内有新点。</li>
+          <li>全市场阳谱来自 <code>market_spectrum_realtime_daily</code>；下方板块表来自 <code>realtime_sector_strength</code>，与全市场同一批快照对齐。</li>
+          <li><strong>「站上 MA5」</strong>与「阴阳谱」日线逻辑一致：取该股最近 <strong>4 个交易日</strong>已在 <code>volume_price</code> 落库的<strong>收盘</strong>，加上<strong>当前实时快照收盘价</strong>（每只股票在 <code>volume_price_realtime_latest</code> 中当日一条），构成含当日在内的 5 日均价，再判断现价是否高于该均价；<strong>不会</strong>把当日 <code>volume_price</code> 里可能滞后或重复的同日记录算进这条 MA。</li>
+          <li>收盘后若日线入库完成且与最后一笔快照一致，该判断与纯日线阴阳谱收敛一致。</li>
+        </ul>
+      </div>
     </div>
 
   <!-- 叠加指数相关性统计 -->
@@ -161,6 +170,66 @@
         </tr>
       </tbody>
     </table>
+
+    <div v-if="selectedSectorCode" class="sector-contributors">
+      <h5 class="contrib-title">贡献股拆解 · {{ selectedSectorName }}</h5>
+      <p class="contrib-sub text-subtle">
+        与上方板块表同一套 MA{{ contributorMaPeriod }} 规则：日线为最近 N 根收盘（含当日）的均值；实时为前 N−1 根已收盘日线 + 当前快照价构成当日均线。
+        下列按成交额、涨跌与距均线空间摘录，便于观察板块内部结构。
+      </p>
+      <div v-if="contributorsLoading" class="loading text-subtle">贡献股加载中...</div>
+      <div v-else-if="contributorsError" class="empty text-subtle">{{ contributorsError }}</div>
+      <template v-else-if="contributorsPayload && contributorsPayload.success">
+        <div class="contrib-grid">
+          <div class="contrib-col">
+            <h6 class="contrib-col-title">站上均线 · Top {{ contributorTopN }}</h6>
+            <table class="spectrum-table contrib-table">
+              <thead>
+                <tr>
+                  <th>代码</th>
+                  <th>名称</th>
+                  <th>涨跌%</th>
+                  <th>成交额(万)</th>
+                  <th>距均线</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in (contributorsPayload.top_above_ma || [])" :key="'a-' + r.symbol">
+                  <td>{{ r.symbol }}</td>
+                  <td>{{ r.name }}</td>
+                  <td>{{ formatPct(r.pct_chg) }}</td>
+                  <td>{{ formatAmountWan(r.amount_yuan) }}</td>
+                  <td>{{ formatMargin(r.margin_to_ma) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="contrib-col">
+            <h6 class="contrib-col-title">未站上均线 · Top {{ contributorTopN }}</h6>
+            <table class="spectrum-table contrib-table">
+              <thead>
+                <tr>
+                  <th>代码</th>
+                  <th>名称</th>
+                  <th>涨跌%</th>
+                  <th>成交额(万)</th>
+                  <th>距均线</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in (contributorsPayload.top_below_ma || [])" :key="'b-' + r.symbol">
+                  <td>{{ r.symbol }}</td>
+                  <td>{{ r.name }}</td>
+                  <td>{{ formatPct(r.pct_chg) }}</td>
+                  <td>{{ formatAmountWan(r.amount_yuan) }}</td>
+                  <td>{{ formatMargin(r.margin_to_ma) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+    </div>
   </section>
 
   <div v-if="loading" class="loading text-subtle">加载中...</div>
@@ -300,6 +369,11 @@ const sectorLevel = ref('L1')
 const selectedSectorCode = ref('')
 const sectorLoading = ref(false)
 const sectorSeriesLoading = ref(false)
+const contributorsPayload = ref(null)
+const contributorsLoading = ref(false)
+const contributorsError = ref('')
+const contributorMaPeriod = 5
+const contributorTopN = 40
 const pageTitle = computed(() => props.title)
 const displayRecords = computed(() => {
   return records.value.map(r => ({
@@ -375,6 +449,20 @@ function relativeClass(v) {
 }
 function ymd(dateStr) { return dateStr.replace(/-/g,'') }
 
+function formatPct(v) {
+  if (v == null || Number.isNaN(Number(v))) return '—'
+  const n = Number(v)
+  return (n >= 0 ? '+' : '') + n.toFixed(2) + '%'
+}
+function formatAmountWan(yuan) {
+  if (yuan == null || Number.isNaN(Number(yuan))) return '—'
+  return (Number(yuan) / 10000).toFixed(1)
+}
+function formatMargin(m) {
+  if (m == null || Number.isNaN(Number(m))) return '—'
+  return Number(m).toFixed(3)
+}
+
 function buildMinuteRange() {
   const start = ymd(startDate.value) + '0930'
   let endMinute = '1500'
@@ -441,6 +529,44 @@ async function fetchSectorSpectrum() {
     selectedSectorCode.value = ''
   } finally {
     sectorLoading.value = false
+    if (selectedSectorCode.value) {
+      fetchSectorContributors().catch(err => console.error('贡献股刷新失败', err))
+    }
+  }
+}
+
+async function fetchSectorContributors() {
+  if (!selectedSectorCode.value || !hasSectorPanel.value) {
+    contributorsPayload.value = null
+    return
+  }
+  const latestDate = records.value[records.value.length - 1]?.trade_date
+  if (!latestDate) {
+    contributorsPayload.value = null
+    return
+  }
+  contributorsLoading.value = true
+  contributorsError.value = ''
+  try {
+    const code = encodeURIComponent(selectedSectorCode.value)
+    const lv = sectorLevel.value
+    const mp = contributorMaPeriod
+    const tn = contributorTopN
+    let url
+    if (mode.value === 'minute') {
+      url = `/api/market-spectrum/sector-contributors?mode=realtime&level=${lv}&sector_code=${code}&snapshot_time=${latestDate}&ma_period=${mp}&top_n=${tn}`
+    } else {
+      const td = String(latestDate).replace(/-/g, '').slice(0, 8)
+      url = `/api/market-spectrum/sector-contributors?mode=daily&level=${lv}&sector_code=${code}&trade_date=${td}&ma_period=${mp}&top_n=${tn}`
+    }
+    const res = await axios.get(url)
+    contributorsPayload.value = res.data
+  } catch (e) {
+    console.error('获取板块贡献股失败', e)
+    contributorsError.value = e?.response?.data?.detail || e.message || '加载失败'
+    contributorsPayload.value = null
+  } finally {
+    contributorsLoading.value = false
   }
 }
 
@@ -500,7 +626,12 @@ async function fetchSpectrum() {
     await fetchOverlay()
     await nextTick() // 确保 chartRef 已渲染
     updateChart()
-    fetchSectorSpectrum().then(() => updateChart())
+    fetchSectorSpectrum().then(() => {
+      updateChart()
+      if (selectedSectorCode.value) {
+        return fetchSectorContributors()
+      }
+    })
   } catch (e) {
     console.error('获取阴阳谱失败', e)
     records.value = []
@@ -545,11 +676,18 @@ function selectSector(code) {
   if (selectedSectorCode.value === code) {
     selectedSectorCode.value = ''
     selectedSectorSeries.value = []
+    contributorsPayload.value = null
+    contributorsError.value = ''
     updateChart()
     return
   }
   selectedSectorCode.value = code
-  fetchSelectedSectorSeries(code).then(() => updateChart())
+  contributorsPayload.value = null
+  contributorsError.value = ''
+  fetchSelectedSectorSeries(code).then(() => {
+    updateChart()
+    return fetchSectorContributors()
+  })
 }
 
 async function updateChart() {
@@ -788,4 +926,11 @@ onBeforeUnmount(() => {
 .help-table th, .help-table td { border:1px solid #e2e8f0; padding:5px 8px; text-align:left; }
 .help-table th { background:#f8fafc; font-weight:600; }
 .help-note { font-size:11px; color:#999; margin-top:6px !important; }
+.sector-contributors { margin-top:14px; padding:12px 14px; background:#fafafa; border-top:1px solid #e2e8f0; }
+.contrib-title { margin:0 0 6px; font-size:14px; }
+.contrib-sub { margin:0 0 10px; line-height:1.45; }
+.contrib-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media (max-width: 900px) { .contrib-grid { grid-template-columns:1fr; } }
+.contrib-col-title { margin:0 0 6px; font-size:12px; color:#475569; font-weight:600; }
+.contrib-table th, .contrib-table td { font-size:12px; padding:5px 6px; }
 </style>
