@@ -237,6 +237,7 @@
                 <tr>
                   <th>代码</th>
                   <th>名称</th>
+                  <th>股价</th>
                   <th>涨跌%</th>
                   <th>成交额(万)</th>
                   <th>距均线</th>
@@ -246,6 +247,7 @@
                 <tr v-for="r in (contributorsPayload.top_above_ma || [])" :key="'a-' + r.symbol">
                   <td>{{ r.symbol }}</td>
                   <td>{{ r.name }}</td>
+                  <td>{{ formatPrice(r.close) }}</td>
                   <td>{{ formatPct(r.pct_chg) }}</td>
                   <td>{{ formatAmountWan(r.amount_yuan) }}</td>
                   <td>{{ formatMargin(r.margin_to_ma) }}</td>
@@ -260,6 +262,7 @@
                 <tr>
                   <th>代码</th>
                   <th>名称</th>
+                  <th>股价</th>
                   <th>涨跌%</th>
                   <th>成交额(万)</th>
                   <th>距均线</th>
@@ -269,6 +272,7 @@
                 <tr v-for="r in (contributorsPayload.top_below_ma || [])" :key="'b-' + r.symbol">
                   <td>{{ r.symbol }}</td>
                   <td>{{ r.name }}</td>
+                  <td>{{ formatPrice(r.close) }}</td>
                   <td>{{ formatPct(r.pct_chg) }}</td>
                   <td>{{ formatAmountWan(r.amount_yuan) }}</td>
                   <td>{{ formatMargin(r.margin_to_ma) }}</td>
@@ -564,6 +568,10 @@ function formatPct(v) {
 function formatAmountWan(yuan) {
   if (yuan == null || Number.isNaN(Number(yuan))) return '—'
   return (Number(yuan) / 10000).toFixed(1)
+}
+function formatPrice(p) {
+  if (p == null || Number.isNaN(Number(p))) return '—'
+  return Number(p).toFixed(2)
 }
 function formatMargin(m) {
   if (m == null || Number.isNaN(Number(m))) return '—'

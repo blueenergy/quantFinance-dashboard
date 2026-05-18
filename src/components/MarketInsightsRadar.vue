@@ -318,6 +318,69 @@
           </ul>
           <h5>核心指标</h5>
           <pre>{{ JSON.stringify(selectedEvent.evidence || {}, null, 2) }}</pre>
+          <template v-if="canLoadSectorContributors(selectedEvent)">
+            <h5>板块内谁在驱动结构</h5>
+            <p class="contrib-explainer muted">
+              与「阴阳谱」页同一口径：按成交额排序，分列站上 MA5 与未站上 MA5（快照时间对齐当前事件）。
+            </p>
+            <div v-if="sectorContributorsLoading" class="empty compact">贡献股加载中…</div>
+            <div v-else-if="sectorContributorsError" class="alert error">{{ sectorContributorsError }}</div>
+            <div v-else-if="sectorContributorsPayload?.success" class="insight-contrib-grid">
+              <div class="insight-contrib-col">
+                <h6 class="insight-contrib-col-title">站上均线 · Top {{ insightContributorTopN }}</h6>
+                <table class="insight-contrib-table">
+                  <thead>
+                    <tr>
+                      <th>代码</th>
+                      <th>名称</th>
+                      <th>股价</th>
+                      <th>涨跌%</th>
+                      <th>成交额(万)</th>
+                      <th>距均线</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="r in (sectorContributorsPayload.top_above_ma || [])" :key="'a-' + r.symbol">
+                      <td>{{ r.symbol }}</td>
+                      <td>{{ r.name }}</td>
+                      <td>{{ formatPrice(r.close) }}</td>
+                      <td>{{ formatPct(r.pct_chg) }}</td>
+                      <td>{{ formatAmountWan(r.amount_yuan) }}</td>
+                      <td>{{ formatMargin(r.margin_to_ma) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="insight-contrib-col">
+                <h6 class="insight-contrib-col-title">未站上均线 · Top {{ insightContributorTopN }}</h6>
+                <table class="insight-contrib-table">
+                  <thead>
+                    <tr>
+                      <th>代码</th>
+                      <th>名称</th>
+                      <th>股价</th>
+                      <th>涨跌%</th>
+                      <th>成交额(万)</th>
+                      <th>距均线</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="r in (sectorContributorsPayload.top_below_ma || [])" :key="'b-' + r.symbol">
+                      <td>{{ r.symbol }}</td>
+                      <td>{{ r.name }}</td>
+                      <td>{{ formatPrice(r.close) }}</td>
+                      <td>{{ formatPct(r.pct_chg) }}</td>
+                      <td>{{ formatAmountWan(r.amount_yuan) }}</td>
+                      <td>{{ formatMargin(r.margin_to_ma) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div v-else-if="sectorContributorsPayload && !sectorContributorsPayload.success" class="empty compact">
+              {{ sectorContributorsPayload.error || '暂无贡献股数据' }}
+            </div>
+          </template>
           <template v-if="selectedSectorSeries.length">
             <h5>板块趋势</h5>
             <div v-if="selectedSectorSeriesSimulated" class="simulated-note">
@@ -346,7 +409,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 
 const today = new Date().toISOString().slice(0, 10)
@@ -370,6 +433,11 @@ const selectedSectorSeries = ref([])
 const selectedSectorSeriesSimulated = ref(false)
 const qualityDimension = ref('event_type')
 const qualityItems = ref([])
+/** 与阴阳谱页同一接口：板块内成交额与 MA 位置拆解 */
+const sectorContributorsPayload = ref(null)
+const sectorContributorsLoading = ref(false)
+const sectorContributorsError = ref('')
+const insightContributorTopN = 25
 
 const fallbackEventTypeMeta = {
   MARKET_BREADTH_RECOVERY: {
@@ -452,6 +520,72 @@ const selectedEventMeta = computed(() => {
   if (!selectedEvent.value?.event_type) return null
   return eventTypeMeta.value[selectedEvent.value.event_type] || fallbackEventTypeMeta[selectedEvent.value.event_type] || null
 })
+
+function canLoadSectorContributors(ev) {
+  if (!ev) return false
+  if (String(ev.subject_type || '') !== 'sector') return false
+  const code = String(ev.subject_code || ev.evidence?.sector_code || '').trim()
+  const st = String(ev.snapshot_time || ev.evidence?.snapshot_time || '').replace(/\D/g, '')
+  return Boolean(code && st.length >= 12)
+}
+
+function contributorLevelForApi(ev) {
+  const lv = String(ev?.level || sectorLevel.value || 'L2').toUpperCase()
+  if (lv === 'L1' || lv === 'L2' || lv === 'L3') return lv
+  return 'L2'
+}
+
+function sectorContributorRequestParams(ev) {
+  if (!canLoadSectorContributors(ev)) return null
+  const code = String(ev.subject_code || ev.evidence?.sector_code || '').trim()
+  const st = String(ev.snapshot_time || ev.evidence?.snapshot_time || '').replace(/\D/g, '').slice(0, 12)
+  return {
+    mode: 'realtime',
+    level: contributorLevelForApi(ev),
+    sector_code: code,
+    snapshot_time: st,
+    ma_period: 5,
+    top_n: insightContributorTopN,
+  }
+}
+
+async function loadInsightsSectorContributors() {
+  const ev = selectedEvent.value
+  const params = sectorContributorRequestParams(ev)
+  if (!params) {
+    sectorContributorsPayload.value = null
+    sectorContributorsError.value = ''
+    sectorContributorsLoading.value = false
+    return
+  }
+  sectorContributorsLoading.value = true
+  sectorContributorsError.value = ''
+  try {
+    const res = await axios.get('/api/market-spectrum/sector-contributors', { params })
+    sectorContributorsPayload.value = res.data
+    if (!res.data?.success) {
+      sectorContributorsError.value = res.data?.error || res.data?.detail || '加载失败'
+    }
+  } catch (err) {
+    sectorContributorsPayload.value = null
+    sectorContributorsError.value = err?.response?.data?.detail || err?.message || '加载失败'
+  } finally {
+    sectorContributorsLoading.value = false
+  }
+}
+
+watch(
+  () => [
+    selectedEvent.value?._id,
+    selectedEvent.value?.subject_code,
+    selectedEvent.value?.snapshot_time,
+    selectedEvent.value?.level,
+    selectedEvent.value?.subject_type,
+  ],
+  () => {
+    loadInsightsSectorContributors()
+  },
+)
 
 const trendPoints = computed(() => {
   const rows = selectedSectorSeries.value
@@ -707,7 +841,10 @@ async function selectSector(row) {
     confidence: 0,
     title: `${row.sector_name} 板块结构`,
     summary: `${row.sector_name} 当前上涨比例 ${percent(row.positive_ratio)}，相对全市场 ${percent(row.relative_positive_ratio)}。`,
+    subject_type: 'sector',
+    subject_code: row.sector_code,
     subject_name: row.sector_name,
+    level: row.level || sectorLevel.value,
     snapshot_time: row.snapshot_time,
     supporting_points: ['这是板块结构快照，不是买卖信号'],
     counter_points: ['需要结合事件流判断变化方向'],
@@ -764,6 +901,27 @@ function formatSnapshot(value) {
   const s = String(value || '')
   if (s.length !== 12) return s || '-'
   return `${s.slice(8, 10)}:${s.slice(10, 12)}`
+}
+
+function formatPct(v) {
+  if (v == null || Number.isNaN(Number(v))) return '—'
+  const n = Number(v)
+  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
+}
+
+function formatAmountWan(yuan) {
+  if (yuan == null || Number.isNaN(Number(yuan))) return '—'
+  return (Number(yuan) / 10000).toFixed(1)
+}
+
+function formatPrice(p) {
+  if (p == null || Number.isNaN(Number(p))) return '—'
+  return Number(p).toFixed(2)
+}
+
+function formatMargin(m) {
+  if (m == null || Number.isNaN(Number(m))) return '—'
+  return Number(m).toFixed(3)
 }
 
 onMounted(loadAll)
@@ -1240,6 +1398,32 @@ pre {
   font-size: 12px;
   justify-content: space-between;
   margin-top: 6px;
+}
+.contrib-explainer {
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 6px 0 8px;
+}
+.insight-contrib-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+.insight-contrib-col-title {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.insight-contrib-table {
+  margin-top: 0;
+}
+.insight-contrib-table tbody tr {
+  cursor: default;
+}
+.insight-contrib-table tbody tr:hover {
+  background: #fff;
 }
 @media (max-width: 1100px) {
   .layout,
