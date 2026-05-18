@@ -784,8 +784,8 @@ export default {
         symbol: symbol,
         asset_type: selectedTask.value?.asset_type || result.value?.asset_type || 'stock',
         strategy_key: strategyKey,
-        start_date: startDt.toISOString().split('T')[0],
-        end_date: endDt.toISOString().split('T')[0],
+        start_date: yyyymmdd(startDt),
+        end_date: yyyymmdd(endDt),
         initial_cash: initialCash,
         preset: createPreferredPreset.value || selectedTask.value?.preset || '',
         strategy_params: { ...params }

@@ -318,151 +318,18 @@
           </ul>
           <h5>核心指标</h5>
           <pre>{{ JSON.stringify(selectedEvent.evidence || {}, null, 2) }}</pre>
-          <template v-if="canLoadSectorContributors(selectedEvent)">
-            <h5>板块内谁在驱动结构</h5>
-            <p class="contrib-explainer muted">
-              与「阴阳谱」页同一口径：按成交额排序，分列站上 MA5 与未站上 MA5（快照时间对齐当前事件）。
-            </p>
-            <div v-if="sectorContributorsLoading" class="empty compact">贡献股加载中…</div>
-            <div v-else-if="sectorContributorsError" class="alert error">{{ sectorContributorsError }}</div>
-            <div v-else-if="sectorContributorsPayload?.success" class="insight-contrib-wrap">
-              <div
-                v-if="(sectorContributorsPayload.leader_amount_top || []).length"
-                class="insight-contrib-leaders"
-              >
-                <p class="insight-contrib-leaders-intro muted">
-                  同一快照下列出三种视角（非单一龙头定义）；与下方 MA 分桶表独立，请自行对照。
-                </p>
-                <div class="insight-contrib-leader-cols">
-                  <div class="insight-contrib-leader-block">
-                    <div class="insight-contrib-leader-label">资金引领 · 成交额 Top {{ sectorContributorsPayload.leader_preview_k || 5 }}</div>
-                    <table class="insight-contrib-table insight-leader-table">
-                      <thead>
-                        <tr>
-                          <th>代码</th>
-                          <th>名称</th>
-                          <th>股价</th>
-                          <th>涨跌%</th>
-                          <th>成交额(万)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="r in sectorContributorsPayload.leader_amount_top" :key="'ila-' + r.symbol">
-                          <td>{{ r.symbol }}</td>
-                          <td>{{ r.name }}</td>
-                          <td>{{ formatPrice(r.close) }}</td>
-                          <td>{{ formatPct(r.pct_chg) }}</td>
-                          <td>{{ formatAmountWan(r.amount_yuan) }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <div class="insight-contrib-leader-block">
-                    <div class="insight-contrib-leader-label">价格引领 · 涨跌幅 Top {{ sectorContributorsPayload.leader_preview_k || 5 }}</div>
-                    <table class="insight-contrib-table insight-leader-table">
-                      <thead>
-                        <tr>
-                          <th>代码</th>
-                          <th>名称</th>
-                          <th>股价</th>
-                          <th>涨跌%</th>
-                          <th>成交额(万)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="r in sectorContributorsPayload.leader_pct_chg_top" :key="'ilp-' + r.symbol">
-                          <td>{{ r.symbol }}</td>
-                          <td>{{ r.name }}</td>
-                          <td>{{ formatPrice(r.close) }}</td>
-                          <td>{{ formatPct(r.pct_chg) }}</td>
-                          <td>{{ formatAmountWan(r.amount_yuan) }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <div class="insight-contrib-leader-block">
-                    <div class="insight-contrib-leader-label">情绪/辨识度 · |涨跌幅| Top {{ sectorContributorsPayload.leader_preview_k || 5 }}</div>
-                    <p class="insight-contrib-leader-hint muted">按涨跌幅绝对值排序（无连板标签）。</p>
-                    <table class="insight-contrib-table insight-leader-table">
-                      <thead>
-                        <tr>
-                          <th>代码</th>
-                          <th>名称</th>
-                          <th>股价</th>
-                          <th>涨跌%</th>
-                          <th>成交额(万)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="r in sectorContributorsPayload.leader_volatility_top" :key="'ilv-' + r.symbol">
-                          <td>{{ r.symbol }}</td>
-                          <td>{{ r.name }}</td>
-                          <td>{{ formatPrice(r.close) }}</td>
-                          <td>{{ formatPct(r.pct_chg) }}</td>
-                          <td>{{ formatAmountWan(r.amount_yuan) }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-              <div class="insight-contrib-grid">
-              <div class="insight-contrib-col">
-                <h6 class="insight-contrib-col-title">站上均线 · Top {{ insightContributorTopN }}</h6>
-                <table class="insight-contrib-table">
-                  <thead>
-                    <tr>
-                      <th>代码</th>
-                      <th>名称</th>
-                      <th>股价</th>
-                      <th>涨跌%</th>
-                      <th>成交额(万)</th>
-                      <th>距均线</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="r in (sectorContributorsPayload.top_above_ma || [])" :key="'a-' + r.symbol">
-                      <td>{{ r.symbol }}</td>
-                      <td>{{ r.name }}</td>
-                      <td>{{ formatPrice(r.close) }}</td>
-                      <td>{{ formatPct(r.pct_chg) }}</td>
-                      <td>{{ formatAmountWan(r.amount_yuan) }}</td>
-                      <td>{{ formatMargin(r.margin_to_ma) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="insight-contrib-col">
-                <h6 class="insight-contrib-col-title">未站上均线 · Top {{ insightContributorTopN }}</h6>
-                <table class="insight-contrib-table">
-                  <thead>
-                    <tr>
-                      <th>代码</th>
-                      <th>名称</th>
-                      <th>股价</th>
-                      <th>涨跌%</th>
-                      <th>成交额(万)</th>
-                      <th>距均线</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="r in (sectorContributorsPayload.top_below_ma || [])" :key="'b-' + r.symbol">
-                      <td>{{ r.symbol }}</td>
-                      <td>{{ r.name }}</td>
-                      <td>{{ formatPrice(r.close) }}</td>
-                      <td>{{ formatPct(r.pct_chg) }}</td>
-                      <td>{{ formatAmountWan(r.amount_yuan) }}</td>
-                      <td>{{ formatMargin(r.margin_to_ma) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            </div>
-            <div v-else-if="sectorContributorsPayload && !sectorContributorsPayload.success" class="empty compact">
-              {{ sectorContributorsPayload.error || '暂无贡献股数据' }}
-            </div>
-          </template>
+          <SectorContributorsPanel
+            v-if="canLoadSectorContributors(selectedEvent)"
+            class="insight-sector-contributors"
+            :loading="sectorContributorsLoading"
+            :error="sectorContributorsError"
+            :payload="sectorContributorsPayload"
+            :title="sectorContributorsTitle"
+            :description="sectorContributorsDescription"
+            :top-n="insightContributorTopN"
+            :ma-period="5"
+            :data-key="sectorContributorsDataKey"
+          />
           <template v-if="selectedSectorSeries.length">
             <h5>板块趋势</h5>
             <div v-if="selectedSectorSeriesSimulated" class="simulated-note">
@@ -493,6 +360,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
+import SectorContributorsPanel from './SectorContributorsPanel.vue'
 
 const today = new Date().toISOString().slice(0, 10)
 const tradeDate = ref(today)
@@ -520,6 +388,13 @@ const sectorContributorsPayload = ref(null)
 const sectorContributorsLoading = ref(false)
 const sectorContributorsError = ref('')
 const insightContributorTopN = 25
+const sectorContributorsDescription = '与「阴阳谱」页同一口径：按成交额排序，分列站上 MA5 与未站上 MA5（快照时间对齐当前事件）。'
+const sectorContributorsTitle = computed(() => (
+  `板块内谁在驱动结构 · ${sectorContributorsPayload.value?.sector_name || selectedEvent.value?.subject_name || '板块'}`
+))
+const sectorContributorsDataKey = computed(() => (
+  `${selectedEvent.value?.subject_code || ''}-${String(sectorContributorsPayload.value?.snapshot_time || sectorContributorsPayload.value?.trade_date || '')}`
+))
 
 const fallbackEventTypeMeta = {
   MARKET_BREADTH_RECOVERY: {
@@ -985,27 +860,6 @@ function formatSnapshot(value) {
   return `${s.slice(8, 10)}:${s.slice(10, 12)}`
 }
 
-function formatPct(v) {
-  if (v == null || Number.isNaN(Number(v))) return '—'
-  const n = Number(v)
-  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
-}
-
-function formatAmountWan(yuan) {
-  if (yuan == null || Number.isNaN(Number(yuan))) return '—'
-  return (Number(yuan) / 10000).toFixed(1)
-}
-
-function formatPrice(p) {
-  if (p == null || Number.isNaN(Number(p))) return '—'
-  return Number(p).toFixed(2)
-}
-
-function formatMargin(m) {
-  if (m == null || Number.isNaN(Number(m))) return '—'
-  return Number(m).toFixed(3)
-}
-
 onMounted(loadAll)
 </script>
 
@@ -1332,6 +1186,9 @@ select {
   grid-template-columns: minmax(260px, 0.9fr) minmax(420px, 1.35fr) minmax(320px, 1fr);
   gap: 12px;
 }
+.layout > .panel {
+  min-width: 0;
+}
 .event-item {
   background: #fff;
   border: 1px solid #e2e8f0;
@@ -1481,73 +1338,14 @@ pre {
   justify-content: space-between;
   margin-top: 6px;
 }
-.contrib-explainer {
-  font-size: 12px;
-  line-height: 1.45;
-  margin: 6px 0 8px;
-}
-.insight-contrib-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.insight-sector-contributors {
   margin-top: 8px;
-}
-.insight-contrib-col-title {
-  color: #475569;
-  font-size: 12px;
-  font-weight: 600;
-  margin: 0 0 6px;
-}
-.insight-contrib-table {
-  margin-top: 0;
-}
-.insight-contrib-table tbody tr {
-  cursor: default;
-}
-.insight-contrib-table tbody tr:hover {
-  background: #fff;
-}
-.insight-contrib-leaders-intro {
-  font-size: 12px;
-  line-height: 1.45;
-  margin: 0 0 10px;
-}
-.insight-contrib-leader-cols {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-bottom: 14px;
-}
-.insight-contrib-leader-block {
-  min-width: 0;
-}
-.insight-contrib-leader-label {
-  color: #475569;
-  font-size: 12px;
-  font-weight: 600;
-  margin: 0 0 6px;
-}
-.insight-contrib-leader-hint {
-  font-size: 11px;
-  line-height: 1.35;
-  margin: -2px 0 6px;
-}
-.insight-leader-table {
-  margin-top: 0;
-}
-.insight-leader-table th,
-.insight-leader-table td {
-  font-size: 11px;
-  padding: 4px 5px;
 }
 @media (max-width: 1100px) {
   .layout,
   .overview,
   .focus-grid,
   .guide-grid {
-    grid-template-columns: 1fr;
-  }
-  .insight-contrib-leader-cols {
     grid-template-columns: 1fr;
   }
 }

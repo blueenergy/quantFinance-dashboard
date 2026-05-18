@@ -211,158 +211,19 @@
       </table>
     </details>
 
-    <div v-if="selectedSectorCode" class="sector-contributors">
-      <h5 class="contrib-title">贡献股拆解 · {{ selectedSectorName }}</h5>
-      <p class="contrib-sub text-subtle">
-        与上方板块表同一套 MA{{ contributorMaPeriod }} 规则：日线为最近 N 根收盘（含当日）的均值；实时为前 N−1 根已收盘日线 + 当前快照价构成当日均线。
-        下列按成交额、涨跌与距均线空间摘录，便于观察板块内部结构。
-      </p>
-      <div v-if="contributorsLoading" class="loading text-subtle">贡献股加载中...</div>
-      <div v-else-if="contributorsError" class="empty text-subtle">{{ contributorsError }}</div>
-      <details
-        v-else-if="contributorsPayload && contributorsPayload.success"
-        class="spectrum-fold spectrum-fold--nested spectrum-fold--contrib"
-        :open="contributorsFoldOpen"
-        @toggle="onContributorsFoldToggle"
-      >
-        <summary class="spectrum-fold-summary">
-          贡献股拆解表格 · {{ selectedSectorName }} · Top {{ contributorTopN }} × 2
-          <span class="spectrum-fold-hint">（默认折叠；选中板块后会自动展开）</span>
-        </summary>
-        <div class="contrib-grid">
-          <div
-            v-if="(contributorsPayload.leader_amount_top || []).length"
-            class="contrib-leader-previews"
-          >
-            <p class="contrib-leader-intro text-subtle">
-              同一快照下列出三种视角（非单一龙头定义）；与下方 MA 分桶表独立，请自行对照。
-            </p>
-            <div class="contrib-leader-cols">
-              <div class="contrib-leader-block">
-                <div class="contrib-leader-label">资金引领 · 成交额 Top {{ contributorsPayload.leader_preview_k || 5 }}</div>
-                <table class="spectrum-table contrib-table contrib-leader-table">
-                  <thead>
-                    <tr>
-                      <th>代码</th>
-                      <th>名称</th>
-                      <th>股价</th>
-                      <th>涨跌%</th>
-                      <th>成交额(万)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="r in contributorsPayload.leader_amount_top" :key="'la-' + r.symbol">
-                      <td>{{ r.symbol }}</td>
-                      <td>{{ r.name }}</td>
-                      <td>{{ formatPrice(r.close) }}</td>
-                      <td>{{ formatPct(r.pct_chg) }}</td>
-                      <td>{{ formatAmountWan(r.amount_yuan) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="contrib-leader-block">
-                <div class="contrib-leader-label">价格引领 · 涨跌幅 Top {{ contributorsPayload.leader_preview_k || 5 }}</div>
-                <table class="spectrum-table contrib-table contrib-leader-table">
-                  <thead>
-                    <tr>
-                      <th>代码</th>
-                      <th>名称</th>
-                      <th>股价</th>
-                      <th>涨跌%</th>
-                      <th>成交额(万)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="r in contributorsPayload.leader_pct_chg_top" :key="'lp-' + r.symbol">
-                      <td>{{ r.symbol }}</td>
-                      <td>{{ r.name }}</td>
-                      <td>{{ formatPrice(r.close) }}</td>
-                      <td>{{ formatPct(r.pct_chg) }}</td>
-                      <td>{{ formatAmountWan(r.amount_yuan) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="contrib-leader-block">
-                <div class="contrib-leader-label">情绪/辨识度 · |涨跌幅| Top {{ contributorsPayload.leader_preview_k || 5 }}</div>
-                <p class="contrib-leader-hint text-subtle">按涨跌幅绝对值排序，近似波动与关注度（无连板标签）。</p>
-                <table class="spectrum-table contrib-table contrib-leader-table">
-                  <thead>
-                    <tr>
-                      <th>代码</th>
-                      <th>名称</th>
-                      <th>股价</th>
-                      <th>涨跌%</th>
-                      <th>成交额(万)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="r in contributorsPayload.leader_volatility_top" :key="'lv-' + r.symbol">
-                      <td>{{ r.symbol }}</td>
-                      <td>{{ r.name }}</td>
-                      <td>{{ formatPrice(r.close) }}</td>
-                      <td>{{ formatPct(r.pct_chg) }}</td>
-                      <td>{{ formatAmountWan(r.amount_yuan) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          <div class="contrib-col">
-            <h6 class="contrib-col-title">站上均线 · Top {{ contributorTopN }}</h6>
-            <table class="spectrum-table contrib-table">
-              <thead>
-                <tr>
-                  <th>代码</th>
-                  <th>名称</th>
-                  <th>股价</th>
-                  <th>涨跌%</th>
-                  <th>成交额(万)</th>
-                  <th>距均线</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="r in (contributorsPayload.top_above_ma || [])" :key="'a-' + r.symbol">
-                  <td>{{ r.symbol }}</td>
-                  <td>{{ r.name }}</td>
-                  <td>{{ formatPrice(r.close) }}</td>
-                  <td>{{ formatPct(r.pct_chg) }}</td>
-                  <td>{{ formatAmountWan(r.amount_yuan) }}</td>
-                  <td>{{ formatMargin(r.margin_to_ma) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="contrib-col">
-            <h6 class="contrib-col-title">未站上均线 · Top {{ contributorTopN }}</h6>
-            <table class="spectrum-table contrib-table">
-              <thead>
-                <tr>
-                  <th>代码</th>
-                  <th>名称</th>
-                  <th>股价</th>
-                  <th>涨跌%</th>
-                  <th>成交额(万)</th>
-                  <th>距均线</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="r in (contributorsPayload.top_below_ma || [])" :key="'b-' + r.symbol">
-                  <td>{{ r.symbol }}</td>
-                  <td>{{ r.name }}</td>
-                  <td>{{ formatPrice(r.close) }}</td>
-                  <td>{{ formatPct(r.pct_chg) }}</td>
-                  <td>{{ formatAmountWan(r.amount_yuan) }}</td>
-                  <td>{{ formatMargin(r.margin_to_ma) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </details>
-    </div>
+    <SectorContributorsPanel
+      v-if="selectedSectorCode"
+      class="sector-contributors"
+      :loading="contributorsLoading"
+      :error="contributorsError"
+      :payload="contributorsPayload"
+      :title="`贡献股拆解 · ${selectedSectorName}`"
+      :description="contributorsDescription"
+      :top-n="contributorTopN"
+      :ma-period="contributorMaPeriod"
+      :data-key="selectedSectorContributorsKey"
+      loading-text="贡献股加载中..."
+    />
   </section>
 
   <div v-if="loading" class="loading text-subtle">加载中...</div>
@@ -408,6 +269,7 @@
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 import axios from 'axios'
+import SectorContributorsPanel from './SectorContributorsPanel.vue'
 // Lazy-load ECharts to reduce initial bundle size
 let echarts
 import { chartColors } from '../theme/chartTheme.js'
@@ -511,12 +373,14 @@ const sectorSeriesLoading = ref(false)
 const contributorsPayload = ref(null)
 const contributorsLoading = ref(false)
 const contributorsError = ref('')
-/** 贡献股折叠面板：受控 open，选中板块并拉取贡献股成功后自动展开 */
-const contributorsFoldOpen = ref(false)
-/** 下一次贡献股请求成功后是否自动展开（选中板块时置 true） */
-const autoOpenContributorsAfterFetch = ref(false)
 const contributorMaPeriod = 5
 const contributorTopN = 40
+const contributorsDescription = computed(() => (
+  `与上方板块表同一套 MA${contributorMaPeriod} 规则：日线为最近 N 根收盘（含当日）的均值；实时为前 N−1 根已收盘日线 + 当前快照价构成当日均线。下列按成交额、涨跌与距均线空间摘录，便于观察板块内部结构。`
+))
+const selectedSectorContributorsKey = computed(() => (
+  `${selectedSectorCode.value}-${String(contributorsPayload.value?.trade_date || contributorsPayload.value?.snapshot_time || '')}`
+))
 const pageTitle = computed(() => props.title)
 const displayRecords = computed(() => {
   return records.value.map(r => ({
@@ -594,8 +458,6 @@ function onSectorPickerChange(raw) {
       selectedSectorSeries.value = []
       contributorsPayload.value = null
       contributorsError.value = ''
-      contributorsFoldOpen.value = false
-      autoOpenContributorsAfterFetch.value = false
       updateChart()
     }
     return
@@ -640,24 +502,6 @@ function relativeClass(v) {
 }
 function ymd(dateStr) { return dateStr.replace(/-/g,'') }
 
-function formatPct(v) {
-  if (v == null || Number.isNaN(Number(v))) return '—'
-  const n = Number(v)
-  return (n >= 0 ? '+' : '') + n.toFixed(2) + '%'
-}
-function formatAmountWan(yuan) {
-  if (yuan == null || Number.isNaN(Number(yuan))) return '—'
-  return (Number(yuan) / 10000).toFixed(1)
-}
-function formatPrice(p) {
-  if (p == null || Number.isNaN(Number(p))) return '—'
-  return Number(p).toFixed(2)
-}
-function formatMargin(m) {
-  if (m == null || Number.isNaN(Number(m))) return '—'
-  return Number(m).toFixed(3)
-}
-
 function buildMinuteRange() {
   const start = ymd(startDate.value) + '0930'
   let endMinute = '1500'
@@ -697,8 +541,6 @@ async function fetchSectorSpectrum() {
     sectorRecords.value = []
     selectedSectorSeries.value = []
     selectedSectorCode.value = ''
-    contributorsFoldOpen.value = false
-    autoOpenContributorsAfterFetch.value = false
     return
   }
   const latestDate = records.value[records.value.length - 1]?.trade_date
@@ -718,16 +560,12 @@ async function fetchSectorSpectrum() {
     if (!arr.some(row => row.sector_code === selectedSectorCode.value)) {
       selectedSectorCode.value = ''
       selectedSectorSeries.value = []
-      contributorsFoldOpen.value = false
-      autoOpenContributorsAfterFetch.value = false
     }
   } catch (e) {
     console.error('获取板块阴阳谱失败', e)
     sectorRecords.value = []
     selectedSectorSeries.value = []
     selectedSectorCode.value = ''
-    contributorsFoldOpen.value = false
-    autoOpenContributorsAfterFetch.value = false
   } finally {
     sectorLoading.value = false
     if (selectedSectorCode.value) {
@@ -768,10 +606,6 @@ async function fetchSectorContributors() {
     contributorsPayload.value = null
   } finally {
     contributorsLoading.value = false
-    if (contributorsPayload.value?.success && autoOpenContributorsAfterFetch.value) {
-      contributorsFoldOpen.value = true
-    }
-    autoOpenContributorsAfterFetch.value = false
   }
 }
 
@@ -875,13 +709,7 @@ function setSectorLevel(level) {
   sectorPickerFilter.value = ''
   selectedSectorCode.value = ''
   selectedSectorSeries.value = []
-  contributorsFoldOpen.value = false
-  autoOpenContributorsAfterFetch.value = false
   fetchSectorSpectrum().then(() => updateChart())
-}
-
-function onContributorsFoldToggle(e) {
-  contributorsFoldOpen.value = e.target.open
 }
 
 function selectSector(code) {
@@ -890,15 +718,12 @@ function selectSector(code) {
     selectedSectorSeries.value = []
     contributorsPayload.value = null
     contributorsError.value = ''
-    contributorsFoldOpen.value = false
-    autoOpenContributorsAfterFetch.value = false
     updateChart()
     return
   }
   selectedSectorCode.value = code
   contributorsPayload.value = null
   contributorsError.value = ''
-  autoOpenContributorsAfterFetch.value = true
   fetchSelectedSectorSeries(code).then(() => {
     updateChart()
     return fetchSectorContributors()
@@ -1105,7 +930,6 @@ onBeforeUnmount(() => {
 .spectrum-fold:not([open]) .spectrum-fold-summary { border-bottom:none; }
 .spectrum-fold-table { margin:0; }
 .spectrum-fold--nested { margin:0; border:none; border-radius:0; background:transparent; overflow:visible; }
-.sector-contributors .spectrum-fold--contrib > .spectrum-fold-summary { border-top:1px solid #e2e8f0; margin-top:2px; padding-top:10px; }
 .sector-panel { margin:0 0 16px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
 .sector-panel-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
 .sector-quick-picker { padding:10px 14px; background:#fff; border-bottom:1px solid #e2e8f0; }
@@ -1157,18 +981,4 @@ onBeforeUnmount(() => {
 .help-table th { background:#f8fafc; font-weight:600; }
 .help-note { font-size:11px; color:#999; margin-top:6px !important; }
 .sector-contributors { margin-top:14px; padding:12px 14px; background:#fafafa; border-top:1px solid #e2e8f0; }
-.contrib-title { margin:0 0 6px; font-size:14px; }
-.contrib-sub { margin:0 0 10px; line-height:1.45; }
-.contrib-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-.contrib-leader-previews { grid-column: 1 / -1; margin-bottom: 4px; }
-.contrib-leader-intro { font-size:12px; line-height:1.45; margin:0 0 10px; }
-.contrib-leader-cols { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
-.contrib-leader-block { min-width:0; }
-.contrib-leader-label { font-size:12px; font-weight:600; color:#475569; margin:0 0 6px; }
-.contrib-leader-hint { font-size:11px; margin:-2px 0 6px; line-height:1.35; }
-.contrib-leader-table { margin-top:0; }
-.contrib-leader-table th, .contrib-leader-table td { font-size:11px; padding:4px 5px; }
-@media (max-width: 900px) { .contrib-grid { grid-template-columns:1fr; } .contrib-leader-cols { grid-template-columns:1fr; } }
-.contrib-col-title { margin:0 0 6px; font-size:12px; color:#475569; font-weight:600; }
-.contrib-table th, .contrib-table td { font-size:12px; padding:5px 6px; }
 </style>
