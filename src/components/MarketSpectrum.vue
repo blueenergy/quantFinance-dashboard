@@ -141,6 +141,40 @@
       </div>
       <span class="sector-date">{{ sectorLoading ? '板块加载中...' : `最新: ${formatDate(latestSectorDate)}` }}</span>
     </div>
+    <div
+      v-if="hasSectorPanel && !sectorLoading && latestSectorRows.length > 0"
+      class="sector-quick-picker"
+    >
+      <div class="sector-quick-picker-row">
+        <label class="sector-quick-label" for="sector-pick-filter">快速切换</label>
+        <input
+          id="sector-pick-filter"
+          v-model="sectorPickerFilter"
+          type="search"
+          class="sector-quick-filter"
+          placeholder="筛选名称或代码"
+          autocomplete="off"
+          enterkeyhint="search"
+        />
+        <select
+          class="sector-quick-select"
+          :value="selectedSectorCode"
+          @change="onSectorPickerChange($event.target.value)"
+        >
+          <option value="">— 未选（不叠加曲线 / 无贡献股）—</option>
+          <option
+            v-for="row in sectorPickerSelectRows"
+            :key="row.sector_code"
+            :value="row.sector_code"
+          >
+            {{ formatSectorPickerOption(row) }}
+          </option>
+        </select>
+      </div>
+      <p v-if="sectorPickerFilter.trim() && filteredSectorPickerRows.length === 0 && sectorPickerSelectRows.length === 0" class="sector-quick-empty text-subtle">
+        无匹配板块
+      </p>
+    </div>
     <div v-if="sectorLoading" class="loading text-subtle">板块阴阳谱加载中...</div>
     <div v-else-if="latestSectorRows.length === 0" class="empty text-subtle">暂无板块阴阳谱数据</div>
     <details v-else class="spectrum-fold spectrum-fold--nested">
@@ -185,10 +219,15 @@
       </p>
       <div v-if="contributorsLoading" class="loading text-subtle">贡献股加载中...</div>
       <div v-else-if="contributorsError" class="empty text-subtle">{{ contributorsError }}</div>
-      <details v-else-if="contributorsPayload && contributorsPayload.success" class="spectrum-fold spectrum-fold--nested spectrum-fold--contrib">
+      <details
+        v-else-if="contributorsPayload && contributorsPayload.success"
+        class="spectrum-fold spectrum-fold--nested spectrum-fold--contrib"
+        :open="contributorsFoldOpen"
+        @toggle="onContributorsFoldToggle"
+      >
         <summary class="spectrum-fold-summary">
           贡献股拆解表格 · {{ selectedSectorName }} · Top {{ contributorTopN }} × 2
-          <span class="spectrum-fold-hint">（默认折叠，点击展开）</span>
+          <span class="spectrum-fold-hint">（默认折叠；选中板块后会自动展开）</span>
         </summary>
         <div class="contrib-grid">
           <div class="contrib-col">
@@ -388,6 +427,10 @@ const sectorSeriesLoading = ref(false)
 const contributorsPayload = ref(null)
 const contributorsLoading = ref(false)
 const contributorsError = ref('')
+/** 贡献股折叠面板：受控 open，选中板块并拉取贡献股成功后自动展开 */
+const contributorsFoldOpen = ref(false)
+/** 下一次贡献股请求成功后是否自动展开（选中板块时置 true） */
+const autoOpenContributorsAfterFetch = ref(false)
 const contributorMaPeriod = 5
 const contributorTopN = 40
 const pageTitle = computed(() => props.title)
@@ -430,6 +473,52 @@ const latestSectorRows = computed(() => {
     .slice()
     .sort((a, b) => (b.yang_spectrum ?? 0) - (a.yang_spectrum ?? 0))
 })
+
+/** 板块快速切换：筛选关键字（名称 / 代码） */
+const sectorPickerFilter = ref('')
+const filteredSectorPickerRows = computed(() => {
+  const q = sectorPickerFilter.value.trim().toLowerCase()
+  const rows = latestSectorRows.value
+  if (!q) return rows
+  return rows.filter((r) => {
+    const name = String(r.sector_name || '').toLowerCase()
+    const code = String(r.sector_code || '').toLowerCase()
+    return name.includes(q) || code.includes(q)
+  })
+})
+/** 下拉选项：筛选结果；若当前选中行被筛掉则插在列表前，避免 select 显示异常 */
+const sectorPickerSelectRows = computed(() => {
+  const list = filteredSectorPickerRows.value
+  const code = selectedSectorCode.value
+  if (!code) return list
+  if (list.some((r) => r.sector_code === code)) return list
+  const sel = latestSectorRows.value.find((r) => r.sector_code === code)
+  return sel ? [sel, ...list] : list
+})
+
+function formatSectorPickerOption(row) {
+  const y = row?.yang_spectrum
+  const yStr = y == null || Number.isNaN(Number(y)) ? '—' : toPercent(Number(y))
+  return `${row.sector_name} · 阳谱 ${yStr}`
+}
+
+function onSectorPickerChange(raw) {
+  const code = (raw || '').trim()
+  if (!code) {
+    if (selectedSectorCode.value) {
+      selectedSectorCode.value = ''
+      selectedSectorSeries.value = []
+      contributorsPayload.value = null
+      contributorsError.value = ''
+      contributorsFoldOpen.value = false
+      autoOpenContributorsAfterFetch.value = false
+      updateChart()
+    }
+    return
+  }
+  if (selectedSectorCode.value === code) return
+  selectSector(code)
+}
 
 const selectedSectorRows = computed(() => {
   if (!selectedSectorCode.value) return []
@@ -520,6 +609,8 @@ async function fetchSectorSpectrum() {
     sectorRecords.value = []
     selectedSectorSeries.value = []
     selectedSectorCode.value = ''
+    contributorsFoldOpen.value = false
+    autoOpenContributorsAfterFetch.value = false
     return
   }
   const latestDate = records.value[records.value.length - 1]?.trade_date
@@ -539,12 +630,16 @@ async function fetchSectorSpectrum() {
     if (!arr.some(row => row.sector_code === selectedSectorCode.value)) {
       selectedSectorCode.value = ''
       selectedSectorSeries.value = []
+      contributorsFoldOpen.value = false
+      autoOpenContributorsAfterFetch.value = false
     }
   } catch (e) {
     console.error('获取板块阴阳谱失败', e)
     sectorRecords.value = []
     selectedSectorSeries.value = []
     selectedSectorCode.value = ''
+    contributorsFoldOpen.value = false
+    autoOpenContributorsAfterFetch.value = false
   } finally {
     sectorLoading.value = false
     if (selectedSectorCode.value) {
@@ -585,6 +680,10 @@ async function fetchSectorContributors() {
     contributorsPayload.value = null
   } finally {
     contributorsLoading.value = false
+    if (contributorsPayload.value?.success && autoOpenContributorsAfterFetch.value) {
+      contributorsFoldOpen.value = true
+    }
+    autoOpenContributorsAfterFetch.value = false
   }
 }
 
@@ -685,9 +784,16 @@ function setMode(m) {
 function setSectorLevel(level) {
   if (sectorLevel.value === level) return
   sectorLevel.value = level
+  sectorPickerFilter.value = ''
   selectedSectorCode.value = ''
   selectedSectorSeries.value = []
+  contributorsFoldOpen.value = false
+  autoOpenContributorsAfterFetch.value = false
   fetchSectorSpectrum().then(() => updateChart())
+}
+
+function onContributorsFoldToggle(e) {
+  contributorsFoldOpen.value = e.target.open
 }
 
 function selectSector(code) {
@@ -696,12 +802,15 @@ function selectSector(code) {
     selectedSectorSeries.value = []
     contributorsPayload.value = null
     contributorsError.value = ''
+    contributorsFoldOpen.value = false
+    autoOpenContributorsAfterFetch.value = false
     updateChart()
     return
   }
   selectedSectorCode.value = code
   contributorsPayload.value = null
   contributorsError.value = ''
+  autoOpenContributorsAfterFetch.value = true
   fetchSelectedSectorSeries(code).then(() => {
     updateChart()
     return fetchSectorContributors()
@@ -911,6 +1020,12 @@ onBeforeUnmount(() => {
 .sector-contributors .spectrum-fold--contrib > .spectrum-fold-summary { border-top:1px solid #e2e8f0; margin-top:2px; padding-top:10px; }
 .sector-panel { margin:0 0 16px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
 .sector-panel-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+.sector-quick-picker { padding:10px 14px; background:#fff; border-bottom:1px solid #e2e8f0; }
+.sector-quick-picker-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; }
+.sector-quick-label { font-size:12px; font-weight:600; color:#475569; white-space:nowrap; }
+.sector-quick-filter { flex:1 1 140px; min-width:120px; max-width:100%; padding:6px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; }
+.sector-quick-select { flex:2 1 200px; min-width:160px; max-width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; background:#fff; color:#334155; }
+.sector-quick-empty { margin:6px 0 0; font-size:12px; }
 .sector-panel-header h4 { margin:0 0 4px; font-size:15px; }
 .sector-panel-header p { margin:0; font-size:12px; color:#64748b; }
 .sector-date { font-size:12px; color:#64748b; white-space:nowrap; }
