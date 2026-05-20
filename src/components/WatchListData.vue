@@ -108,6 +108,44 @@
       </div>
       
       <div v-else>
+        <div class="watchlist-summary-panel">
+          <div class="watchlist-summary">
+            <span>共 {{ watchlistSummary.total }} 个</span>
+            <span>股票 {{ watchlistSummary.stock }}</span>
+            <span>ETF {{ watchlistSummary.etf }}</span>
+            <span class="positive">上涨 {{ watchlistSummary.up }}</span>
+            <span class="negative">下跌 {{ watchlistSummary.down }}</span>
+            <span v-if="watchlistSummary.noData">暂无数据 {{ watchlistSummary.noData }}</span>
+          </div>
+          <div class="watchlist-filter-bar">
+            <button
+              v-for="option in watchlistFilterOptions"
+              :key="option.value"
+              type="button"
+              class="filter-chip"
+              :class="{ active: watchlistFilter === option.value }"
+              @click="setWatchlistFilter(option.value)"
+            >
+              {{ option.label }} <span class="filter-count">{{ option.count }}</span>
+            </button>
+          </div>
+          <div class="watchlist-display-meta">
+            <span>
+              当前显示 {{ visibleWatchlistCount }} / {{ filteredWatchlistCount }} 个
+              <template v-if="watchlistCollapsed && hiddenWatchlistCount > 0">
+                ，已折叠 {{ hiddenWatchlistCount }} 个
+              </template>
+            </span>
+            <button
+              v-if="filteredWatchlistCount > WATCHLIST_COLLAPSED_LIMIT"
+              type="button"
+              class="toggle-collapse-btn"
+              @click="toggleWatchlistCollapsed"
+            >
+              {{ watchlistCollapsed ? '展开全部' : '收起列表' }}
+            </button>
+          </div>
+        </div>
         <table class="data-table">
           <thead>
             <tr>
@@ -125,7 +163,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="stock in stocksData" :key="stock.symbol">
+            <tr v-for="stock in visibleStocksData" :key="stock.symbol">
               <td>
                 <span class="stock-symbol" @click="selectChart(stock.symbol)">
                   {{ stock.symbol }}
@@ -159,7 +197,7 @@
             </tr>
             
             <!-- 显示还没有数据的股票 -->
-            <tr v-for="symbol in stocksWithoutData" :key="symbol" class="no-data-row">
+            <tr v-for="symbol in visibleStocksWithoutData" :key="symbol" class="no-data-row">
               <td>
                 <span class="stock-symbol" @click="selectChart(symbol)">
                   {{ symbol }}
@@ -179,6 +217,13 @@
             </tr>
           </tbody>
         </table>
+        <div
+          v-if="watchlistCollapsed && hiddenWatchlistCount > 0"
+          class="watchlist-more-footer"
+        >
+          还有 {{ hiddenWatchlistCount }} 个自选标的未显示。
+          <button type="button" @click="toggleWatchlistCollapsed">展开全部</button>
+        </div>
       </div>
     </div>
 
@@ -241,6 +286,9 @@ const useRealtimeData = ref(true)  // 默认使用实时数据
 const historyModalMaximized = ref(false)
 
 const DEEP_ANALYSIS_MODE_STORAGE_KEY = 'deep_analysis_mode'
+const WATCHLIST_COLLAPSED_STORAGE_KEY = 'watchlist_collapsed'
+const WATCHLIST_FILTER_STORAGE_KEY = 'watchlist_filter'
+const WATCHLIST_COLLAPSED_LIMIT = 10
 
 function readDeepAnalysisMode() {
   const mode = localStorage.getItem(DEEP_ANALYSIS_MODE_STORAGE_KEY)
@@ -248,6 +296,8 @@ function readDeepAnalysisMode() {
 }
 
 const deepAnalysisMode = ref(readDeepAnalysisMode())
+const watchlistCollapsed = ref(localStorage.getItem(WATCHLIST_COLLAPSED_STORAGE_KEY) !== 'false')
+const watchlistFilter = ref(localStorage.getItem(WATCHLIST_FILTER_STORAGE_KEY) || 'all')
 
 function setDeepAnalysisMode(mode) {
   deepAnalysisMode.value = mode === 'multi_expert_v1' ? 'multi_expert_v1' : 'classic'
@@ -268,6 +318,40 @@ function isEtfAsset(stock) {
 
 function getDeepAnalysisButtonText(stock) {
   return isEtfAsset(stock) ? '🔬 ETF分析' : '🔬 深度分析'
+}
+
+function getStockIndustryGroup(stock) {
+  if (isEtfAsset(stock)) return 'ETF'
+  const swName = stock?.sw_industry?.l1_name
+  if (swName) return swName
+  return stock?.industry || '未分类'
+}
+
+function getStockPctChange(stock) {
+  const raw = stock?.change_percent ?? stock?.change_pct
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : 0
+}
+
+function setWatchlistFilter(value) {
+  watchlistFilter.value = value || 'all'
+}
+
+function toggleWatchlistCollapsed() {
+  watchlistCollapsed.value = !watchlistCollapsed.value
+}
+
+function matchesWatchlistFilter(stock) {
+  const filter = watchlistFilter.value
+  if (filter === 'all') return true
+  if (filter === 'etf') return isEtfAsset(stock)
+  if (filter === 'up') return getStockPctChange(stock) > 0
+  if (filter === 'down') return getStockPctChange(stock) < 0
+  if (filter === 'no_data') return false
+  if (filter.startsWith('industry:')) {
+    return getStockIndustryGroup(stock) === filter.slice('industry:'.length)
+  }
+  return true
 }
 
 // 股票搜索相关
@@ -336,6 +420,74 @@ const stocksWithoutData = computed(() => {
   return watchList.value.filter(symbol => !dataSymbols.includes(symbol))
 })
 
+const watchlistSummary = computed(() => {
+  const up = stocksData.value.filter(stock => getStockPctChange(stock) > 0).length
+  const down = stocksData.value.filter(stock => getStockPctChange(stock) < 0).length
+  const etf = stocksData.value.filter(stock => isEtfAsset(stock)).length
+  return {
+    total: watchList.value.length,
+    stock: stocksData.value.filter(stock => normalizeAssetType(stock) === 'stock').length,
+    etf,
+    up,
+    down,
+    noData: stocksWithoutData.value.length,
+  }
+})
+
+const watchlistFilterOptions = computed(() => {
+  const options = [
+    { value: 'all', label: '全部', count: watchList.value.length },
+    { value: 'etf', label: 'ETF', count: watchlistSummary.value.etf },
+    { value: 'up', label: '上涨', count: watchlistSummary.value.up },
+    { value: 'down', label: '下跌', count: watchlistSummary.value.down },
+  ]
+  if (watchlistSummary.value.noData > 0) {
+    options.push({ value: 'no_data', label: '暂无数据', count: watchlistSummary.value.noData })
+  }
+
+  const industryCounts = new Map()
+  for (const stock of stocksData.value) {
+    if (isEtfAsset(stock)) continue
+    const group = getStockIndustryGroup(stock)
+    industryCounts.set(group, (industryCounts.get(group) || 0) + 1)
+  }
+  for (const [group, count] of Array.from(industryCounts.entries()).sort((a, b) => b[1] - a[1])) {
+    options.push({ value: `industry:${group}`, label: group, count })
+  }
+  return options
+})
+
+const filteredStocksData = computed(() => stocksData.value.filter(matchesWatchlistFilter))
+
+const filteredStocksWithoutData = computed(() => (
+  watchlistFilter.value === 'all' || watchlistFilter.value === 'no_data'
+    ? stocksWithoutData.value
+    : []
+))
+
+const filteredWatchlistCount = computed(() => (
+  filteredStocksData.value.length + filteredStocksWithoutData.value.length
+))
+
+const visibleStocksData = computed(() => {
+  if (!watchlistCollapsed.value) return filteredStocksData.value
+  return filteredStocksData.value.slice(0, WATCHLIST_COLLAPSED_LIMIT)
+})
+
+const visibleStocksWithoutData = computed(() => {
+  if (!watchlistCollapsed.value) return filteredStocksWithoutData.value
+  const remaining = Math.max(WATCHLIST_COLLAPSED_LIMIT - visibleStocksData.value.length, 0)
+  return filteredStocksWithoutData.value.slice(0, remaining)
+})
+
+const visibleWatchlistCount = computed(() => (
+  visibleStocksData.value.length + visibleStocksWithoutData.value.length
+))
+
+const hiddenWatchlistCount = computed(() => (
+  Math.max(filteredWatchlistCount.value - visibleWatchlistCount.value, 0)
+))
+
 // 勿使用 immediate: true，否则与下方 onMounted 重复触发 handleUserLogin（双份请求）；
 // 且默认 Tab 为自选股时，未进该页也会因误挂载而拉数（见 App.vue activeTab 初始化）
 watch(isAuthenticated, async (newValue, oldValue) => {
@@ -348,6 +500,14 @@ watch(isAuthenticated, async (newValue, oldValue) => {
 
 watch(deepAnalysisMode, (mode) => {
   localStorage.setItem(DEEP_ANALYSIS_MODE_STORAGE_KEY, mode)
+})
+
+watch(watchlistCollapsed, (collapsed) => {
+  localStorage.setItem(WATCHLIST_COLLAPSED_STORAGE_KEY, collapsed ? 'true' : 'false')
+})
+
+watch(watchlistFilter, (filter) => {
+  localStorage.setItem(WATCHLIST_FILTER_STORAGE_KEY, filter)
 })
 
 // 处理用户登录
@@ -888,6 +1048,8 @@ async function refreshAll() {
           symbol: stock.symbol,
           name: stock.name,
           asset_type: stock.asset_type,
+          industry: stock.industry,
+          sw_industry: stock.sw_industry,
           price: stock.price,           // 最新价格
           open: stock.open,             // 开盘价
           high: stock.high,             // 最高价
@@ -905,6 +1067,8 @@ async function refreshAll() {
           symbol: stock.symbol,
           name: stock.name,
           asset_type: stock.asset_type,
+          industry: stock.industry,
+          sw_industry: stock.sw_industry,
           close: stock.close,
           change: stock.change,
           change_percent: stock.change_percent,
@@ -927,6 +1091,8 @@ async function refreshAll() {
           symbol: stock.symbol,
           name: stock.name,
           asset_type: stock.asset_type,
+          industry: stock.industry,
+          sw_industry: stock.sw_industry,
           close: stock.close,
           change: stock.change,
           change_percent: stock.change_percent,
@@ -1292,6 +1458,84 @@ onMounted(async () => {
   color: #b19cd9;
   background: #f9fafb;
   border-radius: 8px;
+}
+
+.watchlist-summary-panel {
+  background: rgba(30, 30, 63, 0.75);
+  border: 1px solid rgba(138, 43, 226, 0.22);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 20px rgba(138, 43, 226, 0.15);
+}
+
+.watchlist-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #e6e6fa;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.watchlist-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.filter-chip {
+  border: 1px solid rgba(147, 112, 219, 0.35);
+  background: rgba(49, 46, 129, 0.55);
+  color: #e6e6fa;
+  border-radius: 999px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-chip:hover,
+.filter-chip.active {
+  background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);
+  border-color: rgba(230, 230, 250, 0.6);
+  transform: translateY(-1px);
+}
+
+.filter-count {
+  color: #c4b5fd;
+  margin-left: 3px;
+}
+
+.filter-chip.active .filter-count {
+  color: #ffffff;
+}
+
+.watchlist-display-meta,
+.watchlist-more-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #c4b5fd;
+  font-size: 13px;
+}
+
+.toggle-collapse-btn,
+.watchlist-more-footer button {
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  background: rgba(37, 99, 235, 0.25);
+  color: #bfdbfe;
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.watchlist-more-footer {
+  background: rgba(30, 30, 63, 0.65);
+  border: 1px solid rgba(138, 43, 226, 0.18);
+  border-radius: 0 0 12px 12px;
+  padding: 10px 12px;
 }
 
 .data-table {
