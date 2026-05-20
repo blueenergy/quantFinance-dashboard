@@ -155,7 +155,7 @@
               <div class="narrative-body" v-html="renderNarrative(narrative.narrative_markdown)" />
             </div>
             <v-alert v-else type="info" variant="tonal" density="compact">
-              暂无今日总结
+              {{ narrativeMessage || '暂无今日总结' }}
             </v-alert>
           </v-card-text>
         </v-card>
@@ -514,6 +514,7 @@ let countdownTimer = null
 const narrative = ref(null)
 const narrativeLoading = ref(false)
 const narrativePending = ref(false)
+const narrativeMessage = ref('')
 
 // Reasoning Dialog State
 const showReasoningDialog = ref(false)
@@ -757,20 +758,23 @@ async function loadNarrative() {
   narrativeLoading.value = true
   narrativePending.value = false
   narrative.value = null
+  narrativeMessage.value = ''
   try {
-    // 只在用户主动选了日期时才传 date，否则让后端找最新的 narrative
-    // （不能用 currentLadderDate，天梯可能因回退逻辑落在不同的日期）
+    // 与当前天梯实际展示日期对齐：交易日显示当天，非交易日/无当日数据时显示最近交易日。
     const dateParam = selectedDate.value
       ? selectedDate.value.replace(/-/g, '')
-      : null
+      : (currentLadderDate.value || null)
     const res = await getLimitUpNarrative(dateParam)
     if (res.status === 'pending') {
       narrativePending.value = true
     } else if (res.success) {
       narrative.value = res
+    } else if (res.message) {
+      narrativeMessage.value = res.message
     }
   } catch (e) {
     console.warn('加载市场动向总结失败:', e)
+    narrativeMessage.value = '市场动向总结加载失败，请稍后重试'
   } finally {
     narrativeLoading.value = false
   }
