@@ -27,8 +27,18 @@
             class="sector-contrib-fold"
           >
             <summary class="sector-contrib-fold-summary">
-              多视角引领预览 · 资金 / 价格 / 波动 · 各 Top {{ payload.leader_preview_k || 5 }}
-              <span class="sector-contrib-summary-hint">（点击展开）</span>
+              <span>
+                多视角引领预览 · 资金 / 价格 / 波动 · 各 Top {{ payload.leader_preview_k || 5 }}
+                <span class="sector-contrib-summary-hint">（点击展开）</span>
+              </span>
+              <button
+                type="button"
+                class="sector-contrib-expand-btn"
+                title="放大查看多视角引领预览"
+                @click.stop.prevent="openLeaderDialog"
+              >
+                放大查看
+              </button>
             </summary>
             <div class="sector-contrib-leader-stack">
               <p class="sector-contrib-intro">
@@ -52,8 +62,18 @@
 
           <details class="sector-contrib-fold">
             <summary class="sector-contrib-fold-summary">
-              MA{{ effectiveMaPeriod }} 分桶 · 站上 / 未站上均线 · 各 Top {{ topN }}
-              <span class="sector-contrib-summary-hint">（点击展开）</span>
+              <span>
+                MA{{ effectiveMaPeriod }} 分桶 · 站上 / 未站上均线 · 各 Top {{ topN }}
+                <span class="sector-contrib-summary-hint">（点击展开）</span>
+              </span>
+              <button
+                type="button"
+                class="sector-contrib-expand-btn"
+                title="放大查看 MA 分桶"
+                @click.stop.prevent="openMaDialog"
+              >
+                放大查看
+              </button>
             </summary>
             <div class="sector-contrib-ma-grid">
               <section class="sector-contrib-ma-block">
@@ -73,11 +93,61 @@
       <h5 class="sector-contrib-title">{{ title }}</h5>
       <p class="sector-contrib-state">{{ payload.error || emptyText }}</p>
     </template>
+
+    <Teleport to="body">
+      <div
+        v-if="dialogMode"
+        class="sector-contrib-dialog-backdrop"
+        role="dialog"
+        aria-modal="true"
+        @click.self="closeDialog"
+        @keydown.esc="closeDialog"
+      >
+        <div class="sector-contrib-dialog" tabindex="-1">
+          <header class="sector-contrib-dialog-head">
+            <div>
+              <h5>{{ title }}</h5>
+              <p>{{ dialogSubtitle }}</p>
+            </div>
+            <button type="button" class="sector-contrib-dialog-close" @click="closeDialog">
+              关闭
+            </button>
+          </header>
+          <div
+            v-if="dialogMode === 'leader'"
+            class="sector-contrib-dialog-body sector-contrib-dialog-body--leader"
+          >
+            <section class="sector-contrib-dialog-block">
+              <h6 class="sector-contrib-block-title">资金引领 · 成交额</h6>
+              <ContributorLeaderTable :rows="leaderAmountRows" />
+            </section>
+            <section class="sector-contrib-dialog-block">
+              <h6 class="sector-contrib-block-title">价格引领 · 涨幅排序</h6>
+              <ContributorLeaderTable :rows="leaderPctRows" />
+            </section>
+            <section class="sector-contrib-dialog-block">
+              <h6 class="sector-contrib-block-title">高波动辨识度 · |涨跌幅|</h6>
+              <ContributorLeaderTable :rows="leaderVolatilityRows" />
+            </section>
+          </div>
+          <div v-else class="sector-contrib-dialog-body">
+            <section class="sector-contrib-dialog-block">
+              <h6 class="sector-contrib-block-title">站上均线 · Top {{ topN }}</h6>
+              <ContributorMaTable :rows="topAboveRows" />
+            </section>
+            <section class="sector-contrib-dialog-block">
+              <h6 class="sector-contrib-block-title">未站上均线 · Top {{ topN }}</h6>
+              <ContributorMaTable :rows="topBelowRows" />
+            </section>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { computed, defineComponent, h } from 'vue'
+import { computed, defineComponent, h, ref } from 'vue'
 
 const props = defineProps({
   loading: { type: Boolean, default: false },
@@ -99,6 +169,25 @@ const leaderPctRows = computed(() => props.payload?.leader_pct_chg_top || [])
 const leaderVolatilityRows = computed(() => props.payload?.leader_volatility_top || [])
 const topAboveRows = computed(() => props.payload?.top_above_ma || [])
 const topBelowRows = computed(() => props.payload?.top_below_ma || [])
+const dialogMode = ref('')
+const dialogSubtitle = computed(() => {
+  if (dialogMode.value === 'leader') {
+    return `多视角引领预览 · 资金 / 价格 / 波动 · 各 Top ${props.payload?.leader_preview_k || 5}`
+  }
+  return `MA${effectiveMaPeriod.value} 分桶 · 站上 / 未站上均线 · 各 Top ${props.topN}`
+})
+
+function openLeaderDialog() {
+  dialogMode.value = 'leader'
+}
+
+function openMaDialog() {
+  dialogMode.value = 'ma'
+}
+
+function closeDialog() {
+  dialogMode.value = ''
+}
 
 function formatPct(v) {
   if (v == null || Number.isNaN(Number(v))) return '—'
@@ -244,7 +333,11 @@ const ContributorMaTable = defineComponent({
   padding: 10px 12px;
 }
 .sector-contrib-fold-summary {
+  align-items: center;
+  display: flex;
   font-size: 12px;
+  gap: 8px;
+  justify-content: space-between;
   padding: 8px 12px;
 }
 .sector-contrib-root-summary::-webkit-details-marker,
@@ -274,6 +367,22 @@ const ContributorMaTable = defineComponent({
   font-size: 11px;
   font-weight: 400;
   margin-left: 6px;
+}
+.sector-contrib-expand-btn {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  color: #1d4ed8;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 9px;
+}
+.sector-contrib-expand-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
 }
 .sector-contrib-root-body {
   min-width: 0;
@@ -404,8 +513,99 @@ const ContributorMaTable = defineComponent({
   background: #ffedd5;
   border-color: #fb923c;
 }
+.sector-contrib-dialog-backdrop {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.58);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 28px;
+  position: fixed;
+  z-index: 2400;
+}
+.sector-contrib-dialog {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  display: flex;
+  flex-direction: column;
+  max-height: 86vh;
+  max-width: 1280px;
+  min-width: min(960px, calc(100vw - 56px));
+  overflow: hidden;
+  width: 92vw;
+}
+.sector-contrib-dialog-head {
+  align-items: center;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 14px 18px;
+}
+.sector-contrib-dialog-head h5 {
+  color: #0f172a;
+  font-size: 16px;
+  margin: 0;
+}
+.sector-contrib-dialog-head p {
+  color: #64748b;
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+.sector-contrib-dialog-close {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #334155;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+}
+.sector-contrib-dialog-close:hover {
+  background: #f1f5f9;
+}
+.sector-contrib-dialog-body {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr 1fr;
+  overflow: auto;
+  padding: 16px 18px 18px;
+}
+.sector-contrib-dialog-body--leader {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.sector-contrib-dialog-block {
+  min-width: 0;
+}
+.sector-contrib-dialog :deep(.sector-contrib-table-scroll) {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  max-height: 62vh;
+  overflow: auto;
+}
+.sector-contrib-dialog :deep(.sector-contrib-table th) {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
 @media (max-width: 900px) {
   .sector-contrib-ma-grid {
+    grid-template-columns: 1fr;
+  }
+  .sector-contrib-dialog {
+    min-width: auto;
+    width: calc(100vw - 24px);
+  }
+  .sector-contrib-dialog-backdrop {
+    padding: 12px;
+  }
+  .sector-contrib-dialog-body {
+    grid-template-columns: 1fr;
+  }
+  .sector-contrib-dialog-body--leader {
     grid-template-columns: 1fr;
   }
 }
