@@ -144,7 +144,7 @@ import UserAvatar from './components/UserAvatar.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
 import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
-import { computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getRenderableTabViews, getTabProps as buildTabProps, getTabListeners as buildTabListeners } from './utils/tabViews.js'
 import { useAppStartupFlow } from './composables/useAppStartupFlow.js'
 import { useHomeSummaries } from './composables/useHomeSummaries.js'
@@ -277,6 +277,8 @@ const {
   resetHomeCardSummaries,
 })
 
+const pendingEtfNavigation = ref(null)
+
 const renderableTabViews = computed(() => {
   return getRenderableTabViews(adminTabs.value)
 })
@@ -298,15 +300,27 @@ function getTabProps(tabId) {
     currentStrategy: currentStrategy.value,
     currentPreset: currentPreset.value,
     user: user.value,
+    pendingEtfNavigation: pendingEtfNavigation.value,
   })
 }
 
 function getTabListeners(tabId) {
   return buildTabListeners(tabId, {
     selectStockForChart,
+    openEtfAnalysis,
     goBackToStrategyPool,
     handleLoadMore,
   })
+}
+
+async function openEtfAnalysis (payload) {
+  pendingEtfNavigation.value = {
+    ...(payload || {}),
+    requestId: Date.now(),
+  }
+  if (activeTab.value !== 'etf') {
+    switchTab('etf')
+  }
 }
 
 // 角色降级保护：一旦当前用户不是管理员，不允许停留在 admin 标签页

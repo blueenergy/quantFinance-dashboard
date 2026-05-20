@@ -147,10 +147,12 @@
               <td style="white-space: nowrap;">
                   <div class="action-btn-group" style="white-space: nowrap;">
                     <button @click="selectChart(stock.symbol)" class="chart-btn">📈 K线</button>
-                    <button @click="deepAnalyzeStock(stock.symbol)" class="deep-analyze-btn" :disabled="deepAnalyzingStock === stock.symbol" style="display: inline-block !important; visibility: visible !important; flex-shrink: 0;">
-                      {{ deepAnalyzingStock === stock.symbol ? '提交中...' : '🔬 深度分析' }}
+                    <button @click="deepAnalyzeStock(stock)" class="deep-analyze-btn" :disabled="deepAnalyzingStock === stock.symbol" style="display: inline-block !important; visibility: visible !important; flex-shrink: 0;">
+                      {{ deepAnalyzingStock === stock.symbol ? '提交中...' : getDeepAnalysisButtonText(stock) }}
                     </button>
-                    <button @click="openHistoryModal(stock.symbol)" class="history-btn">🕑 历史分析</button>
+                    <button @click="openHistoryModal(stock)" class="history-btn">
+                      {{ isEtfAsset(stock) ? '🕑 分析结果' : '🕑 历史分析' }}
+                    </button>
                     <button @click="removeStock(stock.symbol)" class="remove-btn">移除</button>
                   </div>
               </td>
@@ -168,10 +170,10 @@
               <td v-if="useRealtimeData" class="no-data"></td>
               <td>
                 <button @click="selectChart(symbol)" class="chart-btn">📈 K线</button>
-                <button @click="deepAnalyzeStock(symbol)" class="deep-analyze-btn" :disabled="deepAnalyzingStock === symbol">
+                <button @click="deepAnalyzeStock({ symbol })" class="deep-analyze-btn" :disabled="deepAnalyzingStock === symbol">
                   {{ deepAnalyzingStock === symbol ? '提交中...' : '🔬 深度分析' }}
                 </button>
-                <button @click="openHistoryModal(symbol)" class="history-btn">🕑 历史分析</button>
+                <button @click="openHistoryModal({ symbol })" class="history-btn">🕑 历史分析</button>
                 <button @click="removeStock(symbol)" class="remove-btn">移除</button>
               </td>
             </tr>
@@ -219,7 +221,7 @@ import { useAnalysisHistory } from '../composables/useAnalysisHistory'
 import HistoryAnalysis from './HistoryAnalysis.vue'
 import { searchStocks } from '../api/stock'
 
-const emit = defineEmits(['select-chart'])
+const emit = defineEmits(['select-chart', 'open-etf-analysis'])
 const { isAuthenticated, currentUser } = useAuth()
 const { analysisHistory, loadHistory } = useAnalysisHistory()
 
@@ -252,7 +254,20 @@ function setDeepAnalysisMode(mode) {
 }
 
 function formatAnalysisModeLabel(mode) {
+  if (mode === 'etf') return 'ETF'
   return mode === 'multi_expert_v1' ? '多专家' : '经典'
+}
+
+function normalizeAssetType(stock) {
+  return String(stock?.asset_type || stock?.security_type || '').toLowerCase()
+}
+
+function isEtfAsset(stock) {
+  return normalizeAssetType(stock) === 'etf'
+}
+
+function getDeepAnalysisButtonText(stock) {
+  return isEtfAsset(stock) ? '🔬 ETF分析' : '🔬 深度分析'
 }
 
 // 股票搜索相关
@@ -612,7 +627,7 @@ function showAppSnackbar(message, color = 'success', timeout = 5000) {
 /**
  * 轮询任务直到完成/失败/超时，完成后用 Snackbar 提醒（带股票名与代码）。
  */
-function startDeepAnalysisTaskPoll(taskId, symbol) {
+function startDeepAnalysisTaskPoll(taskId, symbol, assetType = 'stock') {
   if (activeDeepTaskPolls.has(taskId)) {
     clearInterval(activeDeepTaskPolls.get(taskId))
   }
@@ -650,18 +665,25 @@ function startDeepAnalysisTaskPoll(taskId, symbol) {
 
       if (st === 'completed') {
         const ok = data.success !== false
-        const modeText = formatAnalysisModeLabel(data.analysis_mode)
+        const modeText = data.task_type === 'etf_analysis' || assetType === 'etf'
+          ? 'ETF'
+          : formatAnalysisModeLabel(data.analysis_mode)
+        const completionHint = modeText === 'ETF' ? '可在 ETF 智能分析中查看。' : '可在历史分析中查看。'
         if (ok) {
-          showAppSnackbar(`「${label}」${modeText}深度分析已完成，可在历史分析中查看。`, 'success', 6000)
+          showAppSnackbar(`「${label}」${modeText}深度分析已完成，${completionHint}`, 'success', 6000)
         } else {
-          showAppSnackbar(`「${label}」${modeText}深度分析已结束，但结果异常，请查看历史分析。`, 'warning', 6000)
+          showAppSnackbar(`「${label}」${modeText}深度分析已结束，但结果异常，${completionHint}`, 'warning', 6000)
         }
       } else if (st === 'completed_with_parse_error') {
-        const modeText = formatAnalysisModeLabel(data.analysis_mode)
+        const modeText = data.task_type === 'etf_analysis' || assetType === 'etf'
+          ? 'ETF'
+          : formatAnalysisModeLabel(data.analysis_mode)
         showAppSnackbar(`「${label}」${modeText}深度分析已完成，解析异常，请查看历史分析。`, 'warning', 6000)
       } else if (st === 'failed') {
         const err = data.error || '分析失败'
-        const modeText = formatAnalysisModeLabel(data.analysis_mode)
+        const modeText = data.task_type === 'etf_analysis' || assetType === 'etf'
+          ? 'ETF'
+          : formatAnalysisModeLabel(data.analysis_mode)
         showAppSnackbar(`「${label}」${modeText}深度分析失败：${err}`, 'error', 8000)
       } else {
         showAppSnackbar(`「${label}」分析状态：${st}`, 'info', 5000)
@@ -695,9 +717,15 @@ onUnmounted(() => {
 })
 
 // 深度分析股票
-async function deepAnalyzeStock(symbol) {
+async function deepAnalyzeStock(stock) {
+  const symbol = typeof stock === 'string' ? stock : stock?.symbol
+  const assetType = isEtfAsset(stock) ? 'etf' : 'stock'
   if (!isAuthenticated?.value) {
     alert('请先登录后再进行深度分析')
+    return
+  }
+  if (!symbol) {
+    showAppSnackbar('提交失败: 标的代码为空', 'error', 5000)
     return
   }
   
@@ -705,33 +733,44 @@ async function deepAnalyzeStock(symbol) {
     deepAnalyzingStock.value = symbol
     const token = localStorage.getItem('access_token')
     const analysisMode = deepAnalysisMode.value
-    
-    // 调用后端 Producer 接口
-    const response = await axios.post('/api/analyze/deep-analysis', {
-      symbol: symbol,
-      priority: 30,
-      analysis_mode: analysisMode
-    }, {
+
+    const requestConfig = {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
-    })
+    }
+    const response = assetType === 'etf'
+      ? await axios.post('/api/etf/analyze', {
+        symbol: symbol,
+        force: true
+      }, requestConfig)
+      : await axios.post('/api/analyze/deep-analysis', {
+        symbol: symbol,
+        priority: 30,
+        analysis_mode: analysisMode
+      }, requestConfig)
     
     if (response.data && response.data.success) {
       const remaining = response.data.quota_remaining
       const ahead = response.data.queue_ahead
       const waitHint = response.data.wait_hint
       const label = formatStockLabel(symbol)
-      const modeText = analysisMode === 'multi_expert_v1' ? '多专家' : '经典'
+      const modeText = assetType === 'etf'
+        ? 'ETF'
+        : (analysisMode === 'multi_expert_v1' ? '多专家' : '经典')
+      const quotaText = remaining === undefined ? '' : `剩余配额 ${remaining}，`
+      const queueText = ahead === undefined
+        ? (waitHint || '等待分析')
+        : `前方 ${ahead ?? '?'} 个任务，${waitHint || '等待分析'}`
       showAppSnackbar(
-        `已提交「${label}」${modeText}深度分析。剩余配额 ${remaining}，前方 ${ahead ?? '?'} 个任务，${waitHint || '等待分析'}。`,
+        `已提交「${label}」${modeText}深度分析。${quotaText}${queueText}。`,
         'success',
         7000
       )
       const taskId = response.data.task_id
       if (taskId) {
-        startDeepAnalysisTaskPoll(taskId, symbol)
+        startDeepAnalysisTaskPoll(taskId, symbol, assetType)
       }
     } else {
       showAppSnackbar(`提交失败: ${response.data?.message || '未知错误'}`, 'error', 5000)
@@ -757,9 +796,17 @@ async function deepAnalyzeStock(symbol) {
 
 
 // 打开历史分析模态框
-function openHistoryModal(symbol) {
+function openHistoryModal(stock) {
+  const symbol = typeof stock === 'string' ? stock : stock?.symbol
   if (!symbol || symbol === 'undefined') {
     console.warn('历史分析弹窗打开时 symbol 无效:', symbol)
+    return
+  }
+  if (isEtfAsset(stock)) {
+    emit('open-etf-analysis', {
+      symbol,
+      name: stock?.name || getStockName(symbol),
+    })
     return
   }
   console.log('打开历史分析弹窗:', symbol)
@@ -840,6 +887,7 @@ async function refreshAll() {
         stocksData.value = response.map(stock => ({
           symbol: stock.symbol,
           name: stock.name,
+          asset_type: stock.asset_type,
           price: stock.price,           // 最新价格
           open: stock.open,             // 开盘价
           high: stock.high,             // 最高价
@@ -856,6 +904,7 @@ async function refreshAll() {
         stocksData.value = response.map(stock => ({
           symbol: stock.symbol,
           name: stock.name,
+          asset_type: stock.asset_type,
           close: stock.close,
           change: stock.change,
           change_percent: stock.change_percent,
@@ -877,6 +926,7 @@ async function refreshAll() {
         stocksData.value = response.data.data.map(stock => ({
           symbol: stock.symbol,
           name: stock.name,
+          asset_type: stock.asset_type,
           close: stock.close,
           change: stock.change,
           change_percent: stock.change_percent,

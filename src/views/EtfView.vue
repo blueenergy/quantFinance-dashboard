@@ -91,6 +91,9 @@
             <span class="label">综合分</span>
           </div>
           <div class="analysis-content">
+            <div v-if="analysisTimeLabel" class="analysis-meta">
+              分析时间：{{ analysisTimeLabel }}
+            </div>
             <p class="core-logic"><strong>核心逻辑：</strong>{{ analysisResult.core_logic }}</p>
             <div class="views">
               <div class="view-card short-term">
@@ -144,6 +147,13 @@ import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import axios from 'axios'
 import EtfChart from '../components/EtfChart.vue'
 
+const props = defineProps({
+  pendingNavigation: {
+    type: Object,
+    default: null,
+  },
+})
+
 /** 与 .env 的 VITE_API_BASE 一致时，可直连后端便于排查；默认 /api 走 Vite 代理到 localhost:3001 */
 const etfApiBase = (import.meta.env.VITE_API_BASE || '/api').toString().replace(/\/$/, '') || '/api'
 
@@ -167,6 +177,7 @@ const searchPlaceholder = computed(() =>
 const searchActionLabel = computed(() => (selectedEtf.value ? '切换' : '搜索'))
 
 const analysisResult = ref(null)
+const analysisMeta = ref(null)
 const analyzing = ref(false)
 const pollingTimer = ref(null)
 const chartRecords = ref([])
@@ -192,6 +203,27 @@ function formatNum(v) {
   if (!Number.isFinite(n)) return '—'
   return n.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
 }
+
+function formatDateTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+const analysisTimeLabel = computed(() => {
+  return formatDateTime(
+    analysisMeta.value?.completed_at ||
+    analysisMeta.value?.created_at ||
+    analysisMeta.value?.trade_date,
+  )
+})
 
 async function fetchList({ append = false } = {}) {
   if (append) {
@@ -342,10 +374,50 @@ async function loadEtfKline (tsCode, tfForRequest) {
 const selectEtf = async (etf) => {
   selectedEtf.value = etf
   analysisResult.value = null
+  analysisMeta.value = null
   chartRecords.value = []
   klineTf.value = '1d'
   fetchLatestAnalysis(etf.ts_code)
 }
+
+async function openEtfBySymbol(rawSymbol, fallbackName = '') {
+  const raw = _normTs(rawSymbol)
+  if (!raw || switchingEtf.value) return
+  switchingEtf.value = true
+  try {
+    const localPick = _pickEtfRow(etfList.value, raw)
+    if (localPick?.ts_code) {
+      searchQuery.value = ''
+      await selectEtf(localPick)
+      return
+    }
+
+    const res = await axios.get(`${etfApiBase}/etf/list`, { params: { q: raw, limit: 30 } })
+    const pick = _pickEtfRow(res.data.data, raw)
+    if (!pick?.ts_code) {
+      alert(`未找到 ETF ${raw}，请在 ETF淘金中手动搜索。`)
+      return
+    }
+    if (!pick.name && fallbackName) {
+      pick.name = fallbackName
+    }
+    searchQuery.value = ''
+    await selectEtf(pick)
+  } catch (e) {
+    alert('打开 ETF 分析失败: ' + (e.message || String(e)))
+  } finally {
+    switchingEtf.value = false
+  }
+}
+
+watch(
+  () => props.pendingNavigation,
+  (detail) => {
+    if (!detail?.symbol) return
+    openEtfBySymbol(detail.symbol, detail.name)
+  },
+  { immediate: true },
+)
 
 /** 单次调度：同 tick 内同时改 selectedEtf + klineTf 时只产生一次监听器触发，避免连打两次 K 线。 */
 const klineRequestSig = computed(() => {
@@ -372,6 +444,10 @@ const fetchLatestAnalysis = async (symbol) => {
     const res = await axios.get(`${etfApiBase}/etf/${symbol}/analysis`)
     if (res.data.success && res.data.analysis) {
       analysisResult.value = res.data.analysis
+      analysisMeta.value = {
+        created_at: res.data.created_at,
+        trade_date: res.data.trade_date,
+      }
     }
   } catch (e) {
     console.error('No cached analysis found', e)
@@ -406,6 +482,10 @@ const pollTaskStatus = (taskId) => {
       if (res.data.status === 'completed') {
         clearInterval(pollingTimer.value)
         analysisResult.value = res.data.analysis
+        analysisMeta.value = {
+          completed_at: res.data.completed_at,
+          trade_date: res.data.trade_date,
+        }
         analyzing.value = false
       } else if (res.data.status === 'failed') {
         clearInterval(pollingTimer.value)
@@ -651,6 +731,12 @@ onBeforeUnmount(() => {
 
 .analysis-content {
   flex-grow: 1;
+}
+
+.analysis-meta {
+  color: #666;
+  font-size: 13px;
+  margin-bottom: 8px;
 }
 
 .core-logic {

@@ -295,6 +295,12 @@ export function getTabProps(tabId, context) {
     }
   }
 
+  if (tabId === 'etf') {
+    return {
+      pendingNavigation: context.pendingEtfNavigation,
+    }
+  }
+
   if (tabId === 'spectrum') {
     return {
       defaultMode: 'daily',
@@ -318,6 +324,7 @@ export function getTabListeners(tabId, handlers) {
   if (tabId === 'watchlist') {
     return {
       'select-chart': handlers.selectStockForChart,
+      'open-etf-analysis': handlers.openEtfAnalysis,
     }
   }
 
