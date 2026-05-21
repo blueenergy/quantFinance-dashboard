@@ -21,6 +21,7 @@ const StrategyExecutionAnalysis = defineAsyncComponent(() => import('../componen
 const SecuritiesAccountDashboard = defineAsyncComponent(() => import('../components/SecuritiesAccountDashboard.vue'))
 const UserProfile = defineAsyncComponent(() => import('../components/UserProfile.vue'))
 const BacktestManager = defineAsyncComponent(() => import('../components/BacktestManager.vue'))
+const StrategyLab = defineAsyncComponent(() => import('../views/StrategyLab.vue'))
 const StrategyStockPool = defineAsyncComponent(() => import('../components/StrategyStockPool.vue'))
 const LimitUpLadder = defineAsyncComponent(() => import('../views/LimitUpLadder.vue'))
 const MarketRiskPanel = defineAsyncComponent(() => import('../views/MarketRiskPanel.vue'))
@@ -168,6 +169,12 @@ export const tabViewDefinitions = [
     component: BacktestManager,
     fallbackClass: 'skeleton-table',
     fallbackText: '回测管理加载中...',
+  },
+  {
+    id: 'strategy-lab',
+    component: StrategyLab,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '策略实验室加载中...',
   },
   {
     id: 'strategy-pool',
