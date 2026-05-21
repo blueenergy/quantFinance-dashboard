@@ -83,6 +83,10 @@
             <span class="focus-score">{{ score(item.attention_score) }}</span>
             <span>{{ item.category || item.event_label }}</span>
           </div>
+          <div class="focus-time">
+            焦点事件时间：{{ formatSnapshot(item.primary_event?.snapshot_time) }}
+            <span v-if="item.primary_event?.trade_date"> · {{ item.primary_event.trade_date }}</span>
+          </div>
           <div v-if="item.feedback?.action" class="focus-feedback-current">
             已标记：{{ item.feedback.label || feedbackActionLabel(item.feedback.action) }}
           </div>
@@ -1023,6 +1027,11 @@ select {
   color: #fff;
   font-weight: 700;
   padding: 2px 8px;
+}
+.focus-time {
+  color: #64748b;
+  font-size: 12px;
+  margin: -2px 0 8px;
 }
 .focus-tags {
   display: flex;
