@@ -69,17 +69,48 @@
         手工 symbols（逗号/空格/换行分隔）
         <textarea v-model="symbolsText" rows="3" placeholder="000001.SZ, 000858.SZ"></textarea>
       </label>
-      <div class="collapsible-block full">
+      <div class="params-table-wrap full">
         <button type="button" class="collapse-toggle" @click="createParamsExpanded = !createParamsExpanded">
           <span class="collapse-chevron" :class="{ expanded: createParamsExpanded }">▸</span>
-          <span>策略参数 JSON</span>
+          <strong>策略参数</strong>
+          <span class="muted">（{{ createParamTableRows.length }} 项）</span>
         </button>
-        <textarea
-          v-show="createParamsExpanded"
-          v-model="paramsText"
-          rows="3"
-          placeholder='{"period": 20}'
-        ></textarea>
+        <div v-show="createParamsExpanded" class="collapse-body">
+          <table class="params-table" v-if="createParamTableRows.length">
+            <thead>
+              <tr>
+                <th>参数</th>
+                <th>默认值</th>
+                <th>实验值</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in createParamTableRows"
+                :key="row.key"
+                :class="{
+                  'param-row-changed': row.changed && row.hasCurrent,
+                  'param-row-new': row.isNew,
+                }"
+              >
+                <td class="param-name">
+                  <span class="param-key">{{ row.key }}</span>
+                  <small v-if="createParamLabel(row.key) !== row.key" class="param-desc">
+                    {{ createParamLabel(row.key) }}
+                  </small>
+                </td>
+                <td class="param-current">{{ formatParamDisplay(row.currentValue) }}</td>
+                <td class="param-next">
+                  <input
+                    :value="formatParamDisplay(row.nextValue)"
+                    @change="setCreateFormParam(row.key, $event.target.value, row.currentValue)"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else class="muted">选择 Preset 或策略后将显示可编辑参数；也可先选策略再改实验值。</p>
+        </div>
       </div>
       <div class="actions">
         <button class="primary" :disabled="submitting" @click="submitBatch">创建实验</button>
@@ -426,7 +457,7 @@ const suppressPresetApply = ref(false)
 const createMessage = ref('')
 const batchMessage = ref('')
 const symbolsText = ref('')
-const paramsText = ref('{}')
+const createFormParams = reactive({})
 const createParamsExpanded = ref(true)
 const batchParamsExpanded = ref(true)
 const batchDraft = reactive({
@@ -485,6 +516,23 @@ const latestReview = computed(() => reviews.value[0] || null)
 const usableStrategies = computed(() => strategies.value.filter((item) => item.allow_backtest !== false))
 const selectedPresets = computed(() => strategyTemplates.value[form.strategy_key] || [])
 const batchPresets = computed(() => strategyTemplates.value[batchDraft.strategy_key] || [])
+const createPresets = computed(() => strategyTemplates.value[form.strategy_key] || [])
+
+const createParamsWithDesc = computed(() => {
+  const preset = createPresets.value.find((item) => item.preset === form.preset)
+  return preset?.params_with_desc || {}
+})
+
+const createPresetBaseline = computed(() => {
+  const preset = createPresets.value.find((item) => item.preset === form.preset)
+  return filterValidParamDict(
+    preset ? extractPresetParams(preset.params_with_desc) : {}
+  )
+})
+
+const createParamTableRows = computed(() =>
+  buildParamTableRows(createPresetBaseline.value, createFormParams)
+)
 
 const batchUniverseLabel = computed(() => {
   const batch = selectedBatch.value
@@ -522,8 +570,27 @@ function paramLabel(key) {
   return resolveParamLabel(key, batchParamsWithDesc.value)
 }
 
+function createParamLabel(key) {
+  return resolveParamLabel(key, createParamsWithDesc.value)
+}
+
 function setBatchNextParam(key, raw, hint) {
   batchDraft.nextParams[key] = coerceParamValue(raw, hint)
+}
+
+function setCreateFormParam(key, raw, hint) {
+  createFormParams[key] = coerceParamValue(raw, hint)
+}
+
+function replaceCreateFormParams(params) {
+  for (const key of Object.keys(createFormParams)) {
+    delete createFormParams[key]
+  }
+  Object.assign(createFormParams, filterValidParamDict(params || {}))
+}
+
+function getCreateParamsForSubmit() {
+  return coerceParamsDict(createFormParams, createPresetBaseline.value)
 }
 
 function getBatchNextParamsForSubmit(override) {
@@ -575,19 +642,11 @@ function extractPresetParams(paramsWithDesc) {
 }
 
 function applyPresetParams() {
-  const preset = selectedPresets.value.find((item) => item.preset === form.preset)
-  const params = preset ? extractPresetParams(preset.params_with_desc) : {}
-  paramsText.value = JSON.stringify(params, null, 2)
+  replaceCreateFormParams(createPresetBaseline.value)
 }
 
 function parseSymbols(text) {
   return text.split(/[\s,，]+/).map((item) => item.trim()).filter(Boolean)
-}
-
-function parseParams(text) {
-  const trimmed = text.trim()
-  if (!trimmed) return {}
-  return JSON.parse(trimmed)
 }
 
 function initBatchDraft(batch) {
@@ -724,7 +783,7 @@ async function submitBatch() {
     const created = await createBatch({
       ...form,
       symbols: parseSymbols(symbolsText.value),
-      strategy_params: parseParams(paramsText.value),
+      strategy_params: getCreateParamsForSubmit(),
     })
     createMessage.value = `已创建 ${created.created_tasks} 个子任务`
     await loadBatches()
@@ -818,7 +877,7 @@ function buildLoopBatchConfig(nameSuffix = '') {
     universe_value: form.universe_value,
     strategy_key: form.strategy_key,
     preset: form.preset || null,
-    strategy_params: parseParams(paramsText.value),
+    strategy_params: getCreateParamsForSubmit(),
     start_date: form.start_date,
     end_date: form.end_date,
     initial_cash: form.initial_cash,
