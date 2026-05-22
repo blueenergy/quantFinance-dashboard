@@ -73,6 +73,35 @@
         策略参数 JSON
         <textarea v-model="paramsText" rows="3" placeholder='{"period": 20}'></textarea>
       </label>
+      <section class="param-diff" v-if="paramDiff">
+        <div class="param-diff-header">
+          <strong>AI 参数变更对比</strong>
+          <button class="mini-btn" @click="paramDiff = null">关闭对比</button>
+        </div>
+        <div class="diff-summary" v-if="paramDiff.changes.length">
+          <span
+            v-for="change in paramDiff.changes"
+            :key="change.key"
+            :class="['diff-chip', change.type]"
+          >
+            {{ change.label }} {{ change.key }}:
+            <template v-if="change.type === 'added'">{{ stringifyValue(change.after) }}</template>
+            <template v-else-if="change.type === 'removed'">{{ stringifyValue(change.before) }}</template>
+            <template v-else>{{ stringifyValue(change.before) }} -> {{ stringifyValue(change.after) }}</template>
+          </span>
+        </div>
+        <div class="diff-summary muted" v-else>AI 建议没有改变当前参数。</div>
+        <div class="diff-panels">
+          <div>
+            <h4>应用前</h4>
+            <pre>{{ paramDiff.beforeText }}</pre>
+          </div>
+          <div>
+            <h4>应用后</h4>
+            <pre>{{ paramDiff.afterText }}</pre>
+          </div>
+        </div>
+      </section>
       <div class="actions">
         <button class="primary" :disabled="submitting" @click="submitBatch">创建实验</button>
         <span v-if="message" class="message">{{ message }}</span>
@@ -148,10 +177,24 @@
             <div>
               <strong>下一轮实验</strong>
               <ul>
-                <li v-for="item in latestReview.review?.next_experiments || []" :key="item.name || item.hypothesis">
-                  {{ item.name || item.hypothesis || item }}
+                <li v-for="item in latestReview.review?.next_experiments || []" :key="item.name || item.hypothesis || item">
+                  <span>{{ item.name || item.hypothesis || item }}</span>
+                  <button class="mini-btn" @click="applyReviewSuggestion(item)">应用到参数区</button>
+                  <button class="mini-btn primary-mini" @click="applyReviewSuggestion(item, true)">应用并测试</button>
                 </li>
               </ul>
+            </div>
+          </div>
+          <div class="suggestion-list" v-if="latestReview.review?.parameter_suggestions?.length">
+            <strong>参数建议</strong>
+            <div
+              v-for="item in latestReview.review.parameter_suggestions"
+              :key="item.name || item.rationale || JSON.stringify(item)"
+              class="suggestion-row"
+            >
+              <span>{{ item.name || '参数组合' }}：{{ item.rationale || item.suggested_values || item }}</span>
+              <button class="mini-btn" @click="applyReviewSuggestion(item)">应用到参数区</button>
+              <button class="mini-btn primary-mini" @click="applyReviewSuggestion(item, true)">应用并测试</button>
             </div>
           </div>
         </section>
@@ -210,6 +253,13 @@ import {
   retryFailedBatch,
   rerunBatch,
 } from '../api/strategyLab'
+import {
+  buildParamDiff,
+  normalizeStrategies,
+  normalizeSuggestionParams,
+  normalizeTemplateGroups,
+  stringifyValue,
+} from '../utils/strategyLabParams'
 
 const batches = ref([])
 const selectedBatch = ref(null)
@@ -221,9 +271,11 @@ const strategyTemplates = ref({})
 const strategyLoadError = ref('')
 const loading = ref(false)
 const submitting = ref(false)
+const suppressPresetApply = ref(false)
 const message = ref('')
 const symbolsText = ref('')
 const paramsText = ref('{}')
+const paramDiff = ref(null)
 const resultStatus = ref('')
 const sortBy = ref('total_return')
 
@@ -251,7 +303,7 @@ const form = reactive({
 
 const summary = computed(() => selectedBatch.value?.summary || {})
 const latestReview = computed(() => reviews.value[0] || null)
-const usableStrategies = computed(() => strategies.value.filter((item) => item.allow_backtest !== false && item.can_use !== false))
+const usableStrategies = computed(() => strategies.value.filter((item) => item.allow_backtest !== false))
 const selectedPresets = computed(() => strategyTemplates.value[form.strategy_key] || [])
 
 const fallbackStrategies = [
@@ -311,6 +363,61 @@ function parseParams(text) {
   return JSON.parse(trimmed)
 }
 
+function fillFormFromSelectedBatch() {
+  if (!selectedBatch.value) return
+  form.universe_type = selectedBatch.value.universe_type || form.universe_type
+  form.universe_value = selectedBatch.value.universe_value || form.universe_value
+  form.strategy_key = selectedBatch.value.strategy_key || form.strategy_key
+  form.preset = selectedBatch.value.preset || ''
+  form.start_date = selectedBatch.value.start_date || form.start_date
+  form.end_date = selectedBatch.value.end_date || form.end_date
+  form.initial_cash = selectedBatch.value.initial_cash ?? form.initial_cash
+  form.limit_symbols = selectedBatch.value.limit_symbols ?? 2
+}
+
+function syncFormFromSelectedBatch() {
+  if (!selectedBatch.value) return
+  suppressPresetApply.value = true
+  try {
+    fillFormFromSelectedBatch()
+    form.name = `${selectedBatch.value.name || selectedBatch.value.batch_id || '批量实验'} 下一轮`
+    paramsText.value = JSON.stringify(selectedBatch.value.strategy_params || {}, null, 2)
+    paramDiff.value = null
+  } finally {
+    setTimeout(() => {
+      suppressPresetApply.value = false
+    }, 0)
+  }
+}
+
+async function applyReviewSuggestion(item, createImmediately = false) {
+  suppressPresetApply.value = true
+  try {
+    fillFormFromSelectedBatch()
+    const suggestedParams = normalizeSuggestionParams(item)
+    const currentParams = parseParams(paramsText.value)
+    const mergedParams = { ...currentParams, ...suggestedParams }
+
+    if (item && typeof item === 'object') {
+      if (item.strategy_key) form.strategy_key = item.strategy_key
+      if (item.preset !== undefined) form.preset = item.preset || ''
+      form.name = item.name || `${selectedBatch.value?.name || selectedBatchId.value} 下一轮`
+    }
+
+    paramsText.value = JSON.stringify(mergedParams, null, 2)
+    paramDiff.value = buildParamDiff(currentParams, mergedParams)
+
+    message.value = 'AI 建议已应用到上方参数区'
+    if (createImmediately) {
+      await createNextExperiment(mergedParams, form.name)
+    }
+  } finally {
+    setTimeout(() => {
+      suppressPresetApply.value = false
+    }, 0)
+  }
+}
+
 function pct(value) {
   return typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : '-'
 }
@@ -326,6 +433,8 @@ async function loadBatches() {
     if (!selectedBatchId.value && batches.value.length) {
       await selectBatch(batches.value[0].batch_id)
     }
+  } catch (error) {
+    message.value = error?.response?.data?.detail || error.message || '历史实验列表加载失败'
   } finally {
     loading.value = false
   }
@@ -335,19 +444,18 @@ async function loadStrategyMeta() {
   strategyLoadError.value = ''
   try {
     const strategyPayload = await listStrategies()
-    const loaded = strategyPayload.strategies || []
-    strategies.value = loaded.length ? loaded : fallbackStrategies
+    strategies.value = normalizeStrategies(strategyPayload.strategies, fallbackStrategies)
   } catch (error) {
     strategyLoadError.value = error?.message || '策略列表加载失败'
-    strategies.value = fallbackStrategies
+    strategies.value = normalizeStrategies([], fallbackStrategies)
   }
 
   try {
     const templatesPayload = await listStrategyTemplates()
-    strategyTemplates.value = templatesPayload.templates || fallbackTemplates
+    strategyTemplates.value = normalizeTemplateGroups(templatesPayload.templates, fallbackTemplates)
   } catch (error) {
     strategyLoadError.value = strategyLoadError.value || error?.message || '策略模板加载失败'
-    strategyTemplates.value = fallbackTemplates
+    strategyTemplates.value = normalizeTemplateGroups({}, fallbackTemplates)
   }
 
   if (!usableStrategies.value.some((item) => item.key === form.strategy_key) && usableStrategies.value.length) {
@@ -362,29 +470,44 @@ async function loadStrategyMeta() {
 
 async function selectBatch(batchId) {
   selectedBatchId.value = batchId
-  await loadSelected()
+  try {
+    await loadSelected()
+  } catch (error) {
+    message.value = error?.response?.data?.detail || error.message || '实验详情加载失败'
+  }
 }
 
 async function loadSelected() {
   if (!selectedBatchId.value) return
   selectedBatch.value = await getBatch(selectedBatchId.value)
-  await Promise.all([loadResults(), loadReviews()])
+  syncFormFromSelectedBatch()
+  await Promise.allSettled([loadResults(), loadReviews()])
 }
 
 async function loadResults() {
   if (!selectedBatchId.value) return
-  const payload = await getBatchResults(selectedBatchId.value, {
-    status: resultStatus.value || undefined,
-    sort_by: sortBy.value,
-    order: 'desc',
-    limit: 300,
-  })
-  results.value = payload.rows || []
+  try {
+    const payload = await getBatchResults(selectedBatchId.value, {
+      status: resultStatus.value || undefined,
+      sort_by: sortBy.value,
+      order: 'desc',
+      limit: 300,
+    })
+    results.value = payload.rows || []
+  } catch (error) {
+    results.value = []
+    message.value = error?.response?.data?.detail || error.message || '批量结果加载失败'
+  }
 }
 
 async function loadReviews() {
   if (!selectedBatchId.value) return
-  reviews.value = await listBatchReviews(selectedBatchId.value, { limit: 5 })
+  try {
+    reviews.value = await listBatchReviews(selectedBatchId.value, { limit: 5 })
+  } catch (error) {
+    reviews.value = []
+    message.value = error?.response?.data?.detail || error.message || 'AI 复盘加载失败'
+  }
 }
 
 async function submitBatch() {
@@ -430,11 +553,16 @@ async function queueReview() {
   await loadReviews()
 }
 
-async function createNextExperiment() {
+async function createNextExperiment(paramsOverride = null, nameOverride = '') {
   if (!selectedBatchId.value) return
   const result = await rerunBatch(selectedBatchId.value, {
-    name: `${selectedBatch.value?.name || selectedBatchId.value} 下一轮`,
-    strategy_params: parseParams(paramsText.value),
+    name: nameOverride || `${selectedBatch.value?.name || selectedBatchId.value} 下一轮`,
+    strategy_key: form.strategy_key || selectedBatch.value?.strategy_key,
+    preset: form.preset,
+    strategy_params: paramsOverride || parseParams(paramsText.value),
+    start_date: form.start_date,
+    end_date: form.end_date,
+    initial_cash: form.initial_cash,
   })
   message.value = `下一轮实验已创建：${result.batch_id}`
   await loadBatches()
@@ -442,12 +570,16 @@ async function createNextExperiment() {
 }
 
 watch(() => form.strategy_key, () => {
+  if (suppressPresetApply.value) return
   const defaultPreset = selectedPresets.value.find((item) => item.is_default) || selectedPresets.value[0]
   form.preset = defaultPreset?.preset || ''
   applyPresetParams()
 })
 
-watch(() => form.preset, applyPresetParams)
+watch(() => form.preset, () => {
+  if (suppressPresetApply.value) return
+  applyPresetParams()
+})
 
 onMounted(async () => {
   await loadStrategyMeta()
@@ -618,6 +750,76 @@ button {
   gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   margin-top: 10px;
+}
+
+.param-diff {
+  background: #f8fafc;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.param-diff-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.diff-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.diff-summary.muted {
+  color: #64748b;
+}
+
+.diff-chip {
+  border-radius: 999px;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.diff-chip.added {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.diff-chip.changed {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.diff-chip.removed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.diff-panels {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 12px;
+}
+
+.diff-panels h4 {
+  color: #334155;
+  margin: 0 0 6px;
+}
+
+.diff-panels pre {
+  background: #0f172a;
+  border-radius: 10px;
+  color: #e2e8f0;
+  font-size: 12px;
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px;
 }
 
 table {
