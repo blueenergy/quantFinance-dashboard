@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applySuggestionToParams,
   buildParamDiff,
+  buildParamTableRows,
+  coerceParamValue,
+  coerceParamsDict,
+  formatParamDisplay,
+  isExperimentReviewItem,
+  isPlainParamsObject,
+  isValidStrategyParamName,
+  mergeStrategyParams,
   normalizeStrategies,
   normalizeSuggestionParams,
   normalizeTemplateGroups,
+  resolveParamLabel,
   stableStringify,
   stringifyValue,
 } from './strategyLabParams'
@@ -31,6 +41,84 @@ describe('strategyLabParams', () => {
     expect(normalizeSuggestionParams({ name: 'atr', suggested_values: [25, 30] })).toEqual({ atr: 25 })
     expect(normalizeSuggestionParams({ name: 'risk', value: 0.015 })).toEqual({ risk: 0.015 })
     expect(normalizeSuggestionParams(null)).toEqual({})
+  })
+
+  it('rejects DOM events as strategy param dicts', () => {
+    expect(isPlainParamsObject({ period: 20 })).toBe(true)
+    expect(isPlainParamsObject(null)).toBe(false)
+    expect(isPlainParamsObject({ isTrusted: true })).toBe(false)
+    const fakeEvent = { isTrusted: true, preventDefault() {} }
+    expect(isPlainParamsObject(fakeEvent)).toBe(false)
+  })
+
+  it('rejects batch metadata keys as strategy params', () => {
+    expect(isValidStrategyParamName('entry_ma_period')).toBe(true)
+    expect(isValidStrategyParamName('universe_value')).toBe(false)
+    expect(isValidStrategyParamName('strategy_key')).toBe(false)
+    expect(
+      normalizeSuggestionParams({
+        strategy_params: { entry_ma_period: 20, universe_value: 'csi1000' },
+      })
+    ).toEqual({ entry_ma_period: 20 })
+  })
+
+  it('builds param table rows with current and next columns', () => {
+    const rows = buildParamTableRows(
+      { entry_ma_period: 60, stop_loss_pct: 0.05 },
+      { entry_ma_period: 20, stop_loss_pct: 0.05, ma_proximity_pct: 0.03 }
+    )
+    expect(rows).toHaveLength(3)
+    expect(rows.find((r) => r.key === 'entry_ma_period')).toMatchObject({
+      currentValue: 60,
+      nextValue: 20,
+      changed: true,
+    })
+    expect(rows.find((r) => r.key === 'ma_proximity_pct')).toMatchObject({
+      isNew: true,
+      changed: true,
+    })
+    expect(formatParamDisplay(null)).toBe('—')
+    expect(coerceParamValue('0.03', 0.05)).toBe(0.03)
+    expect(coerceParamsDict({ period: '25' }, { period: 20 })).toEqual({ period: 25 })
+    expect(resolveParamLabel('atr', { atr: { description: 'ATR周期' } })).toBe('ATR周期')
+  })
+
+  it('merges consecutive suggestion applies without dropping earlier keys', () => {
+    let params = { stop_loss_pct: 0.05 }
+    const first = applySuggestionToParams(params, { name: 'entry_ma_period', suggested_values: [20] })
+    expect(first.hasPatch).toBe(true)
+    params = first.mergedParams
+
+    const second = applySuggestionToParams(params, { name: 'ma_proximity_pct', suggested_values: [0.03] })
+    expect(second.hasPatch).toBe(true)
+    expect(second.mergedParams).toEqual({
+      stop_loss_pct: 0.05,
+      entry_ma_period: 20,
+      ma_proximity_pct: 0.03,
+    })
+    expect(mergeStrategyParams({ a: 1 }, { b: 2 })).toEqual({ a: 1, b: 2 })
+  })
+
+  it('distinguishes experiment suggestions from parameter suggestions', () => {
+    expect(isExperimentReviewItem({ name: '下一轮', hypothesis: '放宽止损' })).toBe(true)
+    expect(isExperimentReviewItem({ name: 'entry_ma_period', suggested_values: [20] })).toBe(false)
+  })
+
+  it('ignores AI combo labels used as param names', () => {
+    expect(
+      normalizeSuggestionParams({
+        name: 'entry_ma_period + ma_proximity_pct',
+        suggested_values: [20, 0.03],
+      })
+    ).toEqual({})
+    expect(
+      normalizeSuggestionParams({
+        strategy_params: {
+          entry_ma_period: 20,
+          'entry_ma_period + ma_proximity_pct': 0.03,
+        },
+      })
+    ).toEqual({ entry_ma_period: 20 })
   })
 
   it('stringifies values consistently for the diff chips', () => {
