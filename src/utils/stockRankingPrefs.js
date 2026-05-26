@@ -14,6 +14,7 @@ const STRATEGIES = new Set([
 ])
 
 const DISPLAY_LIMITS = new Set([10, 30, 50, 100, 200])
+const SORT_BY_VALUES = new Set(['composite', 'cycle', 'growth', 'fundamental', 'value', 'technical', 'money_flow'])
 
 /** Max symbols persisted to avoid blowing localStorage quota */
 export const STOCK_RANKING_PREFS_MAX_SYMBOLS = 200
@@ -65,6 +66,7 @@ function sanitizePerStockStrategies(raw) {
  *   viewMode: string,
  *   displayLimit: number,
  *   rankingStrategy: string,
+ *   sortBy: string,
  *   selectedDate: string,
  *   selectedDates: string[],
  *   selectedStocks: string[],
@@ -82,6 +84,8 @@ export function loadStockRankingPrefs() {
     const displayLimit = typeof data.displayLimit === 'number' && DISPLAY_LIMITS.has(data.displayLimit) ? data.displayLimit : null
     const rankingStrategy =
       typeof data.rankingStrategy === 'string' && STRATEGIES.has(data.rankingStrategy) ? data.rankingStrategy : null
+    const sortBy =
+      typeof data.sortBy === 'string' && SORT_BY_VALUES.has(data.sortBy) ? data.sortBy : null
 
     let selectedDate = ''
     if (typeof data.selectedDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.selectedDate)) {
@@ -110,7 +114,7 @@ export function loadStockRankingPrefs() {
 
     const perStockStrategies = sanitizePerStockStrategies(data.perStockStrategies)
 
-    if (!viewMode && !displayLimit && !rankingStrategy && !selectedDate && selectedDates.length === 0 && selectedStocks.length === 0) {
+    if (!viewMode && !displayLimit && !rankingStrategy && !sortBy && !selectedDate && selectedDates.length === 0 && selectedStocks.length === 0) {
       return null
     }
 
@@ -118,6 +122,7 @@ export function loadStockRankingPrefs() {
       viewMode: viewMode || 'ranking',
       displayLimit: displayLimit ?? 30,
       rankingStrategy: rankingStrategy || 'balanced',
+      sortBy: sortBy || 'composite',
       selectedDate,
       selectedDates,
       selectedStocks,
@@ -136,6 +141,7 @@ export function saveStockRankingPrefs(prefs) {
       viewMode: prefs.viewMode,
       displayLimit: prefs.displayLimit,
       rankingStrategy: prefs.rankingStrategy,
+      sortBy: prefs.sortBy,
       selectedDate: prefs.selectedDate ?? '',
       selectedDates: Array.isArray(prefs.selectedDates) ? prefs.selectedDates : [],
       selectedStocks: Array.isArray(prefs.selectedStocks)
@@ -146,6 +152,7 @@ export function saveStockRankingPrefs(prefs) {
     if (!VIEW_MODES.has(payload.viewMode)) payload.viewMode = 'ranking'
     if (!DISPLAY_LIMITS.has(payload.displayLimit)) payload.displayLimit = 30
     if (!STRATEGIES.has(payload.rankingStrategy)) payload.rankingStrategy = 'balanced'
+    if (!SORT_BY_VALUES.has(payload.sortBy)) payload.sortBy = 'composite'
     localStorage.setItem(getStockRankingPrefsStorageKey(), JSON.stringify(payload))
   } catch {
     /* quota / private mode */

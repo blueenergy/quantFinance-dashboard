@@ -33,13 +33,14 @@ describe('buildStockRankingCacheKey', () => {
         viewMode: 'ranking',
         displayLimit: 30,
         rankingStrategy: 'balanced',
+        sortBy: 'composite',
         dateParam: '',
         selectedDates: [],
         selectedStocks: [],
         watchlistSymbols: [],
         indexSymbols: [],
       })
-    ).toBe('ranking|30|balanced|latest')
+    ).toBe('ranking|30|balanced|composite|latest')
   })
 
   it('returns null when required symbols missing', () => {
@@ -48,6 +49,7 @@ describe('buildStockRankingCacheKey', () => {
         viewMode: 'selected',
         displayLimit: 30,
         rankingStrategy: 'balanced',
+        sortBy: 'composite',
         dateParam: '',
         selectedDates: [],
         selectedStocks: [],
@@ -62,13 +64,14 @@ describe('buildStockRankingCacheKey', () => {
       viewMode: 'hs300',
       displayLimit: 30,
       rankingStrategy: 'balanced',
+        sortBy: 'money_flow',
       dateParam: '20200101',
       selectedDates: [],
       selectedStocks: [],
       watchlistSymbols: [],
       indexSymbols: [],
     })
-    expect(k).toBe('hs300|balanced|20200101')
+    expect(k).toBe('hs300|balanced|money_flow|20200101')
   })
 
   it('index mode csi1000 uses latest when no date', () => {
@@ -76,13 +79,14 @@ describe('buildStockRankingCacheKey', () => {
       viewMode: 'csi1000',
       displayLimit: 30,
       rankingStrategy: 'balanced',
+        sortBy: 'composite',
       dateParam: '',
       selectedDates: [],
       selectedStocks: [],
       watchlistSymbols: [],
       indexSymbols: [],
     })
-    expect(k).toBe('csi1000|balanced|latest')
+    expect(k).toBe('csi1000|balanced|composite|latest')
   })
 
   it('includes page offset and size when paginating', () => {
@@ -90,6 +94,7 @@ describe('buildStockRankingCacheKey', () => {
       viewMode: 'csi500',
       displayLimit: 30,
       rankingStrategy: 'balanced',
+        sortBy: 'growth',
       dateParam: '',
       selectedDates: [],
       selectedStocks: [],
@@ -98,7 +103,7 @@ describe('buildStockRankingCacheKey', () => {
       pageOffset: 30,
       pageSize: 30,
     })
-    expect(k).toBe('csi500|balanced|latest|o:30|ps:30')
+    expect(k).toBe('csi500|balanced|growth|latest|o:30|ps:30')
   })
 
   it('uses hash tail for very long symbol lists', () => {
@@ -107,6 +112,7 @@ describe('buildStockRankingCacheKey', () => {
       viewMode: 'selected',
       displayLimit: 30,
       rankingStrategy: 'balanced',
+      sortBy: 'technical',
       dateParam: '20260101',
       selectedDates: [],
       selectedStocks: stocks,

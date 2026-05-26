@@ -60,15 +60,27 @@
         </div>
       </v-col>
       <v-col cols="12" sm="6">
+        <label style="margin-left: 0">排序维度：</label>
+        <v-select
+          v-model="internalSortBy"
+          :items="sortByOptions"
+          item-title="label"
+          item-value="value"
+          density="compact"
+          variant="outlined"
+        />
+        <div class="mt-xs text-muted">选“总分”时排名策略参与排序；选单项维度时按该维度分数排序。</div>
+      </v-col>
+      <v-col v-if="internalSortBy === 'composite'" cols="12" sm="6">
         <label style="margin-left: 0">排名策略：</label>
-  <v-select
-    v-model="internalRankingStrategy"
-    :items="rankingStrategyOptions"
-    item-title="label"
-    item-value="value"
-    density="compact"
-    variant="outlined"
-  />
+        <v-select
+          v-model="internalRankingStrategy"
+          :items="rankingStrategyOptions"
+          item-title="label"
+          item-value="value"
+          density="compact"
+          variant="outlined"
+        />
       </v-col>
     </v-row>
 
@@ -139,7 +151,7 @@ import { toRefs, computed, onMounted } from 'vue'
 
 // define emits explicitly so we can call them from safe handlers
 const emit = defineEmits([
-  'change-view-mode', 'change-date', 'change-display-limit', 'change-ranking-strategy',
+  'change-view-mode', 'change-date', 'change-display-limit', 'change-ranking-strategy', 'change-sort-by',
   'stock-input', 'add-stock', 'clear-selected-stocks', 'select-suggestion', 'remove-stock',
   // distinct events: top date input requests a maybe-open hook, while the selected-mode button
   // explicitly requests opening available-dates for the currently selected symbol.
@@ -153,6 +165,7 @@ const props = defineProps({
   maxDate: { type: String, default: new Date().toISOString().slice(0,10) },
   displayLimit: { type: [String, Number], default: 50 },
   rankingStrategy: { type: String, default: 'balanced' },
+  sortBy: { type: String, default: 'composite' },
   stockInput: { type: String, default: '' },
   stockSuggestions: { type: Array, default: () => [] },
   selectedStocks: { type: Array, default: () => [] },
@@ -180,6 +193,7 @@ const selectedDate = refs.selectedDate
 const maxDate = refs.maxDate || { value: new Date().toISOString().slice(0,10) }
 const displayLimit = refs.displayLimit
 const rankingStrategy = refs.rankingStrategy
+const sortBy = refs.sortBy
 const stockInput = refs.stockInput
 const stockSuggestions = refs.stockSuggestions
 const selectedStocks = refs.selectedStocks
@@ -213,6 +227,15 @@ const rankingStrategyOptions = [
   {label:'交易型',value:'trading_oriented'},
   {label:'成长型',value:'growth_oriented'},
   {label:'周期型',value:'cycle_oriented'},
+]
+const sortByOptions = [
+  { label: '总分', value: 'composite' },
+  { label: '周期', value: 'cycle' },
+  { label: '成长', value: 'growth' },
+  { label: '基本面', value: 'fundamental' },
+  { label: '价值', value: 'value' },
+  { label: '技术', value: 'technical' },
+  { label: '资金', value: 'money_flow' },
 ]
 
 // callback refs (use safe names to avoid Vue auto-merging 'onX' listener props)
@@ -260,6 +283,10 @@ function incrementDisplayLimit() {
 const internalRankingStrategy = computed({
   get: () => rankingStrategy.value,
   set: v => { emit('change-ranking-strategy', v) }
+})
+const internalSortBy = computed({
+  get: () => sortBy.value,
+  set: v => { emit('change-sort-by', v) }
 })
 const internalStockInput = computed({
   get: () => stockInput.value,

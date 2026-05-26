@@ -41,6 +41,7 @@ describe('stockRankingPrefs', () => {
       viewMode: 'selected',
       displayLimit: 50,
       rankingStrategy: 'aggressive',
+      sortBy: 'money_flow',
       selectedDate: '2026-04-01',
       selectedDates: ['20260401', 'bad', '20260402'],
       selectedStocks: ['000001', 'notacode', '600519'],
@@ -51,6 +52,7 @@ describe('stockRankingPrefs', () => {
     expect(p.viewMode).toBe('selected')
     expect(p.displayLimit).toBe(50)
     expect(p.rankingStrategy).toBe('aggressive')
+    expect(p.sortBy).toBe('money_flow')
     expect(p.selectedDate).toBe('2026-04-01')
     expect(p.selectedDates).toEqual(['20260401', '20260402'])
     expect(p.selectedStocks).toEqual(['000001', '600519'])
@@ -63,6 +65,7 @@ describe('stockRankingPrefs', () => {
       version: 1,
       viewMode: 'nope',
       rankingStrategy: 'nope2',
+      sortBy: 'bad',
       displayLimit: 999,
       selectedDate: 'not-a-date',
       selectedDates: [],
@@ -78,6 +81,7 @@ describe('stockRankingPrefs', () => {
       version: 1,
       viewMode: 'nope',
       rankingStrategy: 'aggressive',
+      sortBy: 'growth',
       displayLimit: 999,
       selectedDate: '',
       selectedDates: [],
@@ -88,6 +92,7 @@ describe('stockRankingPrefs', () => {
     expect(p).not.toBeNull()
     expect(p.viewMode).toBe('ranking')
     expect(p.rankingStrategy).toBe('aggressive')
+    expect(p.sortBy).toBe('growth')
     expect(p.displayLimit).toBe(30)
   })
 
@@ -100,6 +105,7 @@ describe('stockRankingPrefs', () => {
       viewMode: 'ranking',
       displayLimit: 30,
       rankingStrategy: 'balanced',
+      sortBy: 'composite',
       selectedDate: '',
       selectedDates: [],
       selectedStocks: many,

@@ -10,6 +10,7 @@
     :maxDate="maxDate"
     :displayLimit="displayLimit"
     :rankingStrategy="rankingStrategy"
+    :sortBy="sortBy"
     :stockInput="stockInput"
     :stockSuggestions="stockSuggestions"
     :selectedStocks="selectedStocks"
@@ -22,6 +23,7 @@
     @change-date="handleChangeDate"
     @change-display-limit="handleChildDisplayLimitChange"
     @change-ranking-strategy="handleChildRankingStrategyChange"
+    @change-sort-by="handleChildSortByChange"
     @stock-input="handleChildStockInput"
     @add-stock="addStockToQuery"
     @clear-selected-stocks="clearSelectedStocks"
@@ -427,6 +429,7 @@ const selectedDates = ref(_srp?.selectedDates?.length ? [..._srp.selectedDates] 
 // rankingStrategy: global strategy used across modes unless a per-stock override is set
 // perStockStrategies: map { SYMBOL: 'balanced'|'aggressive'|'conservative' } for per-symbol overrides
 const rankingStrategy = ref(_srp?.rankingStrategy ?? 'balanced')
+const sortBy = ref(_srp?.sortBy ?? 'composite')
 const perStockStrategies = ref(
   _srp?.perStockStrategies && typeof _srp.perStockStrategies === 'object'
     ? { ..._srp.perStockStrategies }
@@ -441,6 +444,7 @@ function schedulePersistStockRankingPrefs() {
       viewMode: viewMode.value,
       displayLimit: displayLimit.value,
       rankingStrategy: rankingStrategy.value,
+      sortBy: sortBy.value,
       selectedDate: selectedDate.value,
       selectedDates: [...selectedDates.value],
       selectedStocks: [...selectedStocks.value],
@@ -450,7 +454,7 @@ function schedulePersistStockRankingPrefs() {
 }
 
 watch(
-  [viewMode, displayLimit, rankingStrategy, selectedDate, selectedDates, selectedStocks, perStockStrategies],
+  [viewMode, displayLimit, rankingStrategy, sortBy, selectedDate, selectedDates, selectedStocks, perStockStrategies],
   schedulePersistStockRankingPrefs,
   { deep: true }
 )
@@ -617,6 +621,32 @@ function getAuthHeaders() {
 
 // getCompositeScore imported from utils
 
+const SORT_SCORE_FIELDS = {
+  cycle: 'cycle_score',
+  growth: 'growth_score',
+  fundamental: 'fundamental_score',
+  value: 'value_score',
+  technical: 'technical_score',
+  money_flow: 'money_flow_score',
+}
+
+function getSortScoreForRow(row, date = '') {
+  const key = sortBy.value || 'composite'
+  if (key === 'composite') {
+    const strategy = getEffectiveStrategyFor(row.symbol)
+    if (date && row.per_date_scores?.[date]) {
+      return Number(row.per_date_scores[date]?.[strategy] || 0)
+    }
+    return Number(getCompositeScore(row, strategy) || 0)
+  }
+  const field = SORT_SCORE_FIELDS[key]
+  if (!field) return 0
+  if (date && row.per_date_fields?.[date]) {
+    return Number(row.per_date_fields[date]?.[field] || 0)
+  }
+  return Number(row[field] || 0)
+}
+
 // ✅ 主数据获取方法 - 根据模式调用不同API
 async function fetchRankings() {
   dlog('fetchRankings start viewMode=', viewMode.value)
@@ -665,6 +695,7 @@ async function fetchRankings() {
       viewMode: viewMode.value,
       displayLimit: displayLimit.value,
       rankingStrategy: rankingStrategy.value,
+      sortBy: sortBy.value,
       dateParam,
       selectedDates: selectedDates.value,
       selectedStocks: selectedStocks.value,
@@ -692,6 +723,7 @@ async function fetchRankings() {
         let url = `/api/stock-rankings?limit=${displayLimit.value}`
         // include selected ranking strategy so server can sort accordingly
         if (rankingStrategy.value) url += `&strategy=${encodeURIComponent(rankingStrategy.value)}`
+        if (sortBy.value) url += `&sort_by=${encodeURIComponent(sortBy.value)}`
         if (dateParam) url += `&date=${dateParam}`
         response = await axios.get(url, { signal })
         break
@@ -713,6 +745,9 @@ async function fetchRankings() {
         const qpIdx = []
         if (rankingStrategy.value) {
           qpIdx.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+        }
+        if (sortBy.value) {
+          qpIdx.push(`sort_by=${encodeURIComponent(sortBy.value)}`)
         }
         if (dateParam) {
           qpIdx.push(`date=${encodeURIComponent(dateParam)}`)
@@ -741,6 +776,7 @@ async function fetchRankings() {
           payload.dates = selectedDates.value
           const qpSel = []
           if (rankingStrategy.value) qpSel.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+          if (sortBy.value) qpSel.push(`sort_by=${encodeURIComponent(sortBy.value)}`)
           if (qpSel.length) url += `?${qpSel.join('&')}`
           url = appendRankingsPageQuery(url)
           dlog('posting with dates', payload.dates)
@@ -749,6 +785,7 @@ async function fetchRankings() {
           const qpSel = []
           if (dateParam) qpSel.push(`date=${dateParam}`)
           if (rankingStrategy.value) qpSel.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+          if (sortBy.value) qpSel.push(`sort_by=${encodeURIComponent(sortBy.value)}`)
           if (qpSel.length) url += `?${qpSel.join('&')}`
           url = appendRankingsPageQuery(url)
           dlog('posting without dates url=', url)
@@ -776,6 +813,7 @@ async function fetchRankings() {
         const qp2 = []
         if (dateParam) qp2.push(`date=${dateParam}`)
         if (rankingStrategy.value) qp2.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
+        if (sortBy.value) qp2.push(`sort_by=${encodeURIComponent(sortBy.value)}`)
         if (qp2.length) url += `?${qp2.join('&')}`
         url = appendRankingsPageQuery(url)
         response = await axios.post(url, payload, { signal })
@@ -827,14 +865,10 @@ async function fetchRankings() {
     if (viewMode.value === 'selected' && selectedDates.value.length > 0) {
       const primaryDate = selectedDates.value[0]
       rankings.value.sort((a, b) => {
-        const aStrat = getEffectiveStrategyFor(a.symbol)
-        const bStrat = getEffectiveStrategyFor(b.symbol)
-        const aScore = a.per_date_scores?.[primaryDate]?.[aStrat] ?? 0
-        const bScore = b.per_date_scores?.[primaryDate]?.[bStrat] ?? 0
-        return bScore - aScore
+        return getSortScoreForRow(b, primaryDate) - getSortScoreForRow(a, primaryDate)
       })
   } else {
-    rankings.value.sort((a, b) => getCompositeScore(b, rankingStrategy.value) - getCompositeScore(a, rankingStrategy.value))
+    rankings.value.sort((a, b) => getSortScoreForRow(b) - getSortScoreForRow(a))
   }
     // 更新时间
     if (rankings.value.length > 0) {
@@ -853,6 +887,7 @@ async function fetchRankings() {
       viewMode: viewMode.value,
       displayLimit: displayLimit.value,
       rankingStrategy: rankingStrategy.value,
+      sortBy: sortBy.value,
       dateParam,
       selectedDates: selectedDates.value,
       selectedStocks: selectedStocks.value,
@@ -1131,6 +1166,17 @@ function handleChildRankingStrategyChange(v) {
   } catch (e) {
     console.error('onRankingStrategyChange error', e)
   }
+}
+
+function handleChildSortByChange(v) {
+  const newVal = (v && typeof v === 'object' && v.target && 'value' in v.target) ? v.target.value : v
+  if (typeof newVal === 'string' && newVal.trim()) {
+    sortBy.value = newVal.trim()
+  } else {
+    console.warn('handleChildSortByChange ignored invalid value:', newVal)
+    return
+  }
+  onRankingSortChange()
 }
 
 function handleChildStockInput(v) {
@@ -1667,6 +1713,11 @@ function onRankingStrategyChange() {
     console.error('排序失败:', e)
   }
   try { refreshKey.value = (refreshKey.value || 0) + 1 } catch (e) {}
+}
+
+function onRankingSortChange() {
+  rankingPageOffset.value = 0
+  fetchRankings()
 }
 
 // =============================
