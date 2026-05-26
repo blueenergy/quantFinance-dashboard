@@ -6,12 +6,30 @@
         <h2>策略实验室</h2>
         <p class="subtitle">批量回测、横截面排名、AI 复盘和下一轮实验生成。</p>
       </div>
-      <button class="primary" :disabled="loading || loopSubmitting" @click="refreshAll">刷新</button>
+      <div class="header-actions">
+        <button :disabled="!selectedBatch" @click="scrollToBatchDetail">查看当前实验</button>
+        <button class="primary" :disabled="loading || loopSubmitting" @click="refreshAll">刷新</button>
+      </div>
     </header>
 
     <section class="card">
-      <h3>批量实验配置</h3>
-      <p class="subtitle">这组配置可用于创建单次批量实验，也可作为自动迭代 Loop 的第 1 轮输入。</p>
+      <div class="section-title-row compact">
+        <div>
+          <h3>批量实验配置</h3>
+          <p class="subtitle">这组配置可用于创建单次批量实验，也可作为自动迭代 Loop 的第 1 轮输入。</p>
+        </div>
+        <button type="button" class="mini-btn" @click="createPanelExpanded = !createPanelExpanded">
+          {{ createPanelExpanded ? '收起配置' : '展开配置' }}
+        </button>
+      </div>
+      <div v-if="!createPanelExpanded" class="panel-summary">
+        <span>{{ targetModeLabel }}</span>
+        <span>{{ form.strategy_key }} / {{ form.preset || 'default' }}</span>
+        <span>{{ form.start_date }} - {{ form.end_date }}</span>
+        <span>初始资金 {{ money(form.initial_cash) }}</span>
+        <span v-if="form.target_mode === 'single_etf'">资金使用率 {{ pct(normalizedEtfPositionPct()) }}</span>
+      </div>
+      <div v-show="createPanelExpanded" class="panel-body">
       <div class="form-grid">
         <label>
           实验名
@@ -147,6 +165,7 @@
           <p v-else class="muted">选择 Preset 或策略后将显示可编辑参数；也可先选策略再改实验值。</p>
         </div>
       </div>
+      </div>
     </section>
 
     <section class="card loop-panel">
@@ -155,8 +174,20 @@
           <p class="section-kicker">自动化流程 · Loop 维度</p>
           <h3>自动迭代 Loop</h3>
         </div>
-        <span class="type-badge loop-badge">Loop 流程</span>
+        <div class="title-actions">
+          <span class="type-badge loop-badge">Loop 流程</span>
+          <button type="button" class="mini-btn" @click="loopPanelExpanded = !loopPanelExpanded">
+            {{ loopPanelExpanded ? '收起 Loop' : '展开 Loop' }}
+          </button>
+        </div>
       </div>
+      <div v-if="!loopPanelExpanded" class="panel-summary">
+        <span>{{ loopHealthStatusText }}</span>
+        <span>Loop：{{ loops.length }} 条</span>
+        <span v-if="selectedLoop">当前：{{ selectedLoop.status }} · {{ loopStepLabel(selectedLoop.current_step) }}</span>
+        <span v-else>未选中 Loop</span>
+      </div>
+      <div v-show="loopPanelExpanded" class="panel-body">
       <p class="subtitle">一条 Loop 会串联多次批量实验：批量完成 → AI 复盘 → 应用建议参数 → 再测，直到达到停止规则或最大轮数。</p>
       <div class="loop-health-panel" :class="{ unhealthy: loopHealth && !loopHealth.auto_advance_available }">
         <div>
@@ -452,9 +483,10 @@
         </div>
       </div>
       <p v-else class="muted">暂无自动迭代任务</p>
+      </div>
     </section>
 
-    <section class="layout">
+    <section ref="detailSection" class="layout">
       <aside class="card batch-list">
         <div class="section-title-row compact">
           <div>
@@ -836,7 +868,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import {
   cancelBatch,
   deleteBatch,
@@ -903,8 +935,11 @@ const etfSearch = ref('')
 const etfOptionsLoading = ref(false)
 const etfOptionsMessage = ref('')
 const createFormParams = reactive({})
+const createPanelExpanded = ref(false)
+const loopPanelExpanded = ref(false)
 const createParamsExpanded = ref(true)
 const batchParamsExpanded = ref(true)
+const detailSection = ref(null)
 const batchDraft = reactive({
   name: '',
   strategy_key: '',
@@ -996,6 +1031,16 @@ const selectedLoopNextBatchName = computed(() => {
   if (!childBatchId) return ''
   const childBatch = batches.value.find((item) => item.batch_id === childBatchId)
   return childBatch?.name || selectedLoopIteration.value?.child_batch_name || childBatchId
+})
+
+const targetModeLabel = computed(() => {
+  if (form.target_mode === 'single_etf') {
+    const symbol = normalizeSymbolInput(form.etf_symbol)
+    return symbol ? `单个 ETF ${symbol}` : '单个 ETF'
+  }
+  if (form.target_mode === 'manual') return `自定义标的 · ${form.asset_type || 'stock'}`
+  if (form.target_mode === 'strategy_pool') return `策略股池 ${form.universe_value || ''}`.trim()
+  return `指数成分 ${form.universe_value || ''}`.trim()
 })
 
 const batchLinkedLoop = computed(() => {
@@ -1414,6 +1459,10 @@ function money(value) {
     : '-'
 }
 
+function scrollToBatchDetail() {
+  detailSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 function formatDateTime(value) {
   if (!value) return '-'
   const date = new Date(value)
@@ -1475,6 +1524,8 @@ async function selectBatch(batchId) {
     if (linkedLoopId && linkedLoopId !== selectedLoopId.value) {
       await selectLoop(linkedLoopId)
     }
+    await nextTick()
+    scrollToBatchDetail()
   } catch (error) {
     batchMessage.value = error?.response?.data?.detail || error.message || '实验详情加载失败'
   }
@@ -2292,6 +2343,35 @@ p {
 .list-caption span {
   color: #64748b;
   font-size: 12px;
+}
+
+.header-actions,
+.title-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.panel-summary {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 12px;
+  padding: 10px 12px;
+}
+
+.panel-summary span {
+  color: #475569;
+  font-size: 13px;
+}
+
+.panel-body {
+  margin-top: 12px;
 }
 
 .loop-health-panel {
