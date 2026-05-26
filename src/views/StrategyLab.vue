@@ -6,11 +6,12 @@
         <h2>策略实验室</h2>
         <p class="subtitle">批量回测、横截面排名、AI 复盘和下一轮实验生成。</p>
       </div>
-      <button class="primary" :disabled="loading" @click="loadBatches">刷新</button>
+      <button class="primary" :disabled="loading || loopSubmitting" @click="refreshAll">刷新</button>
     </header>
 
     <section class="card">
-      <h3>创建批量实验</h3>
+      <h3>批量实验配置</h3>
+      <p class="subtitle">这组配置可用于创建单次批量实验，也可作为自动迭代 Loop 的第 1 轮输入。</p>
       <div class="form-grid">
         <label>
           实验名
@@ -112,15 +113,31 @@
           <p v-else class="muted">选择 Preset 或策略后将显示可编辑参数；也可先选策略再改实验值。</p>
         </div>
       </div>
-      <div class="actions">
-        <button class="primary" :disabled="submitting" @click="submitBatch">创建实验</button>
-        <span v-if="createMessage" class="message">{{ createMessage }}</span>
-      </div>
     </section>
 
     <section class="card loop-panel">
-      <h3>自动迭代 Loop</h3>
-      <p class="subtitle">由调度器每 45 秒推进：批量完成 → AI 复盘 → 应用建议参数 → 再测，直到达到停止规则或最大轮数。</p>
+      <div class="section-title-row">
+        <div>
+          <p class="section-kicker">自动化流程 · Loop 维度</p>
+          <h3>自动迭代 Loop</h3>
+        </div>
+        <span class="type-badge loop-badge">Loop 流程</span>
+      </div>
+      <p class="subtitle">一条 Loop 会串联多次批量实验：批量完成 → AI 复盘 → 应用建议参数 → 再测，直到达到停止规则或最大轮数。</p>
+      <div class="loop-health-panel" :class="{ unhealthy: loopHealth && !loopHealth.auto_advance_available }">
+        <div>
+          <strong>自动推进状态</strong>
+          <span>{{ loopHealthStatusText }}</span>
+        </div>
+        <div class="loop-health-meta">
+          <span>scheduler：{{ loopHealth?.scheduler_online ? '在线' : '离线/未知' }}</span>
+          <span>tick：{{ loopHealth?.tick_enabled ? '启用' : '禁用' }} / {{ loopHealth?.tick_loaded ? '已加载' : '未加载' }}</span>
+          <span>运行中 Loop：{{ loopHealth?.active_loop_count ?? '-' }}</span>
+          <span v-if="loopHealth?.heartbeat_age_seconds !== null && loopHealth?.heartbeat_age_seconds !== undefined">
+            心跳 {{ Math.round(loopHealth.heartbeat_age_seconds) }}s 前
+          </span>
+        </div>
+      </div>
       <div class="form-grid">
         <label>
           最大轮数
@@ -136,31 +153,260 @@
         </label>
       </div>
       <div class="actions">
-        <button class="primary" :disabled="loopSubmitting" @click="startAutoLoop">从上方配置启动</button>
-        <button :disabled="!selectedBatchId || loopSubmitting" @click="startAutoLoopFromBatch">从当前实验启动</button>
+        <button class="primary" :disabled="loopSubmitting" @click="() => startAutoLoop()">从上方配置启动</button>
+        <button
+          :disabled="!canStartLoopFromBatch || loopSubmitting"
+          :title="startLoopFromBatchHint"
+          @click="() => startAutoLoopFromBatch()"
+        >
+          从当前实验启动
+        </button>
         <button :disabled="!selectedLoopId" @click="refreshSelectedLoop">刷新 Loop</button>
+        <span v-if="loopMessage" class="message">{{ loopMessage }}</span>
       </div>
       <div class="loop-layout" v-if="loops.length">
         <aside class="loop-list">
+          <div class="list-caption">
+            <strong>Loop 列表</strong>
+            <span>每条代表一组自动迭代流程</span>
+          </div>
           <button
             v-for="loop in loops"
             :key="loop.loop_id"
-            class="batch-row"
+            class="batch-row loop-row"
             :class="{ active: selectedLoopId === loop.loop_id }"
             @click="selectLoop(loop.loop_id)"
           >
+            <span class="row-type">Loop</span>
             <strong>{{ loop.name || loop.loop_id }}</strong>
-            <small>{{ loop.status }} · 第 {{ loop.current_iteration }}/{{ loop.max_iterations }} 轮 · {{ loop.current_step }}</small>
+            <small>流程状态：{{ loop.status }} · 第 {{ loop.current_iteration }}/{{ loop.max_iterations }} 轮 · {{ loopStepLabel(loop.current_step) }}</small>
           </button>
         </aside>
         <div class="loop-detail" v-if="selectedLoop">
           <div class="detail-actions">
-            <button v-if="selectedLoop.status === 'running'" @click="pauseSelectedLoop">暂停</button>
-            <button v-if="selectedLoop.status === 'paused'" @click="resumeSelectedLoop">继续</button>
-            <button @click="cancelSelectedLoop">取消</button>
-            <button @click="advanceSelectedLoop">手动推进</button>
+            <button
+              v-if="selectedLoop.status === 'running'"
+              :disabled="loopSubmitting"
+              @click="() => pauseSelectedLoop()"
+            >
+              暂停
+            </button>
+            <button
+              v-if="selectedLoop.status === 'paused'"
+              :disabled="loopSubmitting"
+              @click="() => resumeSelectedLoop()"
+            >
+              继续
+            </button>
+            <button
+              v-if="canManageActiveLoop"
+              :disabled="loopSubmitting"
+              @click="() => cancelSelectedLoop()"
+            >
+              取消 Loop
+            </button>
+            <button
+              v-if="canAdvanceLoop"
+              :disabled="loopSubmitting"
+              title="推进一轮：批量完成 → 复盘 → 再测"
+              @click="() => advanceSelectedLoop()"
+            >
+              手动推进
+            </button>
+            <button
+              class="danger"
+              :disabled="!canDeleteSelectedLoop || loopSubmitting"
+              :title="canDeleteSelectedLoop ? '只删除 Loop 历史记录，不删除关联的批量实验' : '运行中/暂停中的 Loop 需要先取消或完成后才能删除'"
+              @click="() => deleteSelectedLoop()"
+            >
+              删除历史 Loop
+            </button>
+          </div>
+          <div v-if="pendingDeleteLoop" class="inline-confirm danger-confirm">
+            <strong>确认删除历史 Loop「{{ pendingDeleteLoop.name }}」？</strong>
+            <p>只删除 Loop 流程记录，不删除关联的批量实验和回测结果。</p>
+            <div class="confirm-actions">
+              <button class="danger" :disabled="loopSubmitting" @click="() => confirmDeleteSelectedLoop()">
+                确认删除
+              </button>
+              <button :disabled="loopSubmitting" @click="pendingDeleteLoop = null">取消</button>
+            </div>
           </div>
           <p v-if="selectedLoop.stop_reason" class="message">停止原因：{{ selectedLoop.stop_reason }}</p>
+          <section class="loop-wait-panel" v-if="loopSummary?.waiting_reason">
+            <strong>当前等待：{{ loopSummary.waiting_reason }}</strong>
+            <p>{{ loopSummary.waiting_detail }}</p>
+            <div class="loop-health-meta" v-if="loopSummary.waiting_status_counts">
+              <span>pending：{{ loopSummary.waiting_status_counts.pending || 0 }}</span>
+              <span>claimed：{{ loopSummary.waiting_status_counts.claimed || 0 }}</span>
+              <span>running：{{ loopSummary.waiting_status_counts.running || 0 }}</span>
+              <span>completed：{{ loopSummary.waiting_status_counts.completed || 0 }}</span>
+              <span>failed：{{ loopSummary.waiting_status_counts.failed || 0 }}</span>
+            </div>
+            <div class="loop-review-task-box" v-if="loopSummary.waiting_review_task">
+              <strong>AI 复盘任务</strong>
+              <div class="loop-health-meta">
+                <span>状态：{{ loopSummary.waiting_review_task.status }}</span>
+                <span>任务：{{ loopSummary.waiting_review_task.task_id || '-' }}</span>
+                <span>Worker：{{ loopSummary.waiting_review_task.worker_id || '-' }}</span>
+                <span>创建：{{ formatDateTime(loopSummary.waiting_review_task.created_at) }}</span>
+                <span>更新：{{ formatDateTime(loopSummary.waiting_review_task.updated_at) }}</span>
+                <span>结果文档：{{ loopSummary.waiting_review_doc_exists ? '已写入' : '未写入' }}</span>
+              </div>
+              <p v-if="loopSummary.waiting_review_task.error" class="error">
+                {{ loopSummary.waiting_review_task.error }}
+              </p>
+            </div>
+            <p v-else-if="loopSummary.current_step === 'wait_review'" class="muted">
+              尚未找到 AI 复盘任务记录；可能还没入队，或任务记录写入异常。
+            </p>
+            <button
+              v-if="loopSummary.current_batch_id"
+              type="button"
+              class="mini-btn"
+              @click="() => selectBatch(loopSummary.current_batch_id)"
+            >
+              查看当前轮实验
+            </button>
+          </section>
+          <section class="loop-final-report-panel" v-if="loopSummary">
+            <h4>AI 综合结论</h4>
+            <p v-if="loopSummary.final_report_status === 'pending'" class="muted">
+              正在由 quantAnalyzer 生成跨轮综合报告，通常需 1–3 分钟。请稍后点击「刷新 Loop」查看。
+            </p>
+            <p v-else-if="loopSummary.final_report_status === 'failed'" class="message">
+              综合报告生成失败：{{ loopSummary.final_report_error || '未知错误' }}
+              <button type="button" class="mini-btn" @click="() => requestLoopFinalReport(true)">重试</button>
+            </p>
+            <template v-else-if="loopSummary.has_final_report_content">
+              <p class="report-lead">{{ loopSummary.final_report.summary }}</p>
+              <p v-if="loopSummary.final_report.best_iteration" class="muted">
+                相对最优：第 {{ loopSummary.final_report.best_iteration }} 轮
+                <span v-if="loopSummary.final_report.best_iteration_reason">
+                  — {{ loopSummary.final_report.best_iteration_reason }}
+                </span>
+              </p>
+              <div v-if="loopSummary.final_report.iteration_comparison?.length" class="report-block">
+                <strong>各轮对比</strong>
+                <ul>
+                  <li
+                    v-for="(item, idx) in loopSummary.final_report.iteration_comparison"
+                    :key="item.batch_id || item.iteration || idx"
+                  >
+                    第 {{ item.iteration }} 轮（{{ item.batch_id || '—' }}）：{{ item.verdict }}
+                    <span v-if="item.metric_note" class="param-desc"> — {{ item.metric_note }}</span>
+                  </li>
+                </ul>
+              </div>
+              <div v-if="loopSummary.final_report.main_findings?.length" class="report-block">
+                <strong>主要发现</strong>
+                <ul>
+                  <li v-for="(item, idx) in loopSummary.final_report.main_findings" :key="idx">{{ item }}</li>
+                </ul>
+              </div>
+              <div v-if="loopSummary.final_report.lessons_learned?.length" class="report-block">
+                <strong>经验总结</strong>
+                <ul>
+                  <li v-for="(item, idx) in loopSummary.final_report.lessons_learned" :key="idx">{{ item }}</li>
+                </ul>
+              </div>
+              <div
+                v-if="loopSummary.final_report.recommended_params && Object.keys(loopSummary.final_report.recommended_params).length"
+                class="report-block"
+              >
+                <strong>推荐参数</strong>
+                <ul>
+                  <li
+                    v-for="(val, key) in loopSummary.final_report.recommended_params"
+                    :key="key"
+                  >
+                    {{ key }} = {{ formatParamDisplay(val) }}
+                  </li>
+                </ul>
+              </div>
+              <div v-if="loopSummary.final_report.next_steps?.length" class="report-block">
+                <strong>后续建议</strong>
+                <ul>
+                  <li v-for="(item, idx) in loopSummary.final_report.next_steps" :key="idx">{{ item }}</li>
+                </ul>
+              </div>
+            </template>
+            <p v-else-if="loopSummary.can_request_final_report" class="muted">
+              Loop 已完成，可生成跨 {{ loopSummary.iterations?.length || 0 }} 轮的综合 AI 结论。
+              <button type="button" class="mini-btn primary-mini" @click="() => requestLoopFinalReport(true)">
+                生成综合结论
+              </button>
+            </p>
+            <p v-else class="muted">
+              暂无综合结论。
+              <button
+                v-if="loopSummary.can_request_final_report"
+                type="button"
+                class="mini-btn primary-mini"
+                @click="() => requestLoopFinalReport(true)"
+              >
+                生成综合结论
+              </button>
+            </p>
+          </section>
+          <p v-else-if="loopSummaryLoading" class="muted">加载迭代总结…</p>
+          <p v-else-if="selectedLoopId && !loopSummary" class="muted">
+            迭代总结未加载，请点「刷新 Loop」重试。
+          </p>
+          <section class="loop-summary-panel" v-if="loopSummary">
+            <h4>迭代总结（{{ loopSummary.iterations?.length || 0 }} 轮回测）</h4>
+            <p v-if="loopSummary.is_terminal" class="muted">
+              各轮完整 AI 复盘可在下方实验列表中点开对应 batch 查看；此处汇总各轮批量指标与复盘摘要。
+            </p>
+            <table class="params-table loop-summary-table" v-if="loopSummary.iterations?.length">
+              <thead>
+                <tr>
+                  <th>轮次</th>
+                  <th>实验</th>
+                  <th>状态</th>
+                  <th>完成率</th>
+                  <th>中位收益</th>
+                  <th>均回撤</th>
+                  <th>决策</th>
+                  <th>复盘摘要</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in loopSummary.iterations" :key="`${row.iteration}-${row.batch_id}`">
+                  <td>第 {{ row.iteration }} 轮</td>
+                  <td>
+                    <button type="button" class="link-btn" @click="selectBatch(row.batch_id)">
+                      {{ row.batch_name || row.batch_id }}
+                    </button>
+                    <small class="param-desc">{{ row.batch_id }}</small>
+                    <small v-if="row.param_changes?.length" class="param-desc">
+                      调参：{{ row.param_changes.join(', ') }}
+                    </small>
+                  </td>
+                  <td>{{ row.batch_status || '—' }}</td>
+                  <td>{{ pct(row.completion_rate) }}</td>
+                  <td>{{ pct(row.median_total_return) }}</td>
+                  <td>{{ pct(row.avg_max_drawdown) }}</td>
+                  <td>
+                    <span v-if="row.decision">{{ row.decision }}</span>
+                    <span v-else class="muted">—</span>
+                    <small v-if="row.decision_reason" class="param-desc">{{ row.decision_reason }}</small>
+                  </td>
+                  <td class="review-snippet">
+                    <span v-if="row.review_summary">{{ row.review_summary }}</span>
+                    <span v-else-if="row.has_review" class="muted">复盘已生成（无摘要字段）</span>
+                    <span v-else class="muted">暂无复盘</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-else class="muted">尚无已记录的回测轮次。</p>
+            <div v-if="loopSummary.is_terminal && loopSummary.final_summary" class="loop-final-box">
+              <strong>末轮指标</strong>
+              <span>中位收益 {{ pct(loopSummary.final_summary.median_total_return) }}</span>
+              <span>完成率 {{ pct(loopSummary.final_summary.completion_rate) }}</span>
+            </div>
+          </section>
           <ul class="loop-timeline">
             <li v-for="entry in selectedLoop.iterations || []" :key="`${entry.iteration}-${entry.batch_id}`">
               第 {{ entry.iteration }} 轮 · {{ entry.batch_id }}
@@ -176,17 +422,39 @@
 
     <section class="layout">
       <aside class="card batch-list">
-        <h3>实验列表</h3>
+        <div class="section-title-row compact">
+          <div>
+            <p class="section-kicker">批量回测 · 单次实验维度</p>
+            <h3>实验列表</h3>
+          </div>
+          <span class="type-badge batch-badge">Batch 实验</span>
+        </div>
+        <p class="subtitle">每条是一次具体批量回测；Loop 的每一轮也会落成一条实验记录。</p>
+        <div class="list-action-block">
+          <button class="primary" :disabled="submitting" @click="submitBatch">
+            用上方配置创建实验
+          </button>
+          <span v-if="createMessage" class="message">{{ createMessage }}</span>
+        </div>
         <button
           v-for="batch in batches"
           :key="batch.batch_id"
-          class="batch-row"
-          :class="{ active: selectedBatchId === batch.batch_id }"
+          class="batch-row experiment-row"
+          :class="{
+            active: selectedBatchId === batch.batch_id,
+            'loop-iteration-batch': Boolean(batch.loop_id),
+          }"
           @click="selectBatch(batch.batch_id)"
         >
-          <strong>{{ batch.name }}</strong>
+          <span class="row-type">
+            {{ loopIterationByBatchId[batch.batch_id] ? `第 ${loopIterationByBatchId[batch.batch_id].iteration} 轮` : (batch.loop_id ? 'Loop' : '实验') }}
+          </span>
+          <strong>{{ loopIterationByBatchId[batch.batch_id]?.batch_name || batch.name }}</strong>
           <span>{{ batch.universe_type }} {{ batch.universe_value || '' }}</span>
-          <small>{{ batch.strategy_key }} · {{ batch.status }}</small>
+          <small v-if="batch.loop_id">
+            Loop：{{ loopNameById[batch.loop_id] || batch.loop_id }} · {{ batch.status }}
+          </small>
+          <small v-else>单次回测：{{ batch.strategy_key }} · {{ batch.status }}</small>
         </button>
       </aside>
 
@@ -197,11 +465,32 @@
             <p>{{ selectedBatch.strategy_key }} / {{ selectedBatch.preset || 'default' }} · {{ selectedBatch.start_date }} - {{ selectedBatch.end_date }}</p>
           </div>
           <div class="detail-actions">
-            <button @click="loadSelected">刷新详情</button>
-            <button @click="retryFailed">重试失败</button>
-            <button @click="queueReview">AI 复盘</button>
-            <button @click="() => createNextExperiment()">下一轮实验</button>
-            <button class="danger" @click="deleteSelectedBatch">删除实验</button>
+            <button :disabled="batchActionSubmitting" @click="() => loadSelected()">刷新详情</button>
+            <button
+              v-if="canRetryFailedBatch"
+              :disabled="batchActionSubmitting"
+              @click="() => retryFailed()"
+            >
+              重试失败
+            </button>
+            <button
+              v-if="canQueueBatchReview"
+              :disabled="batchActionSubmitting"
+              :title="canQueueBatchReview ? '' : '请等待本批回测结束后再复盘'"
+              @click="() => queueReview()"
+            >
+              AI 复盘
+            </button>
+            <button
+              v-if="canCreateNextExperiment"
+              :disabled="batchActionSubmitting"
+              @click="() => createNextExperiment()"
+            >
+              下一轮实验
+            </button>
+            <button class="danger" :disabled="batchActionSubmitting" @click="() => requestDeleteSelectedBatch()">
+              删除实验
+            </button>
             <button
               v-if="canCancelBatch"
               class="danger"
@@ -221,18 +510,42 @@
           <div><span>平均收益</span><strong>{{ pct(summary.avg_total_return) }}</strong></div>
           <div><span>中位收益</span><strong>{{ pct(summary.median_total_return) }}</strong></div>
         </div>
+        <p v-if="batchMessage" class="message detail-message">{{ batchMessage }}</p>
+
+        <div v-if="pendingDeleteBatch" class="inline-confirm danger-confirm">
+          <strong>确认删除实验「{{ pendingDeleteBatch.name }}」？</strong>
+          <p>将永久删除该批次的所有子任务与回测结果，且不可恢复。</p>
+          <div class="confirm-actions">
+            <button class="danger" :disabled="batchActionSubmitting" @click="() => confirmDeleteSelectedBatch()">
+              确认删除
+            </button>
+            <button :disabled="batchActionSubmitting" @click="pendingDeleteBatch = null">取消</button>
+          </div>
+        </div>
 
         <section class="batch-config-panel">
           <h4>本实验 · 下一轮配置</h4>
           <p class="muted">选中实验的配置仅在此展示；应用 AI 建议不会改动上方「创建批量实验」公共区域。</p>
+          <p v-if="batchLinkedLoop" class="muted">
+            已关联自动迭代 Loop：{{ batchLinkedLoop.loop_id }}（{{ batchLinkedLoop.status }}）。
+            若需自动迭代，请在该 Loop 中查看，勿重复从本实验启动。
+          </p>
+          <p v-else-if="hasBatchActiveTasks" class="muted">
+            本批仍有子任务未完成，复盘与「下一轮实验」需在结束后使用。
+          </p>
           <div class="form-grid">
             <label>
               当前实验名
               <input :value="selectedBatch.name" readonly />
             </label>
             <label>
-              下一轮实验名
-              <input v-model="batchDraft.name" placeholder="基于当前实验生成下一轮" />
+              {{ batchLinkedLoop ? 'Loop 下一轮实验' : '下一轮实验名' }}
+              <input
+                v-if="batchLinkedLoop"
+                :value="selectedLoopNextBatchName || '等待 Loop 复盘完成后自动生成'"
+                readonly
+              />
+              <input v-else v-model="batchDraft.name" readonly placeholder="按策略和股票池自动生成" />
             </label>
             <label>
               策略
@@ -335,8 +648,14 @@
               <ul>
                 <li v-for="item in latestReview.review?.next_experiments || []" :key="item.name || item.hypothesis || item">
                   <span>{{ item.name || item.hypothesis || item }}</span>
-                  <button class="mini-btn" @click="applyReviewSuggestion(item)">应用到本实验</button>
-                  <button class="mini-btn primary-mini" @click="applyReviewSuggestion(item, true)">应用并测试</button>
+                  <button class="mini-btn" @click="() => applyReviewSuggestion(item)">应用到本实验</button>
+                  <button
+                    class="mini-btn primary-mini"
+                    :disabled="!canCreateNextExperiment"
+                    @click="() => applyReviewSuggestion(item, true)"
+                  >
+                    应用并测试
+                  </button>
                 </li>
               </ul>
             </div>
@@ -349,8 +668,14 @@
               class="suggestion-row"
             >
               <span>{{ item.name || '参数组合' }}：{{ item.rationale || item.suggested_values || item }}</span>
-              <button class="mini-btn" @click="applyReviewSuggestion(item)">应用到本实验</button>
-              <button class="mini-btn primary-mini" @click="applyReviewSuggestion(item, true)">应用并测试</button>
+              <button class="mini-btn" @click="() => applyReviewSuggestion(item)">应用到本实验</button>
+              <button
+                class="mini-btn primary-mini"
+                :disabled="!canCreateNextExperiment"
+                @click="() => applyReviewSuggestion(item, true)"
+              >
+                应用并测试
+              </button>
             </div>
           </div>
         </section>
@@ -406,7 +731,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import {
   cancelBatch,
   deleteBatch,
@@ -422,11 +747,15 @@ import {
   retryFailedBatch,
   rerunBatch,
   listLoops,
+  getLoopHealth,
   createLoop,
   getLoop,
+  getLoopSummary,
+  queueLoopFinalReport,
   pauseLoop,
   resumeLoop,
   cancelLoop,
+  deleteLoop,
   advanceLoop,
 } from '../api/strategyLab'
 import {
@@ -456,6 +785,8 @@ const submitting = ref(false)
 const suppressPresetApply = ref(false)
 const createMessage = ref('')
 const batchMessage = ref('')
+const loopMessage = ref('')
+const loopHealth = ref(null)
 const symbolsText = ref('')
 const createFormParams = reactive({})
 const createParamsExpanded = ref(true)
@@ -471,7 +802,116 @@ const sortBy = ref('total_return')
 const loops = ref([])
 const selectedLoop = ref(null)
 const selectedLoopId = ref('')
+const loopSummary = ref(null)
+const loopSummaryLoading = ref(false)
 const loopSubmitting = ref(false)
+let loopSummaryPollTimer = null
+let loopHealthPollTimer = null
+let loopRequestSeq = 0
+
+const loopHealthStatusText = computed(() => {
+  if (!loopHealth.value) return '正在检测自动推进服务...'
+  return loopHealth.value.message || (
+    loopHealth.value.auto_advance_available
+      ? '自动推进服务正常'
+      : '自动推进不可用'
+  )
+})
+
+const canManageActiveLoop = computed(() => {
+  const status = selectedLoop.value?.status
+  return status === 'running' || status === 'paused'
+})
+
+const canAdvanceLoop = computed(() => selectedLoop.value?.status === 'running')
+
+const LOOP_TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled'])
+
+const canDeleteSelectedLoop = computed(() =>
+  LOOP_TERMINAL_STATUSES.has((selectedLoop.value?.status || '').toLowerCase())
+)
+
+const BATCH_TERMINAL_STATUSES = new Set(['completed', 'partial_failed', 'failed', 'cancelled'])
+
+const isBatchTerminal = computed(() =>
+  BATCH_TERMINAL_STATUSES.has((selectedBatch.value?.status || '').toLowerCase())
+)
+
+const hasBatchActiveTasks = computed(() => {
+  const counts = summary.value?.status_counts || {}
+  return (
+    (counts.pending || 0) + (counts.claimed || 0) + (counts.running || 0) > 0
+  )
+})
+
+const canRetryFailedBatch = computed(() => (summary.value?.failed || 0) > 0)
+
+const canQueueBatchReview = computed(
+  () => isBatchTerminal.value && !hasBatchActiveTasks.value
+)
+
+const canCreateNextExperiment = computed(
+  () => isBatchTerminal.value && !hasBatchActiveTasks.value && !batchLinkedLoop.value
+)
+
+const loopIterationByBatchId = computed(() => {
+  const out = {}
+  for (const row of loopSummary.value?.iterations || []) {
+    if (row?.batch_id) out[row.batch_id] = row
+  }
+  return out
+})
+
+const loopNameById = computed(() => {
+  const out = {}
+  for (const loop of loops.value || []) {
+    if (loop?.loop_id) out[loop.loop_id] = loop.name || loop.loop_id
+  }
+  return out
+})
+
+const selectedLoopIteration = computed(() => {
+  if (!selectedBatchId.value) return null
+  return loopIterationByBatchId.value[selectedBatchId.value] || null
+})
+
+const selectedLoopNextBatchName = computed(() => {
+  const childBatchId = selectedLoopIteration.value?.child_batch_id
+  if (!childBatchId) return ''
+  const childBatch = batches.value.find((item) => item.batch_id === childBatchId)
+  return childBatch?.name || selectedLoopIteration.value?.child_batch_name || childBatchId
+})
+
+const batchLinkedLoop = computed(() => {
+  const loopId = selectedBatch.value?.loop_id
+  if (!loopId) return null
+  return loops.value.find((item) => item.loop_id === loopId) || { loop_id: loopId, status: 'unknown' }
+})
+
+const canStartLoopFromBatch = computed(() => {
+  if (!selectedBatchId.value || !selectedBatch.value) return false
+  if (!isBatchTerminal.value) return false
+  const linked = batchLinkedLoop.value
+  if (linked) {
+    return false
+  }
+  return true
+})
+
+const startLoopFromBatchHint = computed(() => {
+  if (!selectedBatchId.value) return '请先在左侧选中一个实验'
+  if (!isBatchTerminal.value) return '请等待本批回测结束后再启动 Loop'
+  const linked = batchLinkedLoop.value
+  if (linked) {
+    return `该实验已绑定 Loop（${linked.loop_id}）`
+  }
+  return ''
+})
+
+const batchActionSubmitting = ref(false)
+const pendingDeleteBatch = ref(null)
+const pendingDeleteLoop = ref(null)
+
 const loopForm = reactive({
   max_iterations: 3,
   objective: '提高收益并控制回撤',
@@ -649,9 +1089,71 @@ function parseSymbols(text) {
   return text.split(/[\s,，]+/).map((item) => item.trim()).filter(Boolean)
 }
 
+function sanitizeExperimentNamePart(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^rerun:/, '')
+    .replace(/[^\w.-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+function machineExperimentLabel(value) {
+  const label = sanitizeExperimentNamePart(value)
+  if (!/^[A-Za-z][A-Za-z0-9_.-]*$/.test(label)) return ''
+  if (['next_experiment', 'experiment', 'batch', 'rerun'].includes(label.toLowerCase())) return ''
+  return label
+}
+
+function isBatchRef(value) {
+  const part = String(value || '').trim()
+  return part.startsWith('rerun:') || part.startsWith('bb_')
+}
+
+function resolveBatchSourceUniverse(batch) {
+  let universeType = batch?.source_universe_type ?? batch?.original_universe_type ?? batch?.universe_type
+  let universeValue = batch?.source_universe_value ?? batch?.original_universe_value ?? batch?.universe_value
+  if (universeValue && !isBatchRef(universeValue)) {
+    return { universeType, universeValue }
+  }
+
+  let parentId = batch?.parent_batch_id
+  if (!parentId && String(batch?.universe_value || '').startsWith('rerun:')) {
+    parentId = String(batch.universe_value).replace(/^rerun:/, '')
+  }
+  const seen = new Set()
+  while (parentId && !seen.has(parentId)) {
+    seen.add(parentId)
+    const parent = batches.value.find((item) => item.batch_id === parentId)
+    if (!parent) break
+    universeType = parent.source_universe_type ?? parent.original_universe_type ?? parent.universe_type
+    universeValue = parent.source_universe_value ?? parent.original_universe_value ?? parent.universe_value
+    if (universeValue && !isBatchRef(universeValue)) {
+      return { universeType, universeValue }
+    }
+    parentId = parent.parent_batch_id
+    if (!parentId && String(parent.universe_value || '').startsWith('rerun:')) {
+      parentId = String(parent.universe_value).replace(/^rerun:/, '')
+    }
+  }
+  return { universeType, universeValue }
+}
+
+function buildStructuredBatchName(batch, overrides = {}) {
+  const strategyKey = sanitizeExperimentNamePart(overrides.strategy_key ?? batch?.strategy_key)
+  const preset = sanitizeExperimentNamePart(overrides.preset ?? batch?.preset)
+  const label = machineExperimentLabel(overrides.label)
+  const sourceUniverse = resolveBatchSourceUniverse(batch)
+  const universeValue = sanitizeExperimentNamePart(sourceUniverse.universeValue)
+  const universeType = sanitizeExperimentNamePart(sourceUniverse.universeType)
+  const base = label || preset || strategyKey || sanitizeExperimentNamePart(batch?.name) || 'strategy_lab'
+  const suffix = universeValue || universeType
+  if (!suffix || base.endsWith(`_${suffix}`)) return base
+  return `${base}_${suffix}`
+}
+
 function initBatchDraft(batch) {
   if (!batch) return
-  batchDraft.name = `${batch.name || batch.batch_id || '批量实验'} 下一轮`
+  batchDraft.name = buildStructuredBatchName(batch)
   batchDraft.strategy_key = batch.strategy_key || ''
   batchDraft.preset = batch.preset || ''
   batchDraft.nextParams = filterValidParamDict(batch.strategy_params || {})
@@ -672,7 +1174,11 @@ async function applyReviewSuggestion(item, createImmediately = false) {
     if (item.strategy_key) batchDraft.strategy_key = item.strategy_key
     if (item.preset !== undefined) batchDraft.preset = item.preset || ''
     if (isExperimentReviewItem(item)) {
-      batchDraft.name = item.name || item.hypothesis || batchDraft.name
+      batchDraft.name = buildStructuredBatchName(selectedBatch.value, {
+        strategy_key: batchDraft.strategy_key,
+        preset: batchDraft.preset,
+        label: item.name,
+      })
     }
   }
 
@@ -692,6 +1198,13 @@ function num(value) {
   return typeof value === 'number' ? value.toFixed(2) : '-'
 }
 
+function formatDateTime(value) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
 async function loadBatches() {
   loading.value = true
   try {
@@ -704,6 +1217,10 @@ async function loadBatches() {
   } finally {
     loading.value = false
   }
+}
+
+async function refreshAll() {
+  await Promise.allSettled([loadBatches(), loadLoops()])
 }
 
 async function loadStrategyMeta() {
@@ -738,6 +1255,10 @@ async function selectBatch(batchId) {
   selectedBatchId.value = batchId
   try {
     await loadSelected()
+    const linkedLoopId = selectedBatch.value?.loop_id
+    if (linkedLoopId && linkedLoopId !== selectedLoopId.value) {
+      await selectLoop(linkedLoopId)
+    }
   } catch (error) {
     batchMessage.value = error?.response?.data?.detail || error.message || '实验详情加载失败'
   }
@@ -776,15 +1297,28 @@ async function loadReviews() {
   }
 }
 
+function buildCreateBatchPayload() {
+  const initialCash = Number(form.initial_cash)
+  const limitSymbols = Number(form.limit_symbols)
+  return {
+    ...form,
+    symbols: parseSymbols(symbolsText.value),
+    strategy_params: getCreateParamsForSubmit(),
+    initial_cash: Number.isFinite(initialCash) ? initialCash : 1000000,
+    limit_symbols: Number.isFinite(limitSymbols) ? Math.max(0, Math.floor(limitSymbols)) : 0,
+  }
+}
+
 async function submitBatch() {
+  const validationErrors = validateLoopBatchConfig(buildCreateBatchPayload())
+  if (validationErrors.length) {
+    createMessage.value = validationErrors.join('；')
+    return
+  }
   submitting.value = true
   createMessage.value = ''
   try {
-    const created = await createBatch({
-      ...form,
-      symbols: parseSymbols(symbolsText.value),
-      strategy_params: getCreateParamsForSubmit(),
-    })
+    const created = await createBatch(buildCreateBatchPayload())
     createMessage.value = `已创建 ${created.created_tasks} 个子任务`
     await loadBatches()
     await selectBatch(created.batch_id)
@@ -795,24 +1329,46 @@ async function submitBatch() {
   }
 }
 
-async function deleteSelectedBatch() {
-  if (!selectedBatchId.value || !selectedBatch.value) return
-  const name = selectedBatch.value.name || selectedBatchId.value
-  const ok = window.confirm(
-    `确定删除实验「${name}」吗？\n将永久删除该批次的所有子任务与回测结果，且不可恢复。`
-  )
-  if (!ok) return
+function requestDeleteSelectedBatch() {
+  if (batchActionSubmitting.value) return
+  if (!selectedBatchId.value || !selectedBatch.value) {
+    batchMessage.value = '请先选中一个实验再删除'
+    return
+  }
+  const linked = batchLinkedLoop.value
+  if (linked && ['running', 'paused'].includes(String(linked.status || '').toLowerCase())) {
+    pendingDeleteBatch.value = null
+    batchMessage.value = `该实验正在被自动迭代 Loop 使用（${linked.loop_id}，${linked.status}），请先取消/完成该 Loop 或删除历史 Loop 后再删除实验`
+    return
+  }
+  pendingDeleteBatch.value = {
+    batch_id: selectedBatchId.value,
+    name: selectedBatch.value.name || selectedBatchId.value,
+  }
+  batchMessage.value = '请确认删除操作'
+}
+
+async function confirmDeleteSelectedBatch() {
+  if (!pendingDeleteBatch.value || batchActionSubmitting.value) return
+  const deletingBatchId = pendingDeleteBatch.value.batch_id
+  batchActionSubmitting.value = true
+  batchMessage.value = ''
+  createMessage.value = ''
   try {
-    const result = await deleteBatch(selectedBatchId.value)
+    const result = await deleteBatch(deletingBatchId)
     const n = result?.deleted_tasks ?? 0
-    createMessage.value = `已删除实验（${n} 个子任务）`
+    batchMessage.value = `已删除实验（${n} 个子任务）`
+    batches.value = batches.value.filter((item) => item.batch_id !== deletingBatchId)
     selectedBatchId.value = ''
     selectedBatch.value = null
     results.value = []
     reviews.value = []
-    await loadBatches()
+    pendingDeleteBatch.value = null
+    await Promise.allSettled([loadBatches(), loadLoops()])
   } catch (error) {
-    batchMessage.value = error?.response?.data?.detail || error.message || '删除实验失败'
+    batchMessage.value = formatApiError(error, '删除实验失败')
+  } finally {
+    batchActionSubmitting.value = false
   }
 }
 
@@ -851,26 +1407,183 @@ async function cancelSelected() {
 }
 
 async function retryFailed() {
-  if (!selectedBatchId.value) return
-  await retryFailedBatch(selectedBatchId.value)
-  await loadSelected()
+  if (!selectedBatchId.value || !canRetryFailedBatch.value) return
+  batchActionSubmitting.value = true
+  batchMessage.value = ''
+  try {
+    await retryFailedBatch(selectedBatchId.value)
+    batchMessage.value = '已重试失败子任务'
+    await loadSelected()
+  } catch (error) {
+    batchMessage.value = formatApiError(error, '重试失败')
+  } finally {
+    batchActionSubmitting.value = false
+  }
 }
 
 async function queueReview() {
-  if (!selectedBatchId.value) return
-  const result = await requestBatchReview(selectedBatchId.value, {
-    objective: '提高收益并控制回撤',
-    include_top_n: 20,
-    include_bottom_n: 20,
-    include_failures: true,
-  })
-  batchMessage.value = `AI 复盘已入队：${result.analysis_task_id}`
-  await loadReviews()
+  if (!selectedBatchId.value || !canQueueBatchReview.value) return
+  batchActionSubmitting.value = true
+  batchMessage.value = ''
+  try {
+    const result = await requestBatchReview(selectedBatchId.value, {
+      objective: loopForm.objective || '提高收益并控制回撤',
+      include_top_n: 20,
+      include_bottom_n: 20,
+      include_failures: true,
+    })
+    batchMessage.value = `AI 复盘已入队：${result.analysis_task_id}`
+    await loadReviews()
+  } catch (error) {
+    batchMessage.value = formatApiError(error, 'AI 复盘入队失败')
+  } finally {
+    batchActionSubmitting.value = false
+  }
+}
+
+function formatApiError(error, fallback = '请求失败') {
+  const detail = error?.response?.data?.detail ?? error?.response?.data?.message
+  if (typeof detail === 'string') return humanizeLoopError(detail)
+  if (Array.isArray(detail)) {
+    return detail.map((item) => item?.msg || JSON.stringify(item)).join('；')
+  }
+  if (detail && typeof detail === 'object') {
+    return humanizeLoopError(detail.message || JSON.stringify(detail))
+  }
+  return error?.message || fallback
+}
+
+const LOOP_ADVANCE_ACTION_LABELS = {
+  waiting_batch: '本轮回测尚未结束，请稍后再推进',
+  queued_review: '已入队 AI 复盘，请等待完成后再次推进',
+  waiting_review: '复盘任务进行中',
+  waiting_review_doc: '等待复盘结果写入',
+  rerun: '已根据复盘创建下一轮实验',
+  completed: 'Loop 已结束',
+  failed: 'Loop 失败',
+  skipped: '当前状态不可推进',
+  not_found: 'Loop 不存在',
+  noop: '无可用操作',
+}
+
+const LOOP_STEP_LABELS = {
+  wait_batch: '等待回测完成',
+  wait_review: '等待 AI 复盘',
+  completed: '已完成',
+}
+
+function loopStepLabel(step) {
+  return LOOP_STEP_LABELS[step] || step || '-'
+}
+
+function formatAdvanceAction(result) {
+  const action = result?.action || 'noop'
+  const label = LOOP_ADVANCE_ACTION_LABELS[action] || action
+  const extra = result.reason || result.batch_status || result.task_status
+  return extra ? `${label}（${extra}）` : label
+}
+
+function humanizeLoopError(detail) {
+  if (detail === 'No symbols resolved for batch backtest') {
+    return '未能解析股票池：请检查指数/股池配置，或改用手工 symbols 并填写代码'
+  }
+  if (detail === 'batch_config or source_batch_id is required') {
+    return '缺少实验配置：请使用上方表单或先选中一个实验再启动'
+  }
+  if (detail.includes('实验已关联自动迭代 Loop')) {
+    return detail
+  }
+  if (detail.startsWith('Backtest batch not found:')) {
+    return '当前实验不存在或无权访问，请刷新后重选实验'
+  }
+  return detail
+}
+
+function validateLoopForm() {
+  const errors = []
+  const maxIterations = Number(loopForm.max_iterations)
+  if (!Number.isFinite(maxIterations) || maxIterations < 1 || maxIterations > 20) {
+    errors.push('最大轮数需在 1–20 之间')
+  }
+  const minRate = Number(loopForm.min_completion_rate)
+  if (!Number.isFinite(minRate) || minRate < 0 || minRate > 1) {
+    errors.push('最低完成率需在 0–1 之间')
+  }
+  if (!String(loopForm.objective || '').trim()) {
+    errors.push('请填写复盘目标')
+  }
+  return errors
+}
+
+function validateLoopBatchConfig(config) {
+  const errors = []
+  if (!config.strategy_key) errors.push('请选择策略')
+  if (!String(config.start_date || '').trim() || !String(config.end_date || '').trim()) {
+    errors.push('请填写开始/结束日期')
+  }
+  const universeType = (config.universe_type || 'manual').toLowerCase()
+  if (universeType === 'manual' && !(config.symbols || []).length) {
+    errors.push('手工股票池需填写 symbols（逗号/空格分隔）')
+  }
+  if (universeType === 'index' && !String(config.universe_value || '').trim()) {
+    errors.push('指数股票池需填写 universe_value（如 csi1000）')
+  }
+  return errors
+}
+
+function stopLoopSummaryPoll() {
+  if (loopSummaryPollTimer) {
+    clearInterval(loopSummaryPollTimer)
+    loopSummaryPollTimer = null
+  }
+}
+
+function stopLoopHealthPoll() {
+  if (loopHealthPollTimer) {
+    clearInterval(loopHealthPollTimer)
+    loopHealthPollTimer = null
+  }
+}
+
+async function loadLoopHealth() {
+  try {
+    loopHealth.value = await getLoopHealth()
+  } catch (error) {
+    loopHealth.value = {
+      auto_advance_available: false,
+      scheduler_online: false,
+      tick_enabled: false,
+      tick_loaded: false,
+      active_loop_count: null,
+      message: formatApiError(error, '自动推进服务状态不可用'),
+    }
+  }
+}
+
+function startLoopHealthPoll() {
+  stopLoopHealthPoll()
+  loopHealthPollTimer = setInterval(loadLoopHealth, 30000)
+}
+
+function syncLoopSummaryPoll() {
+  stopLoopSummaryPoll()
+  const shouldPoll =
+    loopSummary.value?.final_report_status === 'pending'
+    || selectedLoop.value?.status === 'running'
+  if (!shouldPoll) return
+  loopSummaryPollTimer = setInterval(() => {
+    if (selectedLoopId.value) {
+      refreshSelectedLoop()
+    }
+  }, 15000)
 }
 
 function buildLoopBatchConfig(nameSuffix = '') {
+  const initialCash = Number(form.initial_cash)
+  const limitSymbols = Number(form.limit_symbols)
+  const structuredName = buildStructuredBatchName(form)
   return {
-    name: form.name ? `${form.name}${nameSuffix}` : `Strategy Lab loop ${nameSuffix}`,
+    name: form.name ? `${form.name}${nameSuffix}` : structuredName,
     symbols: parseSymbols(symbolsText.value),
     asset_type: 'stock',
     universe_type: form.universe_type,
@@ -880,16 +1593,20 @@ function buildLoopBatchConfig(nameSuffix = '') {
     strategy_params: getCreateParamsForSubmit(),
     start_date: form.start_date,
     end_date: form.end_date,
-    initial_cash: form.initial_cash,
-    limit_symbols: form.limit_symbols,
+    initial_cash: Number.isFinite(initialCash) ? initialCash : 1000000,
+    limit_symbols: Number.isFinite(limitSymbols) ? Math.max(0, Math.floor(limitSymbols)) : 0,
   }
 }
 
 function buildLoopPayload(extra = {}) {
+  const maxIterations = Number(loopForm.max_iterations)
+  const minCompletion = Number(loopForm.min_completion_rate)
   return {
-    max_iterations: loopForm.max_iterations,
+    max_iterations: Number.isFinite(maxIterations) ? Math.min(20, Math.max(1, Math.floor(maxIterations))) : 3,
     objective: loopForm.objective,
-    stop_rules: { min_completion_rate: loopForm.min_completion_rate },
+    stop_rules: {
+      min_completion_rate: Number.isFinite(minCompletion) ? Math.min(1, Math.max(0, minCompletion)) : 0.5,
+    },
     review_options: {
       objective: loopForm.objective,
       include_top_n: 20,
@@ -903,40 +1620,99 @@ function buildLoopPayload(extra = {}) {
 async function loadLoops() {
   try {
     loops.value = await listLoops({ limit: 30 })
+    await loadLoopHealth()
     if (!selectedLoopId.value && loops.value.length) {
       await selectLoop(loops.value[0].loop_id)
     }
   } catch (error) {
-    createMessage.value = error?.response?.data?.detail || error.message || 'Loop 列表加载失败'
+    loopMessage.value = formatApiError(error, 'Loop 列表加载失败')
   }
 }
 
 async function selectLoop(loopId) {
   selectedLoopId.value = loopId
-  await refreshSelectedLoop()
+  pendingDeleteLoop.value = null
+  const requestId = ++loopRequestSeq
+  await refreshSelectedLoop(requestId)
 }
 
-async function refreshSelectedLoop() {
+async function loadLoopSummary(requestId = loopRequestSeq) {
+  if (!selectedLoopId.value) {
+    loopSummary.value = null
+    return
+  }
+  const loopId = selectedLoopId.value
+  loopSummaryLoading.value = true
+  try {
+    const summary = await getLoopSummary(loopId)
+    if (requestId !== loopRequestSeq || selectedLoopId.value !== loopId) return
+    loopSummary.value = summary
+    syncLoopSummaryPoll()
+  } catch (error) {
+    if (requestId !== loopRequestSeq || selectedLoopId.value !== loopId) return
+    loopSummary.value = null
+    stopLoopSummaryPoll()
+    loopMessage.value = formatApiError(error, '迭代总结加载失败')
+  } finally {
+    if (requestId === loopRequestSeq && selectedLoopId.value === loopId) {
+      loopSummaryLoading.value = false
+    }
+  }
+}
+
+async function requestLoopFinalReport(force = false) {
   if (!selectedLoopId.value) return
-  selectedLoop.value = await getLoop(selectedLoopId.value)
+  loopSubmitting.value = true
+  loopMessage.value = ''
+  try {
+    const result = await queueLoopFinalReport(selectedLoopId.value, force)
+    loopMessage.value = result?.created === false
+      ? `已有进行中的综合结论任务：${result.analysis_task_id}`
+      : `综合结论已入队：${result.analysis_task_id}`
+    await refreshSelectedLoop()
+  } catch (error) {
+    loopMessage.value = formatApiError(error, '综合结论入队失败')
+  } finally {
+    loopSubmitting.value = false
+  }
+}
+
+async function refreshSelectedLoop(requestId = ++loopRequestSeq) {
+  if (!selectedLoopId.value) return
+  const loopId = selectedLoopId.value
+  try {
+    const loop = await getLoop(loopId)
+    if (requestId !== loopRequestSeq || selectedLoopId.value !== loopId) return
+    selectedLoop.value = loop
+    await loadLoopSummary(requestId)
+  } catch (error) {
+    if (requestId !== loopRequestSeq || selectedLoopId.value !== loopId) return
+    loopMessage.value = formatApiError(error, 'Loop 详情加载失败')
+  }
 }
 
 async function startAutoLoop() {
+  const batchConfig = buildLoopBatchConfig(' 自动迭代')
+  const validationErrors = [...validateLoopForm(), ...validateLoopBatchConfig(batchConfig)]
+  if (validationErrors.length) {
+    loopMessage.value = validationErrors.join('；')
+    return
+  }
   loopSubmitting.value = true
-  createMessage.value = ''
+  loopMessage.value = ''
   try {
     const created = await createLoop(buildLoopPayload({
-      name: form.name ? `${form.name} 自动迭代` : undefined,
-      batch_config: buildLoopBatchConfig(' 自动迭代'),
+      name: `${batchConfig.name} 自动迭代`,
+      batch_config: batchConfig,
     }))
-    createMessage.value = `自动迭代已启动：${created.loop_id}`
+    loopMessage.value = `自动迭代已启动：${created.loop_id}`
     await loadLoops()
     await selectLoop(created.loop_id)
     if (created.current_batch_id) {
       await selectBatch(created.current_batch_id)
     }
   } catch (error) {
-    createMessage.value = error?.response?.data?.detail || error.message || '启动 Loop 失败'
+    loopMessage.value = formatApiError(error, '启动 Loop 失败')
   } finally {
     loopSubmitting.value = false
   }
@@ -944,17 +1720,30 @@ async function startAutoLoop() {
 
 async function startAutoLoopFromBatch() {
   if (!selectedBatchId.value) return
+  if (!selectedBatch.value) {
+    loopMessage.value = '实验详情未加载，请稍候或重新选中实验'
+    return
+  }
+  const formErrors = validateLoopForm()
+  if (formErrors.length) {
+    loopMessage.value = formErrors.join('；')
+    return
+  }
   loopSubmitting.value = true
+  loopMessage.value = ''
   try {
     const created = await createLoop(buildLoopPayload({
       name: `${selectedBatch.value?.name || selectedBatchId.value} 自动迭代`,
       source_batch_id: selectedBatchId.value,
     }))
-    batchMessage.value = `已从当前实验启动 Loop：${created.loop_id}`
+    loopMessage.value = `已从当前实验启动 Loop：${created.loop_id}`
     await loadLoops()
     await selectLoop(created.loop_id)
+    if (selectedBatchId.value) {
+      await selectBatch(selectedBatchId.value)
+    }
   } catch (error) {
-    batchMessage.value = error?.response?.data?.detail || error.message || '启动 Loop 失败'
+    loopMessage.value = formatApiError(error, '启动 Loop 失败')
   } finally {
     loopSubmitting.value = false
   }
@@ -962,57 +1751,147 @@ async function startAutoLoopFromBatch() {
 
 async function pauseSelectedLoop() {
   if (!selectedLoopId.value) return
-  await pauseLoop(selectedLoopId.value)
-  await refreshSelectedLoop()
-  await loadLoops()
+  loopSubmitting.value = true
+  loopMessage.value = ''
+  try {
+    await pauseLoop(selectedLoopId.value)
+    loopMessage.value = 'Loop 已暂停'
+    await refreshSelectedLoop()
+    await loadLoops()
+  } catch (error) {
+    loopMessage.value = formatApiError(error, '暂停失败')
+  } finally {
+    loopSubmitting.value = false
+  }
 }
 
 async function resumeSelectedLoop() {
   if (!selectedLoopId.value) return
-  await resumeLoop(selectedLoopId.value)
-  await refreshSelectedLoop()
-  await loadLoops()
+  loopSubmitting.value = true
+  loopMessage.value = ''
+  try {
+    await resumeLoop(selectedLoopId.value)
+    loopMessage.value = 'Loop 已继续'
+    await refreshSelectedLoop()
+    await loadLoops()
+  } catch (error) {
+    loopMessage.value = formatApiError(error, '继续失败')
+  } finally {
+    loopSubmitting.value = false
+  }
 }
 
 async function cancelSelectedLoop() {
   if (!selectedLoopId.value) return
-  await cancelLoop(selectedLoopId.value)
-  await refreshSelectedLoop()
-  await loadLoops()
+  const ok = window.confirm('确定取消该自动迭代 Loop 吗？进行中的调度将不再推进。')
+  if (!ok) return
+  loopSubmitting.value = true
+  loopMessage.value = ''
+  try {
+    await cancelLoop(selectedLoopId.value)
+    loopMessage.value = 'Loop 已取消'
+    stopLoopSummaryPoll()
+    await refreshSelectedLoop()
+    await loadLoops()
+  } catch (error) {
+    loopMessage.value = formatApiError(error, '取消失败')
+  } finally {
+    loopSubmitting.value = false
+  }
+}
+
+function deleteSelectedLoop() {
+  if (!selectedLoopId.value || !selectedLoop.value) {
+    loopMessage.value = '请先选中一个 Loop'
+    return
+  }
+  if (!canDeleteSelectedLoop.value) {
+    pendingDeleteLoop.value = null
+    loopMessage.value = `当前 Loop 状态为 ${selectedLoop.value.status || '未知'}，只能删除 completed / failed / cancelled 的历史 Loop。请先取消或等待流程结束。`
+    return
+  }
+  const loopName = selectedLoop.value?.name || selectedLoopId.value
+  pendingDeleteLoop.value = {
+    loop_id: selectedLoopId.value,
+    name: loopName,
+  }
+  loopMessage.value = '请确认删除历史 Loop'
+}
+
+async function confirmDeleteSelectedLoop() {
+  if (!pendingDeleteLoop.value || loopSubmitting.value) return
+  loopSubmitting.value = true
+  loopMessage.value = ''
+  try {
+    const deletingLoopId = pendingDeleteLoop.value.loop_id
+    const result = await deleteLoop(deletingLoopId)
+    loopMessage.value = `已删除历史 Loop（保留 ${result?.detached_batches ?? 0} 个关联实验）`
+    pendingDeleteLoop.value = null
+    selectedLoopId.value = ''
+    selectedLoop.value = null
+    loopSummary.value = null
+    stopLoopSummaryPoll()
+    await loadLoops()
+    await loadBatches()
+  } catch (error) {
+    loopMessage.value = formatApiError(error, '删除历史 Loop 失败')
+  } finally {
+    loopSubmitting.value = false
+  }
 }
 
 async function advanceSelectedLoop() {
-  if (!selectedLoopId.value) return
-  const result = await advanceLoop(selectedLoopId.value)
-  batchMessage.value = `手动推进：${result.action}`
-  await refreshSelectedLoop()
-  await loadLoops()
-  if (selectedLoop.value?.current_batch_id) {
-    await selectBatch(selectedLoop.value.current_batch_id)
+  if (!selectedLoopId.value || !canAdvanceLoop.value) return
+  loopSubmitting.value = true
+  loopMessage.value = ''
+  try {
+    const result = await advanceLoop(selectedLoopId.value)
+    loopMessage.value = `手动推进：${formatAdvanceAction(result)}`
+    await refreshSelectedLoop()
+    await loadLoops()
+    const batchId = selectedLoop.value?.current_batch_id
+    if (batchId) {
+      await selectBatch(batchId)
+    }
+  } catch (error) {
+    loopMessage.value = formatApiError(error, '手动推进失败')
+  } finally {
+    loopSubmitting.value = false
   }
 }
 
 async function createNextExperiment(paramsOverride = null, nameOverride = '') {
-  if (!selectedBatchId.value) return
-  const strategyParams = getBatchNextParamsForSubmit(
-    isPlainParamsObject(paramsOverride) ? paramsOverride : null
-  )
-  const experimentName =
-    typeof nameOverride === 'string' && nameOverride
-      ? nameOverride
-      : batchDraft.name || `${selectedBatch.value?.name || selectedBatchId.value} 下一轮`
-  const result = await rerunBatch(selectedBatchId.value, {
-    name: experimentName,
-    strategy_key: batchDraft.strategy_key || selectedBatch.value?.strategy_key,
-    preset: batchDraft.preset || null,
-    strategy_params: strategyParams,
-    start_date: selectedBatch.value?.start_date,
-    end_date: selectedBatch.value?.end_date,
-    initial_cash: selectedBatch.value?.initial_cash,
-  })
-  batchMessage.value = `下一轮实验已创建：${result.batch_id}`
-  await loadBatches()
-  await selectBatch(result.batch_id)
+  if (!selectedBatchId.value || !canCreateNextExperiment.value) return
+  batchActionSubmitting.value = true
+  batchMessage.value = ''
+  try {
+    const strategyParams = getBatchNextParamsForSubmit(
+      isPlainParamsObject(paramsOverride) ? paramsOverride : null
+    )
+    const experimentName =
+      typeof nameOverride === 'string' && nameOverride
+        ? nameOverride
+        : batchDraft.name || buildStructuredBatchName(selectedBatch.value, {
+          strategy_key: batchDraft.strategy_key,
+          preset: batchDraft.preset,
+        })
+    const result = await rerunBatch(selectedBatchId.value, {
+      name: experimentName,
+      strategy_key: batchDraft.strategy_key || selectedBatch.value?.strategy_key,
+      preset: batchDraft.preset || null,
+      strategy_params: strategyParams,
+      start_date: selectedBatch.value?.start_date,
+      end_date: selectedBatch.value?.end_date,
+      initial_cash: selectedBatch.value?.initial_cash,
+    })
+    batchMessage.value = `下一轮实验已创建：${result.batch_id}`
+    await loadBatches()
+    await selectBatch(result.batch_id)
+  } catch (error) {
+    batchMessage.value = formatApiError(error, '创建下一轮实验失败')
+  } finally {
+    batchActionSubmitting.value = false
+  }
 }
 
 watch(() => form.strategy_key, () => {
@@ -1029,7 +1908,13 @@ watch(() => form.preset, () => {
 
 onMounted(async () => {
   await loadStrategyMeta()
-  await Promise.allSettled([loadBatches(), loadLoops()])
+  await refreshAll()
+  startLoopHealthPoll()
+})
+
+onUnmounted(() => {
+  stopLoopSummaryPoll()
+  stopLoopHealthPoll()
 })
 </script>
 
@@ -1068,6 +1953,128 @@ p {
 .subtitle {
   color: #64748b;
   margin-top: 6px;
+}
+
+.section-title-row {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-title-row.compact {
+  align-items: center;
+}
+
+.section-kicker {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 0 4px;
+}
+
+.type-badge,
+.row-type {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
+.loop-badge,
+.loop-row .row-type {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.batch-badge,
+.experiment-row .row-type {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.list-caption {
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 8px;
+}
+
+.list-caption span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.loop-health-panel {
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.loop-health-panel.unhealthy {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.loop-wait-panel {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  margin: 12px 0;
+  padding: 12px;
+}
+
+.loop-wait-panel strong {
+  color: #9a3412;
+}
+
+.loop-wait-panel p {
+  color: #475569;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.loop-review-task-box {
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.loop-health-panel strong {
+  color: #0f172a;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.loop-health-panel span {
+  color: #475569;
+  font-size: 13px;
+}
+
+.loop-health-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.list-action-block {
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding-bottom: 10px;
 }
 
 .loop-panel .loop-layout {
@@ -1169,6 +2176,21 @@ button {
   text-align: left;
 }
 
+.loop-row {
+  border-color: #c7d2fe;
+  background: #f8faff;
+}
+
+.experiment-row {
+  border-color: #bbf7d0;
+  background: #fbfefc;
+}
+
+.experiment-row.loop-iteration-batch {
+  border-color: #c7d2fe;
+  background: #f8faff;
+}
+
 .batch-row.active {
   border-color: #2563eb;
   background: #eff6ff;
@@ -1203,6 +2225,33 @@ button {
   color: #64748b;
   display: block;
   font-size: 12px;
+}
+
+.inline-confirm {
+  border-radius: 12px;
+  margin: 12px 0;
+  padding: 12px;
+}
+
+.danger-confirm {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.danger-confirm strong {
+  color: #991b1b;
+}
+
+.danger-confirm p {
+  color: #7f1d1d;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .table-wrap {
@@ -1462,6 +2511,75 @@ th {
 
 .message {
   color: #2563eb;
+}
+
+.loop-final-report-panel {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  margin: 12px 0;
+  padding: 14px;
+}
+
+.loop-final-report-panel h4 {
+  margin: 0 0 10px;
+  color: #1e3a8a;
+}
+
+.report-lead {
+  font-size: 15px;
+  line-height: 1.55;
+  margin: 0 0 12px;
+}
+
+.report-block {
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.report-block ul {
+  margin: 6px 0 0;
+  padding-left: 1.2rem;
+}
+
+.loop-summary-panel {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  margin: 12px 0;
+  padding: 12px;
+}
+
+.loop-summary-panel h4 {
+  margin: 0 0 8px;
+}
+
+.loop-summary-table .review-snippet {
+  max-width: 280px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.loop-final-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.link-btn:hover {
+  color: #1d4ed8;
 }
 
 @media (max-width: 900px) {

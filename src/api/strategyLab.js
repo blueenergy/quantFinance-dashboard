@@ -56,12 +56,28 @@ export function listLoops(params = {}) {
   return request({ url: '/backtest/loops', method: 'get', params })
 }
 
+export function getLoopHealth() {
+  return request({ url: '/backtest/loops/health', method: 'get' })
+}
+
 export function createLoop(data) {
   return request({ url: '/backtest/loops', method: 'post', data })
 }
 
 export function getLoop(loopId) {
   return request({ url: `/backtest/loops/${loopId}`, method: 'get' })
+}
+
+export function getLoopSummary(loopId) {
+  return request({ url: `/backtest/loops/${loopId}/summary`, method: 'get' })
+}
+
+export function queueLoopFinalReport(loopId, force = false) {
+  return request({
+    url: `/backtest/loops/${loopId}/final-report`,
+    method: 'post',
+    params: { force },
+  })
 }
 
 export function pauseLoop(loopId) {
@@ -74,6 +90,10 @@ export function resumeLoop(loopId) {
 
 export function cancelLoop(loopId) {
   return request({ url: `/backtest/loops/${loopId}/cancel`, method: 'post' })
+}
+
+export function deleteLoop(loopId) {
+  return request({ url: `/backtest/loops/${loopId}`, method: 'delete' })
 }
 
 export function advanceLoop(loopId) {
