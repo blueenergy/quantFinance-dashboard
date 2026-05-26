@@ -44,6 +44,9 @@ describe('computeDisplayRows', () => {
         return_since_score_pct: 1.5,
         price_base_trade_date: '20250918',
         price_latest_trade_date: '20251001',
+        prior_3m_return_pct: 12.5,
+        prior_3m_base_trade_date: '20250620',
+        prior_3m_end_trade_date: '20250920',
       },
     ]
     const rows = computeDisplayRows({
@@ -56,6 +59,9 @@ describe('computeDisplayRows', () => {
     })
     expect(rows[0].display_price_base_trade_date).toBe('20250918')
     expect(rows[0].display_price_latest_trade_date).toBe('20251001')
+    expect(rows[0].display_prior_3m_return_pct).toBe(12.5)
+    expect(rows[0].display_prior_3m_base_trade_date).toBe('20250620')
+    expect(rows[0].display_prior_3m_end_trade_date).toBe('20250920')
   })
 
   it('flattens per_date_return_since price dates in selected mode', () => {
@@ -71,6 +77,13 @@ describe('computeDisplayRows', () => {
             price_latest_trade_date: '20250925',
           },
         },
+        per_date_prior_3m_return: {
+          '20250918': {
+            prior_3m_return_pct: 8,
+            prior_3m_base_trade_date: '20250618',
+            prior_3m_end_trade_date: '20250918',
+          },
+        },
       },
     ]
     const rows = computeDisplayRows({
@@ -83,5 +96,8 @@ describe('computeDisplayRows', () => {
     })
     expect(rows[0].display_price_base_trade_date).toBe('20250910')
     expect(rows[0].display_price_latest_trade_date).toBe('20250925')
+    expect(rows[0].display_prior_3m_return_pct).toBe(8)
+    expect(rows[0].display_prior_3m_base_trade_date).toBe('20250618')
+    expect(rows[0].display_prior_3m_end_trade_date).toBe('20250918')
   })
 })

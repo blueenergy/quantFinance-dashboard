@@ -6,6 +6,7 @@
         <th class="th-symbol">股票代码</th>
         <th class="th-name">股票名称</th>
         <th class="th-date">日期</th>
+        <th class="th-prior-3m" title="评分日前约 3 个月至评分日；未复权收盘">前3月涨跌</th>
         <th class="th-return-since" title="未复权收盘；分红送转可能影响长区间">评分日以来涨跌</th>
   <th class="th-score">总分</th>
         <th class="th-cycle">周期</th>
@@ -32,6 +33,15 @@
         </td>
         <td class="td-date">
           <span>{{ formatDateDisplay(row.display_date || row.score_date) }}</span>
+        </td>
+        <td class="td-prior-3m">
+          <div class="return-since-cell">
+            <span
+              :class="returnSinceClass(row.display_prior_3m_return_pct)"
+              :title="prior3mTooltip(row)"
+            >{{ formatReturnSince(row.display_prior_3m_return_pct) }}</span>
+            <span v-if="prior3mDateLine(row)" class="return-since-dates">{{ prior3mDateLine(row) }}</span>
+          </div>
         </td>
         <td class="td-return-since">
           <div class="return-since-cell">
@@ -158,13 +168,37 @@ function returnSinceTooltip(row) {
     fb || fl ? `基准交易日 ${fb || '—'}，最新日线 ${fl || '—'}` : '无基准/最新日线日期'
   return `${pctText}。${dateText}。分红送转可能影响长区间对比。`
 }
+
+function prior3mDateLine(row) {
+  const b = row.display_prior_3m_base_trade_date
+  const e = row.display_prior_3m_end_trade_date
+  if (!b && !e) return ''
+  const fb = b ? formatDateDisplay(b) : '—'
+  const fe = e ? formatDateDisplay(e) : '—'
+  return `${fb} → ${fe}`
+}
+
+function prior3mTooltip(row) {
+  const v = row.display_prior_3m_return_pct
+  const b = row.display_prior_3m_base_trade_date
+  const e = row.display_prior_3m_end_trade_date
+  const fb = b ? formatDateDisplay(b) : null
+  const fe = e ? formatDateDisplay(e) : null
+  const pctText =
+    v != null && !Number.isNaN(Number(v))
+      ? `前 3 个月涨跌幅 ${formatReturnSince(v)}（未复权收盘）`
+      : '暂无有效前 3 个月涨跌幅'
+  const dateText =
+    fb || fe ? `基准交易日 ${fb || '—'}，评分日前交易日 ${fe || '—'}` : '无基准/评分日行情日期'
+  return `${pctText}。${dateText}。用于观察上榜前约 3 个月价格表现。`
+}
 </script>
 
 <style scoped>
 /* table-specific styles moved from StockRanking.vue */
 .ranking-table {
   width: 100%;
-  min-width: 1020px;
+  min-width: 1130px;
   border-collapse: collapse;
   margin-top: 10px;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -197,6 +231,7 @@ function returnSinceTooltip(row) {
 }
 .th-symbol { background: linear-gradient(135deg, #3498db, #2980b9); }
 .th-name { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+.th-prior-3m { background: linear-gradient(135deg, #6d4c41, #4e342e); min-width: 108px; max-width: 132px; }
 .th-return-since { background: linear-gradient(135deg, #546e7a, #37474f); min-width: 108px; max-width: 132px; }
 .th-score { background: linear-gradient(135deg, #e67e22, #d35400); }
 .th-cycle { background: linear-gradient(135deg, #1abc9c, #16a085); }
