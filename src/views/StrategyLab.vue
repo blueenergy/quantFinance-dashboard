@@ -18,16 +18,45 @@
           <input v-model="form.name" placeholder="中证1000 海龟保守参数" />
         </label>
         <label>
-          股票池
-          <select v-model="form.universe_type">
-            <option value="manual">手工 symbols</option>
-            <option value="index">指数成分</option>
-            <option value="strategy_pool">策略股池</option>
+          实验对象
+          <select v-model="form.target_mode">
+            <option value="index">指数成分股</option>
+            <option value="single_etf">单个 ETF</option>
+            <option value="manual">自定义标的列表</option>
+            <option value="strategy_pool">策略选股池</option>
           </select>
         </label>
-        <label>
-          股票池值
+        <label v-if="form.target_mode === 'index'">
+          指数
           <input v-model="form.universe_value" placeholder="例如 csi1000" />
+        </label>
+        <label v-else-if="form.target_mode === 'single_etf'">
+          ETF
+          <select v-model="form.etf_symbol" @focus="loadEtfOptions">
+            <option value="">请选择 ETF</option>
+            <option v-for="etf in etfOptions" :key="etf.ts_code" :value="etf.ts_code">
+              {{ etf.ts_code }} · {{ etf.name || 'ETF' }}
+            </option>
+          </select>
+          <input v-model="etfSearch" placeholder="搜索 ETF 代码/名称，如 512100 或 中证1000" @keyup.enter="searchEtfOptions" />
+          <div class="inline-actions">
+            <button type="button" class="mini-btn" :disabled="etfOptionsLoading" @click="searchEtfOptions">
+              {{ etfOptionsLoading ? '搜索中…' : '搜索 ETF' }}
+            </button>
+            <span v-if="etfOptionsMessage" class="muted">{{ etfOptionsMessage }}</span>
+          </div>
+          <small>直接对 ETF 本身跑回测，不展开指数成分股；也可搜索后从下拉选择。</small>
+        </label>
+        <label v-else-if="form.target_mode === 'strategy_pool'">
+          选股池
+          <input v-model="form.universe_value" placeholder="例如 dragon_default" />
+        </label>
+        <label v-else>
+          标的类型
+          <select v-model="form.asset_type">
+            <option value="stock">股票</option>
+            <option value="etf">ETF</option>
+          </select>
         </label>
         <label>
           策略
@@ -52,7 +81,7 @@
           初始资金
           <input v-model.number="form.initial_cash" type="number" />
         </label>
-        <label>
+        <label v-if="form.target_mode !== 'single_etf'">
           测试数量限制
           <input v-model.number="form.limit_symbols" type="number" min="0" />
           <small>0 表示跑完整股票池</small>
@@ -66,8 +95,8 @@
           <input v-model="form.end_date" placeholder="20241231" />
         </label>
       </div>
-      <label class="full">
-        手工 symbols（逗号/空格/换行分隔）
+      <label v-if="form.target_mode === 'manual'" class="full">
+        自定义标的（逗号/空格/换行分隔）
         <textarea v-model="symbolsText" rows="3" placeholder="000001.SZ, 000858.SZ"></textarea>
       </label>
       <div class="params-table-wrap full">
@@ -741,6 +770,7 @@ import {
   getBatchResults,
   listBatchReviews,
   listBatches,
+  listEtfs,
   listStrategies,
   listStrategyTemplates,
   requestBatchReview,
@@ -788,6 +818,10 @@ const batchMessage = ref('')
 const loopMessage = ref('')
 const loopHealth = ref(null)
 const symbolsText = ref('')
+const etfOptions = ref([])
+const etfSearch = ref('')
+const etfOptionsLoading = ref(false)
+const etfOptionsMessage = ref('')
 const createFormParams = reactive({})
 const createParamsExpanded = ref(true)
 const batchParamsExpanded = ref(true)
@@ -930,8 +964,11 @@ const defaultDates = defaultDateRange()
 
 const form = reactive({
   name: '',
+  target_mode: 'index',
+  asset_type: 'stock',
   universe_type: 'index',
   universe_value: 'csi1000',
+  etf_symbol: '',
   strategy_key: 'turtle',
   preset: 'turtle_conservative',
   start_date: defaultDates.start,
@@ -977,6 +1014,10 @@ const createParamTableRows = computed(() =>
 const batchUniverseLabel = computed(() => {
   const batch = selectedBatch.value
   if (!batch) return ''
+  if (batch.asset_type === 'etf') {
+    const symbol = batch.symbols_preview?.[0] || batch.universe_value || ''
+    return `单个 ETF ${symbol}`.trim()
+  }
   if (batch.universe_type === 'manual') return '手工 symbols'
   if (batch.universe_type === 'index') return `指数成分 ${batch.universe_value || ''}`
   if (batch.universe_type === 'strategy_pool') return `策略股池 ${batch.universe_value || ''}`
@@ -1089,6 +1130,78 @@ function parseSymbols(text) {
   return text.split(/[\s,，]+/).map((item) => item.trim()).filter(Boolean)
 }
 
+function normalizeSymbolInput(value) {
+  return String(value || '').trim().toUpperCase()
+}
+
+function buildTargetConfig() {
+  const targetMode = form.target_mode || 'index'
+  if (targetMode === 'single_etf') {
+    const symbol = normalizeSymbolInput(form.etf_symbol)
+    return {
+      asset_type: 'etf',
+      universe_type: 'manual',
+      universe_value: symbol,
+      symbols: symbol ? [symbol] : [],
+      limit_symbols: 0,
+    }
+  }
+  if (targetMode === 'manual') {
+    return {
+      asset_type: form.asset_type || 'stock',
+      universe_type: 'manual',
+      universe_value: null,
+      symbols: parseSymbols(symbolsText.value),
+    }
+  }
+  if (targetMode === 'strategy_pool') {
+    return {
+      asset_type: 'stock',
+      universe_type: 'strategy_pool',
+      universe_value: form.universe_value,
+      symbols: [],
+    }
+  }
+  return {
+    asset_type: 'stock',
+    universe_type: 'index',
+    universe_value: form.universe_value,
+    symbols: [],
+  }
+}
+
+async function loadEtfOptions({ q = '', force = false } = {}) {
+  if (etfOptionsLoading.value) return
+  if (!force && etfOptions.value.length && !q) return
+  etfOptionsLoading.value = true
+  etfOptionsMessage.value = ''
+  try {
+    const params = q
+      ? { q, limit: 80 }
+      : { featured: true, sort: 'total_share', limit: 80 }
+    const payload = await listEtfs(params)
+    etfOptions.value = payload?.data || []
+    if (!etfOptions.value.length) {
+      etfOptionsMessage.value = q ? '未找到匹配 ETF' : '暂无 ETF 列表'
+    } else if (!form.etf_symbol && !q) {
+      const csi1000 = etfOptions.value.find((item) => item.ts_code === '512100.SH')
+      form.etf_symbol = csi1000?.ts_code || etfOptions.value[0].ts_code
+    }
+  } catch (error) {
+    etfOptionsMessage.value = formatApiError(error, 'ETF 列表加载失败')
+  } finally {
+    etfOptionsLoading.value = false
+  }
+}
+
+async function searchEtfOptions() {
+  const q = etfSearch.value.trim()
+  await loadEtfOptions({ q, force: true })
+  if (q && etfOptions.value.length === 1) {
+    form.etf_symbol = etfOptions.value[0].ts_code
+  }
+}
+
 function sanitizeExperimentNamePart(value) {
   return String(value || '')
     .trim()
@@ -1146,7 +1259,7 @@ function buildStructuredBatchName(batch, overrides = {}) {
   const universeValue = sanitizeExperimentNamePart(sourceUniverse.universeValue)
   const universeType = sanitizeExperimentNamePart(sourceUniverse.universeType)
   const base = label || preset || strategyKey || sanitizeExperimentNamePart(batch?.name) || 'strategy_lab'
-  const suffix = universeValue || universeType
+  const suffix = universeValue || (batch?.asset_type === 'etf' ? 'etf' : universeType)
   if (!suffix || base.endsWith(`_${suffix}`)) return base
   return `${base}_${suffix}`
 }
@@ -1300,12 +1413,19 @@ async function loadReviews() {
 function buildCreateBatchPayload() {
   const initialCash = Number(form.initial_cash)
   const limitSymbols = Number(form.limit_symbols)
+  const targetConfig = buildTargetConfig()
   return {
-    ...form,
-    symbols: parseSymbols(symbolsText.value),
+    name: form.name,
+    ...targetConfig,
+    strategy_key: form.strategy_key,
+    preset: form.preset || null,
     strategy_params: getCreateParamsForSubmit(),
+    start_date: form.start_date,
+    end_date: form.end_date,
     initial_cash: Number.isFinite(initialCash) ? initialCash : 1000000,
-    limit_symbols: Number.isFinite(limitSymbols) ? Math.max(0, Math.floor(limitSymbols)) : 0,
+    limit_symbols: targetConfig.limit_symbols !== undefined
+      ? targetConfig.limit_symbols
+      : (Number.isFinite(limitSymbols) ? Math.max(0, Math.floor(limitSymbols)) : 0),
   }
 }
 
@@ -1523,10 +1643,13 @@ function validateLoopBatchConfig(config) {
   }
   const universeType = (config.universe_type || 'manual').toLowerCase()
   if (universeType === 'manual' && !(config.symbols || []).length) {
-    errors.push('手工股票池需填写 symbols（逗号/空格分隔）')
+    errors.push(config.asset_type === 'etf' ? '请填写 ETF 代码' : '自定义标的需填写 symbols（逗号/空格分隔）')
   }
   if (universeType === 'index' && !String(config.universe_value || '').trim()) {
-    errors.push('指数股票池需填写 universe_value（如 csi1000）')
+    errors.push('指数成分股需填写指数代码（如 csi1000）')
+  }
+  if (universeType === 'strategy_pool' && !String(config.universe_value || '').trim()) {
+    errors.push('策略选股池需填写池子名称')
   }
   return errors
 }
@@ -1581,20 +1704,23 @@ function syncLoopSummaryPoll() {
 function buildLoopBatchConfig(nameSuffix = '') {
   const initialCash = Number(form.initial_cash)
   const limitSymbols = Number(form.limit_symbols)
-  const structuredName = buildStructuredBatchName(form)
+  const targetConfig = buildTargetConfig()
+  const structuredName = buildStructuredBatchName({ ...form, ...targetConfig })
   return {
     name: form.name ? `${form.name}${nameSuffix}` : structuredName,
-    symbols: parseSymbols(symbolsText.value),
-    asset_type: 'stock',
-    universe_type: form.universe_type,
-    universe_value: form.universe_value,
+    symbols: targetConfig.symbols,
+    asset_type: targetConfig.asset_type,
+    universe_type: targetConfig.universe_type,
+    universe_value: targetConfig.universe_value,
     strategy_key: form.strategy_key,
     preset: form.preset || null,
     strategy_params: getCreateParamsForSubmit(),
     start_date: form.start_date,
     end_date: form.end_date,
     initial_cash: Number.isFinite(initialCash) ? initialCash : 1000000,
-    limit_symbols: Number.isFinite(limitSymbols) ? Math.max(0, Math.floor(limitSymbols)) : 0,
+    limit_symbols: targetConfig.limit_symbols !== undefined
+      ? targetConfig.limit_symbols
+      : (Number.isFinite(limitSymbols) ? Math.max(0, Math.floor(limitSymbols)) : 0),
   }
 }
 
@@ -1899,6 +2025,25 @@ watch(() => form.strategy_key, () => {
   const defaultPreset = selectedPresets.value.find((item) => item.is_default) || selectedPresets.value[0]
   form.preset = defaultPreset?.preset || ''
   applyPresetParams()
+})
+
+watch(() => form.target_mode, (mode) => {
+  if (mode === 'index') {
+    form.asset_type = 'stock'
+    form.universe_type = 'index'
+    if (!form.universe_value || form.universe_value.includes('.')) form.universe_value = 'csi1000'
+  } else if (mode === 'single_etf') {
+    form.asset_type = 'etf'
+    form.universe_type = 'manual'
+    loadEtfOptions()
+  } else if (mode === 'manual') {
+    form.universe_type = 'manual'
+    if (form.universe_value === 'csi1000') form.universe_value = ''
+  } else if (mode === 'strategy_pool') {
+    form.asset_type = 'stock'
+    form.universe_type = 'strategy_pool'
+    if (form.universe_value === 'csi1000' || form.universe_value.includes('.')) form.universe_value = ''
+  }
 })
 
 watch(() => form.preset, () => {

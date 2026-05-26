@@ -16,6 +16,10 @@ export function listStrategyTemplates(params = {}) {
   return request({ url: '/strategy/templates', method: 'get', params })
 }
 
+export function listEtfs(params = {}) {
+  return request({ url: '/etf/list', method: 'get', params })
+}
+
 export function getBatch(batchId) {
   return request({ url: `/backtest/batches/${batchId}`, method: 'get' })
 }
