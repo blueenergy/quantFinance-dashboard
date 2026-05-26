@@ -589,7 +589,38 @@
           </div>
         </div>
 
-        <section class="batch-config-panel">
+        <nav class="detail-tabs" aria-label="实验详情视图">
+          <button
+            type="button"
+            :class="{ active: activeDetailTab === 'results' }"
+            @click="activeDetailTab = 'results'"
+          >
+            回测结果
+          </button>
+          <button
+            type="button"
+            :class="{ active: activeDetailTab === 'trades' }"
+            @click="activeDetailTab = 'trades'"
+          >
+            交易列表
+          </button>
+          <button
+            type="button"
+            :class="{ active: activeDetailTab === 'review' }"
+            @click="activeDetailTab = 'review'"
+          >
+            AI 复盘
+          </button>
+          <button
+            type="button"
+            :class="{ active: activeDetailTab === 'config' }"
+            @click="activeDetailTab = 'config'"
+          >
+            下一轮配置
+          </button>
+        </nav>
+
+        <section v-show="activeDetailTab === 'config'" class="batch-config-panel">
           <h4>本实验 · 下一轮配置</h4>
           <p class="muted">选中实验的配置仅在此展示；应用 AI 建议不会改动上方「创建批量实验」公共区域。</p>
           <p v-if="batchLinkedLoop" class="muted">
@@ -683,25 +714,7 @@
           <p v-if="batchMessage" class="message">{{ batchMessage }}</p>
         </section>
 
-        <div class="table-toolbar">
-          <select v-model="resultStatus" @change="loadResults">
-            <option value="">全部状态</option>
-            <option value="completed">完成</option>
-            <option value="failed">失败</option>
-            <option value="pending">待执行</option>
-          </select>
-          <select v-model="sortBy" @change="loadResults">
-            <option value="total_return">账户收益</option>
-            <option value="invested_return">投入资金收益</option>
-            <option value="capital_utilization">资金使用率</option>
-            <option value="max_drawdown">最大回撤</option>
-            <option value="sharpe_ratio">夏普</option>
-            <option value="win_rate">胜率</option>
-            <option value="total_trades">交易次数</option>
-          </select>
-        </div>
-
-        <section class="trade-panel" v-if="selectedTradeResult || tradeResultLoading || tradeResultMessage">
+        <section v-show="activeDetailTab === 'trades'" class="trade-panel">
           <div class="section-title-row compact">
             <div>
               <h4>交易列表</h4>
@@ -752,112 +765,135 @@
             </table>
             <p v-if="!(selectedTradeResult.trades || []).length" class="muted">该回测没有交易记录。</p>
           </div>
+          <p v-else class="muted">请先在「回测结果」中点击某行的「查看交易」。</p>
         </section>
 
-        <section class="review-panel" v-if="latestReview">
-          <h4>AI 复盘</h4>
-          <p>{{ latestReview.review?.summary || '复盘已完成' }}</p>
-          <div class="review-grid">
-            <div>
-              <strong>主要发现</strong>
-              <ul>
-                <li v-for="item in latestReview.review?.main_findings || []" :key="item">{{ item }}</li>
-              </ul>
+        <section v-show="activeDetailTab === 'review'" class="review-panel">
+          <template v-if="latestReview">
+            <h4>AI 复盘</h4>
+            <p>{{ latestReview.review?.summary || '复盘已完成' }}</p>
+            <div class="review-grid">
+              <div>
+                <strong>主要发现</strong>
+                <ul>
+                  <li v-for="item in latestReview.review?.main_findings || []" :key="item">{{ item }}</li>
+                </ul>
+              </div>
+              <div>
+                <strong>下一轮实验</strong>
+                <ul>
+                  <li v-for="item in latestReview.review?.next_experiments || []" :key="item.name || item.hypothesis || item">
+                    <span>{{ item.name || item.hypothesis || item }}</span>
+                    <button class="mini-btn" @click="() => applyReviewSuggestion(item)">应用到本实验</button>
+                    <button
+                      class="mini-btn primary-mini"
+                      :disabled="!canCreateNextExperiment"
+                      @click="() => applyReviewSuggestion(item, true)"
+                    >
+                      应用并测试
+                    </button>
+                  </li>
+                </ul>
+              </div>
             </div>
-            <div>
-              <strong>下一轮实验</strong>
-              <ul>
-                <li v-for="item in latestReview.review?.next_experiments || []" :key="item.name || item.hypothesis || item">
-                  <span>{{ item.name || item.hypothesis || item }}</span>
-                  <button class="mini-btn" @click="() => applyReviewSuggestion(item)">应用到本实验</button>
-                  <button
-                    class="mini-btn primary-mini"
-                    :disabled="!canCreateNextExperiment"
-                    @click="() => applyReviewSuggestion(item, true)"
-                  >
-                    应用并测试
-                  </button>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div class="suggestion-list" v-if="latestReview.review?.parameter_suggestions?.length">
-            <strong>参数建议</strong>
-            <div
-              v-for="item in latestReview.review.parameter_suggestions"
-              :key="item.name || item.rationale || JSON.stringify(item)"
-              class="suggestion-row"
-            >
-              <span>{{ item.name || '参数组合' }}：{{ item.rationale || item.suggested_values || item }}</span>
-              <button class="mini-btn" @click="() => applyReviewSuggestion(item)">应用到本实验</button>
-              <button
-                class="mini-btn primary-mini"
-                :disabled="!canCreateNextExperiment"
-                @click="() => applyReviewSuggestion(item, true)"
+            <div class="suggestion-list" v-if="latestReview.review?.parameter_suggestions?.length">
+              <strong>参数建议</strong>
+              <div
+                v-for="item in latestReview.review.parameter_suggestions"
+                :key="item.name || item.rationale || JSON.stringify(item)"
+                class="suggestion-row"
               >
-                应用并测试
-              </button>
+                <span>{{ item.name || '参数组合' }}：{{ item.rationale || item.suggested_values || item }}</span>
+                <button class="mini-btn" @click="() => applyReviewSuggestion(item)">应用到本实验</button>
+                <button
+                  class="mini-btn primary-mini"
+                  :disabled="!canCreateNextExperiment"
+                  @click="() => applyReviewSuggestion(item, true)"
+                >
+                  应用并测试
+                </button>
+              </div>
             </div>
-          </div>
+          </template>
+          <p v-else class="muted">暂无 AI 复盘。批量回测完成后可点击上方「AI 复盘」生成。</p>
         </section>
 
-        <p v-if="!canDeleteResultRows && results.length === 1" class="muted result-action-hint">
-          当前实验只有一条回测结果；如需删除，请使用上方「删除实验」，避免留下空实验记录。
-        </p>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>名称</th>
-                <th>状态</th>
-                <th>账户收益</th>
-                <th>投入资金收益</th>
-                <th>资金使用率</th>
-                <th>最大回撤</th>
-                <th>夏普</th>
-                <th>胜率</th>
-                <th>交易</th>
-                <th>错误</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in results" :key="row.task_id">
-                <td>{{ row.symbol }}</td>
-                <td>{{ row.stock_name || '-' }}</td>
-                <td>{{ row.status }}</td>
-                <td>{{ pct(row.total_return) }}</td>
-                <td>{{ pct(row.invested_return) }}</td>
-                <td>{{ pct(row.capital_utilization) }}</td>
-                <td>{{ pct(row.max_drawdown) }}</td>
-                <td>{{ num(row.sharpe_ratio) }}</td>
-                <td>{{ pct(row.win_rate) }}</td>
-                <td>{{ row.total_trades ?? '-' }}</td>
-                <td class="error">{{ row.error_message || '-' }}</td>
-                <td>
-                  <button
-                    class="mini-btn"
-                    :disabled="row.status !== 'completed' || tradeResultLoading"
-                    title="查看该标的的买卖明细"
-                    @click="() => loadTradeResult(row)"
-                  >
-                    查看交易
-                  </button>
-                  <button
-                    v-if="canDeleteResultRows"
-                    class="mini-btn danger-mini"
-                    :disabled="row.status === 'running' || row.status === 'claimed'"
-                    title="仅删除该标的的子任务和回测结果，不删除整个实验"
-                    @click="() => deleteResultRow(row)"
-                  >
-                    删除该结果
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <section v-show="activeDetailTab === 'results'" class="detail-tab-panel">
+          <div class="table-toolbar">
+            <select v-model="resultStatus" @change="loadResults">
+              <option value="">全部状态</option>
+              <option value="completed">完成</option>
+              <option value="failed">失败</option>
+              <option value="pending">待执行</option>
+            </select>
+            <select v-model="sortBy" @change="loadResults">
+              <option value="total_return">账户收益</option>
+              <option value="invested_return">投入资金收益</option>
+              <option value="capital_utilization">资金使用率</option>
+              <option value="max_drawdown">最大回撤</option>
+              <option value="sharpe_ratio">夏普</option>
+              <option value="win_rate">胜率</option>
+              <option value="total_trades">交易次数</option>
+            </select>
+          </div>
+          <p v-if="!canDeleteResultRows && results.length === 1" class="muted result-action-hint">
+            当前实验只有一条回测结果；如需删除，请使用上方「删除实验」，避免留下空实验记录。
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>名称</th>
+                  <th>状态</th>
+                  <th>账户收益</th>
+                  <th>投入资金收益</th>
+                  <th>资金使用率</th>
+                  <th>最大回撤</th>
+                  <th>夏普</th>
+                  <th>胜率</th>
+                  <th>交易</th>
+                  <th>错误</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in results" :key="row.task_id">
+                  <td>{{ row.symbol }}</td>
+                  <td>{{ row.stock_name || '-' }}</td>
+                  <td>{{ row.status }}</td>
+                  <td>{{ pct(row.total_return) }}</td>
+                  <td>{{ pct(row.invested_return) }}</td>
+                  <td>{{ pct(row.capital_utilization) }}</td>
+                  <td>{{ pct(row.max_drawdown) }}</td>
+                  <td>{{ num(row.sharpe_ratio) }}</td>
+                  <td>{{ pct(row.win_rate) }}</td>
+                  <td>{{ row.total_trades ?? '-' }}</td>
+                  <td class="error">{{ row.error_message || '-' }}</td>
+                  <td>
+                    <button
+                      class="mini-btn"
+                      :disabled="row.status !== 'completed' || tradeResultLoading"
+                      title="查看该标的的买卖明细"
+                      @click="() => loadTradeResult(row)"
+                    >
+                      查看交易
+                    </button>
+                    <button
+                      v-if="canDeleteResultRows"
+                      class="mini-btn danger-mini"
+                      :disabled="row.status === 'running' || row.status === 'claimed'"
+                      title="仅删除该标的的子任务和回测结果，不删除整个实验"
+                      @click="() => deleteResultRow(row)"
+                    >
+                      删除该结果
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </main>
 
       <main class="card empty" v-else>
@@ -940,6 +976,7 @@ const loopPanelExpanded = ref(false)
 const createParamsExpanded = ref(true)
 const batchParamsExpanded = ref(true)
 const detailSection = ref(null)
+const activeDetailTab = ref('results')
 const batchDraft = reactive({
   name: '',
   strategy_key: '',
@@ -1518,6 +1555,7 @@ async function loadStrategyMeta() {
 
 async function selectBatch(batchId) {
   selectedBatchId.value = batchId
+  activeDetailTab.value = 'results'
   try {
     await loadSelected()
     const linkedLoopId = selectedBatch.value?.loop_id
@@ -1563,6 +1601,7 @@ async function loadTradeResult(row, { silent = false } = {}) {
   try {
     selectedTradeResult.value = await getBacktestResult(row.task_id)
     tradeResultMessage.value = ''
+    if (!silent) activeDetailTab.value = 'trades'
   } catch (error) {
     selectedTradeResult.value = null
     tradeResultMessage.value = formatApiError(error, '交易列表加载失败')
@@ -2571,6 +2610,31 @@ button {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.detail-tabs {
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  padding-bottom: 8px;
+}
+
+.detail-tabs button {
+  background: #f8fafc;
+  color: #475569;
+}
+
+.detail-tabs button.active {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.detail-tab-panel {
+  margin-top: 12px;
 }
 
 .metrics {
