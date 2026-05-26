@@ -12,161 +12,29 @@
       </div>
     </header>
 
-    <section class="card">
-      <div class="section-title-row compact">
-        <div>
-          <h3>批量实验配置</h3>
-          <p class="subtitle">这组配置可用于创建单次批量实验，也可作为自动迭代 Loop 的第 1 轮输入。</p>
-        </div>
-        <button type="button" class="mini-btn" @click="createPanelExpanded = !createPanelExpanded">
-          {{ createPanelExpanded ? '收起配置' : '展开配置' }}
-        </button>
-      </div>
-      <div v-if="!createPanelExpanded" class="panel-summary">
-        <span>{{ targetModeLabel }}</span>
-        <span>{{ form.strategy_key }} / {{ form.preset || 'default' }}</span>
-        <span>{{ form.start_date }} - {{ form.end_date }}</span>
-        <span>初始资金 {{ money(form.initial_cash) }}</span>
-        <span v-if="form.target_mode === 'single_etf'">资金使用率 {{ pct(normalizedEtfPositionPct()) }}</span>
-      </div>
-      <div v-show="createPanelExpanded" class="panel-body">
-      <div class="form-grid">
-        <label>
-          实验名
-          <input v-model="form.name" placeholder="中证1000 海龟保守参数" />
-        </label>
-        <label>
-          实验对象
-          <select v-model="form.target_mode">
-            <option value="index">指数成分股</option>
-            <option value="single_etf">单个 ETF</option>
-            <option value="manual">自定义标的列表</option>
-            <option value="strategy_pool">策略选股池</option>
-          </select>
-        </label>
-        <label v-if="form.target_mode === 'index'">
-          指数
-          <input v-model="form.universe_value" placeholder="例如 csi1000" />
-        </label>
-        <label v-else-if="form.target_mode === 'single_etf'">
-          ETF
-          <select v-model="form.etf_symbol" @focus="loadEtfOptions">
-            <option value="">请选择 ETF</option>
-            <option v-for="etf in etfOptions" :key="etf.ts_code" :value="etf.ts_code">
-              {{ etf.ts_code }} · {{ etf.name || 'ETF' }}
-            </option>
-          </select>
-          <input v-model="etfSearch" placeholder="搜索 ETF 代码/名称，如 512100 或 中证1000" @keyup.enter="searchEtfOptions" />
-          <div class="inline-actions">
-            <button type="button" class="mini-btn" :disabled="etfOptionsLoading" @click="searchEtfOptions">
-              {{ etfOptionsLoading ? '搜索中…' : '搜索 ETF' }}
-            </button>
-            <span v-if="etfOptionsMessage" class="muted">{{ etfOptionsMessage }}</span>
-          </div>
-          <small>直接对 ETF 本身跑回测，不展开指数成分股；也可搜索后从下拉选择。</small>
-        </label>
-        <label v-else-if="form.target_mode === 'strategy_pool'">
-          选股池
-          <input v-model="form.universe_value" placeholder="例如 dragon_default" />
-        </label>
-        <label v-else>
-          标的类型
-          <select v-model="form.asset_type">
-            <option value="stock">股票</option>
-            <option value="etf">ETF</option>
-          </select>
-        </label>
-        <label>
-          策略
-          <select v-model="form.strategy_key">
-            <option v-if="!usableStrategies.length" value="">策略加载失败，请刷新</option>
-            <option v-for="strategy in usableStrategies" :key="strategy.key" :value="strategy.key">
-              {{ strategy.name || strategy.key }}（{{ strategy.key }}）
-            </option>
-          </select>
-          <small v-if="strategyLoadError">{{ strategyLoadError }}，已使用本地默认列表</small>
-        </label>
-        <label>
-          Preset
-          <select v-model="form.preset">
-            <option value="">默认参数</option>
-            <option v-for="preset in selectedPresets" :key="preset.preset" :value="preset.preset">
-              {{ preset.description || preset.preset }}
-            </option>
-          </select>
-        </label>
-        <label>
-          初始资金
-          <input v-model.number="form.initial_cash" type="number" />
-        </label>
-        <label v-if="form.target_mode === 'single_etf'">
-          资金使用率
-          <input v-model.number="form.etf_position_pct" type="number" min="0.01" max="1" step="0.01" />
-          <small>单 ETF 建仓时使用的账户资金比例，例如 0.95 表示尽量使用 95% 资金。</small>
-        </label>
-        <label v-if="form.target_mode !== 'single_etf'">
-          测试数量限制
-          <input v-model.number="form.limit_symbols" type="number" min="0" />
-          <small>0 表示跑完整股票池</small>
-        </label>
-        <label>
-          开始日期
-          <input v-model="form.start_date" placeholder="20240101" />
-        </label>
-        <label>
-          结束日期
-          <input v-model="form.end_date" placeholder="20241231" />
-        </label>
-      </div>
-      <label v-if="form.target_mode === 'manual'" class="full">
-        自定义标的（逗号/空格/换行分隔）
-        <textarea v-model="symbolsText" rows="3" placeholder="000001.SZ, 000858.SZ"></textarea>
-      </label>
-      <div class="params-table-wrap full">
-        <button type="button" class="collapse-toggle" @click="createParamsExpanded = !createParamsExpanded">
-          <span class="collapse-chevron" :class="{ expanded: createParamsExpanded }">▸</span>
-          <strong>策略参数</strong>
-          <span class="muted">（{{ createParamTableRows.length }} 项）</span>
-        </button>
-        <div v-show="createParamsExpanded" class="collapse-body">
-          <table class="params-table" v-if="createParamTableRows.length">
-            <thead>
-              <tr>
-                <th>参数</th>
-                <th>默认值</th>
-                <th>实验值</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="row in createParamTableRows"
-                :key="row.key"
-                :class="{
-                  'param-row-changed': row.changed && row.hasCurrent,
-                  'param-row-new': row.isNew,
-                }"
-              >
-                <td class="param-name">
-                  <span class="param-key">{{ row.key }}</span>
-                  <small v-if="createParamLabel(row.key) !== row.key" class="param-desc">
-                    {{ createParamLabel(row.key) }}
-                  </small>
-                </td>
-                <td class="param-current">{{ formatParamDisplay(row.currentValue) }}</td>
-                <td class="param-next">
-                  <input
-                    :value="formatParamDisplay(row.nextValue)"
-                    @change="setCreateFormParam(row.key, $event.target.value, row.currentValue)"
-                  />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <p v-else class="muted">选择 Preset 或策略后将显示可编辑参数；也可先选策略再改实验值。</p>
-        </div>
-      </div>
-      </div>
-    </section>
+    <StrategyLabCreatePanel
+      v-model:expanded="createPanelExpanded"
+      v-model:params-expanded="createParamsExpanded"
+      v-model:etf-search="etfSearch"
+      v-model:symbols-text="symbolsText"
+      :form="form"
+      :target-mode-label="targetModeLabel"
+      :usable-strategies="usableStrategies"
+      :strategy-load-error="strategyLoadError"
+      :selected-presets="selectedPresets"
+      :etf-options="etfOptions"
+      :etf-options-loading="etfOptionsLoading"
+      :etf-options-message="etfOptionsMessage"
+      :create-param-table-rows="createParamTableRows"
+      :load-etf-options="loadEtfOptions"
+      :search-etf-options="searchEtfOptions"
+      :normalized-etf-position-pct="normalizedEtfPositionPct"
+      :pct="pct"
+      :money="money"
+      :create-param-label="createParamLabel"
+      :format-param-display="formatParamDisplay"
+      :set-create-form-param="setCreateFormParam"
+    />
 
     <section class="card loop-panel">
       <div class="section-title-row">
@@ -487,42 +355,16 @@
     </section>
 
     <section ref="detailSection" class="layout">
-      <aside class="card batch-list">
-        <div class="section-title-row compact">
-          <div>
-            <p class="section-kicker">批量回测 · 单次实验维度</p>
-            <h3>实验列表</h3>
-          </div>
-          <span class="type-badge batch-badge">Batch 实验</span>
-        </div>
-        <p class="subtitle">每条是一次具体批量回测；Loop 的每一轮也会落成一条实验记录。</p>
-        <div class="list-action-block">
-          <button class="primary" :disabled="submitting" @click="submitBatch">
-            用上方配置创建实验
-          </button>
-          <span v-if="createMessage" class="message">{{ createMessage }}</span>
-        </div>
-        <button
-          v-for="batch in batches"
-          :key="batch.batch_id"
-          class="batch-row experiment-row"
-          :class="{
-            active: selectedBatchId === batch.batch_id,
-            'loop-iteration-batch': Boolean(batch.loop_id),
-          }"
-          @click="selectBatch(batch.batch_id)"
-        >
-          <span class="row-type">
-            {{ loopIterationByBatchId[batch.batch_id] ? `第 ${loopIterationByBatchId[batch.batch_id].iteration} 轮` : (batch.loop_id ? 'Loop' : '实验') }}
-          </span>
-          <strong>{{ loopIterationByBatchId[batch.batch_id]?.batch_name || batch.name }}</strong>
-          <span>{{ batch.universe_type }} {{ batch.universe_value || '' }}</span>
-          <small v-if="batch.loop_id">
-            Loop：{{ loopNameById[batch.loop_id] || batch.loop_id }} · {{ batch.status }}
-          </small>
-          <small v-else>单次回测：{{ batch.strategy_key }} · {{ batch.status }}</small>
-        </button>
-      </aside>
+      <StrategyLabBatchList
+        :batches="batches"
+        :selected-batch-id="selectedBatchId"
+        :loop-iteration-by-batch-id="loopIterationByBatchId"
+        :loop-name-by-id="loopNameById"
+        :submitting="submitting"
+        :create-message="createMessage"
+        @submit-batch="submitBatch"
+        @select-batch="selectBatch"
+      />
 
       <main class="card details" v-if="selectedBatch">
         <div class="detail-header">
@@ -905,6 +747,8 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import StrategyLabBatchList from '../components/strategy-lab/StrategyLabBatchList.vue'
+import StrategyLabCreatePanel from '../components/strategy-lab/StrategyLabCreatePanel.vue'
 import {
   cancelBatch,
   deleteBatch,
