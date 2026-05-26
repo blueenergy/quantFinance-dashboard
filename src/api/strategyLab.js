@@ -28,6 +28,10 @@ export function getBatchResults(batchId, params = {}) {
   return request({ url: `/backtest/batches/${batchId}/results`, method: 'get', params })
 }
 
+export function getBacktestResult(taskId) {
+  return request({ url: `/backtest/results/${taskId}`, method: 'get' })
+}
+
 export function cancelBatch(batchId) {
   return request({ url: `/backtest/batches/${batchId}/cancel`, method: 'post' })
 }

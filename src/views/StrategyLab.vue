@@ -81,6 +81,11 @@
           初始资金
           <input v-model.number="form.initial_cash" type="number" />
         </label>
+        <label v-if="form.target_mode === 'single_etf'">
+          资金使用率
+          <input v-model.number="form.etf_position_pct" type="number" min="0.01" max="1" step="0.01" />
+          <small>单 ETF 建仓时使用的账户资金比例，例如 0.95 表示尽量使用 95% 资金。</small>
+        </label>
         <label v-if="form.target_mode !== 'single_etf'">
           测试数量限制
           <input v-model.number="form.limit_symbols" type="number" min="0" />
@@ -654,13 +659,68 @@
             <option value="pending">待执行</option>
           </select>
           <select v-model="sortBy" @change="loadResults">
-            <option value="total_return">总收益</option>
+            <option value="total_return">账户收益</option>
+            <option value="invested_return">投入资金收益</option>
+            <option value="capital_utilization">资金使用率</option>
             <option value="max_drawdown">最大回撤</option>
             <option value="sharpe_ratio">夏普</option>
             <option value="win_rate">胜率</option>
             <option value="total_trades">交易次数</option>
           </select>
         </div>
+
+        <section class="trade-panel" v-if="selectedTradeResult || tradeResultLoading || tradeResultMessage">
+          <div class="section-title-row compact">
+            <div>
+              <h4>交易列表</h4>
+              <p class="muted" v-if="selectedTradeResult">
+                {{ selectedTradeResult.symbol }} · {{ selectedTradeResult.strategy_key }} ·
+                {{ selectedTradeResult.trades?.length || 0 }} 笔交易
+              </p>
+              <p class="muted" v-if="selectedTradeResult?.metrics">
+                账户收益 {{ pct(selectedTradeResult.metrics.total_return) }} ·
+                投入资金收益 {{ pct(selectedTradeResult.metrics.invested_return) }} ·
+                实际投入 {{ money(selectedTradeResult.metrics.invested_cash) }} ·
+                资金使用率 {{ pct(selectedTradeResult.metrics.capital_utilization) }}
+              </p>
+            </div>
+            <button
+              v-if="selectedTradeResult"
+              type="button"
+              class="mini-btn"
+              @click="selectedTradeResult = null"
+            >
+              收起
+            </button>
+          </div>
+          <p v-if="tradeResultLoading" class="muted">正在加载交易列表…</p>
+          <p v-else-if="tradeResultMessage" class="message">{{ tradeResultMessage }}</p>
+          <div v-else-if="selectedTradeResult" class="table-wrap trade-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>方向</th>
+                  <th>价格</th>
+                  <th>数量</th>
+                  <th>PnL</th>
+                  <th>手续费</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(trade, idx) in selectedTradeResult.trades || []" :key="`${trade.datetime}-${idx}`">
+                  <td>{{ trade.datetime || '-' }}</td>
+                  <td>{{ trade.action || '-' }}</td>
+                  <td>{{ num(trade.price) }}</td>
+                  <td>{{ trade.quantity ?? '-' }}</td>
+                  <td>{{ num(trade.pnl) }}</td>
+                  <td>{{ num(trade.commission) }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-if="!(selectedTradeResult.trades || []).length" class="muted">该回测没有交易记录。</p>
+          </div>
+        </section>
 
         <section class="review-panel" v-if="latestReview">
           <h4>AI 复盘</h4>
@@ -709,6 +769,9 @@
           </div>
         </section>
 
+        <p v-if="!canDeleteResultRows && results.length === 1" class="muted result-action-hint">
+          当前实验只有一条回测结果；如需删除，请使用上方「删除实验」，避免留下空实验记录。
+        </p>
         <div class="table-wrap">
           <table>
             <thead>
@@ -716,7 +779,9 @@
                 <th>Symbol</th>
                 <th>名称</th>
                 <th>状态</th>
-                <th>总收益</th>
+                <th>账户收益</th>
+                <th>投入资金收益</th>
+                <th>资金使用率</th>
                 <th>最大回撤</th>
                 <th>夏普</th>
                 <th>胜率</th>
@@ -731,6 +796,8 @@
                 <td>{{ row.stock_name || '-' }}</td>
                 <td>{{ row.status }}</td>
                 <td>{{ pct(row.total_return) }}</td>
+                <td>{{ pct(row.invested_return) }}</td>
+                <td>{{ pct(row.capital_utilization) }}</td>
                 <td>{{ pct(row.max_drawdown) }}</td>
                 <td>{{ num(row.sharpe_ratio) }}</td>
                 <td>{{ pct(row.win_rate) }}</td>
@@ -738,12 +805,21 @@
                 <td class="error">{{ row.error_message || '-' }}</td>
                 <td>
                   <button
+                    class="mini-btn"
+                    :disabled="row.status !== 'completed' || tradeResultLoading"
+                    title="查看该标的的买卖明细"
+                    @click="() => loadTradeResult(row)"
+                  >
+                    查看交易
+                  </button>
+                  <button
+                    v-if="canDeleteResultRows"
                     class="mini-btn danger-mini"
                     :disabled="row.status === 'running' || row.status === 'claimed'"
-                    title="删除该股票的回测任务及结果"
+                    title="仅删除该标的的子任务和回测结果，不删除整个实验"
                     @click="() => deleteResultRow(row)"
                   >
-                    删除
+                    删除该结果
                   </button>
                 </td>
               </tr>
@@ -767,6 +843,7 @@ import {
   deleteBacktestTask,
   createBatch,
   getBatch,
+  getBacktestResult,
   getBatchResults,
   listBatchReviews,
   listBatches,
@@ -806,6 +883,9 @@ const batches = ref([])
 const selectedBatch = ref(null)
 const selectedBatchId = ref('')
 const results = ref([])
+const selectedTradeResult = ref(null)
+const tradeResultLoading = ref(false)
+const tradeResultMessage = ref('')
 const reviews = ref([])
 const strategies = ref([])
 const strategyTemplates = ref({})
@@ -887,6 +967,8 @@ const canQueueBatchReview = computed(
 const canCreateNextExperiment = computed(
   () => isBatchTerminal.value && !hasBatchActiveTasks.value && !batchLinkedLoop.value
 )
+
+const canDeleteResultRows = computed(() => results.value.length > 1)
 
 const loopIterationByBatchId = computed(() => {
   const out = {}
@@ -974,6 +1056,7 @@ const form = reactive({
   start_date: defaultDates.start,
   end_date: defaultDates.end,
   initial_cash: 1000000,
+  etf_position_pct: 0.95,
   limit_symbols: 2,
 })
 
@@ -1072,6 +1155,20 @@ function replaceCreateFormParams(params) {
 
 function getCreateParamsForSubmit() {
   return coerceParamsDict(createFormParams, createPresetBaseline.value)
+}
+
+function normalizedEtfPositionPct() {
+  const value = Number(form.etf_position_pct)
+  if (!Number.isFinite(value)) return 0.95
+  return Math.min(1, Math.max(0.01, value))
+}
+
+function getCreateStrategyParamsForSubmit(targetConfig = buildTargetConfig()) {
+  const params = getCreateParamsForSubmit()
+  if (targetConfig.asset_type === 'etf' && form.target_mode === 'single_etf') {
+    params.target_position_pct = normalizedEtfPositionPct()
+  }
+  return params
 }
 
 function getBatchNextParamsForSubmit(override) {
@@ -1311,6 +1408,12 @@ function num(value) {
   return typeof value === 'number' ? value.toFixed(2) : '-'
 }
 
+function money(value) {
+  return typeof value === 'number'
+    ? value.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+    : '-'
+}
+
 function formatDateTime(value) {
   if (!value) return '-'
   const date = new Date(value)
@@ -1394,10 +1497,41 @@ async function loadResults() {
       limit: 300,
     })
     results.value = payload.rows || []
+    syncAutoTradeResult()
   } catch (error) {
     results.value = []
+    selectedTradeResult.value = null
     batchMessage.value = error?.response?.data?.detail || error.message || '批量结果加载失败'
   }
+}
+
+async function loadTradeResult(row, { silent = false } = {}) {
+  if (!row?.task_id) return
+  tradeResultLoading.value = true
+  if (!silent) tradeResultMessage.value = ''
+  try {
+    selectedTradeResult.value = await getBacktestResult(row.task_id)
+    tradeResultMessage.value = ''
+  } catch (error) {
+    selectedTradeResult.value = null
+    tradeResultMessage.value = formatApiError(error, '交易列表加载失败')
+  } finally {
+    tradeResultLoading.value = false
+  }
+}
+
+function syncAutoTradeResult() {
+  const completedRows = results.value.filter((row) => row.status === 'completed')
+  const shouldAutoLoad =
+    selectedBatch.value?.asset_type === 'etf'
+    && results.value.length === 1
+    && completedRows.length === 1
+  if (shouldAutoLoad) {
+    loadTradeResult(completedRows[0], { silent: true })
+    return
+  }
+  selectedTradeResult.value = null
+  tradeResultMessage.value = ''
 }
 
 async function loadReviews() {
@@ -1419,7 +1553,7 @@ function buildCreateBatchPayload() {
     ...targetConfig,
     strategy_key: form.strategy_key,
     preset: form.preset || null,
-    strategy_params: getCreateParamsForSubmit(),
+    strategy_params: getCreateStrategyParamsForSubmit(targetConfig),
     start_date: form.start_date,
     end_date: form.end_date,
     initial_cash: Number.isFinite(initialCash) ? initialCash : 1000000,
@@ -1482,6 +1616,8 @@ async function confirmDeleteSelectedBatch() {
     selectedBatchId.value = ''
     selectedBatch.value = null
     results.value = []
+    selectedTradeResult.value = null
+    tradeResultMessage.value = ''
     reviews.value = []
     pendingDeleteBatch.value = null
     await Promise.allSettled([loadBatches(), loadLoops()])
@@ -1493,9 +1629,13 @@ async function confirmDeleteSelectedBatch() {
 }
 
 async function deleteResultRow(row) {
+  if (!canDeleteResultRows.value) {
+    batchMessage.value = '当前实验只有一条结果；请使用上方「删除实验」删除整个实验记录'
+    return
+  }
   if (!row?.task_id) return
   const label = row.stock_name || row.symbol || row.task_id
-  const ok = window.confirm(`确定删除 ${label} 的回测结果吗？`)
+  const ok = window.confirm(`确定删除 ${label} 的子任务和回测结果吗？这不会删除整个实验。`)
   if (!ok) return
   try {
     const result = await deleteBacktestTask(row.task_id)
@@ -1714,7 +1854,7 @@ function buildLoopBatchConfig(nameSuffix = '') {
     universe_value: targetConfig.universe_value,
     strategy_key: form.strategy_key,
     preset: form.preset || null,
-    strategy_params: getCreateParamsForSubmit(),
+    strategy_params: getCreateStrategyParamsForSubmit(targetConfig),
     start_date: form.start_date,
     end_date: form.end_date,
     initial_cash: Number.isFinite(initialCash) ? initialCash : 1000000,
@@ -2532,6 +2672,22 @@ button {
   border-radius: 12px;
   margin-top: 16px;
   padding: 12px;
+}
+
+.trade-panel {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 12px;
+}
+
+.trade-table-wrap {
+  margin-top: 8px;
+}
+
+.result-action-hint {
+  margin: 12px 0 0;
 }
 
 .review-grid {
