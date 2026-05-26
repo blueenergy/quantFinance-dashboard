@@ -274,109 +274,22 @@
           <p v-if="batchMessage" class="message">{{ batchMessage }}</p>
         </section>
 
-        <section v-show="activeDetailTab === 'trades'" class="trade-panel">
-          <div class="section-title-row compact">
-            <div>
-              <h4>交易列表</h4>
-              <p class="muted" v-if="selectedTradeResult">
-                {{ selectedTradeResult.symbol }} · {{ selectedTradeResult.strategy_key }} ·
-                {{ selectedTradeResult.trades?.length || 0 }} 笔交易
-              </p>
-              <p class="muted" v-if="selectedTradeResult?.metrics">
-                账户收益 {{ pct(selectedTradeResult.metrics.total_return) }} ·
-                投入资金收益 {{ pct(selectedTradeResult.metrics.invested_return) }} ·
-                实际投入 {{ money(selectedTradeResult.metrics.invested_cash) }} ·
-                资金使用率 {{ pct(selectedTradeResult.metrics.capital_utilization) }}
-              </p>
-            </div>
-            <button
-              v-if="selectedTradeResult"
-              type="button"
-              class="mini-btn"
-              @click="selectedTradeResult = null"
-            >
-              收起
-            </button>
-          </div>
-          <p v-if="tradeResultLoading" class="muted">正在加载交易列表…</p>
-          <p v-else-if="tradeResultMessage" class="message">{{ tradeResultMessage }}</p>
-          <div v-else-if="selectedTradeResult" class="table-wrap trade-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>时间</th>
-                  <th>方向</th>
-                  <th>价格</th>
-                  <th>数量</th>
-                  <th>PnL</th>
-                  <th>手续费</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(trade, idx) in selectedTradeResult.trades || []" :key="`${trade.datetime}-${idx}`">
-                  <td>{{ trade.datetime || '-' }}</td>
-                  <td>{{ trade.action || '-' }}</td>
-                  <td>{{ num(trade.price) }}</td>
-                  <td>{{ trade.quantity ?? '-' }}</td>
-                  <td>{{ num(trade.pnl) }}</td>
-                  <td>{{ num(trade.commission) }}</td>
-                </tr>
-              </tbody>
-            </table>
-            <p v-if="!(selectedTradeResult.trades || []).length" class="muted">该回测没有交易记录。</p>
-          </div>
-          <p v-else class="muted">请先在「回测结果」中点击某行的「查看交易」。</p>
-        </section>
+        <StrategyLabTradePanel
+          v-show="activeDetailTab === 'trades'"
+          v-model:selected-trade-result="selectedTradeResult"
+          :trade-result-loading="tradeResultLoading"
+          :trade-result-message="tradeResultMessage"
+          :pct="pct"
+          :money="money"
+          :num="num"
+        />
 
-        <section v-show="activeDetailTab === 'review'" class="review-panel">
-          <template v-if="latestReview">
-            <h4>AI 复盘</h4>
-            <p>{{ latestReview.review?.summary || '复盘已完成' }}</p>
-            <div class="review-grid">
-              <div>
-                <strong>主要发现</strong>
-                <ul>
-                  <li v-for="item in latestReview.review?.main_findings || []" :key="item">{{ item }}</li>
-                </ul>
-              </div>
-              <div>
-                <strong>下一轮实验</strong>
-                <ul>
-                  <li v-for="item in latestReview.review?.next_experiments || []" :key="item.name || item.hypothesis || item">
-                    <span>{{ item.name || item.hypothesis || item }}</span>
-                    <button class="mini-btn" @click="() => applyReviewSuggestion(item)">应用到本实验</button>
-                    <button
-                      class="mini-btn primary-mini"
-                      :disabled="!canCreateNextExperiment"
-                      @click="() => applyReviewSuggestion(item, true)"
-                    >
-                      应用并测试
-                    </button>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <div class="suggestion-list" v-if="latestReview.review?.parameter_suggestions?.length">
-              <strong>参数建议</strong>
-              <div
-                v-for="item in latestReview.review.parameter_suggestions"
-                :key="item.name || item.rationale || JSON.stringify(item)"
-                class="suggestion-row"
-              >
-                <span>{{ item.name || '参数组合' }}：{{ item.rationale || item.suggested_values || item }}</span>
-                <button class="mini-btn" @click="() => applyReviewSuggestion(item)">应用到本实验</button>
-                <button
-                  class="mini-btn primary-mini"
-                  :disabled="!canCreateNextExperiment"
-                  @click="() => applyReviewSuggestion(item, true)"
-                >
-                  应用并测试
-                </button>
-              </div>
-            </div>
-          </template>
-          <p v-else class="muted">暂无 AI 复盘。批量回测完成后可点击上方「AI 复盘」生成。</p>
-        </section>
+        <StrategyLabReviewPanel
+          v-show="activeDetailTab === 'review'"
+          :latest-review="latestReview"
+          :can-create-next-experiment="canCreateNextExperiment"
+          :apply-review-suggestion="applyReviewSuggestion"
+        />
 
         <section v-show="activeDetailTab === 'results'" class="detail-tab-panel">
           <div class="table-toolbar">
@@ -468,6 +381,8 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import StrategyLabBatchList from '../components/strategy-lab/StrategyLabBatchList.vue'
 import StrategyLabCreatePanel from '../components/strategy-lab/StrategyLabCreatePanel.vue'
 import StrategyLabLoopPanel from '../components/strategy-lab/StrategyLabLoopPanel.vue'
+import StrategyLabReviewPanel from '../components/strategy-lab/StrategyLabReviewPanel.vue'
+import StrategyLabTradePanel from '../components/strategy-lab/StrategyLabTradePanel.vue'
 import {
   cancelBatch,
   deleteBatch,
@@ -2190,34 +2105,8 @@ button {
   border-color: #2563eb;
 }
 
-.review-panel {
-  background: #f8fafc;
-  border-radius: 12px;
-  margin-top: 16px;
-  padding: 12px;
-}
-
-.trade-panel {
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
-  border-radius: 12px;
-  margin-top: 16px;
-  padding: 12px;
-}
-
-.trade-table-wrap {
-  margin-top: 8px;
-}
-
 .result-action-hint {
   margin: 12px 0 0;
-}
-
-.review-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  margin-top: 10px;
 }
 
 .param-diff {
