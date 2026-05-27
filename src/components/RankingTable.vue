@@ -101,7 +101,6 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from 'vue'
 
 const props = defineProps({
   displayRows: { type: Array, required: true },
