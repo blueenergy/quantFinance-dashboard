@@ -113,6 +113,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'watchlist', name: '自选股' },
       { id: 'backtest', name: '📊 回测管理' },
       { id: 'strategy-lab', name: '🧪 策略实验室' },
+      { id: 'portfolio-plans', name: '📋 组合交易计划' },
       { id: 'strategies', name: '策略配置' },
       { id: 'strategy-workers', name: '🚀 实盘交易' },
       { id: 'trade-executions', name: '交易记录' },
