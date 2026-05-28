@@ -69,6 +69,9 @@
               <button :disabled="actionLoading" @click="review('approved')">审核通过</button>
               <button class="danger" :disabled="actionLoading" @click="review('rejected')">驳回</button>
             </div>
+            <div v-else-if="selectedDetail.plan.status === 'approved'" class="actions">
+              <button :disabled="actionLoading" @click="executePaper">执行 Paper</button>
+            </div>
           </div>
 
           <div class="metrics">
@@ -129,6 +132,37 @@
               </span>
             </div>
           </section>
+
+          <section>
+            <h4>Paper 成交</h4>
+            <p v-if="!executions.length" class="muted">暂无 paper 成交。</p>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>代码</th>
+                    <th>动作</th>
+                    <th>数量</th>
+                    <th>价格</th>
+                    <th>金额</th>
+                    <th>阻塞原因</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="execution in executions" :key="execution.execution_id">
+                    <td>{{ execution.execute_date || '-' }}</td>
+                    <td>{{ execution.symbol || '-' }}</td>
+                    <td>{{ execution.action || '-' }}</td>
+                    <td>{{ execution.quantity ?? 0 }}</td>
+                    <td>{{ num(execution.price) }}</td>
+                    <td>{{ money(execution.amount) }}</td>
+                    <td>{{ execution.blocker || '-' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </template>
         <p v-else class="muted">请选择一份计划。</p>
       </main>
@@ -140,7 +174,9 @@
 import { onMounted, ref } from 'vue'
 import {
   approvePortfolioPlan,
+  executePortfolioPlanPaper,
   getPortfolioPlan,
+  getPortfolioPlanExecutions,
   getPortfolioStrategyEquity,
   listPortfolioPlans,
   listPortfolioStrategies,
@@ -154,6 +190,7 @@ const statusFilter = ref('')
 const selectedPlanId = ref('')
 const selectedDetail = ref(null)
 const equity = ref([])
+const executions = ref([])
 const loading = ref(false)
 const actionLoading = ref(false)
 const message = ref('')
@@ -209,6 +246,7 @@ async function selectPlan(planId) {
   const res = await getPortfolioPlan(planId)
   selectedDetail.value = res.data
   await loadEquity()
+  await loadExecutions()
 }
 
 async function loadEquity() {
@@ -219,6 +257,15 @@ async function loadEquity() {
   }
   const res = await getPortfolioStrategyEquity(strategyId)
   equity.value = res.data || []
+}
+
+async function loadExecutions() {
+  if (!selectedPlanId.value) {
+    executions.value = []
+    return
+  }
+  const res = await getPortfolioPlanExecutions(selectedPlanId.value)
+  executions.value = res.data || []
 }
 
 async function review(decision) {
@@ -233,6 +280,20 @@ async function review(decision) {
     }
     await selectPlan(selectedPlanId.value)
     await loadPlans()
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function executePaper() {
+  if (!selectedPlanId.value) return
+  actionLoading.value = true
+  try {
+    await executePortfolioPlanPaper(selectedPlanId.value)
+    await selectPlan(selectedPlanId.value)
+    await loadPlans()
+  } catch (error) {
+    message.value = error.response?.data?.detail || error.message || '执行 paper 失败'
   } finally {
     actionLoading.value = false
   }

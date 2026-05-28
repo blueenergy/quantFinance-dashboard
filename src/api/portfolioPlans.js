@@ -20,6 +20,10 @@ export function rejectPortfolioPlan(planId, data = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/reject`, method: 'post', data })
 }
 
+export function executePortfolioPlanPaper(planId, data = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/execute-paper`, method: 'post', data })
+}
+
 export function getPortfolioPlanExecutions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/executions`, method: 'get' })
 }
