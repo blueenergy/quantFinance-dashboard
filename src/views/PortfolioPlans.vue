@@ -69,9 +69,6 @@
               <button :disabled="actionLoading" @click="review('approved')">审核通过</button>
               <button class="danger" :disabled="actionLoading" @click="review('rejected')">驳回</button>
             </div>
-            <div v-else-if="selectedDetail.plan.status === 'approved'" class="actions">
-              <button :disabled="actionLoading" @click="executePaper">执行 Paper</button>
-            </div>
           </div>
 
           <div class="metrics">
@@ -86,6 +83,41 @@
             审核备注
             <textarea v-model="reviewComment" rows="2" placeholder="记录审核意见或风险确认" />
           </label>
+
+          <section v-if="selectedDetail.plan.status === 'approved' || selectedDetail.execution_status" class="execution-status">
+            <h4>后台执行状态</h4>
+            <p v-if="selectedDetail.plan.status === 'approved'" class="muted">
+              已审核，等待后台在开盘价就绪后自动执行。
+            </p>
+            <div class="status-grid">
+              <div>
+                <span>execute_date</span>
+                <strong>{{ executionStatus.execute_date || '-' }}</strong>
+                <small v-if="executionStatus.uses_runtime_execute_date">
+                  后台将按运行日期 {{ executionStatus.effective_execute_date || '-' }} 检查
+                </small>
+              </div>
+              <div>
+                <span>开盘价是否就绪</span>
+                <strong>{{ executionStatus.open_price_ready ? '已就绪' : '未就绪' }}</strong>
+                <small v-if="!executionStatus.open_price_ready">
+                  缺失 {{ executionStatus.missing_open_price_count ?? 0 }} 个
+                </small>
+              </div>
+              <div>
+                <span>后台执行状态</span>
+                <strong>{{ executionStatus.backend_execution_status || '-' }}</strong>
+              </div>
+              <div>
+                <span>最近一次执行结果</span>
+                <strong>{{ latestExecutionText }}</strong>
+                <small v-if="executionStatus.execution_count">累计 {{ executionStatus.execution_count }} 条成交记录</small>
+              </div>
+            </div>
+            <p v-if="executionStatus.missing_open_price_examples?.length" class="muted">
+              缺失示例：{{ executionStatus.missing_open_price_examples.join(', ') }}
+            </p>
+          </section>
 
           <section>
             <h4>目标持仓与交易明细</h4>
@@ -234,7 +266,6 @@
 import { computed, onMounted, ref } from 'vue'
 import {
   approvePortfolioPlan,
-  executePortfolioPlanPaper,
   getPortfolioPlan,
   getPortfolioPlanExecutions,
   getPortfolioStrategyEquity,
@@ -255,6 +286,18 @@ const loading = ref(false)
 const actionLoading = ref(false)
 const message = ref('')
 const reviewComment = ref('')
+
+const executionStatus = computed(() => selectedDetail.value?.execution_status || {})
+
+const latestExecutionText = computed(() => {
+  const latest = executionStatus.value.latest_execution_result
+  if (!latest) return '暂无'
+  const action = latest.action || 'unknown'
+  const symbol = latest.symbol || '-'
+  const quantity = latest.quantity ?? 0
+  const blocker = latest.blocker ? ` / ${latest.blocker}` : ''
+  return `${latest.execute_date || '-'} ${action} ${symbol} ${quantity}${blocker}`
+})
 
 const equityRows = computed(() => {
   return [...equity.value]
@@ -402,20 +445,6 @@ async function review(decision) {
   }
 }
 
-async function executePaper() {
-  if (!selectedPlanId.value) return
-  actionLoading.value = true
-  try {
-    await executePortfolioPlanPaper(selectedPlanId.value)
-    await selectPlan(selectedPlanId.value)
-    await loadPlans()
-  } catch (error) {
-    message.value = error.response?.data?.detail || error.message || '执行 paper 失败'
-  } finally {
-    actionLoading.value = false
-  }
-}
-
 onMounted(refreshAll)
 </script>
 
@@ -549,6 +578,39 @@ button.danger {
   color: #111827;
   display: block;
   font-size: 12px;
+}
+
+.execution-status {
+  margin-bottom: 14px;
+}
+
+.status-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 8px;
+}
+
+.status-grid div {
+  border: 1px solid #111827;
+  border-radius: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  word-break: break-word;
+}
+
+.status-grid span,
+.status-grid small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.status-grid strong {
+  display: block;
+  line-height: 1.4;
+  white-space: normal;
 }
 
 .message {
