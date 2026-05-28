@@ -125,12 +125,72 @@
 
           <section>
             <h4>Paper 净值</h4>
-            <p v-if="!equity.length" class="muted">暂无 paper 净值。</p>
-            <div v-else class="equity-list">
-              <span v-for="point in equity.slice(-8)" :key="point.date">
-                {{ point.date }}: {{ money(point.equity) }}
-              </span>
-            </div>
+            <p v-if="!equityRows.length" class="muted">暂无 paper 净值。</p>
+            <template v-else>
+              <div class="equity-summary">
+                <div>
+                  <span>最新权益</span>
+                  <strong>{{ money(equityRows[equityRows.length - 1]?.equity) }}</strong>
+                </div>
+                <div>
+                  <span>累计收益</span>
+                  <strong>{{ signedPct(equityChart.latestReturn) }}</strong>
+                </div>
+                <div>
+                  <span>最近变化</span>
+                  <strong>{{ signedMoney(equityRows[equityRows.length - 1]?.change) }}</strong>
+                </div>
+              </div>
+              <div class="equity-chart" aria-label="Paper equity curve">
+                <svg viewBox="0 0 640 220" role="img">
+                  <line x1="28" y1="28" x2="28" y2="192" />
+                  <line x1="28" y1="192" x2="612" y2="192" />
+                  <polyline :points="equityChart.points" />
+                  <circle
+                    v-for="point in equityChart.points.split(' ')"
+                    :key="point"
+                    :cx="point.split(',')[0]"
+                    :cy="point.split(',')[1]"
+                    r="3"
+                  />
+                  <text x="36" y="22">{{ money(equityChart.max) }}</text>
+                  <text x="36" y="186">{{ money(equityChart.min) }}</text>
+                  <text
+                    v-for="label in equityChart.labels"
+                    :key="label.text"
+                    :x="label.x"
+                    :y="label.y"
+                    :text-anchor="label.anchor"
+                  >
+                    {{ label.text }}
+                  </text>
+                </svg>
+              </div>
+              <div class="table-wrap compact">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>日期</th>
+                      <th>权益</th>
+                      <th>日变化</th>
+                      <th>日变化率</th>
+                      <th>现金</th>
+                      <th>市值</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="point in equityRows.slice().reverse()" :key="point.date">
+                      <td>{{ point.date }}</td>
+                      <td>{{ money(point.equity) }}</td>
+                      <td>{{ signedMoney(point.change) }}</td>
+                      <td>{{ signedPct(point.changePct) }}</td>
+                      <td>{{ money(point.cash) }}</td>
+                      <td>{{ money(point.market_value) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </template>
           </section>
 
           <section>
@@ -171,7 +231,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   approvePortfolioPlan,
   executePortfolioPlanPaper,
@@ -196,6 +256,50 @@ const actionLoading = ref(false)
 const message = ref('')
 const reviewComment = ref('')
 
+const equityRows = computed(() => {
+  return [...equity.value]
+    .filter((point) => Number.isFinite(Number(point.equity)))
+    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
+    .map((point, index, rows) => {
+      const value = Number(point.equity)
+      const previous = index > 0 ? Number(rows[index - 1].equity) : NaN
+      const change = Number.isFinite(previous) ? value - previous : null
+      const changePct = Number.isFinite(previous) && previous !== 0 ? change / previous : null
+      return { ...point, equity: value, change, changePct }
+    })
+})
+
+const equityChart = computed(() => {
+  const rows = equityRows.value
+  if (!rows.length) return { points: '', labels: [], min: 0, max: 0, latestReturn: null }
+  const values = rows.map((row) => row.equity)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min || 1
+  const width = 640
+  const height = 220
+  const pad = 28
+  const points = rows
+    .map((row, index) => {
+      const x = rows.length === 1 ? width / 2 : pad + (index * (width - pad * 2)) / (rows.length - 1)
+      const y = height - pad - ((row.equity - min) * (height - pad * 2)) / span
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+  const first = rows[0].equity
+  const latest = rows[rows.length - 1].equity
+  return {
+    points,
+    min,
+    max,
+    latestReturn: first ? latest / first - 1 : null,
+    labels: [
+      { text: rows[0].date, x: pad, y: height - 6, anchor: 'start' },
+      { text: rows[rows.length - 1].date, x: width - pad, y: height - 6, anchor: 'end' },
+    ],
+  }
+})
+
 function pct(value) {
   const number = Number(value)
   return Number.isFinite(number) ? `${(number * 100).toFixed(2)}%` : '-'
@@ -209,6 +313,19 @@ function money(value) {
 function num(value) {
   const number = Number(value)
   return Number.isFinite(number) ? number.toFixed(2) : '-'
+}
+
+function signedMoney(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '-'
+  const formatted = Math.abs(number).toLocaleString('zh-CN', { maximumFractionDigits: 0 })
+  return `${number >= 0 ? '+' : '-'}${formatted}`
+}
+
+function signedPct(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '-'
+  return `${number >= 0 ? '+' : ''}${(number * 100).toFixed(2)}%`
 }
 
 async function refreshAll() {
@@ -475,17 +592,60 @@ th {
   font-weight: 700;
 }
 
-.equity-list {
+.equity-summary {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-bottom: 10px;
 }
 
-.equity-list span {
+.equity-summary div {
   background: #fff;
   border: 1px solid #111827;
   border-radius: 4px;
   color: #111827;
-  padding: 6px 8px;
+  padding: 8px 10px;
+}
+
+.equity-summary span {
+  display: block;
+  font-size: 12px;
+}
+
+.equity-chart {
+  border: 1px solid #111827;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.equity-chart svg {
+  background: #fff;
+  display: block;
+  height: 260px;
+  width: 100%;
+}
+
+.equity-chart line {
+  stroke: #111827;
+  stroke-width: 1;
+}
+
+.equity-chart polyline {
+  fill: none;
+  stroke: #111827;
+  stroke-width: 3;
+}
+
+.equity-chart circle {
+  fill: #111827;
+}
+
+.equity-chart text {
+  fill: #111827;
+  font-size: 12px;
+}
+
+.table-wrap.compact table {
+  min-width: 720px;
 }
 </style>
