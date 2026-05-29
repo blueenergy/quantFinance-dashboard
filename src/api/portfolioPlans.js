@@ -27,3 +27,7 @@ export function getPortfolioPlanExecutions(planId) {
 export function getPortfolioStrategyEquity(strategyId, params = {}) {
   return request({ url: `/portfolio-plans/strategies/${strategyId}/equity`, method: 'get', params })
 }
+
+export function getPortfolioStrategyRealtimeEquity(strategyId) {
+  return request({ url: `/portfolio-plans/strategies/${strategyId}/realtime-equity`, method: 'get' })
+}

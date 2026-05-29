@@ -157,6 +157,28 @@
 
           <section>
             <h4>Paper 净值</h4>
+            <div v-if="realtimeEquity" class="realtime-equity">
+              <div>
+                <span>实时估算权益</span>
+                <strong>{{ money(realtimeEquity.equity) }}</strong>
+              </div>
+              <div>
+                <span>较最新落库净值</span>
+                <strong>{{ signedMoney(realtimeEquity.change) }} / {{ signedPct(realtimeEquity.change_pct) }}</strong>
+              </div>
+              <div>
+                <span>实时市值</span>
+                <strong>{{ money(realtimeEquity.market_value) }}</strong>
+              </div>
+              <div>
+                <span>现金</span>
+                <strong>{{ money(realtimeEquity.cash) }}</strong>
+              </div>
+              <div>
+                <span>更新时间</span>
+                <strong>{{ realtimeEquity.latest_update || '-' }}</strong>
+              </div>
+            </div>
             <p v-if="!equityRows.length" class="muted">暂无 paper 净值。</p>
             <template v-else>
               <div class="equity-summary">
@@ -234,6 +256,7 @@
                   <tr>
                     <th>日期</th>
                     <th>代码</th>
+                    <th>名称</th>
                     <th>动作</th>
                     <th>数量</th>
                     <th>价格</th>
@@ -245,6 +268,7 @@
                   <tr v-for="execution in executions" :key="execution.execution_id">
                     <td>{{ execution.execute_date || '-' }}</td>
                     <td>{{ execution.symbol || '-' }}</td>
+                    <td>{{ execution.name || '-' }}</td>
                     <td>{{ execution.action || '-' }}</td>
                     <td>{{ execution.quantity ?? 0 }}</td>
                     <td>{{ num(execution.price) }}</td>
@@ -263,12 +287,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   approvePortfolioPlan,
   getPortfolioPlan,
   getPortfolioPlanExecutions,
   getPortfolioStrategyEquity,
+  getPortfolioStrategyRealtimeEquity,
   listPortfolioPlans,
   listPortfolioStrategies,
   rejectPortfolioPlan,
@@ -281,11 +306,13 @@ const statusFilter = ref('')
 const selectedPlanId = ref('')
 const selectedDetail = ref(null)
 const equity = ref([])
+const realtimeEquity = ref(null)
 const executions = ref([])
 const loading = ref(false)
 const actionLoading = ref(false)
 const message = ref('')
 const reviewComment = ref('')
+let realtimeTimer = null
 
 const executionStatus = computed(() => selectedDetail.value?.execution_status || {})
 
@@ -406,6 +433,7 @@ async function selectPlan(planId) {
   const res = await getPortfolioPlan(planId)
   selectedDetail.value = res.data
   await loadEquity()
+  await loadRealtimeEquity()
   await loadExecutions()
 }
 
@@ -417,6 +445,16 @@ async function loadEquity() {
   }
   const res = await getPortfolioStrategyEquity(strategyId)
   equity.value = res.data || []
+}
+
+async function loadRealtimeEquity() {
+  const strategyId = selectedDetail.value?.plan?.strategy_id
+  if (!strategyId) {
+    realtimeEquity.value = null
+    return
+  }
+  const res = await getPortfolioStrategyRealtimeEquity(strategyId)
+  realtimeEquity.value = res.data || null
 }
 
 async function loadExecutions() {
@@ -445,7 +483,18 @@ async function review(decision) {
   }
 }
 
-onMounted(refreshAll)
+onMounted(() => {
+  refreshAll()
+  realtimeTimer = window.setInterval(() => {
+    if (selectedDetail.value?.plan?.strategy_id) {
+      loadRealtimeEquity()
+    }
+  }, 60000)
+})
+
+onUnmounted(() => {
+  if (realtimeTimer) window.clearInterval(realtimeTimer)
+})
 </script>
 
 <style scoped>
@@ -654,14 +703,16 @@ th {
   font-weight: 700;
 }
 
-.equity-summary {
+.equity-summary,
+.realtime-equity {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 10px;
 }
 
-.equity-summary div {
+.equity-summary div,
+.realtime-equity div {
   background: #fff;
   border: 1px solid #111827;
   border-radius: 4px;
@@ -669,7 +720,8 @@ th {
   padding: 8px 10px;
 }
 
-.equity-summary span {
+.equity-summary span,
+.realtime-equity span {
   display: block;
   font-size: 12px;
 }
