@@ -255,24 +255,28 @@
               <table>
                 <thead>
                   <tr>
-                    <th>日期</th>
-                    <th>代码</th>
-                    <th>名称</th>
+                    <th class="col-date">日期</th>
+                    <th class="col-symbol">代码</th>
+                    <th class="col-name">名称</th>
                     <th>动作</th>
                     <th>数量</th>
-                    <th>价格</th>
+                    <th>买入价格</th>
+                    <th>当前价格</th>
+                    <th>涨跌幅</th>
                     <th>金额</th>
                     <th>阻塞原因</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="execution in executions" :key="execution.execution_id">
-                    <td>{{ execution.execute_date || '-' }}</td>
-                    <td>{{ execution.symbol || '-' }}</td>
-                    <td>{{ execution.name || '-' }}</td>
+                    <td class="col-date">{{ execution.execute_date || '-' }}</td>
+                    <td class="col-symbol">{{ execution.symbol || '-' }}</td>
+                    <td class="col-name">{{ execution.name || '-' }}</td>
                     <td>{{ execution.action || '-' }}</td>
                     <td>{{ execution.quantity ?? 0 }}</td>
                     <td>{{ num(execution.price) }}</td>
+                    <td>{{ num(currentPriceForExecution(execution)) }}</td>
+                    <td>{{ executionReturnPct(execution) }}</td>
                     <td>{{ money(execution.amount) }}</td>
                     <td>{{ execution.blocker || '-' }}</td>
                   </tr>
@@ -325,6 +329,11 @@ const latestExecutionText = computed(() => {
   const quantity = latest.quantity ?? 0
   const blocker = latest.blocker ? ` / ${latest.blocker}` : ''
   return `${latest.execute_date || '-'} ${action} ${symbol} ${quantity}${blocker}`
+})
+
+const realtimePriceBySymbol = computed(() => {
+  const rows = realtimeEquity.value?.positions || []
+  return Object.fromEntries(rows.map((row) => [row.symbol, row.realtime_price]))
 })
 
 const equityRows = computed(() => {
@@ -397,6 +406,17 @@ function signedPct(value) {
   const number = Number(value)
   if (!Number.isFinite(number)) return '-'
   return `${number >= 0 ? '+' : ''}${(number * 100).toFixed(2)}%`
+}
+
+function currentPriceForExecution(execution) {
+  return realtimePriceBySymbol.value[execution?.symbol]
+}
+
+function executionReturnPct(execution) {
+  const entry = Number(execution?.price)
+  const current = Number(currentPriceForExecution(execution))
+  if (!Number.isFinite(entry) || entry <= 0 || !Number.isFinite(current)) return '-'
+  return signedPct(current / entry - 1)
 }
 
 async function refreshAll() {
@@ -702,6 +722,23 @@ th {
   background: #f3f4f6;
   color: #111827;
   font-weight: 700;
+}
+
+.col-date {
+  max-width: 86px;
+  width: 86px;
+}
+
+.col-symbol {
+  max-width: 92px;
+  width: 92px;
+}
+
+.col-name {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 90px;
 }
 
 .equity-summary,
