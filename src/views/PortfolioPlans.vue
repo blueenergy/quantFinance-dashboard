@@ -105,6 +105,11 @@
             <strong>{{ latestCompletedScoringText }}</strong>
           </div>
           <div>
+            <span>最新可用评分数据</span>
+            <strong>{{ latestAvailableScoreText }}</strong>
+            <small>{{ latestAvailableScoreMeta }}</small>
+          </div>
+          <div>
             <span>最近评分 run</span>
             <strong>{{ latestScoringRunText }}</strong>
           </div>
@@ -526,6 +531,17 @@ const latestGenerationTask = computed(() => generationTasks.value[0] || null)
 const targetScoringRunText = computed(() => scoringRunText(planGenerationWatermark.value?.target_scoring_run))
 const latestCompletedScoringText = computed(() => scoringRunText(planGenerationWatermark.value?.latest_completed_scoring_run))
 const latestScoringRunText = computed(() => scoringRunText(planGenerationWatermark.value?.latest_scoring_run))
+const latestAvailableScoreText = computed(() => {
+  const watermark = planGenerationWatermark.value
+  if (!watermark?.latest_available_score_date) return '暂无记录'
+  return `${watermark.latest_available_score_date} / ${watermark.latest_available_score_count ?? 0} 条`
+})
+const latestAvailableScoreMeta = computed(() => {
+  const scope = planGenerationWatermark.value?.latest_available_score_scope
+  if (scope === 'index_codes') return '按当前 universe 匹配'
+  if (scope === 'global') return '全局最新 fallback'
+  return '-'
+})
 
 const equityRows = computed(() => {
   return [...equity.value]
