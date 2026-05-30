@@ -142,6 +142,57 @@
       </div>
     </section>
 
+    <section class="card live-ops-card">
+      <div class="task-list-header">
+        <div>
+          <h3>实盘执行监控</h3>
+          <p class="muted">
+            signals {{ formatSummary(liveSignalStatusSummary) }} · executions {{ formatSummary(liveExecutionStatusSummary) }}
+            <span v-if="latestTraderHeartbeat"> · quantTrader {{ latestTraderHeartbeat.status }} / {{ latestTraderHeartbeat.last_seen_at || '-' }}</span>
+          </p>
+        </div>
+        <div class="task-list-actions">
+          <select v-model="selectedLiveAccountId" @change="loadLiveOps">
+            <option value="">全部账户</option>
+            <option v-for="account in liveAccountOptions" :key="account.id" :value="account.id">
+              {{ account.label }}
+            </option>
+          </select>
+          <button :disabled="liveOpsLoading" @click="loadLiveOps">刷新实盘状态</button>
+        </div>
+      </div>
+      <p v-if="liveOpsLoading" class="muted">正在加载实盘状态...</p>
+      <div v-else class="live-ops-grid">
+        <div>
+          <h4>quantTrader heartbeat</h4>
+          <p v-if="!traderHeartbeats.length" class="muted">暂无 heartbeat。</p>
+          <p v-for="heartbeat in traderHeartbeats" :key="heartbeat.worker_id" class="ops-line">
+            <strong>{{ heartbeat.status }}</strong>
+            <span>{{ heartbeat.worker_id }}</span>
+            <small>{{ heartbeat.last_seen_at || '-' }}</small>
+          </p>
+        </div>
+        <div>
+          <h4>Live signals</h4>
+          <p v-if="!liveSignals.length" class="muted">暂无 live signals。</p>
+          <p v-for="signal in liveSignals.slice(0, 5)" :key="signal.order_id" class="ops-line">
+            <strong>{{ signal.status }}</strong>
+            <span>{{ signal.action }} {{ signal.symbol }} x {{ signal.size }}</span>
+            <small>{{ signal.created_at || signal.timestamp || '-' }}</small>
+          </p>
+        </div>
+        <div>
+          <h4>Executions</h4>
+          <p v-if="!liveExecutions.length" class="muted">暂无 execution。</p>
+          <p v-for="execution in liveExecutions.slice(0, 5)" :key="`${execution.order_id}-${execution.status}-${execution.timestamp}`" class="ops-line">
+            <strong>{{ execution.status }}</strong>
+            <span>{{ execution.action }} {{ execution.symbol }} filled {{ execution.filled_size ?? '-' }}</span>
+            <small>{{ execution.timestamp || '-' }}</small>
+          </p>
+        </div>
+      </div>
+    </section>
+
     <section class="card task-list-card">
       <div class="task-list-header">
         <div>
@@ -284,6 +335,58 @@
             <p v-if="executionStatus.missing_open_price_examples?.length" class="muted">
               缺失示例：{{ executionStatus.missing_open_price_examples.join(', ') }}
             </p>
+          </section>
+
+          <section v-if="selectedDetail.plan.status === 'approved'" class="live-publish-panel">
+            <div class="task-list-header">
+              <div>
+                <h4>发布到实盘</h4>
+                <p class="muted">先 dry-run 生成 risk report，确认后才写入 executable live signals。</p>
+              </div>
+              <div class="task-list-actions">
+                <select v-model="selectedLiveAccountId">
+                  <option value="">请选择账户</option>
+                  <option v-for="account in liveAccountOptions" :key="account.id" :value="account.id">
+                    {{ account.label }}
+                  </option>
+                </select>
+                <button :disabled="livePublishLoading || !selectedLiveAccountId" @click="previewLivePublish">实盘预检</button>
+                <button :disabled="livePublishLoading || !selectedLiveAccountId || livePublishBlockers.length" @click="publishLiveSignals">
+                  确认发布
+                </button>
+              </div>
+            </div>
+            <div v-if="livePublishPreview" class="risk-report">
+              <p>
+                待写入 {{ livePublishPreview.new_signals?.length ?? 0 }} 条，已有 {{ livePublishPreview.existing_count ?? 0 }} 条，
+                阻断 {{ livePublishPreview.risk_report?.blocked_count ?? 0 }} 条
+              </p>
+              <p v-if="livePublishBlockers.length" class="watermark-warning">
+                {{ livePublishBlockers.slice(0, 8).join(' / ') }}
+              </p>
+              <div v-if="livePublishPreview.new_signals?.length" class="table-wrap compact">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>代码</th>
+                      <th>方向</th>
+                      <th>数量</th>
+                      <th>限价</th>
+                      <th>order_id</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="signal in livePublishPreview.new_signals.slice(0, 8)" :key="signal.order_id">
+                      <td>{{ signal.symbol }}</td>
+                      <td>{{ signal.action }}</td>
+                      <td>{{ signal.size }}</td>
+                      <td>{{ num(signal.price) }}</td>
+                      <td class="truncate" :title="signal.order_id">{{ signal.order_id }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </section>
 
           <section>
@@ -468,12 +571,17 @@ import {
   getPortfolioPlanGenerationWatermark,
   getPortfolioStrategyEquity,
   getPortfolioStrategyRealtimeEquity,
+  listLiveTradeExecutions,
+  listLiveTradeSignals,
   listPortfolioPlanGenerationTasks,
   listPortfolioPlans,
   listPortfolioStrategies,
   listPortfolioWorkerStatus,
+  listTraderHeartbeats,
+  publishPortfolioPlanLiveSignals,
   rejectPortfolioPlan,
 } from '../api/portfolioPlans'
+import { getSecuritiesAccounts } from '../api/trader'
 
 const strategies = ref([])
 const plans = ref([])
@@ -490,11 +598,19 @@ const generateLoading = ref(false)
 const tasksLoading = ref(false)
 const watermarkLoading = ref(false)
 const workerStatusLoading = ref(false)
+const liveOpsLoading = ref(false)
+const livePublishLoading = ref(false)
 const currentGenerationTask = ref(null)
 const generationTasks = ref([])
 const generationTasksExpanded = ref(false)
 const planGenerationWatermark = ref(null)
 const workerStatuses = ref([])
+const traderHeartbeats = ref([])
+const liveSignals = ref([])
+const liveExecutions = ref([])
+const securitiesAccounts = ref([])
+const selectedLiveAccountId = ref('')
+const livePublishPreview = ref(null)
 const message = ref('')
 const reviewComment = ref('')
 let realtimeTimer = null
@@ -527,6 +643,17 @@ const realtimePriceBySymbol = computed(() => {
 const availableStrategies = computed(() => strategies.value.filter((strategy) => strategy.status !== 'disabled'))
 
 const latestGenerationTask = computed(() => generationTasks.value[0] || null)
+const latestTraderHeartbeat = computed(() => traderHeartbeats.value[0] || null)
+const liveSignalStatusSummary = computed(() => summarizeByStatus(liveSignals.value))
+const liveExecutionStatusSummary = computed(() => summarizeByStatus(liveExecutions.value))
+const liveAccountOptions = computed(() => securitiesAccounts.value.map((account) => ({
+  id: account.id || account._id,
+  label: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}`,
+})))
+const livePublishBlockers = computed(() => {
+  const items = livePublishPreview.value?.risk_report?.items || []
+  return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blocker}`))
+})
 
 const targetScoringRunText = computed(() => scoringRunText(planGenerationWatermark.value?.target_scoring_run))
 const latestCompletedScoringText = computed(() => scoringRunText(planGenerationWatermark.value?.latest_completed_scoring_run))
@@ -639,15 +766,43 @@ function scoringRunText(run) {
   return `${scoreDate} / ${status}`
 }
 
+function summarizeByStatus(rows) {
+  return rows.reduce((acc, row) => {
+    const status = row.status || 'unknown'
+    acc[status] = (acc[status] || 0) + 1
+    return acc
+  }, {})
+}
+
+function formatSummary(summary) {
+  const entries = Object.entries(summary)
+  if (!entries.length) return '暂无'
+  return entries.map(([status, count]) => `${status}: ${count}`).join(' / ')
+}
+
 async function refreshAll() {
+  await loadSecuritiesAccounts()
   await loadStrategies()
   if (!generateForm.value.strategy_id && availableStrategies.value.length) {
     generateForm.value.strategy_id = availableStrategies.value[0].strategy_id
   }
   await loadPlanGenerationWatermark()
   await loadWorkerStatus()
+  await loadLiveOps()
   await loadGenerationTasks()
   await loadPlans()
+}
+
+async function loadSecuritiesAccounts() {
+  try {
+    const accounts = await getSecuritiesAccounts()
+    securitiesAccounts.value = Array.isArray(accounts) ? accounts : []
+    if (!selectedLiveAccountId.value && securitiesAccounts.value.length) {
+      selectedLiveAccountId.value = securitiesAccounts.value[0].id || securitiesAccounts.value[0]._id
+    }
+  } catch (error) {
+    securitiesAccounts.value = []
+  }
 }
 
 async function loadStrategies() {
@@ -695,6 +850,26 @@ async function loadWorkerStatus() {
     message.value = error.response?.data?.detail || error.message || '加载 worker 状态失败'
   } finally {
     workerStatusLoading.value = false
+  }
+}
+
+async function loadLiveOps() {
+  liveOpsLoading.value = true
+  try {
+    const params = { limit: 20 }
+    if (selectedLiveAccountId.value) params.securities_account_id = selectedLiveAccountId.value
+    const [signalsRes, executionsRes, heartbeatsRes] = await Promise.all([
+      listLiveTradeSignals(params),
+      listLiveTradeExecutions(params),
+      listTraderHeartbeats({ limit: 20 }),
+    ])
+    liveSignals.value = signalsRes.data || []
+    liveExecutions.value = executionsRes.data || []
+    traderHeartbeats.value = heartbeatsRes.data || []
+  } catch (error) {
+    message.value = error.response?.data?.detail || error.message || '加载实盘执行状态失败'
+  } finally {
+    liveOpsLoading.value = false
   }
 }
 
@@ -778,11 +953,51 @@ async function pollGenerationTask(taskId) {
 async function selectPlan(planId) {
   selectedPlanId.value = planId
   reviewComment.value = ''
+  livePublishPreview.value = null
   const res = await getPortfolioPlan(planId)
   selectedDetail.value = res.data
   await loadEquity()
   await loadRealtimeEquity()
   await loadExecutions()
+}
+
+async function previewLivePublish() {
+  if (!selectedPlanId.value || !selectedLiveAccountId.value) return
+  livePublishLoading.value = true
+  message.value = ''
+  try {
+    const res = await publishPortfolioPlanLiveSignals(selectedPlanId.value, {
+      securities_account_id: selectedLiveAccountId.value,
+      dry_run: true,
+    })
+    livePublishPreview.value = res.data
+  } catch (error) {
+    message.value = error.response?.data?.detail?.message || error.response?.data?.detail || error.message || '实盘发布预检失败'
+  } finally {
+    livePublishLoading.value = false
+  }
+}
+
+async function publishLiveSignals() {
+  if (!selectedPlanId.value || !selectedLiveAccountId.value) return
+  livePublishLoading.value = true
+  message.value = ''
+  try {
+    const res = await publishPortfolioPlanLiveSignals(selectedPlanId.value, {
+      securities_account_id: selectedLiveAccountId.value,
+      dry_run: false,
+    })
+    livePublishPreview.value = res.data
+    message.value = `已发布 ${res.data?.inserted_count ?? 0} 条 live signals，已有 ${res.data?.existing_count ?? 0} 条`
+    await loadLiveOps()
+    await loadPlans()
+  } catch (error) {
+    const detail = error.response?.data?.detail
+    livePublishPreview.value = detail?.risk_report ? { risk_report: detail.risk_report, blocked: true } : livePublishPreview.value
+    message.value = detail?.message || detail || error.message || '实盘发布失败'
+  } finally {
+    livePublishLoading.value = false
+  }
 }
 
 async function loadEquity() {
@@ -991,6 +1206,44 @@ button.danger {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.live-ops-card,
+.live-publish-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.live-ops-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.ops-line {
+  border: 1px solid #111827;
+  border-radius: 4px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 90px 1fr;
+  margin-top: 6px;
+  padding: 8px;
+}
+
+.ops-line small {
+  color: #374151;
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
+
+.risk-report {
+  border: 1px solid #111827;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
 }
 
 .watermark-card {

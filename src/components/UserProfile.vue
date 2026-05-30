@@ -290,7 +290,7 @@
           <h3>🏦 证券账户管理</h3>
           
           <div class="securities-actions">
-            <button @click="showAddAccountModal = true" class="add-btn">+ 添加账户</button>
+            <button @click="showAddAccount" class="add-btn">+ 添加账户</button>
           </div>
           
           <div v-if="securitiesAccounts.length === 0" class="no-accounts">
@@ -329,6 +329,18 @@
                 <div v-if="account.account_type === 'simulated' && account.initial_cash" class="detail-row">
                   <span class="detail-label">初始资金:</span>
                   <span class="detail-value">￥{{ account.initial_cash.toLocaleString() }}</span>
+                </div>
+                <div v-if="account.account_type === 'real'" class="detail-row">
+                  <span class="detail-label">实盘信号:</span>
+                  <span class="detail-value">{{ account.live_trading_enabled ? '已启用' : '未启用' }}</span>
+                </div>
+                <div v-if="account.account_type === 'real'" class="detail-row">
+                  <span class="detail-label">风控:</span>
+                  <span class="detail-value">
+                    单笔 {{ account.risk_limits?.max_order_amount ? `￥${Number(account.risk_limits.max_order_amount).toLocaleString()}` : '未设置' }}
+                    / 单日 {{ account.risk_limits?.max_daily_amount ? `￥${Number(account.risk_limits.max_daily_amount).toLocaleString()}` : '未设置' }}
+                    / 单票 {{ account.risk_limits?.max_position_pct ? `${Number(account.risk_limits.max_position_pct).toFixed(1)}%` : '未设置' }}
+                  </span>
                 </div>
                 <div class="detail-row">
                   <span class="detail-label">创建时间:</span>
@@ -448,6 +460,50 @@
               <strong>提示：</strong>真实交易需要在 quantTrader 中配置券商账户密码，此处无需填写密码。
             </small>
           </div>
+
+          <div v-if="currentAccount.account_type === 'real'" class="form-group">
+            <label class="checkbox-label">
+              <input v-model="currentAccount.live_trading_enabled" type="checkbox" />
+              允许该真实账户接收实盘交易信号
+            </label>
+            <small class="form-hint">
+              默认关闭。开启后，审核通过的组合 plan 才能发布为 quantTrader 可执行的 live trade_signals。
+            </small>
+          </div>
+
+          <div v-if="currentAccount.account_type === 'real'" class="risk-limits-grid">
+            <div class="form-group">
+              <label>单笔最大金额（元）</label>
+              <input
+                v-model.number="currentAccount.risk_limits.max_order_amount"
+                type="number"
+                min="0"
+                class="form-control"
+                placeholder="例如 5000"
+              />
+            </div>
+            <div class="form-group">
+              <label>单日最大金额（元）</label>
+              <input
+                v-model.number="currentAccount.risk_limits.max_daily_amount"
+                type="number"
+                min="0"
+                class="form-control"
+                placeholder="例如 20000"
+              />
+            </div>
+            <div class="form-group">
+              <label>单票最大仓位（%）</label>
+              <input
+                v-model.number="currentAccount.risk_limits.max_position_pct"
+                type="number"
+                min="0"
+                max="100"
+                class="form-control"
+                placeholder="例如 20"
+              />
+            </div>
+          </div>
         </div>
         
         <div class="modal-footer">
@@ -556,7 +612,13 @@ export default {
       broker: '',
       account_id: '',
       account_type: 'simulated',  // 默认模拟账户
-      initial_cash: 1000000  // 默认100万
+      initial_cash: 1000000,  // 默认100万
+      live_trading_enabled: false,
+      risk_limits: {
+        max_order_amount: null,
+        max_daily_amount: null,
+        max_position_pct: null
+      }
     })
     
     // 切换标签页
@@ -1075,7 +1137,13 @@ export default {
         broker: '',
         account_id: '',
         account_type: 'simulated',
-        initial_cash: 1000000
+        initial_cash: 1000000,
+        live_trading_enabled: false,
+        risk_limits: {
+          max_order_amount: null,
+          max_daily_amount: null,
+          max_position_pct: null
+        }
       })
       showAddAccountModal.value = true
     }
@@ -1088,9 +1156,26 @@ export default {
         broker: account.broker,
         account_id: account.account_id,
         account_type: account.account_type || 'simulated',  // 使用原有的账户类型
-        initial_cash: account.initial_cash || 1000000  // 使用原有的初始资金
+        initial_cash: account.initial_cash || 1000000,  // 使用原有的初始资金
+        live_trading_enabled: !!account.live_trading_enabled,
+        risk_limits: {
+          max_order_amount: account.risk_limits?.max_order_amount ?? null,
+          max_daily_amount: account.risk_limits?.max_daily_amount ?? null,
+          max_position_pct: account.risk_limits?.max_position_pct ?? null
+        }
       })
       showAddAccountModal.value = true
+    }
+
+    const cleanRiskLimits = (limits) => {
+      const cleaned = {}
+      for (const field of ['max_order_amount', 'max_daily_amount', 'max_position_pct']) {
+        const value = Number(limits?.[field])
+        if (Number.isFinite(value) && value > 0) {
+          cleaned[field] = value
+        }
+      }
+      return cleaned
     }
     
     // 保存账户
@@ -1107,6 +1192,14 @@ export default {
         }
       }
       // 模拟账户不需要任何输入验证
+      if (currentAccount.account_type === 'real' && currentAccount.live_trading_enabled) {
+        const confirmed = confirm(
+          '确认允许该真实账户接收实盘交易信号？开启后，审核通过的组合 plan 可以发布给 quantTrader 执行。请确认已设置合适的单笔/单日风控。'
+        )
+        if (!confirmed) {
+          return
+        }
+      }
       
       try {
         let response
@@ -1114,7 +1207,9 @@ export default {
           // 更新现有账户
           const updateData = {
             broker: currentAccount.broker,
-            account_type: currentAccount.account_type
+            account_type: currentAccount.account_type,
+            live_trading_enabled: currentAccount.account_type === 'real' ? currentAccount.live_trading_enabled : false,
+            risk_limits: currentAccount.account_type === 'real' ? cleanRiskLimits(currentAccount.risk_limits) : {}
           }
           // 真实账户才需要账户ID
           if (currentAccount.account_type === 'real') {
@@ -1125,7 +1220,9 @@ export default {
           // 创建新账户
           const createData = {
             broker: currentAccount.broker,
-            account_type: currentAccount.account_type
+            account_type: currentAccount.account_type,
+            live_trading_enabled: currentAccount.account_type === 'real' ? currentAccount.live_trading_enabled : false,
+            risk_limits: currentAccount.account_type === 'real' ? cleanRiskLimits(currentAccount.risk_limits) : {}
           }
           
           if (currentAccount.account_type === 'real') {
@@ -1400,6 +1497,16 @@ export default {
   margin-top: 5px;
   font-size: 12px;
   color: #6c757d;
+}
+
+.risk-limits-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.risk-limits-grid .form-group {
+  margin-bottom: 12px;
 }
 
 .info-box {

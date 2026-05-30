@@ -28,6 +28,22 @@ export function getPortfolioPlanGenerationWatermark(params = {}) {
   return request({ url: '/portfolio-plans/data-watermarks/plan-generation', method: 'get', params })
 }
 
+export function publishPortfolioPlanLiveSignals(planId, data = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/publish-live-signals`, method: 'post', data })
+}
+
+export function listLiveTradeSignals(params = {}) {
+  return request({ url: '/trader/live-signals', method: 'get', params })
+}
+
+export function listLiveTradeExecutions(params = {}) {
+  return request({ url: '/trader/executions', method: 'get', params })
+}
+
+export function listTraderHeartbeats(params = {}) {
+  return request({ url: '/trader/heartbeat', method: 'get', params })
+}
+
 export function getPortfolioPlan(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}`, method: 'get' })
 }
