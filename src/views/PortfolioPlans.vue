@@ -75,6 +75,33 @@
 
     <p v-if="message" class="message">{{ message }}</p>
 
+    <section class="card task-list-card">
+      <div class="task-list-header">
+        <div>
+          <h3>最近生成任务</h3>
+          <p class="muted">展示当前用户最近提交的 plan generation task。</p>
+        </div>
+        <button :disabled="tasksLoading" @click="loadGenerationTasks">刷新任务</button>
+      </div>
+      <p v-if="tasksLoading" class="muted">正在加载任务...</p>
+      <p v-else-if="!generationTasks.length" class="muted">暂无生成任务。</p>
+      <div v-else class="task-list">
+        <button
+          v-for="task in generationTasks"
+          :key="task.task_id"
+          class="task-row"
+          :class="{ active: currentGenerationTask?.task_id === task.task_id }"
+          @click="currentGenerationTask = task"
+        >
+          <span>
+            <strong>{{ task.strategy_id }}</strong>
+            <small>{{ task.base_date }} · {{ task.mode }} · {{ task.status }}</small>
+          </span>
+          <em>{{ task.plan_id || task.error_message || task.task_id }}</em>
+        </button>
+      </div>
+    </section>
+
     <div class="layout">
       <aside class="card plan-list">
         <h3>计划列表</h3>
@@ -341,6 +368,7 @@ import {
   getPortfolioPlanGenerationTask,
   getPortfolioStrategyEquity,
   getPortfolioStrategyRealtimeEquity,
+  listPortfolioPlanGenerationTasks,
   listPortfolioPlans,
   listPortfolioStrategies,
   rejectPortfolioPlan,
@@ -358,7 +386,9 @@ const executions = ref([])
 const loading = ref(false)
 const actionLoading = ref(false)
 const generateLoading = ref(false)
+const tasksLoading = ref(false)
 const currentGenerationTask = ref(null)
+const generationTasks = ref([])
 const message = ref('')
 const reviewComment = ref('')
 let realtimeTimer = null
@@ -484,6 +514,7 @@ async function refreshAll() {
   if (!generateForm.value.strategy_id && availableStrategies.value.length) {
     generateForm.value.strategy_id = availableStrategies.value[0].strategy_id
   }
+  await loadGenerationTasks()
   await loadPlans()
 }
 
@@ -511,6 +542,18 @@ async function loadPlans() {
   }
 }
 
+async function loadGenerationTasks() {
+  tasksLoading.value = true
+  try {
+    const res = await listPortfolioPlanGenerationTasks({ limit: 20 })
+    generationTasks.value = res.data || []
+  } catch (error) {
+    message.value = error.response?.data?.detail || error.message || '加载生成任务失败'
+  } finally {
+    tasksLoading.value = false
+  }
+}
+
 async function generatePlan() {
   if (!generateForm.value.strategy_id || !generateForm.value.base_date) return
   generateLoading.value = true
@@ -524,6 +567,7 @@ async function generatePlan() {
     }
     const res = await generatePortfolioPlan(payload)
     currentGenerationTask.value = res.data
+    await loadGenerationTasks()
     selectedStrategyId.value = generateForm.value.strategy_id
     statusFilter.value = ''
     message.value = `已提交生成任务 ${res.data?.task_id || ''}`
@@ -551,6 +595,7 @@ async function pollGenerationTask(taskId) {
         window.clearInterval(generationTaskTimer)
         generationTaskTimer = null
       }
+      await loadGenerationTasks()
       await loadPlans()
       if (res.data.status === 'completed' && res.data.plan_id) {
         await selectPlan(res.data.plan_id)
@@ -736,6 +781,49 @@ button.danger {
 
 .task-status {
   grid-column: 1 / -1;
+}
+
+.task-list-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-list-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-list {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.task-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.task-row.active {
+  background: #f3f4f6;
+}
+
+.task-row span,
+.task-row small,
+.task-row em {
+  display: block;
+}
+
+.task-row small,
+.task-row em {
+  color: #374151;
+  font-style: normal;
+  overflow-wrap: anywhere;
 }
 
 .plan-list {
