@@ -147,6 +147,7 @@
         <div>
           <h3>实盘执行监控</h3>
           <p class="muted">
+            <span v-if="selectedPlanId">当前 plan：{{ selectedPlanId }} · </span>
             signals {{ formatSummary(liveSignalStatusSummary) }} · executions {{ formatSummary(liveExecutionStatusSummary) }}
             <span v-if="latestTraderHeartbeat"> · quantTrader {{ latestTraderHeartbeat.status }} / {{ latestTraderHeartbeat.last_seen_at || '-' }}</span>
           </p>
@@ -178,7 +179,7 @@
           <p v-for="signal in liveSignals.slice(0, 5)" :key="signal.order_id" class="ops-line">
             <strong>{{ signal.status }}</strong>
             <span>{{ signal.action }} {{ signal.symbol }} x {{ signal.size }}</span>
-            <small>{{ signal.created_at || signal.timestamp || '-' }}</small>
+            <small>{{ signal.execution_time || signal.created_at || signal.timestamp || '-' }}</small>
           </p>
         </div>
         <div>
@@ -187,7 +188,7 @@
           <p v-for="execution in liveExecutions.slice(0, 5)" :key="`${execution.order_id}-${execution.status}-${execution.timestamp}`" class="ops-line">
             <strong>{{ execution.status }}</strong>
             <span>{{ execution.action }} {{ execution.symbol }} filled {{ execution.filled_size ?? '-' }}</span>
-            <small>{{ execution.timestamp || '-' }}</small>
+            <small>{{ execution.execution_time || execution.timestamp || '-' }}</small>
           </p>
         </div>
       </div>
@@ -608,6 +609,7 @@ import {
   generatePortfolioPlan,
   getPortfolioPlan,
   getPortfolioPlanExecutions,
+  getPortfolioPlanLiveExecutions,
   getPortfolioPlanGenerationTask,
   getPortfolioPlanGenerationWatermark,
   getPortfolioStrategyEquity,
@@ -822,6 +824,11 @@ function formatSummary(summary) {
   return entries.map(([status, count]) => `${status}: ${count}`).join(' / ')
 }
 
+function filterBySelectedAccount(rows) {
+  if (!selectedLiveAccountId.value) return rows
+  return rows.filter((row) => String(row.securities_account_id || '') === String(selectedLiveAccountId.value))
+}
+
 function blockerText(blocker) {
   const labels = {
     account_binding_missing: '账户绑定不完整',
@@ -917,10 +924,21 @@ async function loadLiveOps() {
   try {
     const params = { limit: 20 }
     if (selectedLiveAccountId.value) params.securities_account_id = selectedLiveAccountId.value
+    const heartbeatsPromise = listTraderHeartbeats({ limit: 20 })
+    if (selectedPlanId.value) {
+      const [planLiveRes, heartbeatsRes] = await Promise.all([
+        getPortfolioPlanLiveExecutions(selectedPlanId.value),
+        heartbeatsPromise,
+      ])
+      liveSignals.value = filterBySelectedAccount(planLiveRes.data?.signals || [])
+      liveExecutions.value = filterBySelectedAccount(planLiveRes.data?.executions || [])
+      traderHeartbeats.value = heartbeatsRes.data || []
+      return
+    }
     const [signalsRes, executionsRes, heartbeatsRes] = await Promise.all([
       listLiveTradeSignals(params),
       listLiveTradeExecutions(params),
-      listTraderHeartbeats({ limit: 20 }),
+      heartbeatsPromise,
     ])
     liveSignals.value = signalsRes.data || []
     liveExecutions.value = executionsRes.data || []
@@ -1018,6 +1036,7 @@ async function selectPlan(planId) {
   await loadEquity()
   await loadRealtimeEquity()
   await loadExecutions()
+  await loadLiveOps()
 }
 
 async function previewLivePublish() {

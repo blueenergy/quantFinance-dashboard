@@ -60,6 +60,10 @@ export function getPortfolioPlanExecutions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/executions`, method: 'get' })
 }
 
+export function getPortfolioPlanLiveExecutions(planId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/live-executions`, method: 'get' })
+}
+
 export function getPortfolioStrategyEquity(strategyId, params = {}) {
   return request({ url: `/portfolio-plans/strategies/${strategyId}/equity`, method: 'get', params })
 }
