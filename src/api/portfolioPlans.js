@@ -8,6 +8,18 @@ export function listPortfolioPlans(params = {}) {
   return request({ url: '/portfolio-plans/plans', method: 'get', params })
 }
 
+export function generatePortfolioPlan(data) {
+  return request({ url: '/portfolio-plans/plans/generate', method: 'post', data })
+}
+
+export function getPortfolioPlanGenerationTask(taskId) {
+  return request({ url: `/portfolio-plans/plans/generation-tasks/${taskId}`, method: 'get' })
+}
+
+export function listPortfolioPlanGenerationTasks(params = {}) {
+  return request({ url: '/portfolio-plans/plans/generation-tasks', method: 'get', params })
+}
+
 export function getPortfolioPlan(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}`, method: 'get' })
 }

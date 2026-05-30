@@ -33,6 +33,46 @@
       </label>
     </section>
 
+    <section class="card generate-card">
+      <div>
+        <h3>生成交易计划</h3>
+        <p class="muted">从当前可用 strategy 生成新的 plan，生成后仍需人工审核。</p>
+      </div>
+      <label>
+        策略
+        <select v-model="generateForm.strategy_id">
+          <option value="">请选择 strategy</option>
+          <option v-for="strategy in availableStrategies" :key="strategy.strategy_id" :value="strategy.strategy_id">
+            {{ strategy.name || strategy.strategy_id }}
+          </option>
+        </select>
+      </label>
+      <label>
+        base_date
+        <input v-model="generateForm.base_date" type="date" />
+      </label>
+      <label>
+        mode
+        <select v-model="generateForm.mode">
+          <option value="auto">auto</option>
+          <option value="monitor">monitor</option>
+          <option value="rebalance">rebalance</option>
+        </select>
+      </label>
+      <label class="inline-check">
+        <input v-model="generateForm.force" type="checkbox" />
+        force
+      </label>
+      <button :disabled="generateLoading || !generateForm.strategy_id || !generateForm.base_date" @click="generatePlan">
+        {{ generateLoading ? '提交中...' : '生成 plan' }}
+      </button>
+      <p v-if="currentGenerationTask" class="task-status">
+        任务 {{ currentGenerationTask.task_id }}：{{ currentGenerationTask.status }}
+        <span v-if="currentGenerationTask.plan_id"> / plan {{ currentGenerationTask.plan_id }}</span>
+        <span v-if="currentGenerationTask.error_message"> / {{ currentGenerationTask.error_message }}</span>
+      </p>
+    </section>
+
     <p v-if="message" class="message">{{ message }}</p>
 
     <div class="layout">
@@ -295,8 +335,10 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   approvePortfolioPlan,
+  generatePortfolioPlan,
   getPortfolioPlan,
   getPortfolioPlanExecutions,
+  getPortfolioPlanGenerationTask,
   getPortfolioStrategyEquity,
   getPortfolioStrategyRealtimeEquity,
   listPortfolioPlans,
@@ -315,9 +357,19 @@ const realtimeEquity = ref(null)
 const executions = ref([])
 const loading = ref(false)
 const actionLoading = ref(false)
+const generateLoading = ref(false)
+const currentGenerationTask = ref(null)
 const message = ref('')
 const reviewComment = ref('')
 let realtimeTimer = null
+let generationTaskTimer = null
+
+const generateForm = ref({
+  strategy_id: '',
+  base_date: todayInputDate(),
+  mode: 'auto',
+  force: false,
+})
 
 const executionStatus = computed(() => selectedDetail.value?.execution_status || {})
 
@@ -335,6 +387,8 @@ const realtimePriceBySymbol = computed(() => {
   const rows = realtimeEquity.value?.positions || []
   return Object.fromEntries(rows.map((row) => [row.symbol, row.realtime_price]))
 })
+
+const availableStrategies = computed(() => strategies.value.filter((strategy) => strategy.status !== 'disabled'))
 
 const equityRows = computed(() => {
   return [...equity.value]
@@ -419,8 +473,17 @@ function executionReturnPct(execution) {
   return signedPct(current / entry - 1)
 }
 
+function todayInputDate() {
+  const now = new Date()
+  const offset = now.getTimezoneOffset() * 60000
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10)
+}
+
 async function refreshAll() {
   await loadStrategies()
+  if (!generateForm.value.strategy_id && availableStrategies.value.length) {
+    generateForm.value.strategy_id = availableStrategies.value[0].strategy_id
+  }
   await loadPlans()
 }
 
@@ -445,6 +508,59 @@ async function loadPlans() {
     message.value = error.response?.data?.detail || error.message || '加载计划失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function generatePlan() {
+  if (!generateForm.value.strategy_id || !generateForm.value.base_date) return
+  generateLoading.value = true
+  message.value = ''
+  try {
+    const payload = {
+      strategy_id: generateForm.value.strategy_id,
+      base_date: generateForm.value.base_date,
+      mode: generateForm.value.mode,
+      force: generateForm.value.force,
+    }
+    const res = await generatePortfolioPlan(payload)
+    currentGenerationTask.value = res.data
+    selectedStrategyId.value = generateForm.value.strategy_id
+    statusFilter.value = ''
+    message.value = `已提交生成任务 ${res.data?.task_id || ''}`
+    startGenerationTaskPolling(res.data?.task_id)
+  } catch (error) {
+    message.value = error.response?.data?.detail || error.message || '生成计划失败'
+  } finally {
+    generateLoading.value = false
+  }
+}
+
+function startGenerationTaskPolling(taskId) {
+  if (!taskId) return
+  if (generationTaskTimer) window.clearInterval(generationTaskTimer)
+  pollGenerationTask(taskId)
+  generationTaskTimer = window.setInterval(() => pollGenerationTask(taskId), 3000)
+}
+
+async function pollGenerationTask(taskId) {
+  try {
+    const res = await getPortfolioPlanGenerationTask(taskId)
+    currentGenerationTask.value = res.data
+    if (['completed', 'failed'].includes(res.data?.status)) {
+      if (generationTaskTimer) {
+        window.clearInterval(generationTaskTimer)
+        generationTaskTimer = null
+      }
+      await loadPlans()
+      if (res.data.status === 'completed' && res.data.plan_id) {
+        await selectPlan(res.data.plan_id)
+        message.value = `已生成计划 ${res.data.plan_id}`
+      } else if (res.data.status === 'failed') {
+        message.value = res.data.error_message || '生成计划失败'
+      }
+    }
+  } catch (error) {
+    message.value = error.response?.data?.detail || error.message || '查询生成任务失败'
   }
 }
 
@@ -515,6 +631,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (realtimeTimer) window.clearInterval(realtimeTimer)
+  if (generationTaskTimer) window.clearInterval(generationTaskTimer)
 })
 </script>
 
@@ -562,6 +679,7 @@ p {
 }
 
 button,
+input,
 select,
 textarea {
   background: #fff;
@@ -593,6 +711,31 @@ button.danger {
   border-radius: 4px;
   color: #111827;
   padding: 14px;
+}
+
+.generate-card {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1.2fr) minmax(160px, 0.7fr) minmax(140px, 0.6fr) auto auto;
+}
+
+.generate-card label,
+.toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.generate-card .inline-check {
+  align-items: center;
+  flex-direction: row;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+.task-status {
+  grid-column: 1 / -1;
 }
 
 .plan-list {
