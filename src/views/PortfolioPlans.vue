@@ -101,27 +101,59 @@
       <div class="task-list-header">
         <div>
           <h3>最近生成任务</h3>
-          <p class="muted">展示当前用户最近提交的 plan generation task。</p>
+          <p class="muted">
+            {{ generationTasks.length }} 条最近任务
+            <span v-if="latestGenerationTask">
+              · 最新 {{ latestGenerationTask.status }} / {{ latestGenerationTask.strategy_id }} / {{ latestGenerationTask.base_date }}
+            </span>
+          </p>
         </div>
-        <button :disabled="tasksLoading" @click="loadGenerationTasks">刷新任务</button>
+        <div class="task-list-actions">
+          <button @click="generationTasksExpanded = !generationTasksExpanded">
+            {{ generationTasksExpanded ? '折叠' : '展开' }}
+          </button>
+          <button :disabled="tasksLoading" @click="loadGenerationTasks">刷新任务</button>
+        </div>
       </div>
-      <p v-if="tasksLoading" class="muted">正在加载任务...</p>
-      <p v-else-if="!generationTasks.length" class="muted">暂无生成任务。</p>
-      <div v-else class="task-list">
-        <button
-          v-for="task in generationTasks"
-          :key="task.task_id"
-          class="task-row"
-          :class="{ active: currentGenerationTask?.task_id === task.task_id }"
-          @click="currentGenerationTask = task"
-        >
-          <span>
-            <strong>{{ task.strategy_id }}</strong>
-            <small>{{ task.base_date }} · {{ task.mode }} · {{ task.status }}</small>
-          </span>
-          <em>{{ task.plan_id || task.error_message || task.task_id }}</em>
-        </button>
-      </div>
+      <template v-if="generationTasksExpanded">
+        <p v-if="tasksLoading" class="muted">正在加载任务...</p>
+        <p v-else-if="!generationTasks.length" class="muted">暂无生成任务。</p>
+        <div v-else class="table-wrap compact generation-task-table">
+          <table>
+            <thead>
+              <tr>
+                <th>created_at</th>
+                <th>status</th>
+                <th>strategy</th>
+                <th>base_date</th>
+                <th>mode</th>
+                <th>attempts</th>
+                <th>worker</th>
+                <th>plan/error</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="task in generationTasks"
+                :key="task.task_id"
+                :class="{ active: currentGenerationTask?.task_id === task.task_id }"
+                @click="currentGenerationTask = task"
+              >
+                <td>{{ task.created_at || '-' }}</td>
+                <td>{{ task.status || '-' }}</td>
+                <td class="truncate" :title="task.strategy_id">{{ task.strategy_id || '-' }}</td>
+                <td>{{ task.base_date || '-' }}</td>
+                <td>{{ task.mode || '-' }}</td>
+                <td>{{ task.attempts ?? 0 }}</td>
+                <td class="truncate" :title="task.worker_id">{{ task.worker_id || '-' }}</td>
+                <td class="truncate" :title="task.plan_id || task.error_message || task.task_id">
+                  {{ task.plan_id || task.error_message || task.task_id }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </template>
     </section>
 
     <div class="layout">
@@ -413,6 +445,7 @@ const tasksLoading = ref(false)
 const workerStatusLoading = ref(false)
 const currentGenerationTask = ref(null)
 const generationTasks = ref([])
+const generationTasksExpanded = ref(false)
 const workerStatuses = ref([])
 const message = ref('')
 const reviewComment = ref('')
@@ -444,6 +477,8 @@ const realtimePriceBySymbol = computed(() => {
 })
 
 const availableStrategies = computed(() => strategies.value.filter((strategy) => strategy.status !== 'disabled'))
+
+const latestGenerationTask = computed(() => generationTasks.value[0] || null)
 
 const equityRows = computed(() => {
   return [...equity.value]
@@ -835,34 +870,24 @@ button.danger {
   gap: 12px;
 }
 
-.task-list {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-}
-
-.task-row {
+.task-list-actions {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: left;
+  gap: 8px;
 }
 
-.task-row.active {
+.generation-task-table tbody tr {
+  cursor: pointer;
+}
+
+.generation-task-table tbody tr.active {
   background: #f3f4f6;
 }
 
-.task-row span,
-.task-row small,
-.task-row em {
-  display: block;
-}
-
-.task-row small,
-.task-row em {
-  color: #374151;
-  font-style: normal;
-  overflow-wrap: anywhere;
+.truncate {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .worker-status-card {
