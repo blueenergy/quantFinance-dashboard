@@ -20,6 +20,10 @@ export function listPortfolioPlanGenerationTasks(params = {}) {
   return request({ url: '/portfolio-plans/plans/generation-tasks', method: 'get', params })
 }
 
+export function listPortfolioWorkerStatus(params = {}) {
+  return request({ url: '/portfolio-plans/workers/status', method: 'get', params })
+}
+
 export function getPortfolioPlan(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}`, method: 'get' })
 }

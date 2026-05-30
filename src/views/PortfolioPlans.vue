@@ -75,6 +75,28 @@
 
     <p v-if="message" class="message">{{ message }}</p>
 
+    <section class="card worker-status-card">
+      <div class="task-list-header">
+        <div>
+          <h3>Plan 生成 Worker</h3>
+          <p class="muted">展示 quant-scorer 最近一次 heartbeat，辅助判断任务是否有人消费。</p>
+        </div>
+        <button :disabled="workerStatusLoading" @click="loadWorkerStatus">刷新 worker</button>
+      </div>
+      <p v-if="workerStatusLoading" class="muted">正在加载 worker 状态...</p>
+      <p v-else-if="!workerStatuses.length" class="muted">暂无 worker heartbeat。</p>
+      <div v-else class="worker-status-grid">
+        <div v-for="worker in workerStatuses" :key="worker.worker_id" class="worker-status-row">
+          <span>{{ worker.worker_id }}</span>
+          <strong>{{ worker.status }}</strong>
+          <small>last_seen: {{ worker.last_seen_at || '-' }}</small>
+          <small v-if="worker.current_task_id">current_task: {{ worker.current_task_id }}</small>
+          <small v-else-if="worker.last_task_id">last_task: {{ worker.last_task_id }}</small>
+          <small v-if="worker.last_message">{{ worker.last_message }}</small>
+        </div>
+      </div>
+    </section>
+
     <section class="card task-list-card">
       <div class="task-list-header">
         <div>
@@ -371,6 +393,7 @@ import {
   listPortfolioPlanGenerationTasks,
   listPortfolioPlans,
   listPortfolioStrategies,
+  listPortfolioWorkerStatus,
   rejectPortfolioPlan,
 } from '../api/portfolioPlans'
 
@@ -387,8 +410,10 @@ const loading = ref(false)
 const actionLoading = ref(false)
 const generateLoading = ref(false)
 const tasksLoading = ref(false)
+const workerStatusLoading = ref(false)
 const currentGenerationTask = ref(null)
 const generationTasks = ref([])
+const workerStatuses = ref([])
 const message = ref('')
 const reviewComment = ref('')
 let realtimeTimer = null
@@ -514,6 +539,7 @@ async function refreshAll() {
   if (!generateForm.value.strategy_id && availableStrategies.value.length) {
     generateForm.value.strategy_id = availableStrategies.value[0].strategy_id
   }
+  await loadWorkerStatus()
   await loadGenerationTasks()
   await loadPlans()
 }
@@ -551,6 +577,18 @@ async function loadGenerationTasks() {
     message.value = error.response?.data?.detail || error.message || '加载生成任务失败'
   } finally {
     tasksLoading.value = false
+  }
+}
+
+async function loadWorkerStatus() {
+  workerStatusLoading.value = true
+  try {
+    const res = await listPortfolioWorkerStatus({ worker_type: 'portfolio_plan_generator', limit: 20 })
+    workerStatuses.value = res.data || []
+  } catch (error) {
+    message.value = error.response?.data?.detail || error.message || '加载 worker 状态失败'
+  } finally {
+    workerStatusLoading.value = false
   }
 }
 
@@ -595,6 +633,7 @@ async function pollGenerationTask(taskId) {
         window.clearInterval(generationTaskTimer)
         generationTaskTimer = null
       }
+      await loadWorkerStatus()
       await loadGenerationTasks()
       await loadPlans()
       if (res.data.status === 'completed' && res.data.plan_id) {
@@ -823,6 +862,33 @@ button.danger {
 .task-row em {
   color: #374151;
   font-style: normal;
+  overflow-wrap: anywhere;
+}
+
+.worker-status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.worker-status-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.worker-status-row {
+  border: 1px solid #111827;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+}
+
+.worker-status-row span,
+.worker-status-row small {
+  color: #374151;
   overflow-wrap: anywhere;
 }
 
