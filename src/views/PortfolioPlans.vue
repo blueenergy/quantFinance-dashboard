@@ -757,11 +757,16 @@ onUnmounted(() => {
 <style scoped>
 .portfolio-plans {
   background: #fff;
+  box-sizing: border-box;
   color: #111827;
   display: flex;
   flex-direction: column;
   gap: 16px;
   line-height: 1.5;
+  margin: 0 auto;
+  max-width: 1440px;
+  padding: 24px;
+  width: 100%;
 }
 
 .page-header,
@@ -1121,5 +1126,11 @@ th {
 
 .table-wrap.compact table {
   min-width: 720px;
+}
+
+@media (max-width: 768px) {
+  .portfolio-plans {
+    padding: 12px;
+  }
 }
 </style>
