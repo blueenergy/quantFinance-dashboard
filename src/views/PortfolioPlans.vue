@@ -15,7 +15,7 @@
         <select v-model="selectedStrategyId" @change="loadPlans">
           <option value="">全部策略</option>
           <option v-for="strategy in strategies" :key="strategy.strategy_id" :value="strategy.strategy_id">
-            {{ strategy.name || strategy.strategy_id }}
+            {{ strategyOptionLabel(strategy) }}
           </option>
         </select>
       </label>
@@ -43,7 +43,7 @@
         <select v-model="generateForm.strategy_id" @change="loadPlanGenerationWatermark">
           <option value="">请选择 strategy</option>
           <option v-for="strategy in availableStrategies" :key="strategy.strategy_id" :value="strategy.strategy_id">
-            {{ strategy.name || strategy.strategy_id }}
+            {{ strategyOptionLabel(strategy) }}
           </option>
         </select>
       </label>
@@ -684,6 +684,15 @@ const realtimePriceBySymbol = computed(() => {
 })
 
 const availableStrategies = computed(() => strategies.value.filter((strategy) => strategy.status !== 'disabled'))
+
+function strategyOptionLabel(strategy) {
+  if (!strategy) return '-'
+  const base = strategy.name || strategy.strategy_id
+  const source = strategy.source === 'portfolio_research' ? ' · 组合研究' : ''
+  const topN = strategy.top_n ? ` · Top${strategy.top_n}` : ''
+  const rebalance = strategy.rebalance_days ? ` · ${strategy.rebalance_days}d` : ''
+  return `${base}${source}${topN}${rebalance}`
+}
 
 const latestGenerationTask = computed(() => generationTasks.value[0] || null)
 const latestTraderHeartbeat = computed(() => traderHeartbeats.value[0] || null)
