@@ -364,6 +364,47 @@
               <p v-if="livePublishBlockers.length" class="watermark-warning">
                 {{ livePublishBlockers.slice(0, 8).join(' / ') }}
               </p>
+              <div v-if="livePublishRiskRows.length" class="table-wrap compact risk-report-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>状态</th>
+                      <th>代码</th>
+                      <th>方向</th>
+                      <th>数量</th>
+                      <th>价格</th>
+                      <th>预估金额</th>
+                      <th>预检结果</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="item in livePublishRiskRows"
+                      :key="item.order_id || `${item.symbol}-${item.action}-${item.size}`"
+                      :class="{ blocked: item.blockers?.length }"
+                    >
+                      <td>{{ item.blockers?.length ? '阻断' : '通过' }}</td>
+                      <td>{{ item.symbol || '-' }}</td>
+                      <td>{{ item.action || '-' }}</td>
+                      <td>{{ item.size ?? '-' }}</td>
+                      <td>{{ num(item.price) }}</td>
+                      <td>{{ money(item.estimated_amount) }}</td>
+                      <td class="risk-reasons">
+                        <span v-if="!item.blockers?.length">可发布</span>
+                        <span
+                          v-for="blocker in item.blockers"
+                          v-else
+                          :key="`${item.order_id}-${blocker}`"
+                          class="risk-chip"
+                          :title="blocker"
+                        >
+                          {{ blockerText(blocker) }}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
               <div v-if="livePublishPreview.new_signals?.length" class="table-wrap compact">
                 <table>
                   <thead>
@@ -652,8 +693,9 @@ const liveAccountOptions = computed(() => securitiesAccounts.value.map((account)
 })))
 const livePublishBlockers = computed(() => {
   const items = livePublishPreview.value?.risk_report?.items || []
-  return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blocker}`))
+  return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
 })
+const livePublishRiskRows = computed(() => livePublishPreview.value?.risk_report?.items || [])
 
 const targetScoringRunText = computed(() => scoringRunText(planGenerationWatermark.value?.target_scoring_run))
 const latestCompletedScoringText = computed(() => scoringRunText(planGenerationWatermark.value?.latest_completed_scoring_run))
@@ -778,6 +820,23 @@ function formatSummary(summary) {
   const entries = Object.entries(summary)
   if (!entries.length) return '暂无'
   return entries.map(([status, count]) => `${status}: ${count}`).join(' / ')
+}
+
+function blockerText(blocker) {
+  const labels = {
+    account_binding_missing: '账户绑定不完整',
+    insufficient_available_position: '可卖持仓不足',
+    insufficient_cash: '可用资金不足',
+    limit_up: '已涨停',
+    live_trading_disabled: '账户未开启实盘',
+    max_daily_amount_exceeded: '超过单日交易金额上限',
+    max_order_amount_exceeded: '超过单笔金额上限',
+    max_position_pct_exceeded: '超过单票仓位上限',
+    missing_price: '缺少有效价格',
+    st_stock: 'ST 股票',
+    suspended: '停牌',
+  }
+  return labels[blocker] || blocker || '-'
 }
 
 async function refreshAll() {
@@ -1244,6 +1303,25 @@ button.danger {
   flex-direction: column;
   gap: 8px;
   padding: 10px;
+}
+
+.risk-report-table tr.blocked {
+  background: #fef2f2;
+}
+
+.risk-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 360px;
+  white-space: normal;
+}
+
+.risk-chip {
+  border: 1px solid #111827;
+  border-radius: 999px;
+  display: inline-block;
+  padding: 2px 8px;
 }
 
 .watermark-card {
