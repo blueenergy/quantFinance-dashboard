@@ -40,7 +40,7 @@
       </div>
       <label>
         策略
-        <select v-model="generateForm.strategy_id">
+        <select v-model="generateForm.strategy_id" @change="loadPlanGenerationWatermark">
           <option value="">请选择 strategy</option>
           <option v-for="strategy in availableStrategies" :key="strategy.strategy_id" :value="strategy.strategy_id">
             {{ strategy.name || strategy.strategy_id }}
@@ -49,7 +49,7 @@
       </label>
       <label>
         base_date
-        <input v-model="generateForm.base_date" type="date" />
+        <input v-model="generateForm.base_date" type="date" @change="loadPlanGenerationWatermark" />
       </label>
       <label>
         mode
@@ -74,6 +74,46 @@
     </section>
 
     <p v-if="message" class="message">{{ message }}</p>
+
+    <section class="card watermark-card">
+      <div class="task-list-header">
+        <div>
+          <h3>Plan 生成数据水位</h3>
+          <p class="muted">确认当前 base_date 对应评分数据是否可用于生成 plan。</p>
+        </div>
+        <button :disabled="watermarkLoading || !generateForm.strategy_id" @click="loadPlanGenerationWatermark">
+          刷新水位
+        </button>
+      </div>
+      <p v-if="watermarkLoading" class="muted">正在加载数据水位...</p>
+      <p v-else-if="!planGenerationWatermark" class="muted">请选择 strategy 后查看评分水位。</p>
+      <template v-else>
+        <div class="watermark-grid">
+          <div>
+            <span>universe</span>
+            <strong>{{ planGenerationWatermark.universe_index || '-' }}</strong>
+          </div>
+          <div>
+            <span>base_date 评分</span>
+            <strong>{{ targetScoringRunText }}</strong>
+            <small v-if="planGenerationWatermark.target_scoring_run?.updated_at">
+              updated {{ planGenerationWatermark.target_scoring_run.updated_at }}
+            </small>
+          </div>
+          <div>
+            <span>最近完成评分</span>
+            <strong>{{ latestCompletedScoringText }}</strong>
+          </div>
+          <div>
+            <span>最近评分 run</span>
+            <strong>{{ latestScoringRunText }}</strong>
+          </div>
+        </div>
+        <p v-if="planGenerationWatermark.target_is_running" class="watermark-warning">
+          当前 base_date 的评分仍在运行，plan generation worker 会等待，避免使用半成品评分。
+        </p>
+      </template>
+    </section>
 
     <section class="card worker-status-card">
       <div class="task-list-header">
@@ -420,6 +460,7 @@ import {
   getPortfolioPlan,
   getPortfolioPlanExecutions,
   getPortfolioPlanGenerationTask,
+  getPortfolioPlanGenerationWatermark,
   getPortfolioStrategyEquity,
   getPortfolioStrategyRealtimeEquity,
   listPortfolioPlanGenerationTasks,
@@ -442,10 +483,12 @@ const loading = ref(false)
 const actionLoading = ref(false)
 const generateLoading = ref(false)
 const tasksLoading = ref(false)
+const watermarkLoading = ref(false)
 const workerStatusLoading = ref(false)
 const currentGenerationTask = ref(null)
 const generationTasks = ref([])
 const generationTasksExpanded = ref(false)
+const planGenerationWatermark = ref(null)
 const workerStatuses = ref([])
 const message = ref('')
 const reviewComment = ref('')
@@ -479,6 +522,10 @@ const realtimePriceBySymbol = computed(() => {
 const availableStrategies = computed(() => strategies.value.filter((strategy) => strategy.status !== 'disabled'))
 
 const latestGenerationTask = computed(() => generationTasks.value[0] || null)
+
+const targetScoringRunText = computed(() => scoringRunText(planGenerationWatermark.value?.target_scoring_run))
+const latestCompletedScoringText = computed(() => scoringRunText(planGenerationWatermark.value?.latest_completed_scoring_run))
+const latestScoringRunText = computed(() => scoringRunText(planGenerationWatermark.value?.latest_scoring_run))
 
 const equityRows = computed(() => {
   return [...equity.value]
@@ -569,11 +616,19 @@ function todayInputDate() {
   return new Date(now.getTime() - offset).toISOString().slice(0, 10)
 }
 
+function scoringRunText(run) {
+  if (!run) return '暂无记录'
+  const scoreDate = run.score_date || '-'
+  const status = run.status || 'unknown'
+  return `${scoreDate} / ${status}`
+}
+
 async function refreshAll() {
   await loadStrategies()
   if (!generateForm.value.strategy_id && availableStrategies.value.length) {
     generateForm.value.strategy_id = availableStrategies.value[0].strategy_id
   }
+  await loadPlanGenerationWatermark()
   await loadWorkerStatus()
   await loadGenerationTasks()
   await loadPlans()
@@ -627,6 +682,25 @@ async function loadWorkerStatus() {
   }
 }
 
+async function loadPlanGenerationWatermark() {
+  if (!generateForm.value.strategy_id) {
+    planGenerationWatermark.value = null
+    return
+  }
+  watermarkLoading.value = true
+  try {
+    const res = await getPortfolioPlanGenerationWatermark({
+      strategy_id: generateForm.value.strategy_id,
+      base_date: generateForm.value.base_date,
+    })
+    planGenerationWatermark.value = res.data || null
+  } catch (error) {
+    message.value = error.response?.data?.detail || error.message || '加载数据水位失败'
+  } finally {
+    watermarkLoading.value = false
+  }
+}
+
 async function generatePlan() {
   if (!generateForm.value.strategy_id || !generateForm.value.base_date) return
   generateLoading.value = true
@@ -640,6 +714,7 @@ async function generatePlan() {
     }
     const res = await generatePortfolioPlan(payload)
     currentGenerationTask.value = res.data
+    await loadPlanGenerationWatermark()
     await loadGenerationTasks()
     selectedStrategyId.value = generateForm.value.strategy_id
     statusFilter.value = ''
@@ -668,6 +743,7 @@ async function pollGenerationTask(taskId) {
         window.clearInterval(generationTaskTimer)
         generationTaskTimer = null
       }
+      await loadPlanGenerationWatermark()
       await loadWorkerStatus()
       await loadGenerationTasks()
       await loadPlans()
@@ -899,6 +975,39 @@ button.danger {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.watermark-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.watermark-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.watermark-grid div {
+  border: 1px solid #111827;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+}
+
+.watermark-grid span,
+.watermark-grid small {
+  color: #374151;
+}
+
+.watermark-warning {
+  background: #f3f4f6;
+  border: 1px solid #111827;
+  border-radius: 4px;
+  padding: 10px;
 }
 
 .worker-status-grid {

@@ -24,6 +24,10 @@ export function listPortfolioWorkerStatus(params = {}) {
   return request({ url: '/portfolio-plans/workers/status', method: 'get', params })
 }
 
+export function getPortfolioPlanGenerationWatermark(params = {}) {
+  return request({ url: '/portfolio-plans/data-watermarks/plan-generation', method: 'get', params })
+}
+
 export function getPortfolioPlan(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}`, method: 'get' })
 }
