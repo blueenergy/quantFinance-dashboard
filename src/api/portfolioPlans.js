@@ -4,6 +4,10 @@ export function listPortfolioStrategies(params = {}) {
   return request({ url: '/portfolio-plans/strategies', method: 'get', params })
 }
 
+export function listPortfolioParameterPresets(params = {}) {
+  return request({ url: '/portfolio-plans/parameter-presets', method: 'get', params })
+}
+
 export function listPortfolioPlans(params = {}) {
   return request({ url: '/portfolio-plans/plans', method: 'get', params })
 }

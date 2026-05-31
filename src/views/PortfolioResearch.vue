@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">Portfolio Research</p>
         <h2>组合研究</h2>
-        <p class="subtitle">用生产数据复跑组合策略研究，筛选可行参数并发布为组合交易计划可消费的策略。</p>
+        <p class="subtitle">用生产数据复跑组合策略研究，筛选可行参数并保存为组合交易计划可消费的参数预设。</p>
       </div>
       <button :disabled="loading" @click="refreshAll">刷新</button>
     </header>
@@ -132,8 +132,8 @@
               <strong>{{ selectedJob.data_watermark?.dataset_rows ?? '-' }}</strong>
             </div>
             <div>
-              <span>已发布</span>
-              <strong>{{ resultDetail?.published_strategy_id || '-' }}</strong>
+              <span>已保存预设</span>
+              <strong>{{ resultDetail?.published_preset_id || '-' }}</strong>
             </div>
           </div>
 
@@ -144,11 +144,11 @@
                 <p class="muted">{{ candidateConfig.name || candidateConfig.strategy_id }}</p>
               </div>
               <div class="actions">
-                <button :disabled="publishLoading || !!resultDetail?.published_strategy_id" @click="publish('draft')">
-                  发布为 draft
+                <button :disabled="publishLoading || !!resultDetail?.published_preset_id" @click="publish('draft')">
+                  保存为 draft 预设
                 </button>
-                <button :disabled="publishLoading || !!resultDetail?.published_strategy_id" @click="publish('enabled')">
-                  发布并启用
+                <button :disabled="publishLoading || !!resultDetail?.published_preset_id" @click="publish('enabled')">
+                  保存并启用预设
                 </button>
               </div>
             </div>
@@ -374,7 +374,7 @@ async function publish(status) {
   errorMessage.value = ''
   try {
     const res = await publishPortfolioResearchResult(resultDetail.value.result_id, { status })
-    message.value = `已发布策略 ${res.data?.strategy?.strategy_id}`
+    message.value = `已保存参数预设 ${res.data?.preset?.preset_id}`
     await selectJob(selectedJobId.value)
     await loadJobs()
   } catch (err) {

@@ -40,7 +40,7 @@
       </div>
       <label>
         策略
-        <select v-model="generateForm.strategy_id" @change="loadPlanGenerationWatermark">
+        <select v-model="generateForm.strategy_id" @change="onGenerateStrategyChange">
           <option value="">请选择 strategy</option>
           <option v-for="strategy in availableStrategies" :key="strategy.strategy_id" :value="strategy.strategy_id">
             {{ strategyOptionLabel(strategy) }}
@@ -76,16 +76,82 @@
       <div v-if="selectedGenerateStrategy" class="strategy-param-card">
         <div class="strategy-param-header">
           <div>
-            <strong>策略固定参数</strong>
-            <p class="muted">这些参数来自策略配置，生成 plan 时不可改；只有 initial capital override 会覆盖本次初始本金。</p>
+            <strong>本次 plan 参数</strong>
+            <p class="muted">先选择策略模板，再选择推荐预设或手动调整参数；系统会把本次参数快照写入 plan。</p>
           </div>
-          <span class="editable-badge">可改：initial capital override</span>
+          <span class="editable-badge">内部唯一键：params_hash</span>
         </div>
-        <div class="strategy-param-grid">
-          <div v-for="row in strategyParamRows" :key="row.label">
-            <span>{{ row.label }}</span>
-            <strong>{{ row.value }}</strong>
-          </div>
+        <label>
+          参数预设
+          <select v-model="generateForm.preset_id" @change="applySelectedPreset">
+            <option value="">自定义参数</option>
+            <option v-for="preset in parameterPresets" :key="preset.preset_id" :value="preset.preset_id">
+              {{ presetLabel(preset) }}
+            </option>
+          </select>
+        </label>
+        <div v-if="selectedPreset" class="preset-evidence">
+          <strong>推荐依据</strong>
+          <span>区间：{{ selectedPreset.data_window?.start_date || '-' }} → {{ selectedPreset.data_window?.end_date || '-' }}</span>
+          <span>超额：{{ pct(selectedPreset.backtest_summary?.index_excess_cumulative_return) }}</span>
+          <span>Sharpe：{{ num(selectedPreset.backtest_summary?.sharpe) }}</span>
+          <span>回撤：{{ pct(selectedPreset.backtest_summary?.max_drawdown) }}</span>
+        </div>
+        <div class="strategy-param-grid editable">
+          <label>
+            universe
+            <select v-model="generateForm.params.universe_index">
+              <option v-for="universe in universeOptions" :key="universe.value" :value="universe.value">
+                {{ universe.label }}
+              </option>
+            </select>
+          </label>
+          <label>
+            top_n
+            <input v-model.number="generateForm.params.top_n" type="number" min="1" />
+          </label>
+          <label>
+            rebalance_days
+            <input v-model.number="generateForm.params.rebalance_days" type="number" min="1" />
+          </label>
+          <label>
+            construction_mode
+            <select v-model="generateForm.params.construction_mode">
+              <option value="top_n">top_n</option>
+              <option value="industry_capped">industry_capped</option>
+              <option value="industry_neutral">industry_neutral</option>
+            </select>
+          </label>
+          <label>
+            growth_weight
+            <input
+              :value="generateForm.params.growth_weight"
+              type="number"
+              min="0"
+              max="1"
+              step="0.05"
+              @input="setGrowthWeight($event.target.value)"
+            />
+          </label>
+          <label>
+            cycle_weight
+            <input
+              :value="generateForm.params.cycle_weight"
+              type="number"
+              min="0"
+              max="1"
+              step="0.05"
+              @input="setCycleWeight($event.target.value)"
+            />
+          </label>
+          <label>
+            industry cap
+            <input v-model.number="generateForm.params.max_industry_weight" type="number" min="0" max="1" step="0.05" />
+          </label>
+          <label>
+            cash_buffer
+            <input v-model.number="generateForm.params.cash_buffer" type="number" min="0" max="1" step="0.01" />
+          </label>
         </div>
       </div>
       <button :disabled="generateLoading || !generateForm.strategy_id || !generateForm.base_date" @click="generatePlan">
@@ -639,6 +705,7 @@ import {
   getPortfolioPlanGenerationWatermark,
   getPortfolioStrategyEquity,
   getPortfolioStrategyRealtimeEquity,
+  listPortfolioParameterPresets,
   listLiveTradeExecutions,
   listLiveTradeSignals,
   listPortfolioPlanGenerationTasks,
@@ -652,6 +719,7 @@ import {
 import { getSecuritiesAccounts } from '../api/trader'
 
 const strategies = ref([])
+const parameterPresets = ref([])
 const plans = ref([])
 const selectedStrategyId = ref('')
 const statusFilter = ref('')
@@ -690,6 +758,8 @@ const generateForm = ref({
   mode: 'auto',
   force: false,
   initial_capital_override: null,
+  preset_id: '',
+  params: {},
 })
 
 const executionStatus = computed(() => selectedDetail.value?.execution_status || {})
@@ -713,24 +783,14 @@ const availableStrategies = computed(() => strategies.value.filter((strategy) =>
 const selectedGenerateStrategy = computed(() => (
   strategies.value.find((strategy) => strategy.strategy_id === generateForm.value.strategy_id) || null
 ))
-const strategyParamRows = computed(() => {
-  const strategy = selectedGenerateStrategy.value
-  if (!strategy) return []
-  return [
-    { label: 'universe', value: strategy.universe_index || '-' },
-    { label: 'status', value: strategy.status || '-' },
-    { label: 'source', value: strategy.source === 'portfolio_research' ? '组合研究' : (strategy.source || '-') },
-    { label: 'top_n', value: strategy.top_n ?? '-' },
-    { label: 'rebalance_days', value: strategy.rebalance_days ? `${strategy.rebalance_days}d` : '-' },
-    { label: 'construction_mode', value: strategy.construction_mode || '-' },
-    { label: 'growth_weight', value: pct(strategy.growth_weight) },
-    { label: 'cycle_weight', value: pct(strategy.cycle_weight) },
-    { label: 'industry cap', value: pct(strategy.max_industry_weight) },
-    { label: 'cash_buffer', value: pct(strategy.cash_buffer) },
-    { label: 'lot_size', value: strategy.lot_size ?? '-' },
-    { label: 'default initial capital', value: money(strategy.initial_capital) },
-  ]
-})
+const selectedPreset = computed(() => parameterPresets.value.find((preset) => preset.preset_id === generateForm.value.preset_id) || null)
+const universeOptions = [
+  { value: 'hs300', label: 'hs300 - 沪深300' },
+  { value: 'a500', label: 'a500 - 中证A500' },
+  { value: 'csi500', label: 'csi500 - 中证500' },
+  { value: 'csi1000', label: 'csi1000 - 中证1000' },
+  { value: 'star50', label: 'star50 - 科创50' },
+]
 
 function strategyOptionLabel(strategy) {
   if (!strategy) return '-'
@@ -739,6 +799,83 @@ function strategyOptionLabel(strategy) {
   const topN = strategy.top_n ? ` · Top${strategy.top_n}` : ''
   const rebalance = strategy.rebalance_days ? ` · ${strategy.rebalance_days}d` : ''
   return `${base}${source}${topN}${rebalance}`
+}
+
+function planParamsFromStrategy(strategy) {
+  if (!strategy) return {}
+  const params = {
+    universe_index: strategy.universe_index || '',
+    top_n: strategy.top_n ?? null,
+    rebalance_days: strategy.rebalance_days ?? null,
+    construction_mode: strategy.construction_mode || 'top_n',
+    growth_weight: strategy.growth_weight ?? null,
+    cycle_weight: strategy.cycle_weight ?? null,
+    max_industry_weight: strategy.max_industry_weight ?? null,
+    cash_buffer: strategy.cash_buffer ?? 0.03,
+  }
+  return normalizePlanParams(params)
+}
+
+function clampWeight(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return 0
+  return Math.min(1, Math.max(0, numeric))
+}
+
+function roundWeight(value) {
+  return Number(clampWeight(value).toFixed(4))
+}
+
+function normalizePlanParams(params) {
+  const next = { ...params }
+  if (!universeOptions.some((option) => option.value === next.universe_index)) {
+    next.universe_index = universeOptions[0].value
+  }
+  const growth = Number.isFinite(Number(next.growth_weight)) ? clampWeight(next.growth_weight) : 0.3
+  next.growth_weight = roundWeight(growth)
+  next.cycle_weight = roundWeight(1 - growth)
+  return next
+}
+
+function setGrowthWeight(value) {
+  const growth = roundWeight(value)
+  generateForm.value.params = {
+    ...generateForm.value.params,
+    growth_weight: growth,
+    cycle_weight: roundWeight(1 - growth),
+  }
+}
+
+function setCycleWeight(value) {
+  const cycle = roundWeight(value)
+  generateForm.value.params = {
+    ...generateForm.value.params,
+    cycle_weight: cycle,
+    growth_weight: roundWeight(1 - cycle),
+  }
+}
+
+function presetLabel(preset) {
+  const status = preset.status ? `${preset.status} · ` : ''
+  const source = preset.source === 'portfolio_research' ? '组合研究 · ' : ''
+  return `${status}${source}${preset.name || preset.preset_id}`
+}
+
+function syncGenerateParamsFromStrategy() {
+  generateForm.value.params = planParamsFromStrategy(selectedGenerateStrategy.value)
+}
+
+async function onGenerateStrategyChange() {
+  generateForm.value.preset_id = ''
+  syncGenerateParamsFromStrategy()
+  await loadParameterPresets()
+  await loadPlanGenerationWatermark()
+}
+
+function applySelectedPreset() {
+  const base = planParamsFromStrategy(selectedGenerateStrategy.value)
+  const presetParams = selectedPreset.value?.params || {}
+  generateForm.value.params = normalizePlanParams({ ...base, ...presetParams })
 }
 
 const latestGenerationTask = computed(() => generationTasks.value[0] || null)
@@ -908,6 +1045,8 @@ async function refreshAll() {
   if (!generateForm.value.strategy_id && availableStrategies.value.length) {
     generateForm.value.strategy_id = availableStrategies.value[0].strategy_id
   }
+  syncGenerateParamsFromStrategy()
+  await loadParameterPresets()
   await loadPlanGenerationWatermark()
   await loadWorkerStatus()
   await loadLiveOps()
@@ -930,6 +1069,19 @@ async function loadSecuritiesAccounts() {
 async function loadStrategies() {
   const res = await listPortfolioStrategies()
   strategies.value = res.data || []
+}
+
+async function loadParameterPresets() {
+  if (!generateForm.value.strategy_id) {
+    parameterPresets.value = []
+    return
+  }
+  try {
+    const res = await listPortfolioParameterPresets({ strategy_template_id: generateForm.value.strategy_id })
+    parameterPresets.value = res.data || []
+  } catch (error) {
+    parameterPresets.value = []
+  }
 }
 
 async function loadPlans() {
@@ -1035,6 +1187,8 @@ async function generatePlan() {
       base_date: generateForm.value.base_date,
       mode: generateForm.value.mode,
       force: generateForm.value.force,
+      preset_id: generateForm.value.preset_id || null,
+      params_override: normalizePlanParams(generateForm.value.params),
     }
     const overrideCapital = Number(generateForm.value.initial_capital_override)
     if (Number.isFinite(overrideCapital) && overrideCapital > 0) {
@@ -1345,11 +1499,35 @@ button.danger {
   padding: 8px;
 }
 
+.strategy-param-grid.editable label {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+}
+
 .strategy-param-grid span {
   color: #6b7280;
   display: block;
   font-size: 12px;
   margin-bottom: 4px;
+}
+
+.preset-evidence {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 8px 0 10px;
+}
+
+.preset-evidence span {
+  color: #4b5563;
+  font-size: 12px;
 }
 
 .strategy-param-grid strong {
