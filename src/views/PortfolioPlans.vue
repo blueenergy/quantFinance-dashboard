@@ -81,10 +81,20 @@
         </label>
         <div v-if="selectedPreset" class="preset-evidence">
           <strong>推荐依据</strong>
+          <span>evidence：{{ selectedPreset.evidence_count ?? presetEvidenceRows.length }} 条</span>
           <span>区间：{{ selectedPreset.data_window?.start_date || '-' }} → {{ selectedPreset.data_window?.end_date || '-' }}</span>
           <span>超额：{{ pct(selectedPreset.backtest_summary?.index_excess_cumulative_return) }}</span>
           <span>Sharpe：{{ num(selectedPreset.backtest_summary?.sharpe) }}</span>
           <span>回撤：{{ pct(selectedPreset.backtest_summary?.max_drawdown) }}</span>
+        </div>
+        <div v-if="presetEvidenceRows.length" class="preset-evidence-list">
+          <strong>Evidence 明细</strong>
+          <p v-for="evidence in presetEvidenceRows" :key="evidence.research_result_id || evidence.research_job_id">
+            <span>{{ evidence.data_window?.start_date || '-' }} → {{ evidence.data_window?.end_date || '-' }}</span>
+            <span>超额 {{ pct(evidence.best_row?.index_excess_cumulative_return) }}</span>
+            <span>Sharpe {{ num(evidence.best_row?.sharpe) }}</span>
+            <span>回撤 {{ pct(evidence.best_row?.max_drawdown) }}</span>
+          </p>
         </div>
         <div class="strategy-param-grid editable">
           <label>
@@ -783,6 +793,11 @@ const selectedGenerateStrategy = computed(() => (
   strategies.value.find((strategy) => strategy.strategy_template_id === generateForm.value.strategy_template_id) || null
 ))
 const selectedPreset = computed(() => parameterPresets.value.find((preset) => preset.preset_id === generateForm.value.preset_id) || null)
+const presetEvidenceRows = computed(() => {
+  const rows = selectedPreset.value?.evidence || []
+  if (!Array.isArray(rows)) return []
+  return rows.slice(-5).reverse()
+})
 const universeOptions = [
   { value: 'hs300', label: 'hs300 - 沪深300' },
   { value: 'a500', label: 'a500 - 中证A500' },
@@ -861,7 +876,8 @@ function setCycleWeight(value) {
 function presetLabel(preset) {
   const defaultText = preset.is_default ? '默认 · ' : ''
   const source = preset.source === 'portfolio_research' ? '组合研究 · ' : ''
-  return `${defaultText}${source}${preset.name || preset.preset_id}`
+  const evidenceText = preset.evidence_count ? ` · evidence ${preset.evidence_count}` : ''
+  return `${defaultText}${source}${preset.name || preset.preset_id}${evidenceText}`
 }
 
 function syncGenerateParamsFromStrategy() {
@@ -1580,6 +1596,31 @@ button.danger {
 }
 
 .preset-evidence span {
+  color: #4b5563;
+  font-size: 12px;
+}
+
+.preset-evidence-list {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+}
+
+.preset-evidence-list strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.preset-evidence-list p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 4px 0;
+}
+
+.preset-evidence-list span {
   color: #4b5563;
   font-size: 12px;
 }

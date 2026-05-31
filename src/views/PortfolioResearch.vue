@@ -124,8 +124,12 @@
 
           <div class="info-grid">
             <div>
-              <span>数据水位</span>
+              <span>评分数据水位</span>
               <strong>{{ selectedJob.data_watermark?.stock_scores_max_date || '-' }}</strong>
+            </div>
+            <div>
+              <span>可回测收益水位</span>
+              <strong>{{ selectedJob.data_watermark?.backtest_score_max_date || selectedJob.data_watermark?.stock_scores_max_date || '-' }}</strong>
             </div>
             <div>
               <span>dataset rows</span>
@@ -133,7 +137,11 @@
             </div>
             <div>
               <span>已保存预设</span>
-              <strong>{{ resultDetail?.published_preset_id || '-' }}</strong>
+              <strong>{{ publishedPresetLabel }}</strong>
+            </div>
+            <div>
+              <span>发布动作</span>
+              <strong>{{ publishActionLabel }}</strong>
             </div>
           </div>
 
@@ -158,14 +166,17 @@
                 <p class="muted">{{ candidateConfig.name || candidateConfig.preset_id }}</p>
               </div>
               <div class="actions">
-                <button :disabled="publishLoading || !!resultDetail?.published_preset_id" @click="publish('draft')">
+                <button :disabled="publishLoading || hasPublishedPreset" @click="publish('draft')">
                   保存为 draft 预设
                 </button>
-                <button :disabled="publishLoading || !!resultDetail?.published_preset_id" @click="publish('enabled')">
+                <button :disabled="publishLoading || hasPublishedPreset" @click="publish('enabled')">
                   保存并启用预设
                 </button>
               </div>
             </div>
+            <p v-if="hasPublishedPreset" class="muted">
+              该研究结果已经保存为参数预设，不能重复启用。
+            </p>
             <div class="config-grid">
               <span><strong>top_n</strong>{{ candidateConfig.top_n ?? '-' }}</span>
               <span><strong>rebalance</strong>{{ candidateConfig.rebalance_days ? `${candidateConfig.rebalance_days}d` : '-' }}</span>
@@ -199,8 +210,15 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(row, idx) in resultRows.slice(0, 30)" :key="`${row.score_variant}-${row.variant}-${row.top_n}-${idx}`">
-                    <td>{{ idx + 1 }}</td>
+                  <tr
+                    v-for="(row, idx) in resultRows.slice(0, 30)"
+                    :key="`${row.score_variant}-${row.variant}-${row.top_n}-${idx}`"
+                    :class="{ 'selected-result-row': isSelectedResultRow(row, idx) }"
+                  >
+                    <td>
+                      {{ idx + 1 }}
+                      <span v-if="isSelectedResultRow(row, idx)" class="selected-badge">已选</span>
+                    </td>
                     <td>{{ row.score_variant || row.score_column || '-' }}</td>
                     <td>{{ row.variant || '-' }}</td>
                     <td>{{ row.top_n }}</td>
@@ -270,6 +288,21 @@ const form = ref({
 const resultRows = computed(() => resultDetail.value?.rows || [])
 const candidateConfig = computed(() => resultDetail.value?.candidate_strategy_config || selectedJob.value?.candidate_strategy_config)
 const researchParamRows = computed(() => buildResearchParamRows(selectedJob.value))
+const publishedPresetId = computed(() => resultDetail.value?.published_preset_id || selectedJob.value?.published_preset_id || '')
+const publishedStatus = computed(() => resultDetail.value?.published_status || selectedJob.value?.published_status || '')
+const publishAction = computed(() => resultDetail.value?.publish_action || selectedJob.value?.publish_action || '')
+const hasPublishedPreset = computed(() => Boolean(publishedPresetId.value))
+const publishedPresetLabel = computed(() => {
+  if (!publishedPresetId.value) return '-'
+  return publishedStatus.value ? `${publishedPresetId.value} (${publishedStatus.value})` : publishedPresetId.value
+})
+const publishActionLabel = computed(() => {
+  const labels = {
+    preset_published: '新建 preset',
+    evidence_attached: '作为 evidence 附加',
+  }
+  return labels[publishAction.value] || '-'
+})
 
 function universeName(value) {
   const option = universeOptions.find((item) => item.value === value)
@@ -357,6 +390,10 @@ function buildResearchParamRows(job) {
   return rows.map((row) => ({ ...row, value: row.value || '-' }))
 }
 
+function isSelectedResultRow(row, idx) {
+  return idx === 0
+}
+
 async function loadJobs() {
   loading.value = true
   errorMessage.value = ''
@@ -428,7 +465,11 @@ async function publish(status) {
   errorMessage.value = ''
   try {
     const res = await publishPortfolioResearchResult(resultDetail.value.result_id, { status })
-    message.value = `已保存参数预设 ${res.data?.preset?.preset_id}`
+    if (res.data?.attached_to_existing) {
+      message.value = `参数已存在，已作为 evidence 附加到预设 ${res.data?.preset?.preset_id}`
+    } else {
+      message.value = `已保存参数预设 ${res.data?.preset?.preset_id}`
+    }
     await selectJob(selectedJobId.value)
     await loadJobs()
   } catch (err) {
@@ -705,6 +746,27 @@ td:nth-child(3) {
 th {
   background: #f8fafc;
   color: #475569;
+}
+
+.selected-result-row td {
+  background: #fff7ed;
+  border-bottom-color: #fed7aa;
+}
+
+.selected-result-row td:first-child {
+  color: #c2410c;
+  font-weight: 800;
+}
+
+.selected-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #f97316;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .message {
