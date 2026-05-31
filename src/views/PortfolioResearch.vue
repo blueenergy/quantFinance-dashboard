@@ -17,14 +17,14 @@
       <div class="form-grid">
         <label>
           名称
-          <input v-model="form.name" />
+          <input v-model="form.name" @input="nameTouched = true" />
         </label>
         <label>
           universe
-          <select v-model="form.universe_index">
-            <option value="csi1000">csi1000</option>
-            <option value="csi500">csi500</option>
-            <option value="csi300">csi300</option>
+          <select v-model="form.universe_index" @change="syncDefaultName">
+            <option v-for="universe in universeOptions" :key="universe.value" :value="universe.value">
+              {{ universe.label }}
+            </option>
           </select>
         </label>
         <label>
@@ -216,6 +216,7 @@ const loading = ref(false)
 const submitting = ref(false)
 const publishLoading = ref(false)
 const artifactLoading = ref(false)
+const nameTouched = ref(false)
 const jobs = ref([])
 const selectedJob = ref(null)
 const resultDetail = ref(null)
@@ -224,8 +225,16 @@ const statusFilter = ref('')
 const message = ref('')
 const errorMessage = ref('')
 
+const universeOptions = [
+  { value: 'hs300', label: 'hs300 - 沪深300' },
+  { value: 'a500', label: 'a500 - 中证A500' },
+  { value: 'csi500', label: 'csi500 - 中证500' },
+  { value: 'csi1000', label: 'csi1000 - 中证1000' },
+  { value: 'star50', label: 'star50 - 科创50' },
+]
+
 const form = ref({
-  name: 'CSI1000 growth-cycle research',
+  name: defaultResearchName('csi1000'),
   universe_index: 'csi1000',
   start_date: '2023-01-01',
   end_date: todayInputDate(),
@@ -239,6 +248,20 @@ const form = ref({
 
 const resultRows = computed(() => resultDetail.value?.rows || [])
 const candidateConfig = computed(() => resultDetail.value?.candidate_strategy_config || selectedJob.value?.candidate_strategy_config)
+
+function universeName(value) {
+  const option = universeOptions.find((item) => item.value === value)
+  return option?.label || value || 'universe'
+}
+
+function defaultResearchName(universeValue) {
+  return `${universeName(universeValue)} growth-cycle research`
+}
+
+function syncDefaultName() {
+  if (nameTouched.value) return
+  form.value.name = defaultResearchName(form.value.universe_index)
+}
 
 function todayInputDate() {
   return new Date().toISOString().slice(0, 10)
@@ -313,6 +336,7 @@ async function createJob() {
   try {
     const payload = {
       ...form.value,
+      name: form.value.name || defaultResearchName(form.value.universe_index),
       growth_cycle_weights: parseCsvNumbers(form.value.growth_cycle_weights, String),
       top_n_values: parseCsvNumbers(form.value.top_n_values, Number),
       active_caps: parseCsvNumbers(form.value.active_caps, Number),
