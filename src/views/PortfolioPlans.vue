@@ -14,7 +14,7 @@
         策略
         <select v-model="selectedStrategyId" @change="loadPlans">
           <option value="">全部策略</option>
-          <option v-for="strategy in strategies" :key="strategy.strategy_id" :value="strategy.strategy_id">
+          <option v-for="strategy in strategies" :key="strategy.strategy_template_id" :value="strategy.strategy_template_id">
             {{ strategyOptionLabel(strategy) }}
           </option>
         </select>
@@ -40,9 +40,9 @@
       </div>
       <label>
         策略
-        <select v-model="generateForm.strategy_id" @change="onGenerateStrategyChange">
+        <select v-model="generateForm.strategy_template_id" @change="onGenerateStrategyChange">
           <option value="">请选择 strategy</option>
-          <option v-for="strategy in availableStrategies" :key="strategy.strategy_id" :value="strategy.strategy_id">
+          <option v-for="strategy in availableStrategies" :key="strategy.strategy_template_id" :value="strategy.strategy_template_id">
             {{ strategyOptionLabel(strategy) }}
           </option>
         </select>
@@ -59,16 +59,6 @@
           <option value="rebalance">rebalance</option>
         </select>
       </label>
-      <label>
-        initial capital override
-        <input
-          v-model.number="generateForm.initial_capital_override"
-          type="number"
-          min="0"
-          step="10000"
-          placeholder="不填则使用策略/持仓快照"
-        />
-      </label>
       <label class="inline-check">
         <input v-model="generateForm.force" type="checkbox" />
         force
@@ -77,14 +67,13 @@
         <div class="strategy-param-header">
           <div>
             <strong>本次 plan 参数</strong>
-            <p class="muted">先选择策略模板，再选择推荐预设或手动调整参数；系统会把本次参数快照写入 plan。</p>
+            <p class="muted">先选择策略模板和参数预设，再按本次计划需要调整参数；系统会把最终参数快照写入 plan。</p>
           </div>
           <span class="editable-badge">内部唯一键：params_hash</span>
         </div>
         <label>
           参数预设
           <select v-model="generateForm.preset_id" @change="applySelectedPreset">
-            <option value="">自定义参数</option>
             <option v-for="preset in parameterPresets" :key="preset.preset_id" :value="preset.preset_id">
               {{ presetLabel(preset) }}
             </option>
@@ -152,9 +141,13 @@
             cash_buffer
             <input v-model.number="generateForm.params.cash_buffer" type="number" min="0" max="1" step="0.01" />
           </label>
+          <label>
+            initial_capital
+            <input v-model.number="generateForm.params.initial_capital" type="number" min="1" step="10000" />
+          </label>
         </div>
       </div>
-      <button :disabled="generateLoading || !generateForm.strategy_id || !generateForm.base_date" @click="generatePlan">
+      <button :disabled="generateLoading || !generateForm.strategy_template_id || !generateForm.base_date" @click="generatePlan">
         {{ generateLoading ? '提交中...' : '生成 plan' }}
       </button>
       <p v-if="currentGenerationTask" class="task-status">
@@ -172,7 +165,7 @@
           <h3>Plan 生成数据水位</h3>
           <p class="muted">确认当前 base_date 对应评分数据是否可用于生成 plan。</p>
         </div>
-        <button :disabled="watermarkLoading || !generateForm.strategy_id" @click="loadPlanGenerationWatermark">
+        <button :disabled="watermarkLoading || !generateForm.strategy_template_id" @click="loadPlanGenerationWatermark">
           刷新水位
         </button>
       </div>
@@ -251,10 +244,13 @@
             </option>
           </select>
           <button :disabled="liveOpsLoading" @click="loadLiveOps">刷新实盘状态</button>
+          <button @click="liveOpsExpanded = !liveOpsExpanded">
+            {{ liveOpsExpanded ? '收起详情' : '展开详情' }}
+          </button>
         </div>
       </div>
-      <p v-if="liveOpsLoading" class="muted">正在加载实盘状态...</p>
-      <div v-else class="live-ops-grid">
+      <p v-if="liveOpsLoading && liveOpsExpanded" class="muted">正在加载实盘状态...</p>
+      <div v-else-if="liveOpsExpanded" class="live-ops-grid">
         <div>
           <h4>quantTrader heartbeat</h4>
           <p v-if="!traderHeartbeats.length" class="muted">暂无 heartbeat。</p>
@@ -267,9 +263,9 @@
         <div>
           <h4>Live signals</h4>
           <p v-if="!liveSignals.length" class="muted">暂无 live signals。</p>
-          <p v-for="signal in liveSignals.slice(0, 5)" :key="signal.order_id" class="ops-line">
+          <p v-for="signal in liveSignals.slice(0, 20)" :key="signal.order_id" class="ops-line">
             <strong>{{ signal.status }}</strong>
-            <span>{{ signal.action }} {{ signal.symbol }} x {{ signal.size }}</span>
+            <span>{{ signal.action }} {{ signalDisplayName(signal) }} x {{ signal.size }}</span>
             <small>{{ signal.execution_time || signal.created_at || signal.timestamp || '-' }}</small>
           </p>
         </div>
@@ -292,7 +288,7 @@
           <p class="muted">
             {{ generationTasks.length }} 条最近任务
             <span v-if="latestGenerationTask">
-              · 最新 {{ latestGenerationTask.status }} / {{ latestGenerationTask.strategy_id }} / {{ latestGenerationTask.base_date }}
+              · 最新 {{ latestGenerationTask.status }} / {{ latestGenerationTask.strategy_template_id }} / {{ latestGenerationTask.base_date }}
             </span>
           </p>
         </div>
@@ -329,7 +325,7 @@
               >
                 <td>{{ task.created_at || '-' }}</td>
                 <td>{{ task.status || '-' }}</td>
-                <td class="truncate" :title="task.strategy_id">{{ task.strategy_id || '-' }}</td>
+                <td class="truncate" :title="task.strategy_template_id">{{ task.strategy_template_id || '-' }}</td>
                 <td>{{ task.base_date || '-' }}</td>
                 <td>{{ task.mode || '-' }}</td>
                 <td>{{ task.attempts ?? 0 }}</td>
@@ -357,7 +353,7 @@
         >
           <span>
             <strong>{{ plan.base_date }}</strong>
-            <small>{{ plan.strategy_id }}</small>
+            <small>{{ planDisplayTitle(plan) }} · {{ planParamSummary(plan) }}</small>
           </span>
           <em>{{ plan.plan_type }} / {{ plan.status }}</em>
         </button>
@@ -368,10 +364,12 @@
         <template v-if="selectedDetail">
           <div class="detail-header">
             <div>
-              <h3>{{ selectedDetail.plan.strategy_name || selectedDetail.plan.strategy_id }}</h3>
+              <h3>{{ planDisplayTitle(selectedDetail.plan) }}</h3>
               <p class="muted">
                 {{ selectedDetail.plan.base_date }} → {{ selectedDetail.plan.execute_date || '-' }}
                 · {{ selectedDetail.plan.plan_type }} · {{ selectedDetail.plan.status }}
+                · {{ planParamSummary(selectedDetail.plan) }}
+                · initial capital {{ money(effectiveInitialCapital(selectedDetail.plan)) }}
               </p>
             </div>
             <div v-if="selectedDetail.plan.status === 'needs_review'" class="actions">
@@ -385,6 +383,7 @@
             <div><span>卖出</span><strong>{{ selectedDetail.plan.summary?.sell_count ?? 0 }}</strong></div>
             <div><span>持有</span><strong>{{ selectedDetail.plan.summary?.hold_count ?? 0 }}</strong></div>
             <div><span>跳过</span><strong>{{ selectedDetail.plan.summary?.skip_count ?? 0 }}</strong></div>
+            <div><span>目标 TopN</span><strong>{{ effectiveTopN(selectedDetail.plan) }}</strong></div>
             <div><span>换手</span><strong>{{ pct(selectedDetail.plan.summary?.estimated_turnover) }}</strong></div>
             <div><span>权益</span><strong>{{ money(selectedDetail.plan.summary?.equity) }}</strong></div>
           </div>
@@ -461,7 +460,7 @@
                   <thead>
                     <tr>
                       <th>状态</th>
-                      <th>代码</th>
+                      <th>股票</th>
                       <th>方向</th>
                       <th>数量</th>
                       <th>价格</th>
@@ -510,7 +509,7 @@
                   </thead>
                   <tbody>
                     <tr v-for="signal in livePublishPreview.new_signals.slice(0, 8)" :key="signal.order_id">
-                      <td>{{ signal.symbol }}</td>
+                      <td>{{ signalDisplayName(signal) }}</td>
                       <td>{{ signal.action }}</td>
                       <td>{{ signal.size }}</td>
                       <td>{{ num(signal.price) }}</td>
@@ -744,6 +743,7 @@ const workerStatuses = ref([])
 const traderHeartbeats = ref([])
 const liveSignals = ref([])
 const liveExecutions = ref([])
+const liveOpsExpanded = ref(false)
 const securitiesAccounts = ref([])
 const selectedLiveAccountId = ref('')
 const livePublishPreview = ref(null)
@@ -753,11 +753,10 @@ let realtimeTimer = null
 let generationTaskTimer = null
 
 const generateForm = ref({
-  strategy_id: '',
+  strategy_template_id: '',
   base_date: todayInputDate(),
   mode: 'auto',
   force: false,
-  initial_capital_override: null,
   preset_id: '',
   params: {},
 })
@@ -781,7 +780,7 @@ const realtimePriceBySymbol = computed(() => {
 
 const availableStrategies = computed(() => strategies.value.filter((strategy) => strategy.status !== 'disabled'))
 const selectedGenerateStrategy = computed(() => (
-  strategies.value.find((strategy) => strategy.strategy_id === generateForm.value.strategy_id) || null
+  strategies.value.find((strategy) => strategy.strategy_template_id === generateForm.value.strategy_template_id) || null
 ))
 const selectedPreset = computed(() => parameterPresets.value.find((preset) => preset.preset_id === generateForm.value.preset_id) || null)
 const universeOptions = [
@@ -794,26 +793,28 @@ const universeOptions = [
 
 function strategyOptionLabel(strategy) {
   if (!strategy) return '-'
-  const base = strategy.name || strategy.strategy_id
-  const source = strategy.source === 'portfolio_research' ? ' · 组合研究' : ''
-  const topN = strategy.top_n ? ` · Top${strategy.top_n}` : ''
-  const rebalance = strategy.rebalance_days ? ` · ${strategy.rebalance_days}d` : ''
-  return `${base}${source}${topN}${rebalance}`
+  return strategyDisplayName(strategy)
+}
+
+function isGrowthCycleLike(row) {
+  const id = String(row?.strategy_template_id || '')
+  const scoreType = String(row?.score_type || row?.params_snapshot?.score_type || '')
+  return id.startsWith('growth_cycle') || scoreType.startsWith('growth_cycle')
+}
+
+function strategyDisplayName(row) {
+  if (!row) return '-'
+  if (isGrowthCycleLike(row)) return '成长周期指数增强'
+  return row.strategy_name || row.name || row.strategy_template_id || '-'
+}
+
+function planDisplayTitle(plan) {
+  return strategyDisplayName(plan)
 }
 
 function planParamsFromStrategy(strategy) {
   if (!strategy) return {}
-  const params = {
-    universe_index: strategy.universe_index || '',
-    top_n: strategy.top_n ?? null,
-    rebalance_days: strategy.rebalance_days ?? null,
-    construction_mode: strategy.construction_mode || 'top_n',
-    growth_weight: strategy.growth_weight ?? null,
-    cycle_weight: strategy.cycle_weight ?? null,
-    max_industry_weight: strategy.max_industry_weight ?? null,
-    cash_buffer: strategy.cash_buffer ?? 0.03,
-  }
-  return normalizePlanParams(params)
+  return {}
 }
 
 function clampWeight(value) {
@@ -834,6 +835,8 @@ function normalizePlanParams(params) {
   const growth = Number.isFinite(Number(next.growth_weight)) ? clampWeight(next.growth_weight) : 0.3
   next.growth_weight = roundWeight(growth)
   next.cycle_weight = roundWeight(1 - growth)
+  const capital = Number(next.initial_capital)
+  next.initial_capital = Number.isFinite(capital) && capital > 0 ? capital : 1_000_000
   return next
 }
 
@@ -856,9 +859,9 @@ function setCycleWeight(value) {
 }
 
 function presetLabel(preset) {
-  const status = preset.status ? `${preset.status} · ` : ''
+  const defaultText = preset.is_default ? '默认 · ' : ''
   const source = preset.source === 'portfolio_research' ? '组合研究 · ' : ''
-  return `${status}${source}${preset.name || preset.preset_id}`
+  return `${defaultText}${source}${preset.name || preset.preset_id}`
 }
 
 function syncGenerateParamsFromStrategy() {
@@ -869,6 +872,7 @@ async function onGenerateStrategyChange() {
   generateForm.value.preset_id = ''
   syncGenerateParamsFromStrategy()
   await loadParameterPresets()
+  applyDefaultPreset()
   await loadPlanGenerationWatermark()
 }
 
@@ -876,6 +880,15 @@ function applySelectedPreset() {
   const base = planParamsFromStrategy(selectedGenerateStrategy.value)
   const presetParams = selectedPreset.value?.params || {}
   generateForm.value.params = normalizePlanParams({ ...base, ...presetParams })
+}
+
+function applyDefaultPreset() {
+  if (generateForm.value.preset_id || !parameterPresets.value.length) return
+  const preset = parameterPresets.value.find((row) => row.is_default)
+    || parameterPresets.value.find((row) => row.status === 'recommended')
+    || parameterPresets.value[0]
+  generateForm.value.preset_id = preset.preset_id
+  applySelectedPreset()
 }
 
 const latestGenerationTask = computed(() => generationTasks.value[0] || null)
@@ -1017,6 +1030,40 @@ function formatSummary(summary) {
   return entries.map(([status, count]) => `${status}: ${count}`).join(' / ')
 }
 
+function signalDisplayName(signal) {
+  return signal?.name || signal?.stock_name || signal?.symbol || '-'
+}
+
+function effectiveTopN(plan) {
+  return plan?.summary?.target_top_n
+    ?? plan?.params_snapshot?.top_n
+    ?? '-'
+}
+
+function effectiveRebalanceDays(plan) {
+  return plan?.params_snapshot?.rebalance_days
+    ?? null
+}
+
+function effectiveConstructionMode(plan) {
+  return plan?.params_snapshot?.construction_mode
+    ?? null
+}
+
+function effectiveInitialCapital(plan) {
+  return plan?.params_snapshot?.initial_capital
+    ?? null
+}
+
+function planParamSummary(plan) {
+  const parts = [`Top${effectiveTopN(plan)}`]
+  const rebalanceDays = effectiveRebalanceDays(plan)
+  if (rebalanceDays) parts.push(`${rebalanceDays}d`)
+  const mode = effectiveConstructionMode(plan)
+  if (mode) parts.push(mode)
+  return parts.join(' · ')
+}
+
 function filterBySelectedAccount(rows) {
   if (!selectedLiveAccountId.value) return rows
   return rows.filter((row) => String(row.securities_account_id || '') === String(selectedLiveAccountId.value))
@@ -1042,11 +1089,12 @@ function blockerText(blocker) {
 async function refreshAll() {
   await loadSecuritiesAccounts()
   await loadStrategies()
-  if (!generateForm.value.strategy_id && availableStrategies.value.length) {
-    generateForm.value.strategy_id = availableStrategies.value[0].strategy_id
+  if (!generateForm.value.strategy_template_id && availableStrategies.value.length) {
+    generateForm.value.strategy_template_id = availableStrategies.value[0].strategy_template_id
   }
   syncGenerateParamsFromStrategy()
   await loadParameterPresets()
+  applyDefaultPreset()
   await loadPlanGenerationWatermark()
   await loadWorkerStatus()
   await loadLiveOps()
@@ -1072,13 +1120,13 @@ async function loadStrategies() {
 }
 
 async function loadParameterPresets() {
-  if (!generateForm.value.strategy_id) {
+  if (!generateForm.value.strategy_template_id) {
     parameterPresets.value = []
     return
   }
   try {
-    const res = await listPortfolioParameterPresets({ strategy_template_id: generateForm.value.strategy_id })
-    parameterPresets.value = res.data || []
+    const res = await listPortfolioParameterPresets({ strategy_template_id: generateForm.value.strategy_template_id })
+    parameterPresets.value = (res.data || []).filter((preset) => preset.status !== 'disabled')
   } catch (error) {
     parameterPresets.value = []
   }
@@ -1089,7 +1137,7 @@ async function loadPlans() {
   message.value = ''
   try {
     const params = {}
-    if (selectedStrategyId.value) params.strategy_id = selectedStrategyId.value
+    if (selectedStrategyId.value) params.strategy_template_id = selectedStrategyId.value
     if (statusFilter.value) params.status = statusFilter.value
     const res = await listPortfolioPlans(params)
     plans.value = res.data || []
@@ -1159,14 +1207,14 @@ async function loadLiveOps() {
 }
 
 async function loadPlanGenerationWatermark() {
-  if (!generateForm.value.strategy_id) {
+  if (!generateForm.value.strategy_template_id) {
     planGenerationWatermark.value = null
     return
   }
   watermarkLoading.value = true
   try {
     const res = await getPortfolioPlanGenerationWatermark({
-      strategy_id: generateForm.value.strategy_id,
+      strategy_template_id: generateForm.value.strategy_template_id,
       base_date: generateForm.value.base_date,
     })
     planGenerationWatermark.value = res.data || null
@@ -1178,27 +1226,23 @@ async function loadPlanGenerationWatermark() {
 }
 
 async function generatePlan() {
-  if (!generateForm.value.strategy_id || !generateForm.value.base_date) return
+  if (!generateForm.value.strategy_template_id || !generateForm.value.base_date) return
   generateLoading.value = true
   message.value = ''
   try {
     const payload = {
-      strategy_id: generateForm.value.strategy_id,
+      strategy_template_id: generateForm.value.strategy_template_id,
       base_date: generateForm.value.base_date,
       mode: generateForm.value.mode,
       force: generateForm.value.force,
       preset_id: generateForm.value.preset_id || null,
       params_override: normalizePlanParams(generateForm.value.params),
     }
-    const overrideCapital = Number(generateForm.value.initial_capital_override)
-    if (Number.isFinite(overrideCapital) && overrideCapital > 0) {
-      payload.initial_capital_override = overrideCapital
-    }
     const res = await generatePortfolioPlan(payload)
     currentGenerationTask.value = res.data
     await loadPlanGenerationWatermark()
     await loadGenerationTasks()
-    selectedStrategyId.value = generateForm.value.strategy_id
+    selectedStrategyId.value = generateForm.value.strategy_template_id
     statusFilter.value = ''
     message.value = `已提交生成任务 ${res.data?.task_id || ''}`
     startGenerationTaskPolling(res.data?.task_id)
@@ -1293,22 +1337,22 @@ async function publishLiveSignals() {
 }
 
 async function loadEquity() {
-  const strategyId = selectedDetail.value?.plan?.strategy_id
-  if (!strategyId) {
+  const templateId = selectedDetail.value?.plan?.strategy_template_id
+  if (!templateId) {
     equity.value = []
     return
   }
-  const res = await getPortfolioStrategyEquity(strategyId)
+  const res = await getPortfolioStrategyEquity(templateId)
   equity.value = res.data || []
 }
 
 async function loadRealtimeEquity() {
-  const strategyId = selectedDetail.value?.plan?.strategy_id
-  if (!strategyId) {
+  const templateId = selectedDetail.value?.plan?.strategy_template_id
+  if (!templateId) {
     realtimeEquity.value = null
     return
   }
-  const res = await getPortfolioStrategyRealtimeEquity(strategyId)
+  const res = await getPortfolioStrategyRealtimeEquity(templateId)
   realtimeEquity.value = res.data || null
 }
 
@@ -1341,7 +1385,7 @@ async function review(decision) {
 onMounted(() => {
   refreshAll()
   realtimeTimer = window.setInterval(() => {
-    if (selectedDetail.value?.plan?.strategy_id) {
+    if (selectedDetail.value?.plan?.strategy_template_id) {
       loadRealtimeEquity()
     }
   }, 60000)

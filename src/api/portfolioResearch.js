@@ -20,6 +20,6 @@ export function publishPortfolioResearchResult(resultId, data = {}) {
   return request({ url: `/portfolio-research/results/${resultId}/publish`, method: 'post', data })
 }
 
-export function disablePortfolioResearchStrategy(strategyId) {
-  return request({ url: `/portfolio-research/strategies/${strategyId}/disable`, method: 'post' })
+export function disablePortfolioResearchPreset(presetId) {
+  return request({ url: `/portfolio-research/parameter-presets/${presetId}/disable`, method: 'post' })
 }

@@ -141,7 +141,7 @@
             <div class="section-header">
               <div>
                 <h4>候选策略配置</h4>
-                <p class="muted">{{ candidateConfig.name || candidateConfig.strategy_id }}</p>
+                <p class="muted">{{ candidateConfig.name || candidateConfig.preset_id }}</p>
               </div>
               <div class="actions">
                 <button :disabled="publishLoading || !!resultDetail?.published_preset_id" @click="publish('draft')">
