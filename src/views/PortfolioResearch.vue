@@ -59,6 +59,10 @@
           transaction_cost
           <input v-model.number="form.transaction_cost" type="number" min="0" step="0.0001" />
         </label>
+        <label>
+          initial capital
+          <input v-model.number="form.initial_capital" type="number" min="0" step="10000" />
+        </label>
       </div>
       <button :disabled="submitting || !form.start_date || !form.end_date" @click="createJob">
         {{ submitting ? '提交中...' : '提交研究任务' }}
@@ -107,13 +111,15 @@
                 <span v-if="selectedJob.error_message"> · {{ selectedJob.error_message }}</span>
               </p>
             </div>
-            <button
-              v-if="selectedJob.result_id"
-              :disabled="artifactLoading"
-              @click="openArtifact(selectedJob.job_id)"
-            >
-              {{ artifactLoading ? '打开中...' : '打开 HTML 报告' }}
-            </button>
+            <div class="actions">
+              <button
+                v-if="selectedJob.result_id"
+                :disabled="artifactLoading"
+                @click="openArtifact(selectedJob.job_id)"
+              >
+                {{ artifactLoading ? '打开中...' : '打开 HTML 报告' }}
+              </button>
+            </div>
           </div>
 
           <div class="info-grid">
@@ -126,10 +132,6 @@
               <strong>{{ selectedJob.data_watermark?.dataset_rows ?? '-' }}</strong>
             </div>
             <div>
-              <span>候选策略</span>
-              <strong>{{ candidateConfig?.strategy_id || '-' }}</strong>
-            </div>
-            <div>
               <span>已发布</span>
               <strong>{{ resultDetail?.published_strategy_id || '-' }}</strong>
             </div>
@@ -139,7 +141,7 @@
             <div class="section-header">
               <div>
                 <h4>候选策略配置</h4>
-                <p class="muted">{{ candidateConfig.name }}</p>
+                <p class="muted">{{ candidateConfig.name || candidateConfig.strategy_id }}</p>
               </div>
               <div class="actions">
                 <button :disabled="publishLoading || !!resultDetail?.published_strategy_id" @click="publish('draft')">
@@ -151,12 +153,16 @@
               </div>
             </div>
             <div class="config-grid">
-              <span>top_n: {{ candidateConfig.top_n }}</span>
-              <span>rebalance: {{ candidateConfig.rebalance_days }}d</span>
-              <span>mode: {{ candidateConfig.construction_mode }}</span>
-              <span>industry cap: {{ pct(candidateConfig.max_industry_weight) }}</span>
-              <span>growth: {{ pct(candidateConfig.growth_weight) }}</span>
-              <span>cycle: {{ pct(candidateConfig.cycle_weight) }}</span>
+              <span><strong>top_n</strong>{{ candidateConfig.top_n ?? '-' }}</span>
+              <span><strong>rebalance</strong>{{ candidateConfig.rebalance_days ? `${candidateConfig.rebalance_days}d` : '-' }}</span>
+              <span><strong>mode</strong>{{ candidateConfig.construction_mode || '-' }}</span>
+              <span><strong>industry cap</strong>{{ pct(candidateConfig.max_industry_weight) }}</span>
+              <span><strong>growth</strong>{{ pct(candidateConfig.growth_weight) }}</span>
+              <span><strong>cycle</strong>{{ pct(candidateConfig.cycle_weight) }}</span>
+              <span><strong>benchmark</strong>{{ candidateConfig.index_benchmark_symbol || '-' }}</span>
+              <span><strong>initial capital</strong>{{ money(candidateConfig.initial_capital) }}</span>
+              <span><strong>cash buffer</strong>{{ pct(candidateConfig.cash_buffer) }}</span>
+              <span><strong>execution price</strong>{{ candidateConfig.execution_price || '-' }}</span>
             </div>
           </section>
 
@@ -244,6 +250,7 @@ const form = ref({
   horizon: 20,
   active_caps: '0.2,0.25,0.3,0.4',
   transaction_cost: 0.001,
+  initial_capital: 1_000_000,
 })
 
 const resultRows = computed(() => resultDetail.value?.rows || [])
@@ -292,6 +299,12 @@ function num(value, digits = 2) {
   const number = Number(value)
   if (!Number.isFinite(number)) return '-'
   return number.toFixed(digits)
+}
+
+function money(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '-'
+  return number.toLocaleString('zh-CN', { maximumFractionDigits: 0 })
 }
 
 async function loadJobs() {
@@ -404,8 +417,12 @@ onMounted(refreshAll)
 
 <style scoped>
 .portfolio-research {
-  padding: 24px;
+  box-sizing: border-box;
   color: #172033;
+  margin: 0 auto;
+  max-width: 1680px;
+  padding: 28px 32px 40px;
+  width: 100%;
 }
 
 .page-header,
@@ -415,6 +432,18 @@ onMounted(refreshAll)
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
+}
+
+.page-header > div,
+.section-header > div {
+  min-width: 0;
+}
+
+.section-header h3,
+.section-header h4,
+.section-header .muted {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .eyebrow {
@@ -441,17 +470,16 @@ small {
   background: #fff;
   border: 1px solid #e6eaf0;
   border-radius: 14px;
-  padding: 18px;
+  padding: 22px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
 }
 
 .create-card {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .form-grid,
-.info-grid,
-.config-grid {
+.info-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
@@ -492,8 +520,8 @@ button:disabled {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(260px, 340px) 1fr;
-  gap: 16px;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  gap: 20px;
 }
 
 .job-row {
@@ -518,6 +546,7 @@ button:disabled {
   border-radius: 10px;
   padding: 12px;
   background: #fbfcfe;
+  min-width: 0;
 }
 
 .info-grid span {
@@ -526,12 +555,62 @@ button:disabled {
   font-size: 12px;
 }
 
+.info-grid strong {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.detail-card,
+.jobs-card {
+  min-width: 0;
+}
+
+.job-row strong,
+.job-row span,
+.job-row small {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .candidate {
-  margin: 18px 0;
-  padding: 14px;
+  margin: 20px 0;
+  padding: 18px;
   border: 1px solid #e6eaf0;
   border-radius: 12px;
   background: #fbfcfe;
+  min-width: 0;
+}
+
+.candidate .section-header {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.config-grid span {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 10px;
+  background: #fff;
+  color: #172033;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.config-grid strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .actions {
@@ -581,6 +660,10 @@ th {
 }
 
 @media (max-width: 900px) {
+  .portfolio-research {
+    padding: 18px;
+  }
+
   .layout {
     grid-template-columns: 1fr;
   }

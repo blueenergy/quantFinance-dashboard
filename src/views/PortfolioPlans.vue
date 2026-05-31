@@ -59,10 +59,35 @@
           <option value="rebalance">rebalance</option>
         </select>
       </label>
+      <label>
+        initial capital override
+        <input
+          v-model.number="generateForm.initial_capital_override"
+          type="number"
+          min="0"
+          step="10000"
+          placeholder="不填则使用策略/持仓快照"
+        />
+      </label>
       <label class="inline-check">
         <input v-model="generateForm.force" type="checkbox" />
         force
       </label>
+      <div v-if="selectedGenerateStrategy" class="strategy-param-card">
+        <div class="strategy-param-header">
+          <div>
+            <strong>策略固定参数</strong>
+            <p class="muted">这些参数来自策略配置，生成 plan 时不可改；只有 initial capital override 会覆盖本次初始本金。</p>
+          </div>
+          <span class="editable-badge">可改：initial capital override</span>
+        </div>
+        <div class="strategy-param-grid">
+          <div v-for="row in strategyParamRows" :key="row.label">
+            <span>{{ row.label }}</span>
+            <strong>{{ row.value }}</strong>
+          </div>
+        </div>
+      </div>
       <button :disabled="generateLoading || !generateForm.strategy_id || !generateForm.base_date" @click="generatePlan">
         {{ generateLoading ? '提交中...' : '生成 plan' }}
       </button>
@@ -664,6 +689,7 @@ const generateForm = ref({
   base_date: todayInputDate(),
   mode: 'auto',
   force: false,
+  initial_capital_override: null,
 })
 
 const executionStatus = computed(() => selectedDetail.value?.execution_status || {})
@@ -684,6 +710,27 @@ const realtimePriceBySymbol = computed(() => {
 })
 
 const availableStrategies = computed(() => strategies.value.filter((strategy) => strategy.status !== 'disabled'))
+const selectedGenerateStrategy = computed(() => (
+  strategies.value.find((strategy) => strategy.strategy_id === generateForm.value.strategy_id) || null
+))
+const strategyParamRows = computed(() => {
+  const strategy = selectedGenerateStrategy.value
+  if (!strategy) return []
+  return [
+    { label: 'universe', value: strategy.universe_index || '-' },
+    { label: 'status', value: strategy.status || '-' },
+    { label: 'source', value: strategy.source === 'portfolio_research' ? '组合研究' : (strategy.source || '-') },
+    { label: 'top_n', value: strategy.top_n ?? '-' },
+    { label: 'rebalance_days', value: strategy.rebalance_days ? `${strategy.rebalance_days}d` : '-' },
+    { label: 'construction_mode', value: strategy.construction_mode || '-' },
+    { label: 'growth_weight', value: pct(strategy.growth_weight) },
+    { label: 'cycle_weight', value: pct(strategy.cycle_weight) },
+    { label: 'industry cap', value: pct(strategy.max_industry_weight) },
+    { label: 'cash_buffer', value: pct(strategy.cash_buffer) },
+    { label: 'lot_size', value: strategy.lot_size ?? '-' },
+    { label: 'default initial capital', value: money(strategy.initial_capital) },
+  ]
+})
 
 function strategyOptionLabel(strategy) {
   if (!strategy) return '-'
@@ -989,6 +1036,10 @@ async function generatePlan() {
       mode: generateForm.value.mode,
       force: generateForm.value.force,
     }
+    const overrideCapital = Number(generateForm.value.initial_capital_override)
+    if (Number.isFinite(overrideCapital) && overrideCapital > 0) {
+      payload.initial_capital_override = overrideCapital
+    }
     const res = await generatePortfolioPlan(payload)
     currentGenerationTask.value = res.data
     await loadPlanGenerationWatermark()
@@ -1250,6 +1301,60 @@ button.danger {
   flex-direction: row;
   gap: 6px;
   padding-bottom: 8px;
+}
+
+.strategy-param-card {
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  grid-column: 1 / -1;
+  padding: 12px;
+}
+
+.strategy-param-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.strategy-param-header p {
+  margin: 4px 0 0;
+}
+
+.editable-badge {
+  border: 1px solid #111827;
+  border-radius: 999px;
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 3px 8px;
+}
+
+.strategy-param-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.strategy-param-grid div {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  min-width: 0;
+  padding: 8px;
+}
+
+.strategy-param-grid span {
+  color: #6b7280;
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.strategy-param-grid strong {
+  display: block;
+  overflow-wrap: anywhere;
 }
 
 .task-status {
