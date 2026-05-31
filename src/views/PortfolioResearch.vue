@@ -137,6 +137,20 @@
             </div>
           </div>
 
+          <section class="research-params">
+            <div class="section-header">
+              <div>
+                <h4>研究参数</h4>
+                <p class="muted">创建研究任务时使用的参数。</p>
+              </div>
+            </div>
+            <div class="config-grid">
+              <span v-for="row in researchParamRows" :key="row.key">
+                <strong>{{ row.label }}</strong>{{ row.value }}
+              </span>
+            </div>
+          </section>
+
           <section v-if="candidateConfig" class="candidate">
             <div class="section-header">
               <div>
@@ -255,6 +269,7 @@ const form = ref({
 
 const resultRows = computed(() => resultDetail.value?.rows || [])
 const candidateConfig = computed(() => resultDetail.value?.candidate_strategy_config || selectedJob.value?.candidate_strategy_config)
+const researchParamRows = computed(() => buildResearchParamRows(selectedJob.value))
 
 function universeName(value) {
   const option = universeOptions.find((item) => item.value === value)
@@ -307,6 +322,41 @@ function money(value) {
   return number.toLocaleString('zh-CN', { maximumFractionDigits: 0 })
 }
 
+function formatList(value, formatter = (item) => item) {
+  if (Array.isArray(value)) {
+    return value.map(formatter).join(', ')
+  }
+  if (value === undefined || value === null || value === '') return '-'
+  return formatter(value)
+}
+
+function formatBool(value) {
+  if (value === undefined || value === null) return '-'
+  return value ? 'true' : 'false'
+}
+
+function buildResearchParamRows(job) {
+  if (!job) return []
+  const params = job.params || {}
+  const rows = [
+    { key: 'start_date', label: 'start_date', value: compactDate(params.start_date || job.start_date) },
+    { key: 'end_date', label: 'end_date', value: compactDate(params.end_date || job.end_date) },
+    { key: 'universe_index', label: 'universe', value: universeName(params.universe_index || job.universe_index) },
+    { key: 'score_column', label: 'score_column', value: params.score_column || '-' },
+    { key: 'growth_cycle_weights', label: 'growth:cycle 权重', value: formatList(params.growth_cycle_weights) },
+    { key: 'top_n_values', label: 'Top N', value: formatList(params.top_n_values) },
+    { key: 'horizon', label: 'horizon', value: params.horizon ?? '-' },
+    { key: 'rebalance_interval_days', label: 'rebalance intervals', value: formatList(params.rebalance_interval_days, (item) => `${item}d`) },
+    { key: 'active_caps', label: 'active caps', value: formatList(params.active_caps, pct) },
+    { key: 'transaction_cost', label: 'transaction_cost', value: pct(params.transaction_cost) },
+    { key: 'index_benchmark_symbol', label: 'benchmark', value: params.index_benchmark_symbol || '-' },
+    { key: 'cash_buffer', label: 'cash_buffer', value: pct(params.cash_buffer) },
+    { key: 'initial_capital', label: 'initial_capital', value: money(params.initial_capital) },
+    { key: 'force', label: 'force', value: formatBool(params.force) },
+  ]
+  return rows.map((row) => ({ ...row, value: row.value || '-' }))
+}
+
 async function loadJobs() {
   loading.value = true
   errorMessage.value = ''
@@ -315,8 +365,12 @@ async function loadJobs() {
     if (statusFilter.value) params.status = statusFilter.value
     const res = await listPortfolioResearchJobs(params)
     jobs.value = res.data || []
-    if (!selectedJobId.value && jobs.value.length) {
-      await selectJob(jobs.value[0].job_id)
+    if (selectedJobId.value && jobs.value.some((job) => job.job_id === selectedJobId.value)) {
+      selectedJob.value = jobs.value.find((job) => job.job_id === selectedJobId.value)
+    } else if (selectedJobId.value) {
+      selectedJobId.value = ''
+      selectedJob.value = null
+      resultDetail.value = null
     }
   } catch (err) {
     errorMessage.value = err?.response?.data?.detail || err.message || '加载研究任务失败'
@@ -574,7 +628,8 @@ button:disabled {
   word-break: break-word;
 }
 
-.candidate {
+.candidate,
+.research-params {
   margin: 20px 0;
   padding: 18px;
   border: 1px solid #e6eaf0;
@@ -583,7 +638,8 @@ button:disabled {
   min-width: 0;
 }
 
-.candidate .section-header {
+.candidate .section-header,
+.research-params .section-header {
   align-items: flex-start;
   flex-wrap: wrap;
 }

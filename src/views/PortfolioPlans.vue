@@ -1087,19 +1087,23 @@ function blockerText(blocker) {
 }
 
 async function refreshAll() {
-  await loadSecuritiesAccounts()
-  await loadStrategies()
+  await Promise.all([
+    loadSecuritiesAccounts(),
+    loadStrategies(),
+  ])
   if (!generateForm.value.strategy_template_id && availableStrategies.value.length) {
     generateForm.value.strategy_template_id = availableStrategies.value[0].strategy_template_id
   }
   syncGenerateParamsFromStrategy()
-  await loadParameterPresets()
+  await Promise.all([
+    loadParameterPresets(),
+    loadWorkerStatus(),
+    loadGenerationTasks(),
+    loadPlans(),
+  ])
   applyDefaultPreset()
   await loadPlanGenerationWatermark()
-  await loadWorkerStatus()
-  await loadLiveOps()
-  await loadGenerationTasks()
-  await loadPlans()
+  loadLiveOps()
 }
 
 async function loadSecuritiesAccounts() {
@@ -1141,8 +1145,12 @@ async function loadPlans() {
     if (statusFilter.value) params.status = statusFilter.value
     const res = await listPortfolioPlans(params)
     plans.value = res.data || []
-    if (plans.value.length && !plans.value.some((plan) => plan.plan_id === selectedPlanId.value)) {
-      await selectPlan(plans.value[0].plan_id)
+    if (selectedPlanId.value && !plans.value.some((plan) => plan.plan_id === selectedPlanId.value)) {
+      selectedPlanId.value = ''
+      selectedDetail.value = null
+      equity.value = []
+      realtimeEquity.value = null
+      executions.value = []
     }
   } catch (error) {
     message.value = error.response?.data?.detail || error.message || '加载计划失败'
@@ -1291,10 +1299,12 @@ async function selectPlan(planId) {
   livePublishPreview.value = null
   const res = await getPortfolioPlan(planId)
   selectedDetail.value = res.data
-  await loadEquity()
-  await loadRealtimeEquity()
-  await loadExecutions()
-  await loadLiveOps()
+  await Promise.all([
+    loadEquity(),
+    loadRealtimeEquity(),
+    loadExecutions(),
+    loadLiveOps(),
+  ])
 }
 
 async function previewLivePublish() {
