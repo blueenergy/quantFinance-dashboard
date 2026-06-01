@@ -118,7 +118,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'strategies', name: '策略配置' },
       { id: 'strategy-workers', name: '🚀 实盘交易' },
       { id: 'trade-executions', name: '交易记录' },
-      { id: 'trading-manual', name: '人工干预' },
+      { id: 'trading-manual', name: '实盘交易监控' },
       { id: 'strategy-execution-analysis', name: '策略执行分析' },
       { id: 'spectrum', name: '阴阳谱' },
       { id: 'realtime-spectrum', name: '实时阴阳谱' },

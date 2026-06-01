@@ -1,8 +1,21 @@
 <template>
   <v-container fluid class="trading-manual-panel">
+    <div class="page-header">
+      <div>
+        <p class="eyebrow">Live Trading Monitor</p>
+        <h2>实盘交易监控</h2>
+        <p class="subtitle">集中查看实盘信号状态、成交回报、撤单中间态和需要人工处理的执行建议。</p>
+      </div>
+      <v-btn :loading="loading.active || loading.summary" color="primary" @click="refreshAll">刷新全部</v-btn>
+    </div>
+
     <v-tabs v-model="activeTab" fixed-tabs>
       <!-- 信号状态概览 -->
       <v-tab value="summary" class="tab-text">信号状态概览</v-tab>
+      <!-- 处理中订单 -->
+      <v-tab value="active" class="tab-text">处理中订单</v-tab>
+      <!-- 需人工处理 -->
+      <v-tab value="attention" class="tab-text">需人工处理</v-tab>
       <!-- 失败信号管理 -->
       <v-tab value="failed" class="tab-text">失败信号管理</v-tab>
       <!-- 待重试信号 -->
@@ -42,6 +55,159 @@
             </v-card>
           </v-col>
         </v-row>
+      </v-window-item>
+
+      <!-- 处理中订单 -->
+      <v-window-item value="active">
+        <v-card>
+          <v-card-title class="d-flex justify-space-between align-center">
+            <div>
+              <h3>处理中订单</h3>
+              <p class="text-body-2 text-medium-emphasis mb-0">
+                覆盖 pending / submitted / partial_filled / cancel_requested / retry_pending 等活跃状态。
+              </p>
+            </div>
+            <v-btn @click="refreshActiveSignals">刷新</v-btn>
+          </v-card-title>
+
+          <v-data-table
+            :headers="activeSignalHeaders"
+            :items="activeSignals"
+            :loading="loading.active"
+            :items-per-page="30"
+            class="elevation-1"
+          >
+            <template v-slot:item.status="{ item }">
+              <v-chip :color="getStatusTagColor(item.status)" label>
+                {{ getStatusLabel(item.status) }}
+              </v-chip>
+            </template>
+
+            <template v-slot:item.action="{ item }">
+              <v-chip :color="item.action === 'buy' ? 'success' : 'error'" label>
+                {{ item.action?.toUpperCase?.() || item.action }}
+              </v-chip>
+            </template>
+
+            <template v-slot:item.symbol="{ item }">
+              <div class="symbol-cell">
+                <strong>{{ item.name || item.stock_name || item.symbol }}</strong>
+                <span v-if="item.name || item.stock_name">{{ item.symbol }}</span>
+              </div>
+            </template>
+
+            <template v-slot:item.filled_qty="{ item }">
+              {{ item.filled_qty ?? 0 }} / {{ item.size ?? '-' }}
+            </template>
+
+            <template v-slot:item.remaining_size="{ item }">
+              {{ remainingSize(item) }}
+            </template>
+
+            <template v-slot:item.effective_limit_price="{ item }">
+              {{ formatPrice(item.effective_limit_price || item.price) }}
+            </template>
+
+            <template v-slot:item.age="{ item }">
+              <span :class="{ 'text-error font-weight-bold': isStaleSignal(item), 'text-warning': isAttentionSignal(item) && !isStaleSignal(item) }">
+                {{ formatAge(item.age_seconds) }}
+              </span>
+            </template>
+
+            <template v-slot:item.diagnostic="{ item }">
+              <div class="diagnostic-cell">
+                <v-chip v-if="isStaleSignal(item)" color="error" size="small" label>超时</v-chip>
+                <v-chip v-else-if="isAttentionSignal(item)" color="warning" size="small" label>关注</v-chip>
+                <span>{{ diagnosticText(item) }}</span>
+              </div>
+            </template>
+
+            <template v-slot:item.actions="{ item }">
+              <v-btn size="small" color="info" @click="viewSignalDetail(item)" class="mr-2">详情</v-btn>
+              <v-btn
+                v-if="item.chase_suggestion"
+                size="small"
+                color="warning"
+                @click="prefillManualOrderFromSignal(item)"
+              >
+                按建议补单
+              </v-btn>
+            </template>
+          </v-data-table>
+        </v-card>
+      </v-window-item>
+
+      <!-- 需人工处理 -->
+      <v-window-item value="attention">
+        <v-card>
+          <v-card-title class="d-flex justify-space-between align-center">
+            <div>
+              <h3>需人工处理</h3>
+              <p class="text-body-2 text-medium-emphasis mb-0">
+                包含超时 submitted、cancel_requested、partial_cancelled、failed/rejected 以及待人工判断的追单建议。
+              </p>
+            </div>
+            <v-btn @click="refreshActiveSignals">刷新</v-btn>
+          </v-card-title>
+
+          <v-data-table
+            :headers="activeSignalHeaders"
+            :items="attentionSignals"
+            :loading="loading.active"
+            :items-per-page="30"
+            class="elevation-1"
+          >
+            <template v-slot:item.status="{ item }">
+              <v-chip :color="getStatusTagColor(item.status)" label>
+                {{ getStatusLabel(item.status) }}
+              </v-chip>
+            </template>
+            <template v-slot:item.action="{ item }">
+              <v-chip :color="item.action === 'buy' ? 'success' : 'error'" label>
+                {{ item.action?.toUpperCase?.() || item.action }}
+              </v-chip>
+            </template>
+            <template v-slot:item.symbol="{ item }">
+              <div class="symbol-cell">
+                <strong>{{ item.name || item.stock_name || item.symbol }}</strong>
+                <span v-if="item.name || item.stock_name">{{ item.symbol }}</span>
+              </div>
+            </template>
+            <template v-slot:item.filled_qty="{ item }">
+              {{ item.filled_qty ?? 0 }} / {{ item.size ?? '-' }}
+            </template>
+            <template v-slot:item.remaining_size="{ item }">
+              {{ remainingSize(item) }}
+            </template>
+            <template v-slot:item.effective_limit_price="{ item }">
+              {{ formatPrice(item.effective_limit_price || item.price) }}
+            </template>
+            <template v-slot:item.age="{ item }">
+              <span :class="{ 'text-error font-weight-bold': isStaleSignal(item), 'text-warning': !isStaleSignal(item) }">
+                {{ formatAge(item.age_seconds) }}
+              </span>
+            </template>
+            <template v-slot:item.diagnostic="{ item }">
+              <div class="diagnostic-cell">
+                <v-chip :color="isStaleSignal(item) ? 'error' : 'warning'" size="small" label>
+                  {{ isStaleSignal(item) ? '超时' : '关注' }}
+                </v-chip>
+                <span>{{ diagnosticText(item) }}</span>
+              </div>
+            </template>
+            <template v-slot:item.actions="{ item }">
+              <v-btn size="small" color="info" @click="viewSignalDetail(item)" class="mr-2">详情</v-btn>
+              <v-btn
+                v-if="item.chase_suggestion"
+                size="small"
+                color="warning"
+                @click="prefillManualOrderFromSignal(item)"
+              >
+                按建议补单
+              </v-btn>
+            </template>
+          </v-data-table>
+        </v-card>
       </v-window-item>
 
       <!-- 失败信号管理 -->
@@ -249,7 +415,7 @@
     </v-window>
 
     <!-- 信号详情弹窗 -->
-    <v-dialog v-model="signalDetailVisible" max-width="600px">
+    <v-dialog v-model="signalDetailVisible" max-width="760px">
       <v-card v-if="selectedSignal">
         <v-card-title>信号详情</v-card-title>
         <v-card-text>
@@ -284,6 +450,21 @@
               </v-list-item-subtitle>
             </v-list-item>
             <v-list-item>
+              <v-list-item-title>保护限价 / 成交均价</v-list-item-title>
+              <v-list-item-subtitle>
+                {{ formatPrice(selectedSignal.effective_limit_price || selectedSignal.price) }} /
+                {{ formatPrice(selectedSignal.avg_price) }}
+              </v-list-item-subtitle>
+            </v-list-item>
+            <v-list-item>
+              <v-list-item-title>QMT订单 / Broker订单</v-list-item-title>
+              <v-list-item-subtitle>{{ selectedSignal.qmt_order_id || selectedSignal.broker_order_id || '-' }}</v-list-item-subtitle>
+            </v-list-item>
+            <v-list-item>
+              <v-list-item-title>已成 / 剩余</v-list-item-title>
+              <v-list-item-subtitle>{{ selectedSignal.filled_qty ?? 0 }} / {{ remainingSize(selectedSignal) }}</v-list-item-subtitle>
+            </v-list-item>
+            <v-list-item>
               <v-list-item-title>策略</v-list-item-title>
               <v-list-item-subtitle>{{ selectedSignal.strategy }}</v-list-item-subtitle>
             </v-list-item>
@@ -306,6 +487,19 @@
               <v-list-item-title>错误信息</v-list-item-title>
               <v-list-item-subtitle>{{ selectedSignal.last_error }}</v-list-item-subtitle>
             </v-list-item>
+            <v-list-item v-if="selectedSignal.cancel_requested_at">
+              <v-list-item-title>撤单请求时间</v-list-item-title>
+              <v-list-item-subtitle>{{ formatTimestamp(selectedSignal.cancel_requested_at) }}</v-list-item-subtitle>
+            </v-list-item>
+            <v-list-item v-if="selectedSignal.chase_suggestion">
+              <v-list-item-title>追单建议</v-list-item-title>
+              <v-list-item-subtitle>
+                剩余 {{ selectedSignal.chase_suggestion.remaining_size ?? '-' }} 股，
+                建议限价 {{ formatPrice(selectedSignal.chase_suggestion.suggested_limit_price) }}，
+                滑点 {{ selectedSignal.chase_suggestion.suggested_max_slippage_bps ?? '-' }} bps，
+                {{ selectedSignal.chase_suggestion.auto_resubmit ? '允许自动重挂' : '仅人工审查' }}
+              </v-list-item-subtitle>
+            </v-list-item>
             <v-list-item>
               <v-list-item-title>时间</v-list-item-title>
               <v-list-item-subtitle>{{ formatTimestamp(selectedSignal.timestamp) }}</v-list-item-subtitle>
@@ -322,7 +516,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 
 // API base URL
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
@@ -339,6 +533,7 @@ function authHeaders() {
 const activeTab = ref('summary')
 const loading = reactive({
   summary: false,
+  active: false,
   failed: false,
   retryPending: false
 })
@@ -367,10 +562,25 @@ const retryPendingHeaders = ref([
   { title: '操作', key: 'actions', width: 150, sortable: false }
 ])
 
+const activeSignalHeaders = ref([
+  { title: '状态', key: 'status', width: 120 },
+  { title: '股票', key: 'symbol', width: 150 },
+  { title: '方向', key: 'action', width: 80 },
+  { title: '成交/总数', key: 'filled_qty', width: 110 },
+  { title: '剩余', key: 'remaining_size', width: 90 },
+  { title: '保护价', key: 'effective_limit_price', width: 100 },
+  { title: 'QMT订单', key: 'qmt_order_id', width: 140 },
+  { title: '等待', key: 'age', width: 100 },
+  { title: '诊断', key: 'diagnostic', minWidth: 240 },
+  { title: '操作', key: 'actions', width: 180, sortable: false }
+])
+
 // 状态概览
 const statusSummary = ref([])
+const activeSignals = ref([])
 const failedSignals = ref([])
 const retryPendingSignals = ref([])
+const attentionSignals = computed(() => activeSignals.value.filter(isAttentionSignal))
 
 // 分页
 const failedPage = ref(1)
@@ -475,6 +685,28 @@ const fetchStatusSummary = async () => {
   }
 }
 
+const fetchActiveSignals = async () => {
+  loading.active = true
+  try {
+    const response = await get('/trader/live-signals', { limit: 200 })
+    if (response.success) {
+      activeSignals.value = (response.data || [])
+        .map(enrichSignal)
+        .filter(signal => isActiveOrAttentionStatus(signal.status))
+        .sort((a, b) => {
+          const aRank = isStaleSignal(a) ? 0 : isAttentionSignal(a) ? 1 : 2
+          const bRank = isStaleSignal(b) ? 0 : isAttentionSignal(b) ? 1 : 2
+          if (aRank !== bRank) return aRank - bRank
+          return (b.age_seconds || 0) - (a.age_seconds || 0)
+        })
+    }
+  } catch (error) {
+    console.error('获取实盘信号失败:', error)
+  } finally {
+    loading.active = false
+  }
+}
+
 const fetchFailedSignals = async (page = 1, pageSize = 20) => {
   loading.failed = true
   try {
@@ -519,6 +751,7 @@ const retrySignal = async (order_id) => {
         } else if (activeTab.value === 'retryPending') {
           fetchRetryPendingSignals()
         }
+        fetchActiveSignals()
         fetchStatusSummary() // 更新概览
       }
     } catch (error) {
@@ -540,6 +773,7 @@ const batchRetry = async (statusType) => {
         // 刷新数据
         fetchFailedSignals(failedPage.value, failedPageSize.value)
         fetchRetryPendingSignals()
+        fetchActiveSignals()
         fetchStatusSummary() // 更新概览
       }
     } catch (error) {
@@ -567,6 +801,7 @@ const submitManualOrder = async () => {
     if (response.success) {
       alert('手动订单创建成功: ' + response.order_id)
       resetManualOrderForm()
+      fetchActiveSignals()
       fetchStatusSummary() // 更新概览
     }
   } catch (error) {
@@ -603,6 +838,17 @@ const refreshRetryPendingSignals = () => {
   fetchRetryPendingSignals()
 }
 
+const refreshActiveSignals = () => {
+  fetchActiveSignals()
+}
+
+const refreshAll = () => {
+  fetchStatusSummary()
+  fetchActiveSignals()
+  fetchFailedSignals(failedPage.value, failedPageSize.value)
+  fetchRetryPendingSignals()
+}
+
 const handleFailedPageChange = (page) => {
   fetchFailedSignals(page, failedPageSize.value)
 }
@@ -613,7 +859,21 @@ const onStatusCardClick = (status) => {
     activeTab.value = 'failed'
   } else if (status === 'retry_pending') {
     activeTab.value = 'retryPending'
+  } else if (isActiveOrAttentionStatus(status)) {
+    activeTab.value = 'active'
   }
+}
+
+const prefillManualOrderFromSignal = (signal) => {
+  const suggestion = signal.chase_suggestion || {}
+  manualOrderForm.symbol = signal.symbol || ''
+  manualOrderForm.action = signal.action || 'sell'
+  manualOrderForm.size = suggestion.remaining_size || remainingSize(signal) || signal.size || 100
+  manualOrderForm.priceType = suggestion.suggested_limit_price ? 'limit' : 'market'
+  manualOrderForm.price = suggestion.suggested_limit_price || null
+  manualOrderForm.strategy = signal.strategy || signal.strategy_template_id || 'manual'
+  activeTab.value = 'manualOrder'
+  closeSignalDetail()
 }
 
 // 辅助函数
@@ -624,6 +884,10 @@ const getStatusLabel = (status) => {
     'submitted': '已提交',
     'filled': '已成交',
     'partial_filled': '部分成交',
+    'cancel_requested': '撤单中',
+    'partial_cancelled': '部成部撤',
+    'cancelled': '已撤单',
+    'executed': '已执行',
     'rejected': '已拒绝',
     'failed': '已失败'
   }
@@ -637,6 +901,9 @@ const getStatusIcon = (status) => {
     'submitted': 'mdi-paperclip',
     'filled': 'mdi-check-circle',
     'partial_filled': 'mdi-minus-circle',
+    'cancel_requested': 'mdi-cancel',
+    'partial_cancelled': 'mdi-alert-circle',
+    'cancelled': 'mdi-cancel',
     'rejected': 'mdi-close-circle',
     'failed': 'mdi-alert'
   }
@@ -650,6 +917,9 @@ const getStatusIconColor = (status) => {
     'submitted': 'primary',
     'filled': 'success',
     'partial_filled': 'warning',
+    'cancel_requested': 'warning',
+    'partial_cancelled': 'error',
+    'cancelled': 'grey',
     'rejected': 'error',
     'failed': 'error'
   }
@@ -663,6 +933,9 @@ const getStatusTagColor = (status) => {
     'submitted': 'primary',
     'filled': 'success',
     'partial_filled': 'warning',
+    'cancel_requested': 'warning',
+    'partial_cancelled': 'error',
+    'cancelled': 'grey',
     'rejected': 'error',
     'failed': 'error'
   }
@@ -675,6 +948,8 @@ const getStatusCardClass = (status) => {
     'failed': 'bg-red-lighten-4',
     'rejected': 'bg-orange-lighten-4',
     'retry_pending': 'bg-orange-lighten-4',
+    'cancel_requested': 'bg-orange-lighten-4',
+    'partial_cancelled': 'bg-red-lighten-4',
     'pending': 'bg-blue-lighten-4',
     'submitted': 'bg-blue-lighten-4',
     'filled': 'bg-green-lighten-4'
@@ -687,9 +962,81 @@ const formatTimestamp = (timestamp) => {
   return new Date(timestamp * 1000).toLocaleString('zh-CN')
 }
 
+const formatPrice = (value) => {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number.toFixed(2) : '-'
+}
+
+const nowSeconds = () => Math.floor(Date.now() / 1000)
+
+const enrichSignal = (signal) => {
+  const baseTime = Number(signal.updated_at || signal.submitted_at || signal.cancel_requested_at || signal.timestamp || signal.created_at || 0)
+  return {
+    ...signal,
+    age_seconds: baseTime ? Math.max(0, nowSeconds() - baseTime) : 0,
+  }
+}
+
+const remainingSize = (signal) => {
+  const explicit = Number(signal.remaining_size)
+  if (Number.isFinite(explicit)) return Math.max(0, explicit)
+  const size = Number(signal.size || 0)
+  const filled = Number(signal.filled_qty || signal.filled_size || 0)
+  return Math.max(0, size - filled)
+}
+
+const isActiveOrAttentionStatus = (status) => [
+  'pending',
+  'retry_pending',
+  'submitted',
+  'partial_filled',
+  'cancel_requested',
+  'partial_cancelled',
+  'failed',
+  'rejected',
+].includes(status)
+
+const isStaleSignal = (signal) => {
+  const age = Number(signal.age_seconds || 0)
+  if (signal.status === 'submitted') return age >= 90
+  if (signal.status === 'cancel_requested') return age >= 60
+  if (signal.status === 'partial_filled') return age >= 180 && remainingSize(signal) > 0
+  return false
+}
+
+const isAttentionSignal = (signal) => {
+  if (!signal) return false
+  if (isStaleSignal(signal)) return true
+  if (['failed', 'rejected', 'partial_cancelled', 'cancel_requested'].includes(signal.status)) return true
+  if (signal.status === 'partial_filled' && remainingSize(signal) > 0) return true
+  if (signal.status === 'retry_pending') return true
+  return Boolean(signal.chase_suggestion)
+}
+
+const diagnosticText = (signal) => {
+  if (signal.chase_suggestion) {
+    const suggestion = signal.chase_suggestion
+    return `剩余 ${suggestion.remaining_size ?? remainingSize(signal)} 股，建议限价 ${formatPrice(suggestion.suggested_limit_price)}`
+  }
+  if (signal.last_error) return signal.last_error
+  if (signal.status === 'submitted') return '等待券商成交或回报'
+  if (signal.status === 'cancel_requested') return '已请求撤单，等待券商确认'
+  if (signal.status === 'partial_filled') return `部分成交，剩余 ${remainingSize(signal)} 股`
+  if (signal.status === 'retry_pending') return '等待重试条件满足'
+  return '-'
+}
+
+const formatAge = (seconds) => {
+  const value = Number(seconds || 0)
+  if (value < 60) return `${value}s`
+  if (value < 3600) return `${Math.floor(value / 60)}m ${value % 60}s`
+  return `${Math.floor(value / 3600)}h ${Math.floor((value % 3600) / 60)}m`
+}
+
 // 生命周期
 onMounted(() => {
   fetchStatusSummary()
+  fetchActiveSignals()
   fetchFailedSignals()
   fetchRetryPendingSignals()
 })
@@ -698,6 +1045,50 @@ onMounted(() => {
 <style scoped>
 .trading-manual-panel {
   padding: 20px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.page-header h2 {
+  margin: 0 0 4px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: #607d8b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.subtitle {
+  margin: 0;
+  color: #607d8b;
+}
+
+.symbol-cell {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.symbol-cell span {
+  color: #78909c;
+  font-size: 12px;
+}
+
+.diagnostic-cell {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  white-space: normal;
 }
 
 .status-card {
