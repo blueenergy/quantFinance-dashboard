@@ -7,6 +7,7 @@
         color="primary"
         variant="flat"
         size="small"
+        :disabled="!isMiniQmtConnected"
         @click="openTradeDialog(null, 'buy')"
       >
         💹 交易
@@ -58,6 +59,21 @@
           </div>
         </div>
       </v-alert>
+
+      <v-alert v-else-if="currentAccount && !isMiniQmtConnected" type="warning" variant="tonal" class="mt-2">
+        <div class="d-flex align-center">
+          <span>⚠️</span>
+          <div class="ml-2">
+            <strong>miniQMT 未连接或心跳已过期</strong>：下方金额和持仓来自本地数据库最近一次同步快照，仅供参考，具体金额以 miniQMT 客户端为准。<br>
+            <small>{{ traderConnectionText }}；{{ accountSnapshotText }}</small>
+          </div>
+        </div>
+      </v-alert>
+
+      <v-alert v-else-if="currentAccount" type="success" variant="tonal" class="mt-2">
+        <strong>miniQMT 已连接</strong>
+        <small class="ml-2">{{ traderConnectionText }}；{{ accountSnapshotText }}</small>
+      </v-alert>
     </v-card-text>
     
     <v-card-text v-else>
@@ -74,28 +90,32 @@
           <v-col cols="12" md="3">
             <v-card color="blue-lighten-5" class="pa-4">
               <div class="text-subtitle-2">总资产</div>
-              <div class="text-h5 font-weight-bold">{{ formatCurrency(overview.total_assets || 0) }}</div>
+              <div class="text-h5 font-weight-bold">{{ displayAccountCurrency(overview.total_assets) }}</div>
+              <div v-if="!accountDataReliable" class="stale-data-note">本地库快照，以 miniQMT 为准</div>
             </v-card>
           </v-col>
           <v-col cols="12" md="3">
             <v-card color="green-lighten-5" class="pa-4">
               <div class="text-subtitle-2">可用资金</div>
-              <div class="text-h5 font-weight-bold">{{ formatCurrency(overview.available_cash || 0) }}</div>
+              <div class="text-h5 font-weight-bold">{{ displayAccountCurrency(overview.available_cash) }}</div>
+              <div v-if="!accountDataReliable" class="stale-data-note">本地库快照，以 miniQMT 为准</div>
             </v-card>
           </v-col>
           <v-col cols="12" md="3">
             <v-card color="orange-lighten-5" class="pa-4">
               <div class="text-subtitle-2">持仓市值</div>
-              <div class="text-h5 font-weight-bold">{{ formatCurrency(overview.market_value || 0) }}</div>
+              <div class="text-h5 font-weight-bold">{{ displayAccountCurrency(overview.market_value) }}</div>
+              <div v-if="!accountDataReliable" class="stale-data-note">本地库快照，以 miniQMT 为准</div>
             </v-card>
           </v-col>
           <v-col cols="12" md="3">
             <v-card :color="overview.daily_pnl >= 0 ? 'green-lighten-5' : 'red-lighten-5'" class="pa-4">
               <div class="text-subtitle-2">当日盈亏</div>
-              <div class="text-h5 font-weight-bold">{{ formatCurrency(overview.daily_pnl || 0) }}</div>
+              <div class="text-h5 font-weight-bold">{{ displayAccountCurrency(overview.daily_pnl) }}</div>
               <div :class="overview.daily_pnl >= 0 ? 'green--text' : 'red--text'">
                 ({{ formatPercent(overview.daily_pnl_ratio || 0) }})
               </div>
+              <div v-if="!accountDataReliable" class="stale-data-note">本地库快照，以 miniQMT 为准</div>
             </v-card>
           </v-col>
         </v-row>
@@ -157,6 +177,7 @@
                 color="primary"
                 variant="tonal"
                 size="x-small"
+                :disabled="!isMiniQmtConnected"
                 @click="openTradeDialog(item.raw, 'sell')"
               >
                 交易
@@ -311,7 +332,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { getTraderAccount, getTraderPositions, getSecuritiesAccounts, getTradeSignals } from '../api/trader'
+import { getTraderAccount, getTraderPositions, getSecuritiesAccounts, getTradeSignals, getTraderHeartbeats } from '../api/trader'
 import { getTradeExecutionsBySymbol } from '../api/trading'
 import TradeDialog from './TradeDialog.vue'
 
@@ -319,6 +340,8 @@ import TradeDialog from './TradeDialog.vue'
 const securitiesAccounts = ref([])
 // 当前选中的账户ID
 const selectedAccountId = ref(null)
+const traderHeartbeats = ref([])
+const HEARTBEAT_FRESH_SECONDS = 180
 
 // 账户概览数据
 const overview = ref({
@@ -368,6 +391,59 @@ const isObservationMode = computed(() => {
   return currentAccount.value && currentAccount.value.account_type === 'simulated'
 })
 
+const selectedTraderHeartbeat = computed(() => {
+  if (!currentAccount.value || isObservationMode.value) return null
+  const accountId = String(currentAccount.value.account_id || '')
+  const securitiesAccountId = String(currentAccount.value.id || currentAccount.value._id || currentAccount.value.securities_account_id || '')
+  return traderHeartbeats.value.find(hb => {
+    const hbSecuritiesAccountId = String(hb.securities_account_id || '')
+    const hbAccountId = String(hb.account_id || '')
+    const hbWorkerId = String(hb.worker_id || '')
+    return (
+      (securitiesAccountId && hbSecuritiesAccountId === securitiesAccountId) ||
+      (accountId && hbAccountId === accountId) ||
+      (securitiesAccountId && hbWorkerId.includes(securitiesAccountId)) ||
+      (accountId && hbWorkerId.includes(accountId))
+    )
+  }) || null
+})
+
+const heartbeatAgeSeconds = computed(() => {
+  const lastSeenAt = Number(selectedTraderHeartbeat.value?.last_seen_at || 0)
+  if (!lastSeenAt) return null
+  return Math.max(0, Math.floor(Date.now() / 1000 - lastSeenAt))
+})
+
+const isMiniQmtConnected = computed(() => {
+  if (isObservationMode.value) return true
+  if (!selectedTraderHeartbeat.value || heartbeatAgeSeconds.value === null) return false
+  const status = String(selectedTraderHeartbeat.value.status || '').toLowerCase()
+  if (['stopped', 'failed', 'error', 'offline', 'disconnected'].includes(status)) return false
+  return heartbeatAgeSeconds.value <= HEARTBEAT_FRESH_SECONDS
+})
+
+const accountDataReliable = computed(() => {
+  return isObservationMode.value || isMiniQmtConnected.value
+})
+
+const traderConnectionText = computed(() => {
+  if (isObservationMode.value) return '观察模式不依赖 miniQMT 实时连接'
+  const heartbeat = selectedTraderHeartbeat.value
+  if (!heartbeat) return '当前账户没有匹配到 quantTrader heartbeat'
+  const ageText = formatDuration(heartbeatAgeSeconds.value)
+  const lastSeen = heartbeat.last_seen_at ? new Date(heartbeat.last_seen_at * 1000).toLocaleString('zh-CN') : '-'
+  return `状态 ${heartbeat.status || '-'}，最后心跳 ${ageText} 前（${lastSeen}）`
+})
+
+const accountSnapshotText = computed(() => {
+  if (isObservationMode.value) return '数据由观察模式模拟计算'
+  const syncedAt = Number(overview.value?.synced_at || 0)
+  if (!syncedAt) return '本地数据库暂无账户同步时间'
+  const syncedAtText = new Date(syncedAt * 1000).toLocaleString('zh-CN')
+  const ageText = formatDuration(Math.max(0, Math.floor(Date.now() / 1000 - syncedAt)))
+  return `本地数据库同步于 ${syncedAtText}（${ageText} 前）`
+})
+
 // 计算最大持仓占比
 const largestPositionRatio = computed(() => {
   if (enrichedPositions.value.length === 0 || !overview.value.market_value) return 0
@@ -407,6 +483,19 @@ function formatCurrency(value) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })
+}
+
+function displayAccountCurrency(value) {
+  return formatCurrency(value || 0)
+}
+
+function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined) return '未知'
+  const value = Number(seconds)
+  if (!Number.isFinite(value)) return '未知'
+  if (value < 60) return `${Math.floor(value)}秒`
+  if (value < 3600) return `${Math.floor(value / 60)}分${Math.floor(value % 60)}秒`
+  return `${Math.floor(value / 3600)}小时${Math.floor((value % 3600) / 60)}分`
 }
 
 // 格式化百分比
@@ -464,6 +553,15 @@ async function loadPositions() {
   } catch (error) {
     console.error('获取持仓数据失败:', error)
     positions.value = []
+  }
+}
+
+async function loadTraderHeartbeats() {
+  try {
+    traderHeartbeats.value = await getTraderHeartbeats(50)
+  } catch (error) {
+    console.error('获取 quantTrader heartbeat 失败:', error)
+    traderHeartbeats.value = []
   }
 }
 
@@ -588,6 +686,7 @@ function onAccountChange() {
 
 // 刷新数据
 async function refreshData() {
+  await loadTraderHeartbeats()
   await Promise.all([
     loadOverview(),
     loadPositions()

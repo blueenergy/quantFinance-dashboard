@@ -30,6 +30,14 @@ export async function getTraderPositions(securitiesAccountId = null) {
   return data.data || [];
 }
 
+export async function getTraderHeartbeats(limit = 50) {
+  const url = `${API_BASE}/trader/heartbeat?limit=${encodeURIComponent(limit)}`;
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`Failed to get trader heartbeats: ${res.status}`);
+  const data = await res.json();
+  return data.data || [];
+}
+
 // 获取用户的所有证券账户
 export async function getSecuritiesAccounts() {
   const res = await fetch(`${API_BASE}/user/securities_accounts`, { headers: authHeaders() });
