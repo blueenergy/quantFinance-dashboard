@@ -152,6 +152,22 @@
             <input v-model.number="generateForm.params.cash_buffer" type="number" min="0" max="1" step="0.01" />
           </label>
           <label>
+            buy commission
+            <input v-model.number="generateForm.params.buy_commission_rate" type="number" min="0" step="0.00001" />
+          </label>
+          <label>
+            sell commission
+            <input v-model.number="generateForm.params.sell_commission_rate" type="number" min="0" step="0.00001" />
+          </label>
+          <label>
+            min commission
+            <input v-model.number="generateForm.params.min_commission" type="number" min="0" step="0.1" />
+          </label>
+          <label>
+            stamp tax
+            <input v-model.number="generateForm.params.stamp_tax_rate" type="number" min="0" step="0.00001" />
+          </label>
+          <label>
             initial_capital
             <input v-model.number="generateForm.params.initial_capital" type="number" min="1" step="10000" />
           </label>
@@ -852,6 +868,16 @@ function normalizePlanParams(params) {
   next.cycle_weight = roundWeight(1 - growth)
   const capital = Number(next.initial_capital)
   next.initial_capital = Number.isFinite(capital) && capital > 0 ? capital : 1_000_000
+  for (const [key, fallback] of Object.entries({
+    buy_commission_rate: 0.0001,
+    sell_commission_rate: 0.0001,
+    min_commission: 5,
+    stamp_tax_rate: 0.0005,
+    transfer_fee_rate: 0,
+  })) {
+    const value = Number(next[key])
+    next[key] = Number.isFinite(value) && value >= 0 ? value : fallback
+  }
   return next
 }
 

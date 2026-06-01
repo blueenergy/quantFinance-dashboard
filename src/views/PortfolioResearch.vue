@@ -56,8 +56,24 @@
           <input v-model="form.active_caps" placeholder="0.2,0.25,0.3" />
         </label>
         <label>
-          transaction_cost
+          legacy transaction_cost
           <input v-model.number="form.transaction_cost" type="number" min="0" step="0.0001" />
+        </label>
+        <label>
+          buy commission
+          <input v-model.number="form.buy_commission_rate" type="number" min="0" step="0.00001" />
+        </label>
+        <label>
+          sell commission
+          <input v-model.number="form.sell_commission_rate" type="number" min="0" step="0.00001" />
+        </label>
+        <label>
+          min commission
+          <input v-model.number="form.min_commission" type="number" min="0" step="0.1" />
+        </label>
+        <label>
+          stamp tax
+          <input v-model.number="form.stamp_tax_rate" type="number" min="0" step="0.00001" />
         </label>
         <label>
           initial capital
@@ -282,6 +298,11 @@ const form = ref({
   horizon: 20,
   active_caps: '0.2,0.25,0.3,0.4',
   transaction_cost: 0.001,
+  buy_commission_rate: 0.0001,
+  sell_commission_rate: 0.0001,
+  min_commission: 5,
+  stamp_tax_rate: 0.0005,
+  transfer_fee_rate: 0,
   initial_capital: 1_000_000,
 })
 
@@ -381,7 +402,10 @@ function buildResearchParamRows(job) {
     { key: 'horizon', label: 'horizon', value: params.horizon ?? '-' },
     { key: 'rebalance_interval_days', label: 'rebalance intervals', value: formatList(params.rebalance_interval_days, (item) => `${item}d`) },
     { key: 'active_caps', label: 'active caps', value: formatList(params.active_caps, pct) },
-    { key: 'transaction_cost', label: 'transaction_cost', value: pct(params.transaction_cost) },
+    { key: 'transaction_cost', label: 'legacy transaction_cost', value: pct(params.transaction_cost) },
+    { key: 'buy_commission_rate', label: 'buy commission', value: pct(params.buy_commission_rate) },
+    { key: 'sell_commission_rate', label: 'sell commission', value: pct(params.sell_commission_rate) },
+    { key: 'stamp_tax_rate', label: 'stamp tax', value: pct(params.stamp_tax_rate) },
     { key: 'index_benchmark_symbol', label: 'benchmark', value: params.index_benchmark_symbol || '-' },
     { key: 'cash_buffer', label: 'cash_buffer', value: pct(params.cash_buffer) },
     { key: 'initial_capital', label: 'initial_capital', value: money(params.initial_capital) },

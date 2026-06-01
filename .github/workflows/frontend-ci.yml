@@ -14,7 +14,7 @@ permissions:
 jobs:
   test-build:
     name: Test & Build (Vite + Vitest)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -50,7 +50,7 @@ jobs:
   deploy:
     name: Deploy to VolcEngine (docker pull from ACR)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     needs: [test-build, docker]
     steps:
       - name: Set up SSH key
@@ -88,10 +88,13 @@ jobs:
   docker:
     name: Build & Push Docker image (ghcr.io + ACR)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -126,6 +129,7 @@ jobs:
         with:
           context: .
           file: Dockerfile.fast
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

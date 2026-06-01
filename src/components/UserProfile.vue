@@ -504,6 +504,25 @@
               />
             </div>
           </div>
+
+          <div v-if="currentAccount.account_type === 'real'" class="risk-limits-grid">
+            <div class="form-group">
+              <label>买入佣金率</label>
+              <input v-model.number="currentAccount.fee_model.buy_commission_rate" type="number" min="0" step="0.00001" class="form-control" placeholder="例如 0.0001" />
+            </div>
+            <div class="form-group">
+              <label>卖出佣金率</label>
+              <input v-model.number="currentAccount.fee_model.sell_commission_rate" type="number" min="0" step="0.00001" class="form-control" placeholder="例如 0.0001" />
+            </div>
+            <div class="form-group">
+              <label>最低佣金（元）</label>
+              <input v-model.number="currentAccount.fee_model.min_commission" type="number" min="0" step="0.1" class="form-control" placeholder="例如 5" />
+            </div>
+            <div class="form-group">
+              <label>卖出印花税率</label>
+              <input v-model.number="currentAccount.fee_model.stamp_tax_rate" type="number" min="0" step="0.00001" class="form-control" placeholder="例如 0.0005" />
+            </div>
+          </div>
         </div>
         
         <div class="modal-footer">
@@ -618,6 +637,13 @@ export default {
         max_order_amount: null,
         max_daily_amount: null,
         max_position_pct: null
+      },
+      fee_model: {
+        buy_commission_rate: 0.0001,
+        sell_commission_rate: 0.0001,
+        min_commission: 5,
+        stamp_tax_rate: 0.0005,
+        transfer_fee_rate: 0
       }
     })
     
@@ -1143,6 +1169,13 @@ export default {
           max_order_amount: null,
           max_daily_amount: null,
           max_position_pct: null
+        },
+        fee_model: {
+          buy_commission_rate: 0.0001,
+          sell_commission_rate: 0.0001,
+          min_commission: 5,
+          stamp_tax_rate: 0.0005,
+          transfer_fee_rate: 0
         }
       })
       showAddAccountModal.value = true
@@ -1162,6 +1195,13 @@ export default {
           max_order_amount: account.risk_limits?.max_order_amount ?? null,
           max_daily_amount: account.risk_limits?.max_daily_amount ?? null,
           max_position_pct: account.risk_limits?.max_position_pct ?? null
+        },
+        fee_model: {
+          buy_commission_rate: account.fee_model?.buy_commission_rate ?? 0.0001,
+          sell_commission_rate: account.fee_model?.sell_commission_rate ?? 0.0001,
+          min_commission: account.fee_model?.min_commission ?? 5,
+          stamp_tax_rate: account.fee_model?.stamp_tax_rate ?? 0.0005,
+          transfer_fee_rate: account.fee_model?.transfer_fee_rate ?? 0
         }
       })
       showAddAccountModal.value = true
@@ -1172,6 +1212,17 @@ export default {
       for (const field of ['max_order_amount', 'max_daily_amount', 'max_position_pct']) {
         const value = Number(limits?.[field])
         if (Number.isFinite(value) && value > 0) {
+          cleaned[field] = value
+        }
+      }
+      return cleaned
+    }
+
+    const cleanFeeModel = (model) => {
+      const cleaned = {}
+      for (const field of ['buy_commission_rate', 'sell_commission_rate', 'min_commission', 'stamp_tax_rate', 'transfer_fee_rate']) {
+        const value = Number(model?.[field])
+        if (Number.isFinite(value) && value >= 0) {
           cleaned[field] = value
         }
       }
@@ -1209,7 +1260,8 @@ export default {
             broker: currentAccount.broker,
             account_type: currentAccount.account_type,
             live_trading_enabled: currentAccount.account_type === 'real' ? currentAccount.live_trading_enabled : false,
-            risk_limits: currentAccount.account_type === 'real' ? cleanRiskLimits(currentAccount.risk_limits) : {}
+            risk_limits: currentAccount.account_type === 'real' ? cleanRiskLimits(currentAccount.risk_limits) : {},
+            fee_model: currentAccount.account_type === 'real' ? cleanFeeModel(currentAccount.fee_model) : {}
           }
           // 真实账户才需要账户ID
           if (currentAccount.account_type === 'real') {
@@ -1222,7 +1274,8 @@ export default {
             broker: currentAccount.broker,
             account_type: currentAccount.account_type,
             live_trading_enabled: currentAccount.account_type === 'real' ? currentAccount.live_trading_enabled : false,
-            risk_limits: currentAccount.account_type === 'real' ? cleanRiskLimits(currentAccount.risk_limits) : {}
+            risk_limits: currentAccount.account_type === 'real' ? cleanRiskLimits(currentAccount.risk_limits) : {},
+            fee_model: currentAccount.account_type === 'real' ? cleanFeeModel(currentAccount.fee_model) : {}
           }
           
           if (currentAccount.account_type === 'real') {
