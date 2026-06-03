@@ -110,6 +110,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'analysis-task-queue', name: '任务队列' },
       { id: 'strategy-pool', name: '🎯 策略股池' },
       { id: 'ranking', name: '金榜' },
+      { id: 'entropy-ranking', name: '熵值排名' },
       { id: 'watchlist', name: '自选股' },
       { id: 'backtest', name: '📊 回测管理' },
       { id: 'strategy-lab', name: '🧪 策略实验室' },

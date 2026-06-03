@@ -10,6 +10,7 @@ const MarketAnalysisBulletin = defineAsyncComponent(() => import('../components/
 const GlobalMarketBrief = defineAsyncComponent(() => import('../components/GlobalMarketBrief.vue'))
 const AdminDashboard = defineAsyncComponent(() => import('../components/AdminDashboard.vue'))
 const StockRanking = defineAsyncComponent(() => import('../components/StockRanking.vue'))
+const EntropyRanking = defineAsyncComponent(() => import('../views/EntropyRanking.vue'))
 const MarketSpectrum = defineAsyncComponent(() => import('../components/MarketSpectrum.vue'))
 const IntradayT0 = defineAsyncComponent(() => import('../components/IntradayT0.vue'))
 const MarketInsightsRadar = defineAsyncComponent(() => import('../components/MarketInsightsRadar.vue'))
@@ -104,6 +105,12 @@ export const tabViewDefinitions = [
     component: StockRanking,
     fallbackClass: 'skeleton-table',
     fallbackText: '评分模块加载中...',
+  },
+  {
+    id: 'entropy-ranking',
+    component: EntropyRanking,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '熵值因子排名加载中...',
   },
   {
     id: 'spectrum',
