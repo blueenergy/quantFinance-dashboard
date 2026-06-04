@@ -116,6 +116,55 @@
       </v-card-text>
     </v-card>
 
+    <!-- 账户资金曲线 -->
+    <v-card class="mb-4">
+      <v-card-title>账户资金曲线</v-card-title>
+      <v-card-text>
+        <p v-if="!accountEquityRows.length" class="muted-text">暂无账户资金曲线快照，盘后任务落库后显示。</p>
+        <template v-else>
+          <div class="equity-summary">
+            <div>
+              <span>最新总资产</span>
+              <strong>{{ formatCurrency(accountEquityRows[accountEquityRows.length - 1]?.equity) }}</strong>
+            </div>
+            <div>
+              <span>累计变化</span>
+              <strong>{{ formatSignedCurrency(accountEquityRows[accountEquityRows.length - 1]?.change_from_start) }}</strong>
+            </div>
+            <div>
+              <span>最新快照</span>
+              <strong>{{ accountEquityRows[accountEquityRows.length - 1]?.date || '-' }}</strong>
+            </div>
+          </div>
+          <div class="equity-chart" aria-label="Account equity curve">
+            <svg viewBox="0 0 640 220" role="img">
+              <line x1="28" y1="28" x2="28" y2="192" />
+              <line x1="28" y1="192" x2="612" y2="192" />
+              <polyline :points="accountEquityChart.points" />
+              <circle
+                v-for="point in accountEquityChart.points.split(' ')"
+                :key="point"
+                :cx="point.split(',')[0]"
+                :cy="point.split(',')[1]"
+                r="3"
+              />
+              <text x="36" y="22">{{ formatCurrency(accountEquityChart.max) }}</text>
+              <text x="36" y="186">{{ formatCurrency(accountEquityChart.min) }}</text>
+              <text
+                v-for="label in accountEquityChart.labels"
+                :key="label.text"
+                :x="label.x"
+                :y="label.y"
+                :text-anchor="label.anchor"
+              >
+                {{ label.text }}
+              </text>
+            </svg>
+          </div>
+        </template>
+      </v-card-text>
+    </v-card>
+
     <!-- 持仓表 -->
     <v-card class="mb-4">
       <v-card-title>持仓详情</v-card-title>
@@ -326,7 +375,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { getTraderAccount, getTraderPositions, getSecuritiesAccounts, getTradeSignals, getTraderHeartbeats } from '../api/trader'
+import { getTraderAccount, getTraderAccountEquity, getTraderPositions, getSecuritiesAccounts, getTradeSignals, getTraderHeartbeats } from '../api/trader'
 import { getTradeExecutionsBySymbol } from '../api/trading'
 import TradeDialog from './TradeDialog.vue'
 
@@ -345,6 +394,7 @@ const overview = ref({
   daily_pnl: 0,
   daily_pnl_ratio: 0
 })
+const accountEquity = ref([])
 
 // 持仓数据
 const positions = ref([])
@@ -438,6 +488,48 @@ const accountSnapshotText = computed(() => {
   return `本地数据库同步于 ${syncedAtText}（${ageText} 前）`
 })
 
+const accountEquityRows = computed(() => {
+  return [...accountEquity.value]
+    .filter(point => Number.isFinite(Number(point.total_asset ?? point.equity)))
+    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
+    .map((point, index, rows) => {
+      const equity = Number(point.total_asset ?? point.equity)
+      const first = Number(rows[0]?.total_asset ?? rows[0]?.equity)
+      const previous = index > 0 ? Number(rows[index - 1].total_asset ?? rows[index - 1].equity) : NaN
+      const change = Number.isFinite(previous) ? equity - previous : null
+      const changeFromStart = Number.isFinite(first) ? equity - first : null
+      return { ...point, equity, change, change_from_start: changeFromStart }
+    })
+})
+
+const accountEquityChart = computed(() => {
+  const rows = accountEquityRows.value
+  if (!rows.length) return { points: '', labels: [], min: 0, max: 0 }
+  const values = rows.map(row => row.equity)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min || 1
+  const width = 640
+  const height = 220
+  const pad = 28
+  const points = rows
+    .map((row, index) => {
+      const x = rows.length === 1 ? width / 2 : pad + (index * (width - pad * 2)) / (rows.length - 1)
+      const y = height - pad - ((row.equity - min) * (height - pad * 2)) / span
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+  return {
+    points,
+    min,
+    max,
+    labels: [
+      { text: rows[0].date, x: pad, y: height - 6, anchor: 'start' },
+      { text: rows[rows.length - 1].date, x: width - pad, y: height - 6, anchor: 'end' },
+    ],
+  }
+})
+
 // 计算最大持仓占比
 const largestPositionRatio = computed(() => {
   if (enrichedPositions.value.length === 0 || !overview.value.market_value) return 0
@@ -481,6 +573,13 @@ function formatCurrency(value) {
 
 function displayAccountCurrency(value) {
   return formatCurrency(value || 0)
+}
+
+function formatSignedCurrency(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return 'N/A'
+  const formatted = formatCurrency(Math.abs(number))
+  return `${number >= 0 ? '+' : '-'}${formatted}`
 }
 
 function formatDuration(seconds) {
@@ -556,6 +655,19 @@ async function loadTraderHeartbeats() {
   } catch (error) {
     console.error('获取 quantTrader heartbeat 失败:', error)
     traderHeartbeats.value = []
+  }
+}
+
+async function loadAccountEquity() {
+  if (isObservationMode.value || !selectedAccountId.value) {
+    accountEquity.value = []
+    return
+  }
+  try {
+    accountEquity.value = await getTraderAccountEquity(selectedAccountId.value)
+  } catch (error) {
+    console.error('获取账户资金曲线失败:', error)
+    accountEquity.value = []
   }
 }
 
@@ -683,7 +795,8 @@ async function refreshData() {
   await loadTraderHeartbeats()
   await Promise.all([
     loadOverview(),
-    loadPositions()
+    loadPositions(),
+    loadAccountEquity()
   ])
 }
 
@@ -834,5 +947,48 @@ async function openHistoryDialog(position) {
 }
 .gap-1 {
   gap: 4px;
+}
+.muted-text {
+  color: rgba(var(--v-theme-on-surface), 0.55);
+}
+.equity-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.equity-summary div {
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  border-radius: 8px;
+  padding: 10px;
+}
+.equity-summary span {
+  display: block;
+  color: rgba(var(--v-theme-on-surface), 0.55);
+  font-size: 12px;
+}
+.equity-chart {
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  border-radius: 8px;
+  padding: 8px;
+}
+.equity-chart svg {
+  width: 100%;
+  height: auto;
+}
+.equity-chart line {
+  stroke: rgba(var(--v-theme-on-surface), 0.2);
+}
+.equity-chart polyline {
+  fill: none;
+  stroke: rgb(var(--v-theme-primary));
+  stroke-width: 3;
+}
+.equity-chart circle {
+  fill: rgb(var(--v-theme-primary));
+}
+.equity-chart text {
+  fill: rgba(var(--v-theme-on-surface), 0.55);
+  font-size: 12px;
 }
 </style>

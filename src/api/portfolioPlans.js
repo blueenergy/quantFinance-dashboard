@@ -68,6 +68,14 @@ export function getPortfolioPlanLiveExecutions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/live-executions`, method: 'get' })
 }
 
+export function getPortfolioPlanLiveEquity(planId, params = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/live-equity`, method: 'get', params })
+}
+
+export function getPortfolioPlanLiveRealtimeEquity(planId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/live-realtime-equity`, method: 'get' })
+}
+
 export function getPortfolioStrategyEquity(strategyId, params = {}) {
   return request({ url: `/portfolio-plans/strategies/${strategyId}/equity`, method: 'get', params })
 }

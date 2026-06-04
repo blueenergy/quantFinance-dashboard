@@ -19,6 +19,19 @@ export async function getTraderAccount(securitiesAccountId = null) {
   return data.data || {};
 }
 
+export async function getTraderAccountEquity(securitiesAccountId = null, params = {}) {
+  let url = `${API_BASE}/trader/account/equity`;
+  const searchParams = new URLSearchParams();
+  if (securitiesAccountId) searchParams.append("securities_account_id", securitiesAccountId);
+  if (params.start_date) searchParams.append("start_date", params.start_date);
+  if (params.end_date) searchParams.append("end_date", params.end_date);
+  if (searchParams.toString()) url += `?${searchParams.toString()}`;
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`Failed to get trader account equity: ${res.status}`);
+  const data = await res.json();
+  return data.data || [];
+}
+
 export async function getTraderPositions(securitiesAccountId = null) {
   let url = `${API_BASE}/trader/positions`;
   if (securitiesAccountId) {

@@ -591,11 +591,11 @@
             </div>
           </section>
 
-          <section v-if="selectedPlanShowsPaperTrading">
-            <h4>Paper 净值</h4>
+          <section v-if="selectedPlanShowsPaperTrading || selectedPlanHasLiveSignals">
+            <h4>{{ selectedPlanHasLiveSignals ? '实盘资金曲线' : 'Paper 净值' }}</h4>
             <div v-if="realtimeEquity" class="realtime-equity">
               <div>
-                <span>实时估算权益</span>
+                <span>{{ selectedPlanHasLiveSignals ? '实盘实时估算权益' : '实时估算权益' }}</span>
                 <strong>{{ money(realtimeEquity.equity) }}</strong>
               </div>
               <div>
@@ -615,7 +615,9 @@
                 <strong>{{ realtimeEquity.latest_update || '-' }}</strong>
               </div>
             </div>
-            <p v-if="!equityRows.length" class="muted">暂无 paper 净值。</p>
+            <p v-if="!equityRows.length" class="muted">
+              {{ selectedPlanHasLiveSignals ? '暂无实盘资金曲线，盘后任务落库后显示。' : '暂无 paper 净值。' }}
+            </p>
             <template v-else>
               <div class="equity-summary">
                 <div>
@@ -631,7 +633,7 @@
                   <strong>{{ signedMoney(equityRows[equityRows.length - 1]?.change) }}</strong>
                 </div>
               </div>
-              <div class="equity-chart" aria-label="Paper equity curve">
+              <div class="equity-chart" :aria-label="selectedPlanHasLiveSignals ? 'Live equity curve' : 'Paper equity curve'">
                 <svg viewBox="0 0 640 220" role="img">
                   <line x1="28" y1="28" x2="28" y2="192" />
                   <line x1="28" y1="192" x2="612" y2="192" />
@@ -733,7 +735,9 @@ import {
   generatePortfolioPlan,
   getPortfolioPlan,
   getPortfolioPlanExecutions,
+  getPortfolioPlanLiveEquity,
   getPortfolioPlanLiveExecutions,
+  getPortfolioPlanLiveRealtimeEquity,
   getPortfolioPlanGenerationTask,
   getPortfolioPlanGenerationWatermark,
   getPortfolioStrategyEquity,
@@ -1354,10 +1358,12 @@ async function selectPlan(planId) {
   const res = await getPortfolioPlan(planId)
   selectedDetail.value = res.data
   if (selectedPlanHasLiveSignals.value) {
-    equity.value = []
-    realtimeEquity.value = null
     executions.value = []
-    await loadLiveOps()
+    await Promise.all([
+      loadEquity(),
+      loadRealtimeEquity(),
+      loadLiveOps(),
+    ])
     return
   }
   await Promise.all([
@@ -1408,6 +1414,15 @@ async function publishLiveSignals() {
 }
 
 async function loadEquity() {
+  if (selectedPlanHasLiveSignals.value) {
+    if (!selectedPlanId.value) {
+      equity.value = []
+      return
+    }
+    const res = await getPortfolioPlanLiveEquity(selectedPlanId.value)
+    equity.value = res.data || []
+    return
+  }
   const templateId = selectedDetail.value?.plan?.strategy_template_id
   if (!templateId) {
     equity.value = []
@@ -1418,6 +1433,15 @@ async function loadEquity() {
 }
 
 async function loadRealtimeEquity() {
+  if (selectedPlanHasLiveSignals.value) {
+    if (!selectedPlanId.value) {
+      realtimeEquity.value = null
+      return
+    }
+    const res = await getPortfolioPlanLiveRealtimeEquity(selectedPlanId.value)
+    realtimeEquity.value = res.data || null
+    return
+  }
   const templateId = selectedDetail.value?.plan?.strategy_template_id
   if (!templateId) {
     realtimeEquity.value = null
