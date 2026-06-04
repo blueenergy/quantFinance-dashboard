@@ -87,37 +87,31 @@
       <v-card-title>账户概览</v-card-title>
       <v-card-text>
         <v-row>
-          <v-col cols="12" md="3">
+          <v-col cols="12" md="4">
             <v-card color="blue-lighten-5" class="pa-4">
               <div class="text-subtitle-2">总资产</div>
               <div class="text-h5 font-weight-bold">{{ displayAccountCurrency(overview.total_assets) }}</div>
               <div v-if="!accountDataReliable" class="stale-data-note">本地库快照，以 miniQMT 为准</div>
             </v-card>
           </v-col>
-          <v-col cols="12" md="3">
+          <v-col cols="12" md="4">
             <v-card color="green-lighten-5" class="pa-4">
               <div class="text-subtitle-2">可用资金</div>
               <div class="text-h5 font-weight-bold">{{ displayAccountCurrency(overview.available_cash) }}</div>
               <div v-if="!accountDataReliable" class="stale-data-note">本地库快照，以 miniQMT 为准</div>
             </v-card>
           </v-col>
-          <v-col cols="12" md="3">
+          <v-col cols="12" md="4">
             <v-card color="orange-lighten-5" class="pa-4">
               <div class="text-subtitle-2">持仓市值</div>
               <div class="text-h5 font-weight-bold">{{ displayAccountCurrency(overview.market_value) }}</div>
               <div v-if="!accountDataReliable" class="stale-data-note">本地库快照，以 miniQMT 为准</div>
             </v-card>
           </v-col>
-          <v-col cols="12" md="3">
-            <v-card :color="overview.daily_pnl >= 0 ? 'green-lighten-5' : 'red-lighten-5'" class="pa-4">
-              <div class="text-subtitle-2">当日盈亏</div>
-              <div class="text-h5 font-weight-bold">{{ displayAccountCurrency(overview.daily_pnl) }}</div>
-              <div :class="overview.daily_pnl >= 0 ? 'green--text' : 'red--text'">
-                ({{ formatPercent(overview.daily_pnl_ratio || 0) }})
-              </div>
-              <div v-if="!accountDataReliable" class="stale-data-note">本地库快照，以 miniQMT 为准</div>
-            </v-card>
-          </v-col>
+          <!--
+            当日盈亏卡片已移除：miniQMT 账户资产不提供当日盈亏，
+            详见 quantTrader/KNOWN_LIMITATIONS.md（已知 limitation，暂不实现）。
+          -->
         </v-row>
       </v-card-text>
     </v-card>
