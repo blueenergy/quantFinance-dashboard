@@ -419,7 +419,7 @@
             <textarea v-model="reviewComment" rows="2" placeholder="记录审核意见或风险确认" />
           </label>
 
-          <section v-if="selectedDetail.plan.status === 'approved' || selectedDetail.execution_status" class="execution-status">
+          <section v-if="selectedPlanShowsPaperTrading && (selectedDetail.plan.status === 'approved' || selectedDetail.execution_status)" class="execution-status">
             <h4>后台执行状态</h4>
             <p v-if="selectedDetail.plan.status === 'approved'" class="muted">
               已审核，等待后台在开盘价就绪后自动执行。
@@ -454,7 +454,7 @@
             </p>
           </section>
 
-          <section v-if="selectedDetail.plan.status === 'approved'" class="live-publish-panel">
+          <section v-if="selectedDetail.plan.status === 'approved' && !selectedPlanHasLiveSignals" class="live-publish-panel">
             <div class="task-list-header">
               <div>
                 <h4>发布到实盘</h4>
@@ -558,8 +558,12 @@
                     <th>名称</th>
                     <th>行业</th>
                     <th>动作</th>
-                    <th>当前股数</th>
+                    <th>{{ selectedPlanHasLiveSignals ? '策略当前股数' : '当前股数' }}</th>
                     <th>目标股数</th>
+                    <th v-if="selectedPlanHasLiveSignals">账户真实股数</th>
+                    <th v-if="selectedPlanHasLiveSignals">实盘已成交</th>
+                    <th v-if="selectedPlanHasLiveSignals">剩余</th>
+                    <th v-if="selectedPlanHasLiveSignals">实盘状态</th>
                     <th>预估价</th>
                     <th>候选出现</th>
                     <th>风险</th>
@@ -574,6 +578,10 @@
                     <td>{{ item.action }}</td>
                     <td>{{ item.current_shares ?? 0 }}</td>
                     <td>{{ item.target_shares ?? 0 }}</td>
+                    <td v-if="selectedPlanHasLiveSignals">{{ item.account_current_shares ?? '-' }}</td>
+                    <td v-if="selectedPlanHasLiveSignals">{{ item.live_filled_qty ?? 0 }}</td>
+                    <td v-if="selectedPlanHasLiveSignals">{{ item.live_remaining_qty ?? Math.abs(item.delta_shares ?? 0) }}</td>
+                    <td v-if="selectedPlanHasLiveSignals">{{ item.live_status || '-' }}</td>
                     <td>{{ num(item.estimated_price) }}</td>
                     <td>{{ item.candidate_appearances ?? 0 }}</td>
                     <td>{{ (item.blockers || []).join(', ') || '-' }}</td>
@@ -583,7 +591,7 @@
             </div>
           </section>
 
-          <section>
+          <section v-if="selectedPlanShowsPaperTrading">
             <h4>Paper 净值</h4>
             <div v-if="realtimeEquity" class="realtime-equity">
               <div>
@@ -675,7 +683,7 @@
             </template>
           </section>
 
-          <section>
+          <section v-if="selectedPlanShowsPaperTrading">
             <h4>Paper 成交</h4>
             <p v-if="!executions.length" class="muted">暂无 paper 成交。</p>
             <div v-else class="table-wrap">
@@ -788,6 +796,17 @@ const generateForm = ref({
 })
 
 const executionStatus = computed(() => selectedDetail.value?.execution_status || {})
+const selectedPlanIsPaperExecuted = computed(() => {
+  const status = selectedDetail.value?.plan?.status
+  return status === 'executed_paper' || status === 'partially_executed'
+})
+const selectedPlanHasLiveSignals = computed(() => {
+  const detail = selectedDetail.value
+  if (!detail) return false
+  if (selectedPlanIsPaperExecuted.value) return false
+  return Boolean(detail.live_execution_context?.has_live_signals)
+})
+const selectedPlanShowsPaperTrading = computed(() => Boolean(selectedDetail.value) && (selectedPlanIsPaperExecuted.value || !selectedPlanHasLiveSignals.value))
 
 const latestExecutionText = computed(() => {
   const latest = executionStatus.value.latest_execution_result
@@ -1341,6 +1360,13 @@ async function selectPlan(planId) {
   livePublishPreview.value = null
   const res = await getPortfolioPlan(planId)
   selectedDetail.value = res.data
+  if (selectedPlanHasLiveSignals.value) {
+    equity.value = []
+    realtimeEquity.value = null
+    executions.value = []
+    await loadLiveOps()
+    return
+  }
   await Promise.all([
     loadEquity(),
     loadRealtimeEquity(),
