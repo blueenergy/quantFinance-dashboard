@@ -796,17 +796,10 @@ const generateForm = ref({
 })
 
 const executionStatus = computed(() => selectedDetail.value?.execution_status || {})
-const selectedPlanIsPaperExecuted = computed(() => {
-  const status = selectedDetail.value?.plan?.status
-  return status === 'executed_paper' || status === 'partially_executed'
-})
-const selectedPlanHasLiveSignals = computed(() => {
-  const detail = selectedDetail.value
-  if (!detail) return false
-  if (selectedPlanIsPaperExecuted.value) return false
-  return Boolean(detail.live_execution_context?.has_live_signals)
-})
-const selectedPlanShowsPaperTrading = computed(() => Boolean(selectedDetail.value) && (selectedPlanIsPaperExecuted.value || !selectedPlanHasLiveSignals.value))
+// execution_mode is the backend's single source of truth: 'paper' | 'live' | 'not_executed'.
+const selectedPlanExecutionMode = computed(() => selectedDetail.value?.execution_mode || 'not_executed')
+const selectedPlanHasLiveSignals = computed(() => selectedPlanExecutionMode.value === 'live')
+const selectedPlanShowsPaperTrading = computed(() => Boolean(selectedDetail.value) && selectedPlanExecutionMode.value !== 'live')
 
 const latestExecutionText = computed(() => {
   const latest = executionStatus.value.latest_execution_result
