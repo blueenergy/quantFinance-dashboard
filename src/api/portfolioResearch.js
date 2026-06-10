@@ -16,6 +16,14 @@ export function getPortfolioResearchResults(jobId) {
   return request({ url: `/portfolio-research/jobs/${jobId}/results`, method: 'get' })
 }
 
+export function listPortfolioResearchCombos(jobId) {
+  return request({ url: `/portfolio-research/jobs/${jobId}/combos`, method: 'get' })
+}
+
+export function getPortfolioResearchComboDetail(jobId, comboKey) {
+  return request({ url: `/portfolio-research/jobs/${jobId}/combos/${encodeURIComponent(comboKey)}`, method: 'get' })
+}
+
 export function publishPortfolioResearchResult(resultId, data = {}) {
   return request({ url: `/portfolio-research/results/${resultId}/publish`, method: 'post', data })
 }
