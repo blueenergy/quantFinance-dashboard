@@ -73,7 +73,12 @@
       </v-col>
       <v-col v-if="internalSortBy === 'composite'" cols="12" sm="6">
         <label style="margin-left: 0">排名策略：</label>
+        <div v-if="!showStrategyPicker" class="flex-row-center gap-sm">
+          <span class="strategy-current">{{ currentStrategyLabel }}</span>
+          <v-btn size="x-small" variant="text" @click="showStrategyPicker = true">切换策略（高级）</v-btn>
+        </div>
         <v-select
+          v-else
           v-model="internalRankingStrategy"
           :items="rankingStrategyOptions"
           item-title="label"
@@ -81,6 +86,9 @@
           density="compact"
           variant="outlined"
         />
+        <div class="mt-xs text-muted composite-note">
+          综合分仅作概览；选股以「组合研究」中已验证的因子组合为准。
+        </div>
       </v-col>
     </v-row>
 
@@ -147,7 +155,7 @@
 </template>
 
 <script setup>
-import { toRefs, computed, onMounted } from 'vue'
+import { toRefs, computed, onMounted, ref } from 'vue'
 
 // define emits explicitly so we can call them from safe handlers
 const emit = defineEmits([
@@ -280,6 +288,15 @@ function incrementDisplayLimit() {
   const next = Math.min(Number(internalDisplayLimit.value) + 20, 200)
   emit('change-display-limit', next)
 }
+// C1: collapse the 8 hand-weighted composite presets by default. Most users
+// should treat the composite as a coarse overview (balanced), and rely on the
+// validated factor combos in "组合研究" for actual selection. Power users can
+// still expand the full picker.
+const showStrategyPicker = ref(false)
+const currentStrategyLabel = computed(() => {
+  const found = rankingStrategyOptions.find(o => o.value === rankingStrategy.value)
+  return found ? found.label : '均衡'
+})
 const internalRankingStrategy = computed({
   get: () => rankingStrategy.value,
   set: v => { emit('change-ranking-strategy', v) }
@@ -525,5 +542,9 @@ onMounted(() => {
 .label-fixed { min-width:72px; }
 .info-inline { font-size:13px; }
 .date-chip { display:flex; align-items:center; }
+
+/* C1: composite demoted to an overview label */
+.strategy-current { font-weight: 600; color: #333; }
+.composite-note { font-size: 12px; line-height: 1.5; }
 
 </style>

@@ -8,7 +8,7 @@
         <th class="th-date">日期</th>
         <th class="th-prior-3m" title="评分日前约 3 个月至评分日；未复权收盘">前3月涨跌</th>
         <th class="th-return-since" title="未复权收盘；分红送转可能影响长区间">评分日以来涨跌</th>
-  <th class="th-score">总分</th>
+  <th class="th-score" title="综合分仅作概览，由各维度按预设权重粗略加权；选股以「组合研究」中已验证的因子组合为准">总分</th>
         <th class="th-cycle">动量</th>
         <th class="th-growth">成长</th>
         <th class="th-value">基本面</th>
