@@ -354,13 +354,23 @@ async function onShenwanSelectIndustry (e) {
   await new Promise(r => requestAnimationFrame(r))
   window.dispatchEvent(new CustomEvent('shenwan:navigate-to-industry', { detail: e.detail }))
 }
+
+async function onOpenStockWorkbench (e) {
+  switchTab('stock-workbench')
+  await nextTick()
+  await new Promise(r => requestAnimationFrame(r))
+  window.dispatchEvent(new CustomEvent('stock-workbench:set-symbol', { detail: e.detail }))
+}
+
 onMounted(() => {
   window.addEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
   window.addEventListener('shenwan:select-industry', onShenwanSelectIndustry)
+  window.addEventListener('stock-workbench:open', onOpenStockWorkbench)
 })
 onUnmounted(() => {
   window.removeEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
   window.removeEventListener('shenwan:select-industry', onShenwanSelectIndustry)
+  window.removeEventListener('stock-workbench:open', onOpenStockWorkbench)
 })
 </script>
 

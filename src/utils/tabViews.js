@@ -37,6 +37,7 @@ const HotStockAnalysis = defineAsyncComponent(() => import('../components/HotSto
 const KLineComparison = defineAsyncComponent(() => import('../views/KLineComparison.vue'))
 const EarningsHunter = defineAsyncComponent(() => import('../views/EarningsHunter.vue'))
 const ShenwanIndustryIndex = defineAsyncComponent(() => import('../views/ShenwanIndustryIndex.vue'))
+const StockWorkbench = defineAsyncComponent(() => import('../views/StockWorkbench.vue'))
 const ChatPanel = defineAsyncComponent(() => import('../components/ChatPanel.vue'))
 
 export const tabViewDefinitions = [
@@ -60,6 +61,13 @@ export const tabViewDefinitions = [
     wrapperClass: 'history-view',
     fallbackClass: 'skeleton-table',
     fallbackText: '个股深度分析加载中...',
+  },
+  {
+    id: 'stock-workbench',
+    component: StockWorkbench,
+    wrapperClass: 'stock-workbench-view',
+    fallbackClass: 'skeleton-table',
+    fallbackText: '股票工作台加载中...',
   },
   {
     id: 'analysis-task-queue',

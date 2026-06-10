@@ -52,3 +52,43 @@ export async function getStockInfo(symbol) {
     const result = await res.json();
     return result.data;
 }
+
+/**
+ * 获取股票工作台聚合数据
+ * @param {string} symbol - 股票代码
+ */
+export async function getStockWorkbench(symbol) {
+    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench`;
+
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: authHeaders()
+    });
+
+    if (!res.ok) throw new Error(`Failed to get stock workbench: ${res.status}`);
+    const result = await res.json();
+    return result.data;
+}
+
+/**
+ * 获取股票财务报表数据
+ * @param {string} symbol - 股票代码
+ * @param {string} statement - income|balance|cashflow|indicator|daily_basic
+ * @param {number} periods - 最近多少期
+ */
+export async function getStockFinancial(symbol, statement = 'indicator', periods = 8) {
+    const params = new URLSearchParams({
+        statement,
+        periods: String(periods)
+    });
+    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/financial?${params.toString()}`;
+
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: authHeaders()
+    });
+
+    if (!res.ok) throw new Error(`Failed to get stock financial: ${res.status}`);
+    const result = await res.json();
+    return result.data || [];
+}

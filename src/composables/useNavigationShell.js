@@ -107,6 +107,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'earnings-hunter', name: '🎯 财报猎手' },
       { id: 'shenwan-index', name: '📊 申万行业研究' },
       { id: 'history', name: '🔍 个股深度分析' },
+      { id: 'stock-workbench', name: '🔬 个股工作台' },
       { id: 'analysis-task-queue', name: '任务队列' },
       { id: 'strategy-pool', name: '🎯 策略股池' },
       { id: 'ranking', name: '金榜' },
