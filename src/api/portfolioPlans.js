@@ -76,6 +76,10 @@ export function restorePortfolioPlanItem(planId, symbol) {
   return request({ url: `/portfolio-plans/plans/${planId}/items/${encodeURIComponent(symbol)}/restore`, method: 'post' })
 }
 
+export function rerunPortfolioPlanAiRisk(planId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/ai-risk-review`, method: 'post' })
+}
+
 export function getPortfolioPlanExecutions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/executions`, method: 'get' })
 }

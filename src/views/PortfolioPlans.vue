@@ -589,7 +589,20 @@
           </section>
 
           <section>
-            <h4>目标持仓与交易明细</h4>
+            <div class="section-head">
+              <h4>目标持仓与交易明细</h4>
+              <div class="ai-risk-bar">
+                <span v-if="aiRiskSummary" class="ai-risk-summary">
+                  AI风控：<b class="risk-high">{{ aiRiskSummary.high || 0 }}高</b>
+                  / <b class="risk-medium">{{ aiRiskSummary.medium || 0 }}中</b>
+                  / <b class="risk-low">{{ aiRiskSummary.low || 0 }}低</b>
+                </span>
+                <button class="link-btn" :disabled="aiRiskRunning" @click="runAiRisk">
+                  <span v-if="aiRiskRunning" class="spinner" />
+                  {{ aiRiskRunning ? 'AI 风控运行中…' : '运行 AI 风控' }}
+                </button>
+              </div>
+            </div>
             <p v-if="reselectStatus.state !== 'idle'" class="reselect-status" :class="`is-${reselectStatus.state}`">
               <span v-if="reselectStatus.state === 'running'" class="spinner" />
               {{ reselectStatus.text }}
@@ -624,6 +637,7 @@
                     <th class="col-num">预估价</th>
                     <th class="col-narrow">候选</th>
                     <th v-if="canReselectItems" class="col-action">操作</th>
+                    <th class="col-airisk">AI风控</th>
                     <th class="col-risk">风险</th>
                   </tr>
                 </thead>
@@ -664,6 +678,15 @@
                         title="拒绝该买入推荐，用候选池下一名替换"
                         @click="reselectItem(item.symbol)"
                       >{{ reselectBusy && pendingReselect?.symbol === item.symbol ? '处理中…' : '换一只' }}</button>
+                      <span v-else>-</span>
+                    </td>
+                    <td class="col-airisk">
+                      <span
+                        v-if="aiRiskBadge(item).show"
+                        class="ai-risk-tag"
+                        :class="aiRiskBadge(item).cls"
+                        :title="aiRiskBadge(item).title"
+                      >{{ aiRiskBadge(item).text }}</span>
                       <span v-else>-</span>
                     </td>
                     <td class="col-risk" :title="(item.blockers || []).join(', ')">{{ (item.blockers || []).join(', ') || '-' }}</td>
@@ -836,6 +859,7 @@ import {
   publishPortfolioPlanLiveSignals,
   rejectPortfolioPlan,
   rejectPortfolioPlanItem,
+  rerunPortfolioPlanAiRisk,
   restorePortfolioPlanItem,
 } from '../api/portfolioPlans'
 import { getSecuritiesAccounts } from '../api/trader'
@@ -861,6 +885,7 @@ const liveOpsLoading = ref(false)
 const livePublishLoading = ref(false)
 const paperExecuteLoading = ref(false)
 const operationLogsLoading = ref(false)
+const aiRiskRunning = ref(false)
 const currentGenerationTask = ref(null)
 // Tracks an in-flight per-item reselect so we can report the replacement once
 // the regeneration task finishes (which symbol filled the freed slot).
@@ -883,6 +908,7 @@ const reselectStatus = ref({ state: 'idle', text: '' })
 const reselectTaskMeta = ref({ taskId: '', status: '' })
 let realtimeTimer = null
 let generationTaskTimer = null
+let aiRiskTimer = null
 
 const generateForm = ref({
   strategy_template_id: '',
@@ -1670,6 +1696,73 @@ function actionBadge(action) {
   }
 }
 
+const aiRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_summary || null)
+
+function aiRiskBadge(item) {
+  const risk = item?.ai_risk
+  if (!risk || !risk.severity || risk.severity === 'none') {
+    // Only buy/hold targets are reviewed; sells/skips show a neutral dash.
+    return { show: ['buy', 'hold'].includes(item?.action), text: '正常', cls: 'risk-none', title: '未发现规则风控信号' }
+  }
+  const labelMap = { high: '高', medium: '中', low: '低' }
+  const reasons = (risk.findings || []).map((f) => `${f.title}：${f.detail}`).join('\n') || (risk.reasons || []).join('、')
+  return {
+    show: true,
+    text: labelMap[risk.severity] || risk.severity,
+    cls: `risk-${risk.severity}`,
+    title: reasons || '风险信号',
+  }
+}
+
+async function runAiRisk() {
+  if (!selectedPlanId.value || aiRiskRunning.value) return
+  aiRiskRunning.value = true
+  message.value = 'AI 风控审查已提交，正在运行…'
+  try {
+    const res = await rerunPortfolioPlanAiRisk(selectedPlanId.value)
+    const taskId = res.data?.task?.task_id
+    await loadOperationLogs()
+    if (!taskId) {
+      aiRiskRunning.value = false
+      return
+    }
+    if (aiRiskTimer) window.clearInterval(aiRiskTimer)
+    aiRiskTimer = window.setInterval(() => pollAiRiskTask(taskId), 2000)
+  } catch (error) {
+    aiRiskRunning.value = false
+    const detailText = formatApiDetail(error.response?.data?.detail)
+    message.value = detailText || error.message || 'AI 风控审查失败'
+  }
+}
+
+async function pollAiRiskTask(taskId) {
+  try {
+    const res = await getPortfolioPlanGenerationTask(taskId)
+    const status = res.data?.status
+    if (['completed', 'failed'].includes(status)) {
+      if (aiRiskTimer) {
+        window.clearInterval(aiRiskTimer)
+        aiRiskTimer = null
+      }
+      aiRiskRunning.value = false
+      await loadOperationLogs()
+      if (status === 'completed') {
+        await selectPlan(selectedPlanId.value)
+        message.value = 'AI 风控审查完成'
+      } else {
+        message.value = res.data?.error_message || 'AI 风控审查失败'
+      }
+    }
+  } catch (error) {
+    if (aiRiskTimer) {
+      window.clearInterval(aiRiskTimer)
+      aiRiskTimer = null
+    }
+    aiRiskRunning.value = false
+    message.value = error.message || 'AI 风控任务查询失败'
+  }
+}
+
 function describeReselectResult(pending) {
   const items = selectedDetail.value?.items || []
   const nameOf = (sym) => {
@@ -1763,6 +1856,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (realtimeTimer) window.clearInterval(realtimeTimer)
   if (generationTaskTimer) window.clearInterval(generationTaskTimer)
+  if (aiRiskTimer) window.clearInterval(aiRiskTimer)
 })
 </script>
 
@@ -1999,6 +2093,70 @@ button.danger {
 
 .plan-items-table .col-risk {
   width: 84px;
+}
+
+.plan-items-table .col-airisk {
+  width: 52px;
+  text-align: center;
+}
+
+.ai-risk-tag {
+  border-radius: 3px;
+  color: #fff;
+  cursor: help;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  min-width: 22px;
+  padding: 0 4px;
+  text-align: center;
+}
+
+/* A股配色：风险越高越红 */
+.ai-risk-tag.risk-high {
+  background: #d12b2b;
+}
+
+.ai-risk-tag.risk-medium {
+  background: #e08e0b;
+}
+
+.ai-risk-tag.risk-low {
+  background: #b8860b;
+}
+
+.ai-risk-tag.risk-none {
+  background: #1f9d55;
+}
+
+.section-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.ai-risk-bar {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.ai-risk-summary {
+  font-size: 12px;
+}
+
+.ai-risk-summary .risk-high {
+  color: #d12b2b;
+}
+
+.ai-risk-summary .risk-medium {
+  color: #e08e0b;
+}
+
+.ai-risk-summary .risk-low {
+  color: #b8860b;
 }
 
 .plan-items-table .link-btn {
