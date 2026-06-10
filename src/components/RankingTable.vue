@@ -9,7 +9,7 @@
         <th class="th-prior-3m" title="评分日前约 3 个月至评分日；未复权收盘">前3月涨跌</th>
         <th class="th-return-since" title="未复权收盘；分红送转可能影响长区间">评分日以来涨跌</th>
   <th class="th-score">总分</th>
-        <th class="th-cycle">周期</th>
+        <th class="th-cycle">动量</th>
         <th class="th-growth">成长</th>
         <th class="th-value">基本面</th>
         <th class="th-value">价值</th>
@@ -60,7 +60,7 @@
           </div>
         </td>
         <td class="td-cycle" @click="emitCategory(row, 'cycle')">
-          <span class="cycle-score clickable" :title="'查看周期评分详情'">{{ row.cycle_score }}</span>
+          <span class="cycle-score clickable" :title="'查看动量评分详情'">{{ row.cycle_score }}</span>
         </td>
         <td class="td-growth" @click="emitCategory(row, 'growth')">
           <span class="growth-score clickable" :title="'查看成长评分详情'">{{ row.growth_score }}</span>

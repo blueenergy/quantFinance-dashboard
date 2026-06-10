@@ -398,7 +398,7 @@ async function fetchScoreDetails(row, category) {
 
 function translateCategory(cat) {
   const map = {
-    cycle: '周期评分',
+    cycle: '动量评分',
     growth: '成长评分',
     fundamental: '基本面评分',
     value: '价值评分',

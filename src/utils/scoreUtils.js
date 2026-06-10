@@ -47,7 +47,7 @@ export function generateCSV(data, selectedDates, getEffectiveStrategyFor, getCom
     })
   } else {
     headers = headers.concat([
-      '总分', '周期评分', '成长评分', '基本面评分', '价值评分', '技术面评分', '资金流评分', '评分日以来涨跌',
+      '总分', '动量评分', '成长评分', '基本面评分', '价值评分', '技术面评分', '资金流评分', '评分日以来涨跌',
     ])
   }
 

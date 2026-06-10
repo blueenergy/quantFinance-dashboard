@@ -262,7 +262,7 @@ const SCORE_DEFS = [
   { key: 'value', label: '价值' },
   { key: 'growth', label: '成长' },
   { key: 'money_flow', label: '资金流' },
-  { key: 'cycle', label: '周期' },
+  { key: 'cycle', label: '动量' },
   { key: 'sentiment', label: '情绪' },
 ]
 

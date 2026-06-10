@@ -9,7 +9,7 @@
         </div>
         <div class="score-breakdown">
           <div class="score-item">
-            <span class="score-label">周期评分</span>
+            <span class="score-label">动量评分</span>
             <span class="score-value cycle">{{ stock?.cycle_score }}</span>
             <span class="score-weight">(权重: 25%)</span>
           </div>

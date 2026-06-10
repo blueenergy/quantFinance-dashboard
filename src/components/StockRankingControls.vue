@@ -226,11 +226,11 @@ const rankingStrategyOptions = [
   {label:'价值型',value:'value_oriented'},
   {label:'交易型',value:'trading_oriented'},
   {label:'成长型',value:'growth_oriented'},
-  {label:'周期型',value:'cycle_oriented'},
+  {label:'动量型',value:'cycle_oriented'},
 ]
 const sortByOptions = [
   { label: '总分', value: 'composite' },
-  { label: '周期', value: 'cycle' },
+  { label: '动量', value: 'cycle' },
   { label: '成长', value: 'growth' },
   { label: '基本面', value: 'fundamental' },
   { label: '价值', value: 'value' },
