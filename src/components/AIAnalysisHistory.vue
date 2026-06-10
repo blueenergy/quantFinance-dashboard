@@ -5,11 +5,16 @@
     <div class="deep-input-panel">
       <h3 class="history-title">🔍 个股深度分析</h3>
       <div class="input-row">
-        <input
+        <StockSearchInput
           v-model="inputSymbol"
-          class="symbol-input"
-          placeholder="输入股票代码，如 600519 或 600519.SH"
-          @keyup.enter="submitAnalysis"
+          input-id="deep-analysis-stock-input"
+          label="股票代码/名称/拼音"
+          placeholder="输入股票代码、名称或拼音，如 600519、平安银行、PAYH"
+          density="compact"
+          class="symbol-search-input"
+          input-class="symbol-input"
+          @select="selectStockCandidate"
+          @submit="submitAnalysis"
         />
         <div class="mode-toggle">
           <button
@@ -357,6 +362,8 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import AnalysisDetailContent from './AnalysisDetailContent.vue'
+import StockSearchInput from './StockSearchInput.vue'
+import { searchStocks } from '../api/stock'
 
 // Static label maps - 只保留真正需要翻译的标签
 const adviceLabels = { buy: '买入', hold: '持有', sell: '卖出' }
@@ -436,8 +443,8 @@ function goToIndustry (code) {
 }
 
 async function submitAnalysis() {
-  const sym = inputSymbol.value.trim()
-  if (!sym) return
+  const rawInput = inputSymbol.value.trim()
+  if (!rawInput) return
   clearInterval(livePollTimer)
   submitLoading.value = true
   submitError.value = ''
@@ -445,6 +452,13 @@ async function submitAnalysis() {
   liveResult.value = null
   const token = localStorage.getItem('access_token')
   try {
+    const sym = await resolveStockInput(rawInput)
+    if (!sym) {
+      submitError.value = '未找到匹配股票，请输入有效股票代码或从下拉候选中选择'
+      submitLoading.value = false
+      return
+    }
+    inputSymbol.value = sym
     const res = await axios.post(
       '/api/analyze/deep-analysis',
       { symbol: sym, priority: 30, analysis_mode: inputMode.value },
@@ -504,6 +518,31 @@ async function submitAnalysis() {
     submitError.value = e.response?.data?.detail || e.message || '提交失败'
     submitLoading.value = false
   }
+}
+
+function selectStockCandidate(item) {
+  inputSymbol.value = item?.symbol || item?.ts_code || ''
+}
+
+async function resolveStockInput(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const upper = raw.toUpperCase()
+  if (/^\d{6}\.(SZ|SH|BJ)$/.test(upper)) return upper
+  if (/^\d{6}$/.test(upper)) {
+    if (upper.startsWith('6') || upper.startsWith('9')) return `${upper}.SH`
+    if (upper.startsWith('0') || upper.startsWith('2') || upper.startsWith('3')) return `${upper}.SZ`
+    if (upper.startsWith('4') || upper.startsWith('8')) return `${upper}.BJ`
+  }
+  const results = await searchStocks(raw)
+  const exact = results.find((item) => {
+    const symbol = String(item.symbol || item.ts_code || '').toUpperCase()
+    const name = String(item.name || item.stock_name || '').toUpperCase()
+    const pinyin = String(item.pinyin || '').toUpperCase()
+    return symbol === upper || name === upper || pinyin === upper
+  })
+  const match = exact || results[0]
+  return match ? String(match.symbol || match.ts_code || '').toUpperCase() : ''
 }
 
 const accuracyLabels = { accurate: '准确', mixed: '部分准确', inaccurate: '不准确' }
@@ -1140,13 +1179,17 @@ if (typeof window !== 'undefined') {
 /* 主输入区 */
 .deep-input-panel { margin-bottom:20px; }
 .input-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-.symbol-input {
-  flex:1; min-width:200px; max-width:340px;
-  padding:8px 14px; border-radius:8px;
-  border:1px solid #ced4da; font-size:15px;
-  outline:none; transition:.2s;
+.symbol-search-input {
+  flex:1;
+  min-width:240px;
+  max-width:420px;
 }
-.symbol-input:focus { border-color:#764ba2; box-shadow:0 0 0 3px rgba(118,75,162,.12); }
+:deep(.symbol-input .v-field) {
+  border-radius:8px;
+}
+:deep(.symbol-input .v-field--focused) {
+  box-shadow:0 0 0 3px rgba(118,75,162,.12);
+}
 .mode-toggle { display:flex; gap:0; border:1px solid #ced4da; border-radius:8px; overflow:hidden; }
 .mode-btn {
   padding:6px 14px; font-size:13px; font-weight:600;
