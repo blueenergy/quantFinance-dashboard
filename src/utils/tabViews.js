@@ -18,7 +18,6 @@ const WatchlistStrategyTable = defineAsyncComponent(() => import('../components/
 const TradeExecutionTable = defineAsyncComponent(() => import('../components/TradeExecutionTable.vue'))
 const TradingManualPanel = defineAsyncComponent(() => import('../components/TradingManualPanel.vue'))
 const StrategyWorkers = defineAsyncComponent(() => import('../views/StrategyWorkers.vue'))
-const StrategyExecutionAnalysis = defineAsyncComponent(() => import('../components/StrategyExecutionAnalysis.vue'))
 const SecuritiesAccountDashboard = defineAsyncComponent(() => import('../components/SecuritiesAccountDashboard.vue'))
 const UserProfile = defineAsyncComponent(() => import('../components/UserProfile.vue'))
 const BacktestManager = defineAsyncComponent(() => import('../components/BacktestManager.vue'))
@@ -168,12 +167,6 @@ export const tabViewDefinitions = [
     component: StrategyWorkers,
     fallbackClass: 'skeleton-table',
     fallbackText: '策略 Workers 加载中...',
-  },
-  {
-    id: 'strategy-execution-analysis',
-    component: StrategyExecutionAnalysis,
-    fallbackClass: 'skeleton-table',
-    fallbackText: '策略执行分析加载中...',
   },
   {
     id: 'user-profile',
