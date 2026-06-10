@@ -419,7 +419,45 @@
             <textarea v-model="reviewComment" rows="2" placeholder="记录审核意见或风险确认" />
           </label>
 
-          <section v-if="selectedPlanShowsPaperTrading && (selectedDetail.plan.status === 'approved' || selectedDetail.execution_status)" class="execution-status">
+          <section class="operation-log-panel">
+            <div class="task-list-header">
+              <div>
+                <h4>操作日志</h4>
+                <p class="muted">保留 reject/restore 与重生成任务的入队与完成记录。</p>
+              </div>
+              <div class="task-list-actions">
+                <button :disabled="operationLogsLoading || !selectedPlanId" @click="loadOperationLogs">刷新日志</button>
+              </div>
+            </div>
+            <p v-if="operationLogsLoading" class="muted">正在加载日志...</p>
+            <p v-else-if="!operationLogs.length" class="muted">暂无操作日志。</p>
+            <div v-else class="table-wrap compact operation-log-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>time</th>
+                    <th>operation</th>
+                    <th>symbol</th>
+                    <th>status</th>
+                    <th>task</th>
+                    <th>message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="log in operationLogs" :key="log.log_id">
+                    <td>{{ log.created_at || '-' }}</td>
+                    <td>{{ log.operation_type || '-' }}</td>
+                    <td>{{ log.operation_symbol || '-' }}</td>
+                    <td>{{ log.status || '-' }}</td>
+                    <td class="truncate" :title="log.task_id || '-'">{{ log.task_id || '-' }}</td>
+                    <td class="truncate" :title="log.message || '-'">{{ log.message || '-' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section v-if="showPaperExecutionStatus" class="execution-status">
             <h4>后台执行状态</h4>
             <p v-if="selectedDetail.plan.status === 'approved'" class="muted">
               已审核，等待后台在开盘价就绪后自动执行。
@@ -461,6 +499,9 @@
                 <p class="muted">先 dry-run 生成 risk report，确认后才写入 executable live signals。</p>
               </div>
               <div class="task-list-actions">
+                <button :disabled="paperExecuteLoading || livePublishLoading || !canExecutePaperNow" @click="executePaperNow">
+                  立即执行 Paper
+                </button>
                 <select v-model="selectedLiveAccountId">
                   <option value="">请选择账户</option>
                   <option v-for="account in liveAccountOptions" :key="account.id" :value="account.id">
@@ -549,80 +590,90 @@
 
           <section>
             <h4>目标持仓与交易明细</h4>
+            <p v-if="reselectStatus.state !== 'idle'" class="reselect-status" :class="`is-${reselectStatus.state}`">
+              <span v-if="reselectStatus.state === 'running'" class="spinner" />
+              {{ reselectStatus.text }}
+            </p>
+            <p v-if="reselectTaskMeta.taskId" class="reselect-meta">
+              task {{ reselectTaskMeta.taskId }} · {{ reselectTaskMeta.status || '-' }}
+            </p>
+            <p v-if="lastReselectSummary" class="reselect-summary">{{ lastReselectSummary }}</p>
             <div v-if="canReselectItems && selectedPlanExcluded.length" class="excluded-bar">
               <span class="excluded-label">已排除：</span>
               <span v-for="sym in selectedPlanExcluded" :key="sym" class="excluded-chip">
                 {{ sym }}
-                <button class="link-btn" :disabled="actionLoading" @click="reselectItem(sym, true)">恢复</button>
+                <button class="link-btn" :disabled="actionLoading || reselectBusy" @click="reselectItem(sym, true)">
+                  {{ reselectBusy && pendingReselect?.symbol === sym ? '恢复中…' : '恢复' }}
+                </button>
               </span>
             </div>
             <div class="table-wrap">
-              <table>
+              <table class="plan-items-table">
                 <thead>
                   <tr>
-                    <th>Rank</th>
-                    <th>代码</th>
-                    <th>名称</th>
-                    <th>行业</th>
-                    <th>动作</th>
-                    <th>{{ selectedPlanHasLiveSignals ? '策略当前股数' : '当前股数' }}</th>
-                    <th>目标股数</th>
-                    <th v-if="selectedPlanHasLiveSignals">账户真实股数</th>
-                    <th v-if="selectedPlanHasLiveSignals">实盘已成交</th>
-                    <th v-if="selectedPlanHasLiveSignals">剩余</th>
-                    <th v-if="selectedPlanHasLiveSignals">实盘状态</th>
-                    <th>预估价</th>
-                    <th>候选出现</th>
-                    <th>风险</th>
-                    <th v-if="canReselectItems">操作</th>
+                    <th class="col-narrow">Rank</th>
+                    <th class="col-symbol">代码</th>
+                    <th class="col-name">名称</th>
+                    <th class="col-ind">行业</th>
+                    <th class="col-num">{{ selectedPlanHasLiveSignals ? '策略股数' : '当前股数' }}</th>
+                    <th class="col-num">目标股数</th>
+                    <th v-if="selectedPlanHasLiveSignals" class="col-num">账户股数</th>
+                    <th v-if="selectedPlanHasLiveSignals" class="col-num">已成交</th>
+                    <th v-if="selectedPlanHasLiveSignals" class="col-num">剩余</th>
+                    <th v-if="selectedPlanHasLiveSignals" class="col-narrow">实盘状态</th>
+                    <th class="col-num">预估价</th>
+                    <th class="col-narrow">候选</th>
+                    <th v-if="canReselectItems" class="col-action">操作</th>
+                    <th class="col-risk">风险</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="item in selectedDetail.items" :key="`${item.symbol}-${item.rank}`">
-                    <td>{{ item.rank ?? '-' }}</td>
-                    <td>{{ item.symbol }}</td>
-                    <td>{{ item.name || '-' }}</td>
-                    <td>{{ item.industry || '-' }}</td>
-                    <td>{{ item.action }}</td>
-                    <td>{{ item.current_shares ?? 0 }}</td>
-                    <td>{{ item.target_shares ?? 0 }}</td>
-                    <td v-if="selectedPlanHasLiveSignals">{{ item.account_current_shares ?? '-' }}</td>
-                    <td v-if="selectedPlanHasLiveSignals">{{ item.live_filled_qty ?? 0 }}</td>
-                    <td v-if="selectedPlanHasLiveSignals">{{ item.live_remaining_qty ?? Math.abs(item.delta_shares ?? 0) }}</td>
-                    <td v-if="selectedPlanHasLiveSignals">{{ item.live_status || '-' }}</td>
-                    <td>{{ num(item.estimated_price) }}</td>
-                    <td>{{ item.candidate_appearances ?? 0 }}</td>
-                    <td>{{ (item.blockers || []).join(', ') || '-' }}</td>
-                    <td v-if="canReselectItems">
+                    <td class="col-narrow">{{ item.rank ?? '-' }}</td>
+                    <td class="col-symbol">{{ item.symbol }}</td>
+                    <td class="col-name" :title="`${actionBadge(item.action).label} ${item.name || ''}`">
+                      <span class="action-tag" :class="actionBadge(item.action).cls">{{ actionBadge(item.action).text }}</span>{{ item.name || '-' }}
+                    </td>
+                    <td class="col-ind" :title="item.industry || ''">{{ item.industry || '-' }}</td>
+                    <td class="col-num">{{ item.current_shares ?? 0 }}</td>
+                    <td class="col-num">{{ item.target_shares ?? 0 }}</td>
+                    <td v-if="selectedPlanHasLiveSignals" class="col-num">{{ item.account_current_shares ?? '-' }}</td>
+                    <td v-if="selectedPlanHasLiveSignals" class="col-num">{{ item.live_filled_qty ?? 0 }}</td>
+                    <td v-if="selectedPlanHasLiveSignals" class="col-num">{{ item.live_remaining_qty ?? Math.abs(item.delta_shares ?? 0) }}</td>
+                    <td v-if="selectedPlanHasLiveSignals" class="col-narrow">{{ item.live_status || '-' }}</td>
+                    <td class="col-num">{{ num(item.estimated_price) }}</td>
+                    <td class="col-narrow">{{ item.candidate_appearances ?? 0 }}</td>
+                    <td v-if="canReselectItems" class="col-action">
                       <button
                         v-if="selectedPlanExcluded.includes(item.symbol)"
                         class="link-btn"
-                        :disabled="actionLoading"
+                        :disabled="actionLoading || reselectBusy"
                         @click="reselectItem(item.symbol, true)"
-                      >恢复</button>
+                      >{{ reselectBusy && pendingReselect?.symbol === item.symbol ? '恢复中…' : '恢复' }}</button>
                       <button
                         v-else-if="item.rank != null && (item.current_shares ?? 0) > 0"
                         class="link-btn danger"
-                        :disabled="actionLoading"
+                        :disabled="actionLoading || reselectBusy"
                         title="移出目标并清仓该持仓，由候选池补一只新标的"
                         @click="reselectItem(item.symbol)"
-                      >清仓</button>
+                      >{{ reselectBusy && pendingReselect?.symbol === item.symbol ? '处理中…' : '清仓' }}</button>
                       <button
                         v-else-if="item.rank != null"
                         class="link-btn"
-                        :disabled="actionLoading"
+                        :disabled="actionLoading || reselectBusy"
                         title="拒绝该买入推荐，用候选池下一名替换"
                         @click="reselectItem(item.symbol)"
-                      >换一只</button>
+                      >{{ reselectBusy && pendingReselect?.symbol === item.symbol ? '处理中…' : '换一只' }}</button>
                       <span v-else>-</span>
                     </td>
+                    <td class="col-risk" :title="(item.blockers || []).join(', ')">{{ (item.blockers || []).join(', ') || '-' }}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </section>
 
-          <section v-if="selectedPlanShowsPaperTrading || selectedPlanHasLiveSignals">
+          <section v-if="selectedPlanHasLiveSignals || showPaperSections">
             <h4>{{ selectedPlanHasLiveSignals ? '实盘资金曲线' : 'Paper 净值' }}</h4>
             <div v-if="realtimeEquity" class="realtime-equity">
               <div>
@@ -716,7 +767,7 @@
             </template>
           </section>
 
-          <section v-if="selectedPlanShowsPaperTrading">
+          <section v-if="showPaperSections">
             <h4>Paper 成交</h4>
             <p v-if="!executions.length" class="muted">暂无 paper 成交。</p>
             <div v-else class="table-wrap">
@@ -763,16 +814,17 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   approvePortfolioPlan,
+  executePortfolioPlanPaper,
   generatePortfolioPlan,
   getPortfolioPlan,
+  getPortfolioPlanOperationLogs,
+  getPortfolioPlanEquity,
   getPortfolioPlanExecutions,
   getPortfolioPlanLiveEquity,
   getPortfolioPlanLiveExecutions,
   getPortfolioPlanLiveRealtimeEquity,
   getPortfolioPlanGenerationTask,
   getPortfolioPlanGenerationWatermark,
-  getPortfolioStrategyEquity,
-  getPortfolioStrategyRealtimeEquity,
   listPortfolioParameterPresets,
   listLiveTradeExecutions,
   listLiveTradeSignals,
@@ -798,6 +850,7 @@ const selectedDetail = ref(null)
 const equity = ref([])
 const realtimeEquity = ref(null)
 const executions = ref([])
+const operationLogs = ref([])
 const loading = ref(false)
 const actionLoading = ref(false)
 const generateLoading = ref(false)
@@ -806,7 +859,12 @@ const watermarkLoading = ref(false)
 const workerStatusLoading = ref(false)
 const liveOpsLoading = ref(false)
 const livePublishLoading = ref(false)
+const paperExecuteLoading = ref(false)
+const operationLogsLoading = ref(false)
 const currentGenerationTask = ref(null)
+// Tracks an in-flight per-item reselect so we can report the replacement once
+// the regeneration task finishes (which symbol filled the freed slot).
+const pendingReselect = ref(null)
 const generationTasks = ref([])
 const generationTasksExpanded = ref(false)
 const planGenerationWatermark = ref(null)
@@ -820,6 +878,9 @@ const selectedLiveAccountId = ref('')
 const livePublishPreview = ref(null)
 const message = ref('')
 const reviewComment = ref('')
+const lastReselectSummary = ref('')
+const reselectStatus = ref({ state: 'idle', text: '' })
+const reselectTaskMeta = ref({ taskId: '', status: '' })
 let realtimeTimer = null
 let generationTaskTimer = null
 
@@ -835,11 +896,28 @@ const generateForm = ref({
 const executionStatus = computed(() => selectedDetail.value?.execution_status || {})
 // execution_mode is the backend's single source of truth: 'paper' | 'live' | 'not_executed'.
 const selectedPlanExecutionMode = computed(() => selectedDetail.value?.execution_mode || 'not_executed')
+const selectedPlanStatus = computed(() => selectedDetail.value?.plan?.status || '')
 const selectedPlanHasLiveSignals = computed(() => selectedPlanExecutionMode.value === 'live')
-const selectedPlanShowsPaperTrading = computed(() => Boolean(selectedDetail.value) && selectedPlanExecutionMode.value !== 'live')
 const selectedPlanExcluded = computed(() => selectedDetail.value?.plan?.excluded_symbols || [])
 // Only an unpublished, pre-approval plan can be reselected in place.
 const canReselectItems = computed(() => ['needs_review', 'generated', 'draft'].includes(selectedDetail.value?.plan?.status))
+const reselectBusy = computed(() => reselectStatus.value.state === 'running')
+const paperExecutionCount = computed(() => Number(executionStatus.value?.execution_count || 0))
+const hasPaperExecution = computed(() => Boolean(selectedDetail.value?.plan?.paper_executed_at) || paperExecutionCount.value > 0)
+// Plan-detail page uses plan-level data only. Keep paper panels hidden while the
+// plan is still reselectable to avoid showing stale history from prior plans.
+const showPaperSections = computed(() => {
+  if (!selectedDetail.value || selectedPlanHasLiveSignals.value || canReselectItems.value) return false
+  return selectedPlanStatus.value === 'approved' || hasPaperExecution.value
+})
+const showPaperExecutionStatus = computed(() => showPaperSections.value && (
+  selectedPlanStatus.value === 'approved' || paperExecutionCount.value > 0
+))
+const canExecutePaperNow = computed(() => (
+  selectedPlanStatus.value === 'approved'
+  && !selectedPlanHasLiveSignals.value
+  && !hasPaperExecution.value
+))
 
 const latestExecutionText = computed(() => {
   const latest = executionStatus.value.latest_execution_result
@@ -1366,6 +1444,9 @@ async function pollGenerationTask(taskId) {
   try {
     const res = await getPortfolioPlanGenerationTask(taskId)
     currentGenerationTask.value = res.data
+    if (pendingReselect.value) {
+      reselectTaskMeta.value = { taskId: res.data?.task_id || taskId, status: res.data?.status || '' }
+    }
     if (['completed', 'failed'].includes(res.data?.status)) {
       if (generationTaskTimer) {
         window.clearInterval(generationTaskTimer)
@@ -1377,13 +1458,34 @@ async function pollGenerationTask(taskId) {
       await loadPlans()
       if (res.data.status === 'completed' && res.data.plan_id) {
         await selectPlan(res.data.plan_id)
-        message.value = `已生成计划 ${res.data.plan_id}`
+        if (pendingReselect.value) {
+          const summary = describeReselectResult(pendingReselect.value)
+          message.value = summary
+          lastReselectSummary.value = summary
+          reselectStatus.value = { state: 'success', text: summary }
+          reselectTaskMeta.value = { taskId: res.data?.task_id || taskId, status: 'completed' }
+          pendingReselect.value = null
+        } else {
+          message.value = `已生成计划 ${res.data.plan_id}`
+        }
       } else if (res.data.status === 'failed') {
-        message.value = res.data.error_message || '生成计划失败'
+        const taskErr = res.data.error_message || '生成计划失败'
+        message.value = taskErr
+        if (pendingReselect.value) {
+          reselectStatus.value = { state: 'error', text: `重选任务失败：${taskErr}` }
+          reselectTaskMeta.value = { taskId: res.data?.task_id || taskId, status: 'failed' }
+        }
+        pendingReselect.value = null
       }
     }
   } catch (error) {
-    message.value = error.response?.data?.detail || error.message || '查询生成任务失败'
+    const detailText = formatApiDetail(error.response?.data?.detail)
+    const errText = detailText || error.message || '查询生成任务失败'
+    message.value = errText
+    if (pendingReselect.value) {
+      reselectStatus.value = { state: 'error', text: `重选任务查询失败：${errText}` }
+      reselectTaskMeta.value = { taskId, status: 'query_failed' }
+    }
   }
 }
 
@@ -1391,6 +1493,9 @@ async function selectPlan(planId) {
   selectedPlanId.value = planId
   reviewComment.value = ''
   livePublishPreview.value = null
+  lastReselectSummary.value = ''
+  reselectStatus.value = { state: 'idle', text: '' }
+  reselectTaskMeta.value = { taskId: '', status: '' }
   const res = await getPortfolioPlan(planId)
   selectedDetail.value = res.data
   if (selectedPlanHasLiveSignals.value) {
@@ -1398,6 +1503,7 @@ async function selectPlan(planId) {
     await Promise.all([
       loadEquity(),
       loadRealtimeEquity(),
+      loadOperationLogs(),
       loadLiveOps(),
     ])
     return
@@ -1406,6 +1512,7 @@ async function selectPlan(planId) {
     loadEquity(),
     loadRealtimeEquity(),
     loadExecutions(),
+    loadOperationLogs(),
     loadLiveOps(),
   ])
 }
@@ -1449,6 +1556,24 @@ async function publishLiveSignals() {
   }
 }
 
+async function executePaperNow() {
+  if (!selectedPlanId.value || !canExecutePaperNow.value) return
+  paperExecuteLoading.value = true
+  message.value = ''
+  try {
+    const res = await executePortfolioPlanPaper(selectedPlanId.value, { force: false })
+    const status = res.data?.status || 'executed_paper'
+    message.value = `Paper 执行已触发：${status}`
+    await selectPlan(selectedPlanId.value)
+    await loadPlans()
+  } catch (error) {
+    const detail = error.response?.data?.detail
+    message.value = detail?.message || detail || error.message || '执行 Paper 失败'
+  } finally {
+    paperExecuteLoading.value = false
+  }
+}
+
 async function loadEquity() {
   if (selectedPlanHasLiveSignals.value) {
     if (!selectedPlanId.value) {
@@ -1459,12 +1584,15 @@ async function loadEquity() {
     equity.value = res.data || []
     return
   }
-  const templateId = selectedDetail.value?.plan?.strategy_template_id
-  if (!templateId) {
+  if (!selectedPlanId.value) {
     equity.value = []
     return
   }
-  const res = await getPortfolioStrategyEquity(templateId)
+  if (!showPaperSections.value) {
+    equity.value = []
+    return
+  }
+  const res = await getPortfolioPlanEquity(selectedPlanId.value)
   equity.value = res.data || []
 }
 
@@ -1478,22 +1606,38 @@ async function loadRealtimeEquity() {
     realtimeEquity.value = res.data || null
     return
   }
-  const templateId = selectedDetail.value?.plan?.strategy_template_id
-  if (!templateId) {
-    realtimeEquity.value = null
-    return
-  }
-  const res = await getPortfolioStrategyRealtimeEquity(templateId)
-  realtimeEquity.value = res.data || null
+  // Plan detail should not consume strategy-level realtime snapshots.
+  realtimeEquity.value = null
 }
 
 async function loadExecutions() {
+  if (!showPaperSections.value) {
+    executions.value = []
+    return
+  }
   if (!selectedPlanId.value) {
     executions.value = []
     return
   }
   const res = await getPortfolioPlanExecutions(selectedPlanId.value)
   executions.value = res.data || []
+}
+
+async function loadOperationLogs() {
+  if (!selectedPlanId.value) {
+    operationLogs.value = []
+    return
+  }
+  operationLogsLoading.value = true
+  try {
+    const res = await getPortfolioPlanOperationLogs(selectedPlanId.value, { limit: 100 })
+    operationLogs.value = res.data || []
+  } catch (error) {
+    const detailText = formatApiDetail(error.response?.data?.detail)
+    message.value = detailText || error.message || '加载操作日志失败'
+  } finally {
+    operationLogsLoading.value = false
+  }
 }
 
 async function review(decision) {
@@ -1513,21 +1657,95 @@ async function review(decision) {
   }
 }
 
+function actionBadge(action) {
+  switch (action) {
+    case 'buy':
+      return { text: 'B', label: '买入', cls: 'tag-buy' }
+    case 'sell':
+      return { text: 'S', label: '卖出', cls: 'tag-sell' }
+    case 'hold':
+      return { text: 'H', label: '持有', cls: 'tag-hold' }
+    default:
+      return { text: '·', label: '跳过', cls: 'tag-skip' }
+  }
+}
+
+function describeReselectResult(pending) {
+  const items = selectedDetail.value?.items || []
+  const nameOf = (sym) => {
+    const hit = items.find((item) => item.symbol === sym)
+    return hit?.name ? `${sym}(${hit.name})` : sym
+  }
+  const before = new Set(pending.beforeTargets || [])
+  const afterTargets = items.filter((item) => item.rank != null).map((item) => item.symbol)
+  const added = afterTargets.filter((sym) => !before.has(sym) && sym !== pending.symbol)
+  if (pending.type === 'restore') {
+    return afterTargets.includes(pending.symbol)
+      ? `已恢复 ${nameOf(pending.symbol)}，重新纳入目标`
+      : `已恢复 ${pending.symbol}（当前排名未进入目标）`
+  }
+  if (added.length) {
+    return `已排除 ${pending.symbol}，补位换为 ${added.map(nameOf).join('、')}`
+  }
+  return `已排除 ${pending.symbol}，候选池无可补位标的（目标持仓数减少）`
+}
+
+function formatApiDetail(detail) {
+  if (!detail) return ''
+  if (typeof detail === 'string') return detail
+  if (typeof detail === 'object' && detail.message) return String(detail.message)
+  try {
+    return JSON.stringify(detail)
+  } catch {
+    return String(detail)
+  }
+}
+
 async function reselectItem(symbol, restore = false) {
-  if (!selectedPlanId.value || !symbol) return
+  if (!selectedPlanId.value || !symbol || reselectBusy.value) return
+  if (restore && !selectedPlanExcluded.value.includes(symbol)) {
+    const txt = `无需恢复：${symbol} 当前不在已排除列表中`
+    reselectStatus.value = { state: 'success', text: txt }
+    lastReselectSummary.value = txt
+    return
+  }
   actionLoading.value = true
   try {
     const apiCall = restore ? restorePortfolioPlanItem : rejectPortfolioPlanItem
+    // Snapshot current target names so we can diff after regeneration.
+    const beforeTargets = (selectedDetail.value?.items || [])
+      .filter((item) => item.rank != null)
+      .map((item) => item.symbol)
     const res = await apiCall(selectedPlanId.value, symbol)
     const task = res.data?.task
     if (task?.task_id) {
+      lastReselectSummary.value = ''
+      pendingReselect.value = { type: restore ? 'restore' : 'reject', symbol, beforeTargets }
+      reselectTaskMeta.value = { taskId: task.task_id, status: 'pending' }
       currentGenerationTask.value = task
+      reselectStatus.value = {
+        state: 'running',
+        text: restore ? `正在恢复 ${symbol}，任务 ${task.task_id} 执行中…` : `正在重选 ${symbol}，任务 ${task.task_id} 执行中…`,
+      }
       message.value = restore ? `已恢复 ${symbol}，正在重算计划…` : `已排除 ${symbol}，正在重选补位…`
+      await loadOperationLogs()
       await loadGenerationTasks()
       startGenerationTaskPolling(task.task_id)
+    } else if (res.data?.operation_log?.status === 'noop') {
+      const noopMsg = res.data?.operation_log?.message || `无需恢复：${symbol}`
+      reselectStatus.value = { state: 'success', text: noopMsg }
+      lastReselectSummary.value = noopMsg
+      await loadOperationLogs()
+    } else {
+      reselectStatus.value = { state: 'error', text: '重选任务创建失败：未返回 task_id' }
+      reselectTaskMeta.value = { taskId: '', status: 'create_failed' }
     }
   } catch (error) {
-    message.value = error.response?.data?.detail || error.message || '重选失败'
+    const detailText = formatApiDetail(error.response?.data?.detail)
+    const errText = detailText || error.message || '重选失败'
+    reselectStatus.value = { state: 'error', text: `重选失败：${errText}` }
+    reselectTaskMeta.value = { taskId: '', status: 'request_failed' }
+    message.value = errText
   } finally {
     actionLoading.value = false
   }
@@ -1645,6 +1863,74 @@ button.danger {
   margin-bottom: 8px;
 }
 
+.reselect-summary {
+  color: #2563eb;
+  font-size: 12px;
+  margin: 4px 0 8px;
+}
+
+.reselect-meta {
+  color: #6b7280;
+  font-size: 11px;
+  margin: -4px 0 8px;
+}
+
+.operation-log-panel {
+  margin-bottom: 12px;
+}
+
+.operation-log-table td,
+.operation-log-table th {
+  white-space: nowrap;
+}
+
+.reselect-meta {
+  color: #6b7280;
+  font-size: 11px;
+  margin: -4px 0 8px;
+}
+
+.reselect-status {
+  align-items: center;
+  border-radius: 4px;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  margin: 4px 0 8px;
+  padding: 4px 8px;
+}
+
+.reselect-status.is-running {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.reselect-status.is-success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.reselect-status.is-error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+  border: 2px solid #c7d2fe;
+  border-radius: 999px;
+  border-top-color: #2563eb;
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .excluded-label {
   color: #6b7280;
   font-size: 12px;
@@ -1665,6 +1951,87 @@ button.danger {
   border: none;
   color: #2563eb;
   padding: 0 4px;
+}
+
+.plan-items-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.plan-items-table th,
+.plan-items-table td {
+  font-size: 12px;
+  overflow: hidden;
+  padding: 3px 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-items-table .col-num {
+  text-align: right;
+  width: 54px;
+}
+
+.plan-items-table .col-narrow {
+  width: 44px;
+}
+
+.plan-items-table .col-symbol {
+  width: 70px;
+}
+
+.plan-items-table .col-name {
+  width: 92px;
+}
+
+.plan-items-table .col-ind {
+  width: 62px;
+}
+
+.plan-items-table .col-action {
+  overflow: visible;
+  width: 60px;
+}
+
+.plan-items-table .col-action .link-btn {
+  padding: 1px 6px;
+}
+
+.plan-items-table .col-risk {
+  width: 84px;
+}
+
+.plan-items-table .link-btn {
+  white-space: nowrap;
+}
+
+.action-tag {
+  border-radius: 3px;
+  color: #fff;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 14px;
+  margin-right: 4px;
+  text-align: center;
+  width: 14px;
+}
+
+/* A股配色：买入=红，卖出=绿 */
+.action-tag.tag-buy {
+  background: #d12b2b;
+}
+
+.action-tag.tag-sell {
+  background: #1f9d55;
+}
+
+.action-tag.tag-hold {
+  background: #6b7280;
+}
+
+.action-tag.tag-skip {
+  background: #c7ccd6;
 }
 
 .card {

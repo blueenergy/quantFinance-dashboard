@@ -52,6 +52,14 @@ export function getPortfolioPlan(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}`, method: 'get' })
 }
 
+export function getPortfolioPlanOperationLogs(planId, params = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/operation-logs`, method: 'get', params })
+}
+
+export function executePortfolioPlanPaper(planId, data = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/execute-paper`, method: 'post', data })
+}
+
 export function approvePortfolioPlan(planId, data = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/approve`, method: 'post', data })
 }
@@ -70,6 +78,10 @@ export function restorePortfolioPlanItem(planId, symbol) {
 
 export function getPortfolioPlanExecutions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/executions`, method: 'get' })
+}
+
+export function getPortfolioPlanEquity(planId, params = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/equity`, method: 'get', params })
 }
 
 export function getPortfolioPlanLiveExecutions(planId) {
