@@ -97,7 +97,7 @@
           <ul v-if="Array.isArray(field.value) && field.value.length > 0" class="analysis-points-list">
             <li v-for="(point, index) in field.value" :key="index">{{ point }}</li>
           </ul>
-          <p v-else>{{ emptyText }}</p>
+          <p v-else>{{ field.emptyText || emptyText }}</p>
         </template>
 
         <template v-else>
@@ -182,6 +182,7 @@ const financialChartData = computed(() => {
 })
 
 const expertLabelMap = {
+  industry_specialist: { title: '行业专家',           shortLabel: '行业' },
   fundamental:      { title: '基本面专家',         shortLabel: '基本面' },
   technical:        { title: '技术面专家',         shortLabel: '技术面' },
   risk:             { title: '风险专家',           shortLabel: '风险' },
@@ -189,7 +190,7 @@ const expertLabelMap = {
   cycle:            { title: '行业周期专家',       shortLabel: '行业周期' },
   industry_report:  { title: '行业研究报告（原文）', shortLabel: '行业研究' },
 }
-const EXPERT_ORDER = ['cycle', 'fundamental', 'growth', 'technical', 'risk']
+const EXPERT_ORDER = ['industry_specialist', 'cycle', 'fundamental', 'growth', 'technical', 'risk']
 
 const investmentAdviceText = computed(() => {
   const labels = isIndustry.value ? industryAdviceLabels : adviceLabels
@@ -202,6 +203,13 @@ const confidenceText = computed(() => {
 })
 const consensusPoints = computed(() => normalizePoints(analysis.value.consensus_points))
 const divergencePoints = computed(() => normalizePoints(analysis.value.divergence_points))
+const industryKeyMetrics = computed(() => normalizePoints(analysis.value.industry_key_metrics))
+const industrySpecificRisks = computed(() => normalizePoints(analysis.value.industry_specific_risks))
+const missingIndustryData = computed(() => {
+  const direct = normalizePoints(analysis.value.missing_industry_data)
+  if (direct.length > 0) return direct
+  return normalizePoints(analysis.value.industry_metric_meta?.missing_metrics)
+})
 const finalConclusion = computed(() => {
   const value = analysis.value.final_conclusion
   return typeof value === 'string' ? value.trim() : ''
@@ -285,6 +293,34 @@ const detailFields = computed(() => {
     ]
   }
   return [
+    {
+      key: 'industry_expert_assessment',
+      title: '行业专家结论',
+      value: analysis.value.industry_expert_assessment || props.emptyText,
+      wide: true,
+    },
+    {
+      key: 'industry_key_metrics',
+      title: '行业关键指标',
+      type: 'list',
+      value: industryKeyMetrics.value,
+      emptyText: '暂无已验证的行业关键指标',
+    },
+    {
+      key: 'industry_specific_risks',
+      title: '行业专属风险',
+      type: 'list',
+      value: industrySpecificRisks.value,
+      emptyText: '暂无行业专属风险',
+    },
+    {
+      key: 'missing_industry_data',
+      title: '缺失行业数据',
+      type: 'list',
+      value: missingIndustryData.value,
+      emptyText: '未声明缺失行业数据',
+      wide: true,
+    },
     {
       key: 'growth_assessment',
       title: '成长性判断',
@@ -546,12 +582,14 @@ function normalizePoints(value) {
 }
 /* per-expert accent colors */
 .expert-review-chip--cycle       { background: rgba(139, 92, 246, 0.16); border-color: rgba(167, 139, 250, 0.32); color: #c4b5fd; }
+.expert-review-chip--industry_specialist { background: rgba(20, 184, 166, 0.16); border-color: rgba(45, 212, 191, 0.32); color: #99f6e4; }
 .expert-review-chip--fundamental { background: rgba(59, 130, 246, 0.16); border-color: rgba(96, 165, 250, 0.32);  color: #93c5fd; }
 .expert-review-chip--growth      { background: rgba(34, 197, 94, 0.16);  border-color: rgba(74, 222, 128, 0.32); color: #86efac; }
 .expert-review-chip--technical   { background: rgba(245, 158, 11, 0.16); border-color: rgba(251, 191, 36, 0.32); color: #fde68a; }
 .expert-review-chip--risk        { background: rgba(239, 68, 68, 0.16);  border-color: rgba(248, 113, 113, 0.32); color: #fca5a5; }
 
 .expert-review-card--cycle       { border-left: 3px solid rgba(139, 92, 246, 0.5); }
+.expert-review-card--industry_specialist { border-left: 3px solid rgba(20, 184, 166, 0.5); }
 .expert-review-card--fundamental { border-left: 3px solid rgba(59, 130, 246, 0.5); }
 .expert-review-card--growth      { border-left: 3px solid rgba(34, 197, 94, 0.5); }
 .expert-review-card--technical   { border-left: 3px solid rgba(245, 158, 11, 0.5); }
