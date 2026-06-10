@@ -199,7 +199,34 @@
           <section class="workbench-card">
             <div class="card-title-row">
               <h3>深度分析</h3>
-              <span class="muted">{{ deepAnalysis?.created_at || '暂无分析时间' }}</span>
+              <div class="analysis-actions">
+                <v-select
+                  v-model="analysisMode"
+                  :items="analysisModeOptions"
+                  density="compact"
+                  variant="outlined"
+                  hide-details
+                  class="analysis-mode-select"
+                />
+                <v-btn
+                  color="primary"
+                  variant="tonal"
+                  :loading="analysisSubmitting"
+                  :disabled="!stockSymbol || stockSymbol === '-'"
+                  @click="submitDeepAnalysis"
+                >
+                  {{ deepAnalysis?.analysis ? '重新分析' : '开始深度分析' }}
+                </v-btn>
+              </div>
+            </div>
+            <v-alert v-if="analysisSubmitError" type="error" variant="tonal" class="mb-3">
+              {{ analysisSubmitError }}
+            </v-alert>
+            <v-alert v-if="analysisSubmitStatus" type="info" variant="tonal" class="mb-3">
+              {{ analysisSubmitStatus }}
+            </v-alert>
+            <div v-if="deepAnalysis?.created_at" class="analysis-time">
+              最近分析时间：{{ deepAnalysis.created_at }}
             </div>
             <AnalysisDetailContent
               v-if="deepAnalysis?.analysis"
@@ -209,7 +236,7 @@
               mode="stock"
               show-mode
             />
-            <div v-else class="muted-block">暂无深度分析，可先在「个股深度分析」模块发起分析任务。</div>
+            <div v-else class="muted-block">暂无深度分析，可点击上方按钮直接发起分析任务。</div>
           </section>
         </v-window-item>
       </v-window>
@@ -223,6 +250,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import axios from 'axios'
 import * as echarts from 'echarts'
 import { getStockFinancial, getStockWorkbench, searchStocks } from '../api/stock'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
@@ -248,11 +276,21 @@ const searchText = ref('')
 const searchResults = ref([])
 const selectedSearchItem = ref(null)
 const selectedStrategy = ref('balanced')
+const analysisMode = ref('multi_expert_v1')
+const analysisSubmitting = ref(false)
+const analysisSubmitStatus = ref('')
+const analysisSubmitError = ref('')
 const incomeRows = ref([])
 const indicatorRows = ref([])
 const radarRef = ref(null)
 let radarChart = null
 let searchTimer = null
+let analysisPollTimer = null
+
+const analysisModeOptions = [
+  { title: '多专家', value: 'multi_expert_v1' },
+  { title: '经典', value: 'classic' },
+]
 
 const score = computed(() => payload.value?.score || {})
 const stock = computed(() => payload.value?.stock || {})
@@ -412,6 +450,9 @@ async function loadSymbol(symbol) {
   loading.value = true
   error.value = ''
   try {
+    clearAnalysisPolling()
+    analysisSubmitStatus.value = ''
+    analysisSubmitError.value = ''
     const [workbench, income, indicator] = await Promise.all([
       getStockWorkbench(clean),
       getStockFinancial(clean, 'income', 8).catch(() => []),
@@ -427,6 +468,91 @@ async function loadSymbol(symbol) {
     error.value = e?.message || '股票工作台数据加载失败'
   } finally {
     loading.value = false
+  }
+}
+
+function clearAnalysisPolling() {
+  if (analysisPollTimer) {
+    clearInterval(analysisPollTimer)
+    analysisPollTimer = null
+  }
+}
+
+async function submitDeepAnalysis() {
+  const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
+  if (!symbol) return
+  clearAnalysisPolling()
+  analysisSubmitting.value = true
+  analysisSubmitError.value = ''
+  analysisSubmitStatus.value = ''
+  const token = localStorage.getItem('access_token')
+  try {
+    const res = await axios.post(
+      '/api/analyze/deep-analysis',
+      { symbol, priority: 30, analysis_mode: analysisMode.value },
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    if (!res.data?.success) {
+      analysisSubmitError.value = res.data?.message || '提交失败'
+      analysisSubmitting.value = false
+      return
+    }
+    const taskId = res.data.task_id
+    analysisSubmitStatus.value = `已提交，前方 ${res.data.queue_ahead ?? '?'} 个任务。${res.data.wait_hint || '分析中…'}`
+    let tries = 0
+    analysisPollTimer = setInterval(async () => {
+      tries += 1
+      if (tries > 120) {
+        clearAnalysisPolling()
+        analysisSubmitStatus.value = '等待超时，请稍后刷新工作台或在个股深度分析历史中查看。'
+        analysisSubmitting.value = false
+        return
+      }
+      try {
+        const poll = await axios.get(`/api/analyze/task/${taskId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const status = poll.data?.status
+        if (status === 'completed') {
+          clearAnalysisPolling()
+          analysisSubmitting.value = false
+          analysisSubmitStatus.value = '分析完成，已更新当前工作台。'
+          const analysis = poll.data?.analysis || {}
+          const nextDeepAnalysis = {
+            id: taskId,
+            symbol,
+            stock_name: analysis.stock_name || stockName.value || '',
+            analysis_mode: poll.data?.analysis_mode || analysis.analysis_mode || analysisMode.value,
+            analysis,
+            model: poll.data?.model,
+            created_at: new Date().toISOString(),
+          }
+          payload.value = {
+            ...(payload.value || {}),
+            deep_analysis: nextDeepAnalysis,
+            data_status: {
+              ...(payload.value?.data_status || {}),
+              deep_analysis_found: true,
+              analysis_created_at: nextDeepAnalysis.created_at,
+            },
+          }
+        } else if (status === 'failed' || status === 'completed_with_parse_error') {
+          clearAnalysisPolling()
+          analysisSubmitting.value = false
+          analysisSubmitStatus.value = ''
+          analysisSubmitError.value = poll.data?.error || '分析失败'
+        } else if (status === 'pending') {
+          analysisSubmitStatus.value = `排队中，前方 ${poll.data?.queue_ahead ?? '?'} 个任务。${poll.data?.wait_hint || '预计等待时间计算中'}`
+        } else if (status === 'processing') {
+          analysisSubmitStatus.value = poll.data?.wait_hint || '正在分析，LLM 响应时间可能有波动'
+        }
+      } catch (_) {
+        // Keep polling through transient network/server hiccups.
+      }
+    }, 3000)
+  } catch (e) {
+    analysisSubmitError.value = e.response?.data?.detail || e.message || '提交失败'
+    analysisSubmitting.value = false
   }
 }
 
@@ -504,6 +630,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('stock-workbench:set-symbol', onOpenWorkbench)
   clearTimeout(searchTimer)
+  clearAnalysisPolling()
   if (radarChart) {
     radarChart.dispose()
     radarChart = null
@@ -680,6 +807,21 @@ h1, h2, h3 {
 }
 .strategy-select {
   max-width: 220px;
+}
+.analysis-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.analysis-mode-select {
+  min-width: 140px;
+}
+.analysis-time {
+  color: #94a3b8;
+  font-size: 13px;
+  margin: -4px 0 14px;
 }
 .score-radar {
   height: 360px;

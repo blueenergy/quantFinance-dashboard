@@ -625,8 +625,7 @@
                 <thead>
                   <tr>
                     <th class="col-narrow">Rank</th>
-                    <th class="col-symbol">代码</th>
-                    <th class="col-name">名称</th>
+                    <th class="col-stock">标的</th>
                     <th class="col-ind">行业</th>
                     <th class="col-num">{{ selectedPlanHasLiveSignals ? '策略股数' : '当前股数' }}</th>
                     <th class="col-num">目标股数</th>
@@ -644,9 +643,12 @@
                 <tbody>
                   <tr v-for="item in selectedDetail.items" :key="`${item.symbol}-${item.rank}`">
                     <td class="col-narrow">{{ item.rank ?? '-' }}</td>
-                    <td class="col-symbol">{{ item.symbol }}</td>
-                    <td class="col-name" :title="`${actionBadge(item.action).label} ${item.name || ''}`">
-                      <span class="action-tag" :class="actionBadge(item.action).cls">{{ actionBadge(item.action).text }}</span>{{ item.name || '-' }}
+                    <td class="col-stock" :title="`${actionBadge(item.action).label} ${item.name || ''} ${item.symbol || ''}`">
+                      <button type="button" class="stock-workbench-link" @click="openStockWorkbench(item.symbol)">
+                        <span class="action-tag" :class="actionBadge(item.action).cls">{{ actionBadge(item.action).text }}</span>
+                        <span class="stock-workbench-link__name">{{ item.name || item.symbol || '-' }}</span>
+                        <span v-if="item.symbol" class="stock-workbench-link__symbol">{{ item.symbol }}</span>
+                      </button>
                     </td>
                     <td class="col-ind" :title="item.industry || ''">{{ item.industry || '-' }}</td>
                     <td class="col-num">{{ item.current_shares ?? 0 }}</td>
@@ -1230,6 +1232,11 @@ function formatSummary(summary) {
 
 function signalDisplayName(signal) {
   return signal?.name || signal?.stock_name || signal?.symbol || '-'
+}
+
+function openStockWorkbench(symbol) {
+  if (!symbol) return
+  window.dispatchEvent(new CustomEvent('stock-workbench:open', { detail: { symbol } }))
 }
 
 function effectiveTopN(plan) {
@@ -2070,12 +2077,8 @@ button.danger {
   width: 44px;
 }
 
-.plan-items-table .col-symbol {
-  width: 70px;
-}
-
-.plan-items-table .col-name {
-  width: 92px;
+.plan-items-table .col-stock {
+  width: 138px;
 }
 
 .plan-items-table .col-ind {
@@ -2161,6 +2164,38 @@ button.danger {
 
 .plan-items-table .link-btn {
   white-space: nowrap;
+}
+
+.stock-workbench-link {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #1d4ed8;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.stock-workbench-link:hover .stock-workbench-link__name,
+.stock-workbench-link:hover .stock-workbench-link__symbol {
+  text-decoration: underline;
+}
+
+.stock-workbench-link__name {
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stock-workbench-link__symbol {
+  color: #6b7280;
+  flex-shrink: 0;
+  font-size: 11px;
 }
 
 .action-tag {
