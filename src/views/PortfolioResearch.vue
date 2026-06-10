@@ -10,10 +10,14 @@
     </header>
 
     <section class="card create-card">
-      <div>
-        <h3>创建研究任务</h3>
-        <p class="muted">任务由 stock-scoring-system 后台 worker 执行，完成后可发布最佳候选策略。</p>
+      <div class="create-head" @click="createCollapsed = !createCollapsed">
+        <div>
+          <h3>创建研究任务</h3>
+          <p class="muted">任务由 stock-scoring-system 后台 worker 执行，完成后可发布最佳候选策略。</p>
+        </div>
+        <button class="collapse-btn" type="button">{{ createCollapsed ? '展开 ▸' : '收起 ▾' }}</button>
       </div>
+      <div v-show="!createCollapsed">
       <div class="form-grid">
         <label>
           名称
@@ -42,6 +46,7 @@
         <label>
           growth:cycle 权重
           <input v-model="form.growth_cycle_weights" placeholder="30:70,40:60" />
+          <small class="field-hint">逗号分隔可对比多组，如 30:70,60:40</small>
         </label>
         <label>
           Top N
@@ -83,6 +88,7 @@
       <button :disabled="submitting || !form.start_date || !form.end_date" @click="createJob">
         {{ submitting ? '提交中...' : '提交研究任务' }}
       </button>
+      </div>
     </section>
 
     <p v-if="message" class="message">{{ message }}</p>
@@ -215,7 +221,7 @@
                 <thead>
                   <tr>
                     <th>Rank</th>
-                    <th>Score</th>
+                    <th v-if="showScoreColumn">Score</th>
                     <th>Variant</th>
                     <th>TopN</th>
                     <th>收益</th>
@@ -236,7 +242,7 @@
                       {{ idx + 1 }}
                       <span v-if="isSelectedResultRow(row, idx)" class="selected-badge">已选</span>
                     </td>
-                    <td>{{ row.score_variant || row.score_column || '-' }}</td>
+                    <td v-if="showScoreColumn">{{ row.score_variant || row.score_column || '-' }}</td>
                     <td>{{ row.variant || '-' }}</td>
                     <td>{{ row.top_n }}</td>
                     <td>{{ pct(row.cumulative_return) }}</td>
@@ -387,6 +393,7 @@ const selectedJobId = ref('')
 const statusFilter = ref('')
 const message = ref('')
 const errorMessage = ref('')
+const createCollapsed = ref(false)
 
 const comboModalOpen = ref(false)
 const comboLoading = ref(false)
@@ -441,6 +448,7 @@ const form = ref({
 })
 
 const resultRows = computed(() => resultDetail.value?.rows || [])
+const showScoreColumn = computed(() => new Set(resultRows.value.map((row) => row.score_variant)).size > 1)
 const candidateConfig = computed(() => resultDetail.value?.candidate_strategy_config || selectedJob.value?.candidate_strategy_config)
 const researchParamRows = computed(() => buildResearchParamRows(selectedJob.value))
 const publishedPresetId = computed(() => resultDetail.value?.published_preset_id || selectedJob.value?.published_preset_id || '')
@@ -867,6 +875,33 @@ small {
 
 .create-card {
   margin-bottom: 20px;
+}
+
+.field-hint {
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.create-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.create-head > div {
+  min-width: 0;
+}
+
+.collapse-btn {
+  flex: none;
+  border: 1px solid #d9e1ec;
+  background: #fff;
+  color: #475569;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .form-grid,
