@@ -8,17 +8,53 @@
       </div>
       <div class="stock-input-panel">
         <div class="stock-code-row">
-          <v-text-field
-            v-model="directSymbol"
-            clearable
-            hide-details
-            label="输入股票代码"
-            placeholder="例如 600519、000858、600519.SH"
-            variant="outlined"
-            density="comfortable"
-            class="stock-code-input"
-            @keyup.enter="submitDirectSymbol"
-          />
+          <div class="stock-code-combobox">
+            <v-text-field
+              id="stock-workbench-symbol-input"
+              v-model="directSymbol"
+              clearable
+              hide-details
+              label="输入股票代码 / 名称 / 拼音"
+              placeholder="例如 600519、平安银行、PAYH、600519.SH"
+              variant="outlined"
+              density="comfortable"
+              class="stock-code-input"
+              autocomplete="off"
+              :loading="searching"
+              @focus="showStockSearchMenu = searchResults.length > 0"
+              @keyup.enter="submitDirectSymbol"
+            />
+            <v-menu
+              v-model="showStockSearchMenu"
+              activator="#stock-workbench-symbol-input"
+              :close-on-content-click="false"
+              :open-on-click="false"
+              :open-on-focus="false"
+              location="bottom start"
+              content-class="stock-workbench-search-menu"
+            >
+              <div v-if="searchResults.length" class="stock-workbench-search-scroll">
+                <v-list
+                  density="compact"
+                  class="stock-workbench-search-list"
+                >
+                  <v-list-item
+                    v-for="item in searchResults"
+                    :key="item.symbol || item.ts_code"
+                    :title="stockItemTitle(item)"
+                    :subtitle="stockItemSubtitle(item)"
+                    @click="selectSearchCandidate(item)"
+                  >
+                    <template #prepend>
+                      <v-chip size="x-small" label class="mr-2" color="primary">
+                        {{ stockMarketLabel(item) }}
+                      </v-chip>
+                    </template>
+                  </v-list-item>
+                </v-list>
+              </div>
+            </v-menu>
+          </div>
           <v-btn
             color="primary"
             size="large"
@@ -28,23 +64,6 @@
             加载工作台
           </v-btn>
         </div>
-        <v-autocomplete
-          v-model="selectedSearchItem"
-          v-model:search="searchText"
-          :items="searchResults"
-          :loading="searching"
-          :item-title="stockItemTitle"
-          item-value="symbol"
-          return-object
-          clearable
-          hide-details
-          label="也可以按名称搜索"
-          variant="outlined"
-          density="comfortable"
-          class="stock-search-box"
-          @update:model-value="onSearchSelected"
-          @keyup.enter="loadSymbol(searchText)"
-        />
         <div class="quick-symbols">
           <span>快速示例</span>
           <button type="button" @click="loadSymbol('600519.SH')">600519.SH</button>
@@ -83,7 +102,13 @@
           <div>
             <small>最新价</small>
             <strong>{{ fmtNumber(latestPrice) }}</strong>
-            <span :class="changeClass">{{ fmtPct(latestPctChange) }}</span>
+            <span
+              class="price-change-line"
+              :class="changeClass"
+              :title="priceChangeTitle"
+            >
+              日涨跌幅 {{ fmtPct(latestPctChange) }}
+            </span>
           </div>
           <div>
             <small>综合评分</small>
@@ -111,15 +136,7 @@
             <article class="workbench-card">
               <div class="card-title-row">
                 <h3>评分雷达</h3>
-                <v-select
-                  v-model="selectedStrategy"
-                  :items="strategyOptions"
-                  label="策略"
-                  density="compact"
-                  variant="outlined"
-                  hide-details
-                  class="strategy-select"
-                />
+                <span class="muted">按维度展示最新量化评分</span>
               </div>
               <div ref="radarRef" class="score-radar"></div>
             </article>
@@ -272,10 +289,9 @@ const error = ref('')
 const payload = ref(null)
 const activePanel = ref('overview')
 const directSymbol = ref('')
-const searchText = ref('')
 const searchResults = ref([])
 const selectedSearchItem = ref(null)
-const selectedStrategy = ref('balanced')
+const showStockSearchMenu = ref(false)
 const analysisMode = ref('multi_expert_v1')
 const analysisSubmitting = ref(false)
 const analysisSubmitStatus = ref('')
@@ -307,22 +323,53 @@ const stockIndustryL3 = computed(() => shenwan.value.l3_name || '')
 const indexCodes = computed(() => Array.isArray(score.value.index_codes) ? score.value.index_codes : [])
 
 const latestPrice = computed(() => quote.value.close ?? quote.value.price ?? quote.value.latest_price)
-const latestPctChange = computed(() => quote.value.pct_chg ?? quote.value.pct_change ?? quote.value.change_pct)
+const latestPctChange = computed(() => {
+  const normalizedPct = toNumber(quote.value.display_pct_chg)
+  if (normalizedPct != null) return normalizedPct
+
+  const explicitPct = firstFinite([
+    quote.value.pct_chg,
+    quote.value.pct_change,
+    quote.value.change_percent,
+  ])
+  if (explicitPct != null && Math.abs(explicitPct) <= 30) {
+    return explicitPct
+  }
+
+  const close = toNumber(latestPrice.value)
+  const previousClose = firstFinite([
+    quote.value.pre_close,
+    quote.value.prev_close,
+    quote.value.previous_close,
+    quote.value.yesterday_close,
+    quote.value.last_close,
+  ])
+  if (close != null && previousClose > 0) {
+    return ((close - previousClose) / previousClose) * 100
+  }
+
+  return null
+})
+const priceChangeTitle = computed(() => {
+  const source = quote.value.display_pct_chg_source
+  const preClose = toNumber(quote.value.display_pre_close)
+  if (source && source !== 'unavailable') {
+    const preText = preClose != null ? `，昨收 ${fmtNumber(preClose)}` : ''
+    return `当日涨跌幅：后端已按“最新价相对昨收价”归一计算${preText}。来源：${source}。`
+  }
+  return '当日涨跌幅：优先使用后端归一字段 display_pct_chg；缺失时才使用行情 pct_chg / pct_change 或用昨收价计算。'
+})
 const changeClass = computed(() => {
   const n = Number(latestPctChange.value)
   return n > 0 ? 'is-up' : n < 0 ? 'is-down' : ''
 })
 
 const compositeScore = computed(() => score.value.composite_score || {})
-const strategyOptions = computed(() => {
-  if (compositeScore.value && typeof compositeScore.value === 'object') {
-    return Object.keys(compositeScore.value)
-  }
-  return ['balanced']
-})
 const currentCompositeScore = computed(() => {
   if (compositeScore.value && typeof compositeScore.value === 'object') {
-    return compositeScore.value[selectedStrategy.value] ?? compositeScore.value.balanced
+    if (compositeScore.value.balanced != null) return compositeScore.value.balanced
+    const firstKey = Object.keys(compositeScore.value).find((key) => compositeScore.value[key] != null)
+    return firstKey ? compositeScore.value[firstKey] : null
   }
   return compositeScore.value
 })
@@ -348,7 +395,6 @@ const statusItems = computed(() => [
   { label: '行情', value: dataStatus.value.quote_found ? '已覆盖' : '未覆盖' },
   { label: '评分', value: dataStatus.value.score_found ? '已覆盖' : '未覆盖' },
   { label: 'AI分析', value: dataStatus.value.deep_analysis_found ? '已覆盖' : '未覆盖' },
-  { label: '当前策略', value: selectedStrategy.value },
 ])
 
 const analysisObj = computed(() => deepAnalysis.value?.analysis || {})
@@ -403,18 +449,23 @@ const financialMetrics = computed(() => {
   ]
 })
 
-watch(searchText, (val) => {
+watch(directSymbol, (val) => {
   clearTimeout(searchTimer)
-  if (!val || val.length < 2) {
+  const clean = String(val || '').trim()
+  if (!clean || clean.length < 2) {
     searchResults.value = []
+    showStockSearchMenu.value = false
     return
   }
   searchTimer = setTimeout(async () => {
     searching.value = true
     try {
-      searchResults.value = await searchStocks(val)
+      searchResults.value = await searchStocks(clean)
+      showStockSearchMenu.value = searchResults.value.length > 0
     } catch (e) {
       console.warn('search stocks failed', e)
+      searchResults.value = []
+      showStockSearchMenu.value = false
     } finally {
       searching.value = false
     }
@@ -430,13 +481,39 @@ watch([scoreItems, activePanel], async () => {
 function stockItemTitle(item) {
   if (!item) return ''
   const symbol = item.symbol || item.ts_code || ''
-  return `${symbol} ${item.name || item.stock_name || ''}`.trim()
+  const name = item.name || item.stock_name || ''
+  const pinyin = item.pinyin ? ` ${item.pinyin}` : ''
+  return `${symbol} ${name}${pinyin}`.trim()
 }
 
-function onSearchSelected(item) {
+function stockItemSubtitle(item) {
+  if (!item) return ''
+  const parts = []
+  if (item.industry) parts.push(item.industry)
+  if (item.pinyin) parts.push(`拼音 ${item.pinyin}`)
+  if (item.is_etf) parts.push('ETF')
+  return parts.join(' · ')
+}
+
+function stockMarketLabel(item) {
+  const symbol = item?.symbol || item?.ts_code || ''
+  const suffix = String(symbol).split('.')[1]
+  if (suffix) return suffix
+  if (/^6|^9/.test(symbol)) return 'SH'
+  if (/^0|^2|^3/.test(symbol)) return 'SZ'
+  if (/^4|^8/.test(symbol)) return 'BJ'
+  return item?.is_etf ? 'ETF' : '股票'
+}
+
+function selectSearchCandidate(item) {
   if (!item) return
   const symbol = item.symbol || item.ts_code
-  if (symbol) loadSymbol(symbol)
+  if (!symbol) return
+  selectedSearchItem.value = item
+  directSymbol.value = symbol
+  showStockSearchMenu.value = false
+  searchResults.value = []
+  loadSymbol(symbol)
 }
 
 function submitDirectSymbol() {
@@ -447,6 +524,8 @@ async function loadSymbol(symbol) {
   const clean = String(symbol || '').trim()
   if (!clean) return
   directSymbol.value = clean
+  selectedSearchItem.value = null
+  showStockSearchMenu.value = false
   loading.value = true
   error.value = ''
   try {
@@ -461,7 +540,6 @@ async function loadSymbol(symbol) {
     payload.value = workbench
     incomeRows.value = Array.isArray(income) ? income : []
     indicatorRows.value = Array.isArray(indicator) ? indicator : []
-    selectedStrategy.value = Object.keys(workbench?.score?.composite_score || {})[0] || 'balanced'
     await nextTick()
     renderRadar()
   } catch (e) {
@@ -601,6 +679,14 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : null
 }
 
+function firstFinite(values) {
+  for (const value of values) {
+    const n = toNumber(value)
+    if (n != null) return n
+  }
+  return null
+}
+
 function fmtNumber(value, digits = 2, suffix = '') {
   const n = Number(value)
   if (!Number.isFinite(n)) return '-'
@@ -610,15 +696,14 @@ function fmtNumber(value, digits = 2, suffix = '') {
 function fmtPct(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '-'
-  const v = Math.abs(n) > 1 ? n : n * 100
-  return `${v > 0 ? '+' : ''}${v.toFixed(2)}%`
+  return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`
 }
 
 async function onOpenWorkbench(e) {
   const detail = e?.detail || {}
   const symbol = typeof detail === 'string' ? detail : detail.symbol
   if (symbol) {
-    searchText.value = symbol
+    directSymbol.value = symbol
     await loadSymbol(symbol)
   }
 }
@@ -674,10 +759,6 @@ h1, h2, h3 {
   color: #94a3b8;
   margin: 7px 0 0;
 }
-.stock-search-box {
-  background: rgba(255,255,255,.04);
-  border-radius: 12px;
-}
 .stock-input-panel {
   display: grid;
   gap: 12px;
@@ -688,9 +769,62 @@ h1, h2, h3 {
   gap: 12px;
   grid-template-columns: minmax(0, 1fr) auto;
 }
+.stock-code-combobox {
+  min-width: 0;
+}
 .stock-code-input {
   background: rgba(255,255,255,.06);
   border-radius: 12px;
+}
+:global(.stock-workbench-search-menu) {
+  background: rgba(15, 23, 42, .98);
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 12px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .28);
+  max-height: 340px;
+  overflow: hidden;
+}
+:global(.stock-workbench-search-scroll) {
+  max-height: 320px;
+  min-width: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:global(.stock-workbench-search-list) {
+  background: rgba(15, 23, 42, .98) !important;
+  color: #e2e8f0 !important;
+  min-width: 320px;
+}
+:global(.stock-workbench-search-list .v-list-item-title) {
+  color: #ffffff !important;
+  font-size: 14px;
+  font-weight: 800;
+  opacity: 1 !important;
+}
+:global(.stock-workbench-search-list .v-list-item-subtitle) {
+  color: #dbeafe !important;
+  opacity: 1 !important;
+}
+:global(.stock-workbench-search-list .v-list-item) {
+  color: #f8fafc !important;
+}
+:global(.stock-workbench-search-list .v-list-item:hover) {
+  background: rgba(96, 165, 250, .18) !important;
+}
+:global(.stock-workbench-search-list .v-chip) {
+  background: rgba(59, 130, 246, .35) !important;
+  color: #ffffff !important;
+  font-weight: 800;
+}
+:global(.stock-workbench-search-scroll::-webkit-scrollbar) {
+  width: 8px;
+}
+:global(.stock-workbench-search-scroll::-webkit-scrollbar-thumb) {
+  background: rgba(148, 163, 184, .45);
+  border-radius: 999px;
+}
+:global(.stock-workbench-search-scroll::-webkit-scrollbar-track) {
+  background: rgba(15, 23, 42, .55);
 }
 .quick-symbols {
   align-items: center;
@@ -777,11 +911,17 @@ h1, h2, h3 {
   font-size: 22px;
   margin: 4px 0;
 }
+.price-change-line {
+  cursor: help;
+  display: block;
+  font-size: 12px;
+  line-height: 1.35;
+}
 .is-up {
-  color: #22c55e;
+  color: #ef4444;
 }
 .is-down {
-  color: #ef4444;
+  color: #22c55e;
 }
 .workbench-tabs {
   margin-bottom: 14px;
@@ -804,9 +944,6 @@ h1, h2, h3 {
   gap: 12px;
   justify-content: space-between;
   margin-bottom: 14px;
-}
-.strategy-select {
-  max-width: 220px;
 }
 .analysis-actions {
   align-items: center;
