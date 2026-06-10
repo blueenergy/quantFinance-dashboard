@@ -34,46 +34,19 @@
         <!-- 买入：股票搜索与自动补全 (自定义实现) -->
         <!-- 买入：股票搜索与自动补全 (自定义实现) -->
         <div v-if="form.action === 'buy'">
-          <v-text-field
-            id="stock-search-input"
+          <StockSearchInput
             v-model="form.symbol"
+            input-id="stock-search-input"
             label="股票代码/名称/拼音"
             placeholder="如: 000001, 平安银行, PAYH"
-            variant="outlined"
             density="compact"
-            class="mb-3"
-            :loading="isSearchingStock"
+            input-class="mb-3"
             :rules="[v => !!v || '请输入股票代码']"
             hint="输入2位以上自动搜索，6位数字自动补全"
             persistent-hint
-            clearable
-            @update:model-value="handleStockInput"
-            @focus="showStockMenu = !!stockSearchResults.length"
+            :hide-details="false"
+            @select="selectStockCandidate"
           />
-
-          <v-menu
-            v-model="showStockMenu"
-            activator="#stock-search-input"
-            :close-on-content-click="false"
-            location="bottom start"
-            :open-on-click="false"
-            :open-on-focus="false"
-            :offset="5"
-          >
-            <v-list v-if="stockSearchResults.length" density="compact" max-height="300">
-              <v-list-item
-                v-for="item in stockSearchResults"
-                :key="item.value"
-                :title="item.title"
-                :subtitle="item.value"
-                @click="selectStock(item)"
-              >
-                <template #prepend>
-                  <v-chip size="x-small" label class="mr-2">{{ item.value.split('.')[1] || 'Unknown' }}</v-chip>
-                </template>
-              </v-list-item>
-            </v-list>
-          </v-menu>
         </div>
         
         <!-- 卖出：从持仓中选择（已预填时显示只读） -->
@@ -254,7 +227,7 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
 import { createManualSignal } from '../api/trading'
-import { searchStocks } from '../api/stock'
+import StockSearchInput from './StockSearchInput.vue'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -437,8 +410,9 @@ async function submitOrder() {
   try {
     // 市价传 null，限价传实际价格
     const orderPrice = priceType.value === 'market' ? null : form.value.price
+    const symbol = normalizeStockSymbol(form.value.symbol)
     const result = await createManualSignal(
-      form.value.symbol.toUpperCase(),
+      symbol,
       form.value.action,
       form.value.size,
       orderPrice
@@ -463,75 +437,18 @@ function formatNumber(num) {
   return parseFloat(num).toLocaleString('zh-CN', { minimumFractionDigits: 2 })
 }
 
-// 股票搜索相关
-const stockSearchResults = ref([])
-const isSearchingStock = ref(false)
-const showStockMenu = ref(false)
-let searchTimeout = null
-
-function handleStockInput(val) {
-  if (!val) {
-    showStockMenu.value = false
-    stockSearchResults.value = []
-    return
-  }
-  
-  val = val.trim()
-  
-  // 1. 自动补全后缀逻辑（输入6位纯数字时）
-  if (/^\d{6}$/.test(val)) {
-    let suffix = ''
-    if (val.startsWith('6') || val.startsWith('9')) {
-      suffix = '.SH'
-    } else if (val.startsWith('0') || val.startsWith('3') || val.startsWith('2')) {
-      suffix = '.SZ'
-    } else if (val.startsWith('4') || val.startsWith('8')) {
-      suffix = '.BJ'
-    }
-    
-    if (suffix) {
-      setTimeout(() => {
-        form.value.symbol = val + suffix
-        // 自动补全后清除搜索结果并关闭菜单
-        stockSearchResults.value = []
-        showStockMenu.value = false
-      }, 0)
-      return
-    }
-  }
-
-  // 2. 搜索逻辑（防抖）
-  // 已经有后缀的不搜索
-  if (/\.(SZ|SH|BJ)$/i.test(val)) {
-    showStockMenu.value = false
-    return
-  }
-
-  if (val.length < 2) return
-
-  if (searchTimeout) clearTimeout(searchTimeout)
-  
-  searchTimeout = setTimeout(async () => {
-    isSearchingStock.value = true
-    try {
-      const results = await searchStocks(val)
-      stockSearchResults.value = results.map(s => ({
-        title: `${s.name} (${s.symbol})`,
-        value: s.symbol,
-        raw: s
-      }))
-      showStockMenu.value = results.length > 0
-    } catch (e) {
-      console.error(e)
-    } finally {
-      isSearchingStock.value = false
-    }
-  }, 300)
+function selectStockCandidate(item) {
+  form.value.symbol = item?.symbol || item?.ts_code || ''
 }
 
-function selectStock(item) {
-  form.value.symbol = item.value
-  showStockMenu.value = false
+function normalizeStockSymbol(value) {
+  const symbol = String(value || '').trim().toUpperCase()
+  if (/^\d{6}$/.test(symbol)) {
+    if (symbol.startsWith('6') || symbol.startsWith('9')) return `${symbol}.SH`
+    if (symbol.startsWith('0') || symbol.startsWith('2') || symbol.startsWith('3')) return `${symbol}.SZ`
+    if (symbol.startsWith('4') || symbol.startsWith('8')) return `${symbol}.BJ`
+  }
+  return symbol
 }
 </script>
 

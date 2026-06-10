@@ -8,53 +8,17 @@
       </div>
       <div class="stock-input-panel">
         <div class="stock-code-row">
-          <div class="stock-code-combobox">
-            <v-text-field
-              id="stock-workbench-symbol-input"
-              v-model="directSymbol"
-              clearable
-              hide-details
-              label="输入股票代码 / 名称 / 拼音"
-              placeholder="例如 600519、平安银行、PAYH、600519.SH"
-              variant="outlined"
-              density="comfortable"
-              class="stock-code-input"
-              autocomplete="off"
-              :loading="searching"
-              @focus="showStockSearchMenu = searchResults.length > 0"
-              @keyup.enter="submitDirectSymbol"
-            />
-            <v-menu
-              v-model="showStockSearchMenu"
-              activator="#stock-workbench-symbol-input"
-              :close-on-content-click="false"
-              :open-on-click="false"
-              :open-on-focus="false"
-              location="bottom start"
-              content-class="stock-workbench-search-menu"
-            >
-              <div v-if="searchResults.length" class="stock-workbench-search-scroll">
-                <v-list
-                  density="compact"
-                  class="stock-workbench-search-list"
-                >
-                  <v-list-item
-                    v-for="item in searchResults"
-                    :key="item.symbol || item.ts_code"
-                    :title="stockItemTitle(item)"
-                    :subtitle="stockItemSubtitle(item)"
-                    @click="selectSearchCandidate(item)"
-                  >
-                    <template #prepend>
-                      <v-chip size="x-small" label class="mr-2" color="primary">
-                        {{ stockMarketLabel(item) }}
-                      </v-chip>
-                    </template>
-                  </v-list-item>
-                </v-list>
-              </div>
-            </v-menu>
-          </div>
+          <StockSearchInput
+            v-model="directSymbol"
+            input-id="stock-workbench-symbol-input"
+            label="输入股票代码 / 名称 / 拼音"
+            placeholder="例如 600519、平安银行、PAYH、600519.SH"
+            density="comfortable"
+            bg-color="rgba(255,255,255,.06)"
+            input-class="stock-code-input"
+            @select="selectSearchCandidate"
+            @submit="submitDirectSymbol"
+          />
           <v-btn
             color="primary"
             size="large"
@@ -269,9 +233,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
-import { getStockFinancial, getStockWorkbench, searchStocks } from '../api/stock'
+import { getStockFinancial, getStockWorkbench } from '../api/stock'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
 import GrowthChart from '../components/GrowthChart.vue'
+import StockSearchInput from '../components/StockSearchInput.vue'
 
 const SCORE_DEFS = [
   { key: 'technical', label: '技术面' },
@@ -284,14 +249,10 @@ const SCORE_DEFS = [
 ]
 
 const loading = ref(false)
-const searching = ref(false)
 const error = ref('')
 const payload = ref(null)
 const activePanel = ref('overview')
 const directSymbol = ref('')
-const searchResults = ref([])
-const selectedSearchItem = ref(null)
-const showStockSearchMenu = ref(false)
 const analysisMode = ref('multi_expert_v1')
 const analysisSubmitting = ref(false)
 const analysisSubmitStatus = ref('')
@@ -300,7 +261,6 @@ const incomeRows = ref([])
 const indicatorRows = ref([])
 const radarRef = ref(null)
 let radarChart = null
-let searchTimer = null
 let analysisPollTimer = null
 
 const analysisModeOptions = [
@@ -449,70 +409,17 @@ const financialMetrics = computed(() => {
   ]
 })
 
-watch(directSymbol, (val) => {
-  clearTimeout(searchTimer)
-  const clean = String(val || '').trim()
-  if (!clean || clean.length < 2) {
-    searchResults.value = []
-    showStockSearchMenu.value = false
-    return
-  }
-  searchTimer = setTimeout(async () => {
-    searching.value = true
-    try {
-      searchResults.value = await searchStocks(clean)
-      showStockSearchMenu.value = searchResults.value.length > 0
-    } catch (e) {
-      console.warn('search stocks failed', e)
-      searchResults.value = []
-      showStockSearchMenu.value = false
-    } finally {
-      searching.value = false
-    }
-  }, 250)
-})
-
 watch([scoreItems, activePanel], async () => {
   if (activePanel.value !== 'overview') return
   await nextTick()
   renderRadar()
 }, { deep: true })
 
-function stockItemTitle(item) {
-  if (!item) return ''
-  const symbol = item.symbol || item.ts_code || ''
-  const name = item.name || item.stock_name || ''
-  const pinyin = item.pinyin ? ` ${item.pinyin}` : ''
-  return `${symbol} ${name}${pinyin}`.trim()
-}
-
-function stockItemSubtitle(item) {
-  if (!item) return ''
-  const parts = []
-  if (item.industry) parts.push(item.industry)
-  if (item.pinyin) parts.push(`拼音 ${item.pinyin}`)
-  if (item.is_etf) parts.push('ETF')
-  return parts.join(' · ')
-}
-
-function stockMarketLabel(item) {
-  const symbol = item?.symbol || item?.ts_code || ''
-  const suffix = String(symbol).split('.')[1]
-  if (suffix) return suffix
-  if (/^6|^9/.test(symbol)) return 'SH'
-  if (/^0|^2|^3/.test(symbol)) return 'SZ'
-  if (/^4|^8/.test(symbol)) return 'BJ'
-  return item?.is_etf ? 'ETF' : '股票'
-}
-
 function selectSearchCandidate(item) {
   if (!item) return
   const symbol = item.symbol || item.ts_code
   if (!symbol) return
-  selectedSearchItem.value = item
   directSymbol.value = symbol
-  showStockSearchMenu.value = false
-  searchResults.value = []
   loadSymbol(symbol)
 }
 
@@ -524,8 +431,6 @@ async function loadSymbol(symbol) {
   const clean = String(symbol || '').trim()
   if (!clean) return
   directSymbol.value = clean
-  selectedSearchItem.value = null
-  showStockSearchMenu.value = false
   loading.value = true
   error.value = ''
   try {
@@ -714,7 +619,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('stock-workbench:set-symbol', onOpenWorkbench)
-  clearTimeout(searchTimer)
   clearAnalysisPolling()
   if (radarChart) {
     radarChart.dispose()
@@ -769,62 +673,9 @@ h1, h2, h3 {
   gap: 12px;
   grid-template-columns: minmax(0, 1fr) auto;
 }
-.stock-code-combobox {
-  min-width: 0;
-}
 .stock-code-input {
   background: rgba(255,255,255,.06);
   border-radius: 12px;
-}
-:global(.stock-workbench-search-menu) {
-  background: rgba(15, 23, 42, .98);
-  border: 1px solid rgba(148, 163, 184, .22);
-  border-radius: 12px;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, .28);
-  max-height: 340px;
-  overflow: hidden;
-}
-:global(.stock-workbench-search-scroll) {
-  max-height: 320px;
-  min-width: 320px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-:global(.stock-workbench-search-list) {
-  background: rgba(15, 23, 42, .98) !important;
-  color: #e2e8f0 !important;
-  min-width: 320px;
-}
-:global(.stock-workbench-search-list .v-list-item-title) {
-  color: #ffffff !important;
-  font-size: 14px;
-  font-weight: 800;
-  opacity: 1 !important;
-}
-:global(.stock-workbench-search-list .v-list-item-subtitle) {
-  color: #dbeafe !important;
-  opacity: 1 !important;
-}
-:global(.stock-workbench-search-list .v-list-item) {
-  color: #f8fafc !important;
-}
-:global(.stock-workbench-search-list .v-list-item:hover) {
-  background: rgba(96, 165, 250, .18) !important;
-}
-:global(.stock-workbench-search-list .v-chip) {
-  background: rgba(59, 130, 246, .35) !important;
-  color: #ffffff !important;
-  font-weight: 800;
-}
-:global(.stock-workbench-search-scroll::-webkit-scrollbar) {
-  width: 8px;
-}
-:global(.stock-workbench-search-scroll::-webkit-scrollbar-thumb) {
-  background: rgba(148, 163, 184, .45);
-  border-radius: 999px;
-}
-:global(.stock-workbench-search-scroll::-webkit-scrollbar-track) {
-  background: rgba(15, 23, 42, .55);
 }
 .quick-symbols {
   align-items: center;

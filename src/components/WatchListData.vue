@@ -22,49 +22,20 @@
       
       <div class="add-stock">
         <div class="stock-input-wrapper">
-          <v-text-field 
-            id="watchlist-stock-input"
-            v-model="inputSymbol" 
+          <StockSearchInput
+            v-model="inputSymbol"
+            input-id="watchlist-stock-input"
             label="股票代码/名称/拼音"
             placeholder="如: 000001, 平安银行, PAYH"
-            variant="outlined"
             density="compact"
-            hide-details
             bg-color="rgba(30, 30, 63, 0.7)"
             color="white"
             base-color="rgba(230, 230, 250, 0.8)"
-            class="custom-stock-input"
+            input-class="custom-stock-input"
             theme="dark"
-            :loading="isSearchingStock"
-            @update:model-value="handleStockInput"
-            @focus="showStockMenu = !!stockSearchResults.length"
-            @keyup.enter="addStock"
+            @select="selectStockCandidate"
+            @submit="addStock"
           />
-          <v-menu
-            v-model="showStockMenu"
-            activator="#watchlist-stock-input"
-            :close-on-content-click="false"
-            location="bottom start"
-            :open-on-click="false"
-            :open-on-focus="false"
-            :offset="5"
-            content-class="stock-search-menu"
-          >
-            <v-list v-if="stockSearchResults.length" density="compact" max-height="300" theme="dark" class="stock-search-list">
-              <v-list-item
-                v-for="item in stockSearchResults"
-                :key="item.value"
-                :title="item.title"
-                :subtitle="item.value"
-                @click="selectStock(item)"
-                class="stock-search-item"
-              >
-                <template #prepend>
-                  <v-chip size="x-small" label class="mr-2" color="primary">{{ item.value.split('.')[1] || 'Unknown' }}</v-chip>
-                </template>
-              </v-list-item>
-            </v-list>
-          </v-menu>
         </div>
         <button @click="addStock" :disabled="loading" class="add-stock-btn">添加</button>
         <button @click="refreshAll" :disabled="loading" class="refresh-btn">
@@ -264,6 +235,7 @@ import { watchlistService } from '../services/watchlist.js'
 import { useAnalysisHistory } from '../composables/useAnalysisHistory'
 // checkUserLlmConfig import removed - old AI analysis feature deprecated
 import HistoryAnalysis from './HistoryAnalysis.vue'
+import StockSearchInput from './StockSearchInput.vue'
 import { searchStocks } from '../api/stock'
 
 const emit = defineEmits(['select-chart', 'open-etf-analysis'])
@@ -354,63 +326,29 @@ function matchesWatchlistFilter(stock) {
   return true
 }
 
-// 股票搜索相关
-const stockSearchResults = ref([])
-const isSearchingStock = ref(false)
-const showStockMenu = ref(false)
-let searchTimeout = null
-
-// 处理股票代码输入（防抖搜索）
-function handleStockInput(val) {
-  if (!val) {
-    stockSearchResults.value = []
-    showStockMenu.value = false
-    return
-  }
-  
-  // 移除自动补全后缀逻辑，避免无法修改代码的问题
-  // 用户反馈：从右往左删的时候，自动补回去很难受
-
-  // 必须输入2位以上才搜索
-  if (val.length < 2) {
-    stockSearchResults.value = []
-    showStockMenu.value = false
-    return
-  }
-
-  isSearchingStock.value = true
-  
-  if (searchTimeout) clearTimeout(searchTimeout)
-  
-  searchTimeout = setTimeout(async () => {
-    try {
-      // 调用搜索API
-      const results = await searchStocks(val)
-      
-      // 转换结果格式以适应 v-list
-      stockSearchResults.value = results.map(item => ({
-        title: `${item.symbol} ${item.name}`,
-        value: item.symbol,
-        pinyin: item.pinyin
-      }))
-      
-      // 如果有结果，显示菜单
-      showStockMenu.value = !!stockSearchResults.value.length
-    } catch (e) {
-      console.error('搜索股票失败:', e)
-      stockSearchResults.value = []
-    } finally {
-      isSearchingStock.value = false
-    }
-  }, 300)
+function selectStockCandidate(item) {
+  inputSymbol.value = item?.symbol || item?.ts_code || ''
 }
 
-function selectStock(item) {
-  inputSymbol.value = item.value
-  showStockMenu.value = false
-  stockSearchResults.value = [] // 选中后清空搜索结果
-  // 也可以选择自动添加
-  // addStock()
+async function resolveStockInput(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const upper = raw.toUpperCase()
+  if (/^\d{6}\.(SZ|SH|BJ)$/.test(upper)) return upper
+  if (/^\d{6}$/.test(upper)) {
+    if (upper.startsWith('6') || upper.startsWith('9')) return `${upper}.SH`
+    if (upper.startsWith('0') || upper.startsWith('2') || upper.startsWith('3')) return `${upper}.SZ`
+    if (upper.startsWith('4') || upper.startsWith('8')) return `${upper}.BJ`
+  }
+  const results = await searchStocks(raw)
+  const exact = results.find((item) => {
+    const symbol = String(item.symbol || item.ts_code || '').toUpperCase()
+    const name = String(item.name || item.stock_name || '').toUpperCase()
+    const pinyin = String(item.pinyin || '').toUpperCase()
+    return symbol === upper || name === upper || pinyin === upper
+  })
+  const match = exact || results[0]
+  return match ? String(match.symbol || match.ts_code || '').toUpperCase() : ''
 }
 
 
@@ -583,32 +521,12 @@ function loadLocalWatchlist() {
 
 // 添加股票到自选
 async function addStock() {
-  let symbol = inputSymbol.value.trim().toUpperCase()
+  let symbol = await resolveStockInput(inputSymbol.value)
   if (!symbol) return
-  
-  // 校验逻辑：防止输入拼音或无效代码被提交
-  // 1. 如果是6位数字，自动补全后缀
-  if (/^\d{6}$/.test(symbol)) {
-    if (symbol.startsWith('6') || symbol.startsWith('9')) {
-      symbol += '.SH'
-    } else if (symbol.startsWith('0') || symbol.startsWith('2') || symbol.startsWith('3')) {
-      symbol += '.SZ'
-    } else if (symbol.startsWith('4') || symbol.startsWith('8')) {
-      symbol += '.BJ'
-    }
-  }
-  
-  // 2. 校验是否符合股票代码格式 (6位数字.后缀)
+
   if (!/^\d{6}\.(SZ|SH|BJ)$/.test(symbol)) {
-    // 如果不符合格式，尝试在搜索结果中查找匹配项
-    const match = stockSearchResults.value.find(item => item.value === symbol || item.pinyin === symbol)
-    if (match) {
-      symbol = match.value
-    } else {
-      // 没有任何匹配，认为是无效输入
-      alert('请输入有效的股票代码（如 000001 或 000001.SZ）')
-      return
-    }
+    alert('请输入有效的股票代码（如 000001 或 000001.SZ）')
+    return
   }
   
   if (watchList.value.includes(symbol)) {
@@ -631,9 +549,6 @@ async function addStock() {
     }
     
     inputSymbol.value = ''
-    showStockMenu.value = false
-    stockSearchResults.value = []
-    
     // 立即获取新添加股票的数据
     await fetchStockData(symbol)
     
@@ -1924,24 +1839,4 @@ onMounted(async () => {
   color: rgba(230, 230, 250, 0.8) !important;
 }
 
-.stock-search-menu {
-  background: rgba(30, 30, 63, 0.95) !important;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(138, 43, 226, 0.3);
-  border-radius: 8px;
-  z-index: 9999 !important; /* Ensure it floats above everything */
-  margin-top: 5px;
-}
-
-.stock-search-list {
-  background: transparent !important;
-}
-
-.stock-search-item {
-  color: #e6e6fa !important;
-}
-
-.stock-search-item:hover {
-  background: rgba(138, 43, 226, 0.2) !important;
-}
 </style>
