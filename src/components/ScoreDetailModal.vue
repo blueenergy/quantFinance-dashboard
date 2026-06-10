@@ -39,6 +39,14 @@
             <span class="score-weight">(权重: 15%)</span>
           </div>
         </div>
+        <div v-if="stock?.industry_rs_score != null" class="score-reference">
+          <div class="score-item reference-item">
+            <span class="score-label">行业相对强度</span>
+            <span class="score-value industry-rs">{{ stock?.industry_rs_score }}</span>
+            <span class="score-weight">仅供参考</span>
+          </div>
+          <p class="reference-note">个股相对所属申万行业指数的多窗口相对强弱(RS)，是与价量动量正交的「相对行业」视角；不参与综合分计算，也不参与组合选股。</p>
+        </div>
         <div class="score-detail-actions">
           <button @click="$emit('view-chart', stock?.symbol)" class="btn-chart-detail">查看走势图</button>
           <button @click="$emit('toggle-watchlist', stock?.symbol)" class="btn-watchlist-detail">{{ isInWatchlist ? '从自选股移除' : '添加到自选股' }}</button>
@@ -77,6 +85,10 @@ const inWatchlist = computed(() => {
 .score-value.money { background: linear-gradient(135deg, #ef5350, #b71c1c); }
 .score-weight { color: #6c757d; font-size: 12px; }
 .score-breakdown { border-top: 1px solid #ddd; padding-top: 15px; }
+.score-reference { border-top: 1px dashed #bbb; margin-top: 12px; padding-top: 12px; }
+.score-value.industry-rs { background: linear-gradient(135deg, #8e9bff, #5c6bc0); }
+.reference-item { background-color: #f4f5ff; }
+.reference-note { color: #6c757d; font-size: 12px; line-height: 1.5; margin: 6px 2px 0; }
 .score-detail-actions { display: flex; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd; }
 .btn-chart-detail, .btn-watchlist-detail { flex: 1; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
 .btn-chart-detail { background: linear-gradient(135deg, #17a2b8, #138496); color: white; }

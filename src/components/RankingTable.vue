@@ -15,6 +15,7 @@
         <th class="th-value">价值</th>
         <th class="th-technical">技术</th>
         <th class="th-money">资金</th>
+        <th class="th-industry-rs" title="个股相对所属申万行业指数的多窗口相对强弱(RS)。仅供参考，不参与综合分与组合选股">行业RS</th>
         <th class="th-action">操作</th>
       </tr>
     </thead>
@@ -76,6 +77,9 @@
         </td>
         <td class="td-money" @click="emitCategory(row, 'money_flow')">
           <span class="money-score clickable" :title="'查看资金流评分详情'">{{ row.money_flow_score }}</span>
+        </td>
+        <td class="td-industry-rs">
+          <span class="industry-rs-score" title="行业相对强度(参考)，不参与综合分与组合">{{ row.industry_rs_score ?? '—' }}</span>
         </td>
         <td class="td-action">
           <button @click="onViewChart(row.symbol)" class="btn-chart" title="查看图表">📊</button>

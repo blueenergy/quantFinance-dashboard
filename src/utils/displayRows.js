@@ -52,6 +52,7 @@ export function computeDisplayRows({ rankings = [], viewMode = 'ranking', select
         copy.value_score = f.value_score ?? copy.value_score
         copy.technical_score = f.technical_score ?? copy.technical_score
         copy.money_flow_score = f.money_flow_score ?? copy.money_flow_score
+        copy.industry_rs_score = f.industry_rs_score ?? copy.industry_rs_score
       }
       rows.push(copy)
     })
