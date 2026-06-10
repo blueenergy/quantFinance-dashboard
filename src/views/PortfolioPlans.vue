@@ -549,6 +549,13 @@
 
           <section>
             <h4>目标持仓与交易明细</h4>
+            <div v-if="canReselectItems && selectedPlanExcluded.length" class="excluded-bar">
+              <span class="excluded-label">已排除：</span>
+              <span v-for="sym in selectedPlanExcluded" :key="sym" class="excluded-chip">
+                {{ sym }}
+                <button class="link-btn" :disabled="actionLoading" @click="reselectItem(sym, true)">恢复</button>
+              </span>
+            </div>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -567,6 +574,7 @@
                     <th>预估价</th>
                     <th>候选出现</th>
                     <th>风险</th>
+                    <th v-if="canReselectItems">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -585,6 +593,29 @@
                     <td>{{ num(item.estimated_price) }}</td>
                     <td>{{ item.candidate_appearances ?? 0 }}</td>
                     <td>{{ (item.blockers || []).join(', ') || '-' }}</td>
+                    <td v-if="canReselectItems">
+                      <button
+                        v-if="selectedPlanExcluded.includes(item.symbol)"
+                        class="link-btn"
+                        :disabled="actionLoading"
+                        @click="reselectItem(item.symbol, true)"
+                      >恢复</button>
+                      <button
+                        v-else-if="item.rank != null && (item.current_shares ?? 0) > 0"
+                        class="link-btn danger"
+                        :disabled="actionLoading"
+                        title="移出目标并清仓该持仓，由候选池补一只新标的"
+                        @click="reselectItem(item.symbol)"
+                      >清仓</button>
+                      <button
+                        v-else-if="item.rank != null"
+                        class="link-btn"
+                        :disabled="actionLoading"
+                        title="拒绝该买入推荐，用候选池下一名替换"
+                        @click="reselectItem(item.symbol)"
+                      >换一只</button>
+                      <span v-else>-</span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -752,6 +783,8 @@ import {
   listTraderHeartbeats,
   publishPortfolioPlanLiveSignals,
   rejectPortfolioPlan,
+  rejectPortfolioPlanItem,
+  restorePortfolioPlanItem,
 } from '../api/portfolioPlans'
 import { getSecuritiesAccounts } from '../api/trader'
 
@@ -804,6 +837,9 @@ const executionStatus = computed(() => selectedDetail.value?.execution_status ||
 const selectedPlanExecutionMode = computed(() => selectedDetail.value?.execution_mode || 'not_executed')
 const selectedPlanHasLiveSignals = computed(() => selectedPlanExecutionMode.value === 'live')
 const selectedPlanShowsPaperTrading = computed(() => Boolean(selectedDetail.value) && selectedPlanExecutionMode.value !== 'live')
+const selectedPlanExcluded = computed(() => selectedDetail.value?.plan?.excluded_symbols || [])
+// Only an unpublished, pre-approval plan can be reselected in place.
+const canReselectItems = computed(() => ['needs_review', 'generated', 'draft'].includes(selectedDetail.value?.plan?.status))
 
 const latestExecutionText = computed(() => {
   const latest = executionStatus.value.latest_execution_result
@@ -1477,6 +1513,26 @@ async function review(decision) {
   }
 }
 
+async function reselectItem(symbol, restore = false) {
+  if (!selectedPlanId.value || !symbol) return
+  actionLoading.value = true
+  try {
+    const apiCall = restore ? restorePortfolioPlanItem : rejectPortfolioPlanItem
+    const res = await apiCall(selectedPlanId.value, symbol)
+    const task = res.data?.task
+    if (task?.task_id) {
+      currentGenerationTask.value = task
+      message.value = restore ? `已恢复 ${symbol}，正在重算计划…` : `已排除 ${symbol}，正在重选补位…`
+      await loadGenerationTasks()
+      startGenerationTaskPolling(task.task_id)
+    }
+  } catch (error) {
+    message.value = error.response?.data?.detail || error.message || '重选失败'
+  } finally {
+    actionLoading.value = false
+  }
+}
+
 onMounted(() => {
   refreshAll()
   realtimeTimer = window.setInterval(() => {
@@ -1565,6 +1621,50 @@ button:disabled {
 button.danger {
   border-color: #111827;
   color: #111827;
+}
+
+.link-btn {
+  background: transparent;
+  border: 1px solid #c7ccd6;
+  border-radius: 3px;
+  color: #1f2937;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.link-btn.danger {
+  border-color: #b91c1c;
+  color: #b91c1c;
+}
+
+.excluded-bar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.excluded-label {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.excluded-chip {
+  align-items: center;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  padding: 2px 4px 2px 10px;
+}
+
+.excluded-chip .link-btn {
+  border: none;
+  color: #2563eb;
+  padding: 0 4px;
 }
 
 .card {

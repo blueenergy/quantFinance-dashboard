@@ -60,6 +60,14 @@ export function rejectPortfolioPlan(planId, data = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/reject`, method: 'post', data })
 }
 
+export function rejectPortfolioPlanItem(planId, symbol) {
+  return request({ url: `/portfolio-plans/plans/${planId}/items/${encodeURIComponent(symbol)}/reject`, method: 'post' })
+}
+
+export function restorePortfolioPlanItem(planId, symbol) {
+  return request({ url: `/portfolio-plans/plans/${planId}/items/${encodeURIComponent(symbol)}/restore`, method: 'post' })
+}
+
 export function getPortfolioPlanExecutions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/executions`, method: 'get' })
 }
