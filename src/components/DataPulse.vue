@@ -151,12 +151,22 @@
             </div>
           </div>
 
-          <!-- 各合约状态 -->
+          <!-- 各合约状态（点击展开缺口明细） -->
           <div class="contract-list">
-            <div v-for="c in contractRows" :key="c.contract_id" class="contract-row">
+            <div
+              v-for="c in contractRows"
+              :key="c.contract_id"
+              class="contract-row"
+              :class="{ clickable: hasDetail(c) }"
+              role="button"
+              tabindex="0"
+              @click="openContractDetail(c)"
+              @keydown.enter="openContractDetail(c)"
+            >
               <span class="c-badge" :class="contractStatusClass(c.status)">{{ contractStatusText(c.status) }}</span>
               <span class="c-name">{{ c.label }}</span>
               <span class="c-metric" :class="{ filling: isFilling(c.status) }">{{ contractMetric(c) }}</span>
+              <span class="c-chevron" v-if="hasDetail(c)">›</span>
             </div>
           </div>
         </div>
@@ -196,6 +206,67 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- 合约缺口明细 -->
+    <v-dialog v-model="contractDialog" max-width="600" scrollable>
+      <v-card v-if="contractDetail">
+        <v-card-title class="text-subtitle-1 d-flex align-center" style="gap: 8px;">
+          <span class="c-badge" :class="contractStatusClass(contractDetail.status)">
+            {{ contractStatusText(contractDetail.status) }}
+          </span>
+          <span>{{ contractDetail.label }}</span>
+        </v-card-title>
+        <v-card-text>
+          <p class="cd-metric">{{ contractMetric(contractDetail) }}</p>
+          <p v-if="contractDetail.last_reconcile_at" class="cd-ts">
+            最后核对 {{ shortTime(contractDetail.last_reconcile_at) }}
+            <span v-if="contractDetail.last_alert_at">· 最后告警 {{ shortTime(contractDetail.last_alert_at) }}</span>
+          </p>
+
+          <div v-if="contractDetail.violations && contractDetail.violations.length" class="cd-section">
+            <h4>⚠️ 违约项</h4>
+            <ul class="cd-list">
+              <li v-for="(v, i) in contractDetail.violations" :key="'v' + i">{{ v }}</li>
+            </ul>
+          </div>
+
+          <div v-if="contractDetail.repair" class="cd-section">
+            <h4>🔧 修复</h4>
+            <p class="cd-repair-meta">
+              分片 {{ contractDetail.repair.chunks ?? '—' }} ·
+              成功 {{ contractDetail.repair.succeeded ?? 0 }} ·
+              失败 {{ contractDetail.repair.failed ?? 0 }}
+            </p>
+            <ul v-if="contractDetail.repair.errors && contractDetail.repair.errors.length" class="cd-list cd-errors">
+              <li v-for="(e, i) in contractDetail.repair.errors" :key="'e' + i">{{ e }}</li>
+            </ul>
+          </div>
+
+          <div v-if="contractDetail.missing_ranges && contractDetail.missing_ranges.length" class="cd-section">
+            <h4>
+              📉 缺口区间 ({{ contractDetail.missing_ranges.length }}{{ contractDetail.missing_ranges_truncated ? '+' : '' }})
+            </h4>
+            <div class="cd-ranges">
+              <span v-for="(r, i) in contractDetail.missing_ranges" :key="'r' + i" class="cd-range-chip">
+                {{ r[0] }}<template v-if="r[1] && r[1] !== r[0]">~{{ r[1] }}</template>
+              </span>
+            </div>
+            <p v-if="contractDetail.missing_ranges_truncated" class="cd-trunc">仅显示前 50 段</p>
+          </div>
+
+          <p
+            v-if="!hasDetail(contractDetail)"
+            class="text-caption text-medium-emphasis"
+          >无缺口或异常记录</p>
+
+          <p v-if="contractDetail.note" class="cd-note">{{ contractDetail.note }}</p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="contractDialog = false">关闭</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -212,6 +283,8 @@ const newsLoading = ref(false)
 
 const contractsData = ref(null)
 const contractsLoading = ref(false)
+const contractDialog = ref(false)
+const contractDetail = ref(null)
 
 const gapDialog = ref(false)
 const gapLoading = ref(false)
@@ -454,6 +527,18 @@ function contractMetric(c) {
       return parts.join(' · ') || '—'
     }
   }
+}
+function hasDetail(c) {
+  if (!c) return false
+  const hasViolations = Array.isArray(c.violations) && c.violations.length > 0
+  const hasRanges = Array.isArray(c.missing_ranges) && c.missing_ranges.length > 0
+  const hasRepairErr = c.repair && Array.isArray(c.repair.errors) && c.repair.errors.length > 0
+  return hasViolations || hasRanges || hasRepairErr
+}
+function openContractDetail(c) {
+  if (!hasDetail(c)) return
+  contractDetail.value = c
+  contractDialog.value = true
 }
 function shortTime(iso) {
   if (!iso) return ''
@@ -926,6 +1011,61 @@ onMounted(() => {
   white-space: nowrap;
 }
 .c-metric.filling { color: #dd6b20; font-weight: 600; }
+.contract-row.clickable { cursor: pointer; }
+.contract-row.clickable:hover { background: #ebf8ff; }
+.c-chevron {
+  flex-shrink: 0;
+  color: #a0aec0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* ── 合约缺口明细弹窗 ── */
+.cd-metric {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 13px;
+  color: #2d3748;
+  margin: 0 0 4px 0;
+}
+.cd-ts { font-size: 11px; color: #a0aec0; margin: 0 0 12px 0; }
+.cd-section { margin-top: 14px; }
+.cd-section h4 {
+  font-size: 12px;
+  color: #4a5568;
+  font-weight: 600;
+  margin: 0 0 6px 0;
+}
+.cd-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #4a5568;
+  line-height: 1.6;
+}
+.cd-errors li {
+  color: #c53030;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+.cd-repair-meta { font-size: 12px; color: #718096; margin: 0 0 6px 0; }
+.cd-ranges { display: flex; flex-wrap: wrap; gap: 6px; }
+.cd-range-chip {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px;
+  background: #fff5f5;
+  color: #c53030;
+  border: 1px solid #fed7d7;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+.cd-trunc { font-size: 11px; color: #a0aec0; margin: 6px 0 0 0; }
+.cd-note {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #718096;
+  font-style: italic;
+}
 
 /* ── 响应式 ── */
 @media (max-width: 768px) {
