@@ -124,6 +124,43 @@
           </div>
         </div>
       </div>
+
+      <!-- ─── 数据合约 / 冷启动补全 ─── -->
+      <div v-if="panelTab === 'contracts'" class="panel-content">
+        <div v-if="contractsLoading" class="panel-loading">
+          <v-progress-circular indeterminate size="20" width="2" color="primary" />
+        </div>
+        <div v-else-if="!contractRows.length" class="panel-empty">暂无合约数据</div>
+        <div v-else>
+          <!-- 冷启动进度 -->
+          <div class="boot-row">
+            <div class="boot-head">
+              <strong>冷启动补全</strong>
+              <span class="boot-state" :class="bootstrap.done ? 'ok' : 'progress'">
+                {{ bootstrap.done ? '已完成' : '进行中' }}
+              </span>
+            </div>
+            <div class="boot-bar">
+              <div class="boot-bar-fill"
+                :style="{ width: summary.healthy_pct + '%', background: bootColor }"></div>
+            </div>
+            <div class="boot-meta">
+              {{ summary.healthy }}/{{ summary.total }} 合约就绪 ({{ summary.healthy_pct }}%)
+              <span v-if="stillFilling > 0" class="boot-filling">· {{ stillFilling }} 个补全中</span>
+              <span v-if="bootstrap.completed_at" class="boot-ts">· 标记 {{ shortTime(bootstrap.completed_at) }}</span>
+            </div>
+          </div>
+
+          <!-- 各合约状态 -->
+          <div class="contract-list">
+            <div v-for="c in contractRows" :key="c.contract_id" class="contract-row">
+              <span class="c-badge" :class="contractStatusClass(c.status)">{{ contractStatusText(c.status) }}</span>
+              <span class="c-name">{{ c.label }}</span>
+              <span class="c-metric" :class="{ filling: isFilling(c.status) }">{{ contractMetric(c) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <v-dialog v-model="gapDialog" max-width="560" scrollable>
@@ -165,13 +202,16 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { mdiCheckCircle, mdiAlertCircle } from '@mdi/js'
-import { fetchDataPulseOverview, fetchDataPulseNews, fetchCoverageGaps } from '../api/dataPulse.js'
+import { fetchDataPulseOverview, fetchDataPulseNews, fetchCoverageGaps, fetchDataPulseContracts } from '../api/dataPulse.js'
 
 const panelTab = ref('news')
 const overview = ref(null)
 const newsData = ref(null)
 const newsFetchedAt = ref(null)
 const newsLoading = ref(false)
+
+const contractsData = ref(null)
+const contractsLoading = ref(false)
 
 const gapDialog = ref(false)
 const gapLoading = ref(false)
@@ -183,6 +223,7 @@ const gapRows = ref([])
 const panelTabs = [
   { id: 'news', icon: '📰', label: '新闻快讯' },
   { id: 'sync', icon: '⚡', label: '数据同步' },
+  { id: 'contracts', icon: '📑', label: '数据合约' },
 ]
 
 // ── 计算属性 ──
@@ -366,7 +407,78 @@ function isStale(display) {
   return diffDays > 3 // 超过3天视为过期
 }
 
+// ── 数据合约 / 冷启动补全 ──
+const summary = computed(() => contractsData.value?.summary || { total: 0, healthy: 0, healthy_pct: 0 })
+const bootstrap = computed(() => contractsData.value?.bootstrap || { done: false, completed_at: null, contracts: [] })
+
+const SEVERITY = { failed: 0, violated: 1, pending: 2, unknown: 3, repaired: 4, ok: 5 }
+const contractRows = computed(() => {
+  const rows = contractsData.value?.contracts || []
+  return [...rows].sort((a, b) => (SEVERITY[a.status] ?? 9) - (SEVERITY[b.status] ?? 9))
+})
+const stillFilling = computed(() => contractRows.value.filter((c) => isFilling(c.status)).length)
+const bootColor = computed(() => {
+  if (bootstrap.value.done) return '#48bb78'
+  if (summary.value.healthy_pct >= 50) return '#ecc94b'
+  return '#f56565'
+})
+
+function isFilling(st) {
+  return st === 'violated' || st === 'failed' || st === 'pending'
+}
+function contractStatusText(st) {
+  return { ok: '就绪', repaired: '已补', violated: '缺', failed: '失败', unknown: '未知', pending: '等待' }[st] || st
+}
+function contractStatusClass(st) {
+  if (st === 'ok' || st === 'repaired') return 'ok'
+  if (st === 'violated' || st === 'failed') return 'fail'
+  return 'missing'
+}
+function contractMetric(c) {
+  if (c.status === 'pending') return '等待补全…'
+  switch (c.kind) {
+    case 'snapshot':
+      return c.doc_count != null ? `${c.doc_count} 行${c.min_docs ? ` / 最低 ${c.min_docs}` : ''}` : '—'
+    case 'run_recency':
+      return c.run_lag_days != null ? `运行滞后 ${c.run_lag_days} 天` : '—'
+    case 'report_periods': {
+      const pct = c.coverage_pct != null ? `${Number(c.coverage_pct).toFixed(1)}%` : '—'
+      if (c.present_days != null && c.expected_days != null) return `${pct} · ${c.present_days}/${c.expected_days} 期`
+      return pct
+    }
+    default: {
+      const parts = []
+      if (c.coverage_pct != null) parts.push(`${Number(c.coverage_pct).toFixed(2)}%`)
+      if (c.lag_trading_days != null) parts.push(`滞后 ${c.lag_trading_days} 日`)
+      if (c.missing_days) parts.push(`缺 ${c.missing_days} 天`)
+      return parts.join(' · ') || '—'
+    }
+  }
+}
+function shortTime(iso) {
+  if (!iso) return ''
+  try {
+    const d = new Date(iso)
+    const p = (n) => String(n).padStart(2, '0')
+    return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+  } catch {
+    return ''
+  }
+}
+
 // ── 数据加载 ──
+async function loadContracts() {
+  contractsLoading.value = true
+  try {
+    const res = await fetchDataPulseContracts()
+    if (res.success) contractsData.value = res
+  } catch (e) {
+    console.warn('[DataPulse] Failed to load contracts:', e)
+  } finally {
+    contractsLoading.value = false
+  }
+}
+
 async function loadOverview() {
   try {
     const res = await fetchDataPulseOverview()
@@ -400,6 +512,7 @@ async function loadNews() {
 onMounted(() => {
   loadOverview()
   loadNews()
+  loadContracts()
 })
 </script>
 
@@ -735,6 +848,84 @@ onMounted(() => {
   margin: 0 0 12px 0;
 }
 .gap-table { font-size: 12px; }
+
+/* ── 数据合约 / 冷启动补全 ── */
+.boot-row {
+  margin-bottom: 14px;
+}
+.boot-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.boot-head strong { font-size: 13px; color: #2d3748; }
+.boot-state {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 8px;
+  letter-spacing: 0.4px;
+}
+.boot-state.ok { background: #c6f6d5; color: #22543d; }
+.boot-state.progress { background: #feebc8; color: #7b341e; animation: pulse-glow 2s infinite; }
+
+.boot-bar {
+  height: 8px;
+  border-radius: 5px;
+  background: #edf2f7;
+  overflow: hidden;
+}
+.boot-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.4s ease;
+}
+.boot-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #718096;
+}
+.boot-filling { color: #dd6b20; font-weight: 600; }
+.boot-ts { color: #a0aec0; }
+
+.contract-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.contract-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.contract-row:hover { background: #f7fafc; }
+
+.c-badge {
+  flex-shrink: 0;
+  min-width: 34px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+.c-badge.ok { background: #c6f6d5; color: #22543d; }
+.c-badge.fail { background: #fed7d7; color: #822727; }
+.c-badge.missing { background: #e2e8f0; color: #4a5568; }
+
+.c-name { flex: 1; color: #2d3748; min-width: 0; }
+.c-metric {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px;
+  color: #718096;
+  text-align: right;
+  white-space: nowrap;
+}
+.c-metric.filling { color: #dd6b20; font-weight: 600; }
 
 /* ── 响应式 ── */
 @media (max-width: 768px) {

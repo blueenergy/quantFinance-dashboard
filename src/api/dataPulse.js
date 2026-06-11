@@ -57,3 +57,12 @@ export async function fetchDataPulseStatus() {
     if (!res.ok) throw new Error(`Data pulse status failed: ${res.status}`);
     return res.json();
 }
+
+/** 获取数据合约健康度 + 冷启动 bootstrap 进度 */
+export async function fetchDataPulseContracts() {
+    const res = await fetch(`${API_BASE}/data-pulse/contracts`, {
+        headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error(`Data pulse contracts failed: ${res.status}`);
+    return res.json();
+}
