@@ -6,13 +6,13 @@
       <v-row class="mb-4">
         <v-col cols="12" md="8">
           <h1 class="mrp-h1">🇨🇳 中国宏观</h1>
-          <p class="mrp-sub">Shibor · LPR · PMI · CPI/PPI · M/社融 · GDP · 民间利率 — LLM 深度解读</p>
+          <p class="mrp-sub">Shibor · LPR · PMI · CPI/PPI · M/社融 · GDP · 民间利率 — 最新数据默认展示，AI 解读按需触发</p>
         </v-col>
         <v-col cols="12" md="4" class="d-flex align-center justify-end gap-2 flex-wrap">
           <button class="mrp-btn-sm mrp-btn-dark" :disabled="triggering" @click="triggerAnalysis">
             {{ triggering ? '分析中…' : '🤖 触发分析' }}
           </button>
-          <button class="mrp-btn-sm mrp-btn-ghost" :disabled="loading" @click="loadAnalysis">↻ 刷新</button>
+          <button class="mrp-btn-sm mrp-btn-ghost" :disabled="loading || rawLoading" @click="refreshPage">↻ 刷新</button>
         </v-col>
       </v-row>
 
@@ -22,13 +22,52 @@
         <button type="button" class="xiv-error-dismiss" aria-label="关闭" @click="errorMsg = ''">×</button>
       </div>
 
-      <!-- 加载中 -->
-      <div v-if="loading" class="no-data-hint">加载中…</div>
+      <!-- 原始数据快照 -->
+      <section class="macro-data-section mb-4">
+        <div class="macro-section-header">
+          <div>
+            <h2 class="macro-section-title">最新数据</h2>
+            <p class="mrp-caption">
+              数据每日同步后自动更新；最新数据日期：{{ latestDataDate || '—' }}
+            </p>
+          </div>
+          <span v-if="rawLoading" class="mrp-caption">数据加载中…</span>
+        </div>
+        <div v-if="!rawLoading && !rawCards.length" class="no-data-hint compact">
+          暂无原始宏观数据
+        </div>
+        <v-row v-else class="mb-2">
+          <v-col
+            v-for="card in rawCards"
+            :key="card.key"
+            cols="12"
+            sm="6"
+            md="4"
+            lg="2"
+          >
+            <div class="macro-data-card">
+              <div class="macro-card-label">{{ card.label }}</div>
+              <div class="macro-data-value">{{ card.value }}</div>
+              <div class="mrp-caption">{{ card.date }}</div>
+              <div v-if="card.sub" class="mrp-caption">{{ card.sub }}</div>
+            </div>
+          </v-col>
+        </v-row>
+      </section>
 
-      <!-- 暂无数据 -->
-      <div v-else-if="!doc" class="no-data-hint">
-        <p class="mrp-muted">暂无分析数据</p>
-        <p class="mrp-caption">点击「触发分析」生成今日宏观解读，或等待每日 19:45 自动任务</p>
+      <!-- AI 解读 -->
+      <section class="macro-analysis-section">
+        <div class="macro-section-header mb-2">
+          <div>
+            <h2 class="macro-section-title">AI 解读</h2>
+            <p class="mrp-caption">按需生成，不随数据同步自动消耗 token。</p>
+          </div>
+        </div>
+
+      <div v-if="loading" class="no-data-hint compact">AI 解读加载中…</div>
+      <div v-else-if="!doc" class="no-data-hint compact">
+        <p class="mrp-muted">暂无 AI 解读</p>
+        <p class="mrp-caption">需要时点击「触发分析」生成宏观解读。</p>
       </div>
 
       <!-- 分析结果 -->
@@ -134,43 +173,44 @@
           </v-col>
         </v-row>
 
-        <!-- 数据走势（可折叠） -->
-        <v-row class="mt-2">
-          <v-col cols="12">
-            <div class="chart-toggle-bar" @click="toggleCharts">
-              <span class="macro-history-title">📊 数据走势</span>
-              <span class="chart-toggle-arrow">{{ chartsOpen ? '▲' : '▼' }}</span>
-            </div>
-            <div v-if="chartsOpen">
-              <div class="chart-range-bar mt-1">
-                <button
-                  v-for="opt in RANGE_OPTIONS" :key="opt.days"
-                  class="chart-range-btn" :class="{ active: chartDays === opt.days }"
-                  @click.stop="setChartDays(opt.days)"
-                >{{ opt.label }}</button>
-              </div>
-              <div class="chart-row mt-2">
-              <div class="chart-wrap">
-                <div class="chart-label">
-                  Shibor · ON / 1W / 1M / 3M
-                  <button class="info-btn" @click.stop="shiborInfoOpen = true" title="什么是 Shibor？">?</button>
-                </div>
-                <div class="chart-canvas" ref="chartShibor" />
-                <div v-if="chartLoading" class="chart-loading">加载中…</div>
-              </div>
-              <div class="chart-wrap">
-                <div class="chart-label">
-                  LPR · 1年期 / 5年期
-                  <button class="info-btn" @click.stop="lprInfoOpen = true" title="什么是 LPR？">?</button>
-                </div>
-                <div class="chart-canvas" ref="chartLpr" />
-              </div>
-              </div>
-            </div>
-          </v-col>
-        </v-row>
-
       </template>
+      </section>
+
+      <!-- 数据走势（可折叠） -->
+      <v-row class="mt-4">
+        <v-col cols="12">
+          <div class="chart-toggle-bar" @click="toggleCharts">
+            <span class="macro-history-title">📊 数据走势</span>
+            <span class="chart-toggle-arrow">{{ chartsOpen ? '▲' : '▼' }}</span>
+          </div>
+          <div v-if="chartsOpen">
+            <div class="chart-range-bar mt-1">
+              <button
+                v-for="opt in RANGE_OPTIONS" :key="opt.days"
+                class="chart-range-btn" :class="{ active: chartDays === opt.days }"
+                @click.stop="setChartDays(opt.days)"
+              >{{ opt.label }}</button>
+            </div>
+            <div class="chart-row mt-2">
+            <div class="chart-wrap">
+              <div class="chart-label">
+                Shibor · ON / 1W / 1M / 3M
+                <button class="info-btn" @click.stop="shiborInfoOpen = true" title="什么是 Shibor？">?</button>
+              </div>
+              <div class="chart-canvas" ref="chartShibor" />
+              <div v-if="chartLoading" class="chart-loading">加载中…</div>
+            </div>
+            <div class="chart-wrap">
+              <div class="chart-label">
+                LPR · 1年期 / 5年期
+                <button class="info-btn" @click.stop="lprInfoOpen = true" title="什么是 LPR？">?</button>
+              </div>
+              <div class="chart-canvas" ref="chartLpr" />
+            </div>
+            </div>
+          </div>
+        </v-col>
+      </v-row>
 
     </div>
   </v-container>
@@ -259,7 +299,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
 
@@ -269,6 +309,15 @@ const loading = ref(false)
 const historyLoading = ref(false)
 const triggering = ref(false)
 const errorMsg = ref('')
+const rawLoading = ref(false)
+const rawSnapshot = ref({
+  shibor: null,
+  lpr: null,
+  pmi: null,
+  cpi: null,
+  ppi: null,
+  gdp: null,
+})
 
 // ── raw data charts ───────────────────────────────────────────────────────────
 const chartsOpen = ref(false)
@@ -289,9 +338,91 @@ const RANGE_OPTIONS = [
   { label: '3Y', days: 1095 },
 ]
 
+const rawCards = computed(() => [
+  {
+    key: 'shibor',
+    label: 'Shibor 3M',
+    value: fmtPct(rawSnapshot.value.shibor?.['3m']),
+    date: fmtDateLike(rawSnapshot.value.shibor?.date),
+    sub: `ON ${fmtPct(rawSnapshot.value.shibor?.on)}`,
+  },
+  {
+    key: 'lpr',
+    label: 'LPR',
+    value: `1Y ${fmtPct(rawSnapshot.value.lpr?.['1y'])}`,
+    date: fmtDateLike(rawSnapshot.value.lpr?.date),
+    sub: `5Y ${fmtPct(rawSnapshot.value.lpr?.['5y'])}`,
+  },
+  {
+    key: 'pmi',
+    label: 'PMI',
+    value: fmtNumber(rawSnapshot.value.pmi?.pmi),
+    date: fmtDateLike(rawSnapshot.value.pmi?.month),
+    sub: rawSnapshot.value.pmi?.manufacturing_pmi ? `制造业 ${fmtNumber(rawSnapshot.value.pmi.manufacturing_pmi)}` : '',
+  },
+  {
+    key: 'cpi',
+    label: 'CPI',
+    value: fmtPct(rawSnapshot.value.cpi?.nt_yoy ?? rawSnapshot.value.cpi?.yoy),
+    date: fmtDateLike(rawSnapshot.value.cpi?.month),
+    sub: '同比',
+  },
+  {
+    key: 'ppi',
+    label: 'PPI',
+    value: fmtPct(rawSnapshot.value.ppi?.yoy ?? rawSnapshot.value.ppi?.ppi_yoy),
+    date: fmtDateLike(rawSnapshot.value.ppi?.month),
+    sub: '同比',
+  },
+  {
+    key: 'gdp',
+    label: 'GDP',
+    value: fmtPct(rawSnapshot.value.gdp?.gdp_yoy ?? rawSnapshot.value.gdp?.yoy),
+    date: fmtDateLike(rawSnapshot.value.gdp?.quarter),
+    sub: '同比',
+  },
+].filter((card) => card.value !== '—' || card.date !== '—'))
+
+const latestDataDate = computed(() => {
+  const values = rawCards.value.map((card) => card.date).filter((date) => date && date !== '—')
+  return values.sort().at(-1) || ''
+})
+
 async function setChartDays(d) {
   chartDays.value = d
   await loadCharts()
+}
+
+async function refreshPage() {
+  await Promise.all([loadRawSnapshot(), loadAnalysis()])
+}
+
+async function loadRawSnapshot() {
+  rawLoading.value = true
+  try {
+    const token = localStorage.getItem('access_token')
+    const headers = { Authorization: `Bearer ${token}` }
+    const [shibor, lpr, pmi, cpi, ppi, gdp] = await Promise.all([
+      axios.get('/api/macro/raw-data/cn-rates', { params: { data_type: 'shibor', days: 10 }, headers }),
+      axios.get('/api/macro/raw-data/cn-rates', { params: { data_type: 'shibor_lpr', days: 10 }, headers }),
+      axios.get('/api/macro/raw-data/cn-monthly', { params: { data_type: 'pmi', months: 12 }, headers }),
+      axios.get('/api/macro/raw-data/cn-monthly', { params: { data_type: 'cpi', months: 12 }, headers }),
+      axios.get('/api/macro/raw-data/cn-monthly', { params: { data_type: 'ppi', months: 12 }, headers }),
+      axios.get('/api/macro/raw-data/cn-quarterly', { params: { quarters: 8 }, headers }),
+    ])
+    rawSnapshot.value = {
+      shibor: latestRow(shibor.data?.data),
+      lpr: latestRow(lpr.data?.data),
+      pmi: latestRow(pmi.data?.data),
+      cpi: latestRow(cpi.data?.data),
+      ppi: latestRow(ppi.data?.data),
+      gdp: latestRow(gdp.data?.data),
+    }
+  } catch (e) {
+    errorMsg.value = e.response?.data?.detail || e.message || '加载宏观原始数据失败'
+  } finally {
+    rawLoading.value = false
+  }
 }
 
 async function loadAnalysis() {
@@ -354,6 +485,28 @@ function selectHistoryDoc(h) {
 function fmtTime(ts) {
   if (!ts) return ''
   return String(ts).replace('T', ' ').slice(0, 16)
+}
+
+function latestRow(rows) {
+  return Array.isArray(rows) && rows.length ? rows[rows.length - 1] : null
+}
+
+function fmtNumber(value, digits = 2) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n.toFixed(digits) : '—'
+}
+
+function fmtPct(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? `${n.toFixed(2)}%` : '—'
+}
+
+function fmtDateLike(value) {
+  if (!value) return '—'
+  const text = String(value)
+  if (/^\d{8}$/.test(text)) return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
+  if (/^\d{6}$/.test(text)) return `${text.slice(0, 4)}-${text.slice(4, 6)}`
+  return text
 }
 
 function stanceClass(stance) {
@@ -451,6 +604,7 @@ onUnmounted(() => {
 })
 
 onMounted(() => {
+  loadRawSnapshot()
   loadAnalysis()
 })
 </script>
@@ -506,6 +660,40 @@ onMounted(() => {
   text-align: center;
   padding: 60px 20px;
   color: #777;
+}
+.no-data-hint.compact {
+  padding: 20px;
+}
+.macro-section-header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.macro-section-title {
+  color: #111;
+  font-size: 0.98rem;
+  font-weight: 700;
+  margin: 0 0 2px;
+}
+.macro-data-section,
+.macro-analysis-section {
+  border: 1px solid #eeeeee;
+  border-radius: 6px;
+  padding: 14px;
+}
+.macro-data-card {
+  background: #fafafa;
+  border: 1px solid #e9e9e9;
+  border-radius: 6px;
+  min-height: 96px;
+  padding: 12px;
+}
+.macro-data-value {
+  color: #111;
+  font-size: 1.05rem;
+  font-weight: 750;
+  margin: 6px 0 2px;
 }
 .xiv-error-bar {
   display: flex;

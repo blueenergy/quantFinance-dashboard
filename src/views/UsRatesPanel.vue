@@ -6,13 +6,13 @@
       <v-row class="mb-4">
         <v-col cols="12" md="8">
           <h1 class="mrp-h1">🇺🇸 美国利率</h1>
-          <p class="mrp-sub">国债收益率曲线 · TIPS实际利率 · T-Bill · 盈亏平衡通胀 — LLM 深度解读 · 对A股传导</p>
+          <p class="mrp-sub">国债收益率曲线 · TIPS实际利率 · T-Bill · 盈亏平衡通胀 — 最新数据默认展示，AI 解读按需触发</p>
         </v-col>
         <v-col cols="12" md="4" class="d-flex align-center justify-end gap-2 flex-wrap">
           <button class="mrp-btn-sm mrp-btn-dark" :disabled="triggering" @click="triggerAnalysis">
             {{ triggering ? '分析中…' : '🤖 触发分析' }}
           </button>
-          <button class="mrp-btn-sm mrp-btn-ghost" :disabled="loading" @click="loadAnalysis">↻ 刷新</button>
+          <button class="mrp-btn-sm mrp-btn-ghost" :disabled="loading || rawLoading" @click="refreshPage">↻ 刷新</button>
         </v-col>
       </v-row>
 
@@ -22,13 +22,52 @@
         <button type="button" class="xiv-error-dismiss" aria-label="关闭" @click="errorMsg = ''">×</button>
       </div>
 
-      <!-- 加载中 -->
-      <div v-if="loading" class="no-data-hint">加载中…</div>
+      <!-- 原始数据快照 -->
+      <section class="macro-data-section mb-4">
+        <div class="macro-section-header">
+          <div>
+            <h2 class="macro-section-title">最新数据</h2>
+            <p class="mrp-caption">
+              数据每日同步后自动更新；最新数据日期：{{ latestDataDate || '—' }}
+            </p>
+          </div>
+          <span v-if="rawLoading" class="mrp-caption">数据加载中…</span>
+        </div>
+        <div v-if="!rawLoading && !rawCards.length" class="no-data-hint compact">
+          暂无美国利率原始数据
+        </div>
+        <v-row v-else class="mb-2">
+          <v-col
+            v-for="card in rawCards"
+            :key="card.key"
+            cols="12"
+            sm="6"
+            md="4"
+            lg="2"
+          >
+            <div class="macro-data-card">
+              <div class="macro-card-label">{{ card.label }}</div>
+              <div class="macro-data-value">{{ card.value }}</div>
+              <div class="mrp-caption">{{ card.date }}</div>
+              <div v-if="card.sub" class="mrp-caption">{{ card.sub }}</div>
+            </div>
+          </v-col>
+        </v-row>
+      </section>
 
-      <!-- 暂无数据 -->
-      <div v-else-if="!doc" class="no-data-hint">
-        <p class="mrp-muted">暂无分析数据</p>
-        <p class="mrp-caption">点击「触发分析」生成今日解读，或等待每日 06:40 自动任务</p>
+      <!-- AI 解读 -->
+      <section class="macro-analysis-section">
+        <div class="macro-section-header mb-2">
+          <div>
+            <h2 class="macro-section-title">AI 解读</h2>
+            <p class="mrp-caption">按需生成，不随数据同步自动消耗 token。</p>
+          </div>
+        </div>
+
+      <div v-if="loading" class="no-data-hint compact">AI 解读加载中…</div>
+      <div v-else-if="!doc" class="no-data-hint compact">
+        <p class="mrp-muted">暂无 AI 解读</p>
+        <p class="mrp-caption">需要时点击「触发分析」生成美国利率解读。</p>
       </div>
 
       <!-- 分析结果 -->
@@ -129,43 +168,44 @@
           </v-col>
         </v-row>
 
-        <!-- 数据走势（可折叠） -->
-        <v-row class="mt-2">
-          <v-col cols="12">
-            <div class="chart-toggle-bar" @click="toggleCharts">
-              <span class="macro-history-title">📊 数据走势</span>
-              <span class="chart-toggle-arrow">{{ chartsOpen ? '▲' : '▼' }}</span>
-            </div>
-            <div v-if="chartsOpen">
-              <div class="chart-range-bar mt-1">
-                <button
-                  v-for="opt in RANGE_OPTIONS" :key="opt.days"
-                  class="chart-range-btn" :class="{ active: chartDays === opt.days }"
-                  @click.stop="setChartDays(opt.days)"
-                >{{ opt.label }}</button>
-              </div>
-              <div class="chart-row mt-2">
-              <div class="chart-wrap">
-                <div class="chart-label">
-                  收益率 2Y / 10Y · 利差 (10Y−2Y)
-                  <button class="info-btn" @click.stop="spreadInfoOpen = true" title="如何阅读此图？">?</button>
-                </div>
-                <div class="chart-canvas" ref="chartSpread" />
-                <div v-if="chartLoading" class="chart-loading">加载中…</div>
-              </div>
-              <div class="chart-wrap">
-                <div class="chart-label">
-                  TIPS 实际利率 · 10Y
-                  <button class="info-btn" @click.stop="tipsInfoOpen = true" title="如何阅读此图？">?</button>
-                </div>
-                <div class="chart-canvas" ref="chartTips" />
-              </div>
-              </div>
-            </div>
-          </v-col>
-        </v-row>
-
       </template>
+      </section>
+
+      <!-- 数据走势（可折叠） -->
+      <v-row class="mt-4">
+        <v-col cols="12">
+          <div class="chart-toggle-bar" @click="toggleCharts">
+            <span class="macro-history-title">📊 数据走势</span>
+            <span class="chart-toggle-arrow">{{ chartsOpen ? '▲' : '▼' }}</span>
+          </div>
+          <div v-if="chartsOpen">
+            <div class="chart-range-bar mt-1">
+              <button
+                v-for="opt in RANGE_OPTIONS" :key="opt.days"
+                class="chart-range-btn" :class="{ active: chartDays === opt.days }"
+                @click.stop="setChartDays(opt.days)"
+              >{{ opt.label }}</button>
+            </div>
+            <div class="chart-row mt-2">
+            <div class="chart-wrap">
+              <div class="chart-label">
+                收益率 2Y / 10Y · 利差 (10Y−2Y)
+                <button class="info-btn" @click.stop="spreadInfoOpen = true" title="如何阅读此图？">?</button>
+              </div>
+              <div class="chart-canvas" ref="chartSpread" />
+              <div v-if="chartLoading" class="chart-loading">加载中…</div>
+            </div>
+            <div class="chart-wrap">
+              <div class="chart-label">
+                TIPS 实际利率 · 10Y
+                <button class="info-btn" @click.stop="tipsInfoOpen = true" title="如何阅读此图？">?</button>
+              </div>
+              <div class="chart-canvas" ref="chartTips" />
+            </div>
+            </div>
+          </div>
+        </v-col>
+      </v-row>
 
     </div>
   </v-container>
@@ -249,7 +289,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
 
@@ -259,6 +299,14 @@ const loading = ref(false)
 const historyLoading = ref(false)
 const triggering = ref(false)
 const errorMsg = ref('')
+const rawLoading = ref(false)
+const rawSnapshot = ref({
+  tycr: null,
+  trycr: null,
+  tbr: null,
+  tltr: null,
+  trltr: null,
+})
 
 // ── raw data charts ───────────────────────────────────────────────────────────
 const spreadInfoOpen = ref(false)
@@ -279,9 +327,94 @@ const RANGE_OPTIONS = [
   { label: '3Y', days: 1095 },
 ]
 
+const rawCards = computed(() => {
+  const y2 = toNumber(rawSnapshot.value.tycr?.y2)
+  const y10 = toNumber(rawSnapshot.value.tycr?.y10)
+  const spread = y2 != null && y10 != null ? y10 - y2 : null
+  return [
+    {
+      key: 'y2',
+      label: '2Y 国债',
+      value: fmtPct(y2),
+      date: fmtDateLike(rawSnapshot.value.tycr?.date),
+      sub: '政策预期敏感',
+    },
+    {
+      key: 'y10',
+      label: '10Y 国债',
+      value: fmtPct(y10),
+      date: fmtDateLike(rawSnapshot.value.tycr?.date),
+      sub: '长期融资成本',
+    },
+    {
+      key: 'spread',
+      label: '10Y-2Y',
+      value: fmtPct(spread),
+      date: fmtDateLike(rawSnapshot.value.tycr?.date),
+      sub: spread != null && spread < 0 ? '倒挂' : '期限利差',
+    },
+    {
+      key: 'tips10',
+      label: '10Y TIPS',
+      value: fmtPct(rawSnapshot.value.trycr?.y10),
+      date: fmtDateLike(rawSnapshot.value.trycr?.date),
+      sub: '实际利率',
+    },
+    {
+      key: 'tbill13w',
+      label: '13W T-Bill',
+      value: fmtPct(rawSnapshot.value.tbr?.w13),
+      date: fmtDateLike(rawSnapshot.value.tbr?.date),
+      sub: '短端资金价格',
+    },
+    {
+      key: 'long_real',
+      label: '长期实际利率',
+      value: fmtPct(rawSnapshot.value.trltr?.ltc),
+      date: fmtDateLike(rawSnapshot.value.trltr?.date),
+      sub: '',
+    },
+  ].filter((card) => card.value !== '—' || card.date !== '—')
+})
+
+const latestDataDate = computed(() => {
+  const values = rawCards.value.map((card) => card.date).filter((date) => date && date !== '—')
+  return values.sort().at(-1) || ''
+})
+
 async function setChartDays(d) {
   chartDays.value = d
   await loadCharts()
+}
+
+async function refreshPage() {
+  await Promise.all([loadRawSnapshot(), loadAnalysis()])
+}
+
+async function loadRawSnapshot() {
+  rawLoading.value = true
+  try {
+    const token = localStorage.getItem('access_token')
+    const headers = { Authorization: `Bearer ${token}` }
+    const [tycr, trycr, tbr, tltr, trltr] = await Promise.all([
+      axios.get('/api/macro/raw-data/us-rates', { params: { data_type: 'tycr', days: 10 }, headers }),
+      axios.get('/api/macro/raw-data/us-rates', { params: { data_type: 'trycr', days: 10 }, headers }),
+      axios.get('/api/macro/raw-data/us-rates', { params: { data_type: 'tbr', days: 10 }, headers }),
+      axios.get('/api/macro/raw-data/us-rates', { params: { data_type: 'tltr', days: 10 }, headers }),
+      axios.get('/api/macro/raw-data/us-rates', { params: { data_type: 'trltr', days: 10 }, headers }),
+    ])
+    rawSnapshot.value = {
+      tycr: latestRow(tycr.data?.data),
+      trycr: latestRow(trycr.data?.data),
+      tbr: latestRow(tbr.data?.data),
+      tltr: latestRow(tltr.data?.data),
+      trltr: latestRow(trltr.data?.data),
+    }
+  } catch (e) {
+    errorMsg.value = e.response?.data?.detail || e.message || '加载美国利率原始数据失败'
+  } finally {
+    rawLoading.value = false
+  }
 }
 
 async function loadAnalysis() {
@@ -343,6 +476,27 @@ function selectHistoryDoc(h) {
 function fmtTime(ts) {
   if (!ts) return ''
   return String(ts).replace('T', ' ').slice(0, 16)
+}
+
+function latestRow(rows) {
+  return Array.isArray(rows) && rows.length ? rows[rows.length - 1] : null
+}
+
+function toNumber(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function fmtPct(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? `${n.toFixed(2)}%` : '—'
+}
+
+function fmtDateLike(value) {
+  if (!value) return '—'
+  const text = String(value)
+  if (/^\d{8}$/.test(text)) return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
+  return text
 }
 
 function curveClass(shape) {
@@ -443,6 +597,7 @@ onUnmounted(() => {
 })
 
 onMounted(() => {
+  loadRawSnapshot()
   loadAnalysis()
 })
 </script>
@@ -498,6 +653,40 @@ onMounted(() => {
   text-align: center;
   padding: 60px 20px;
   color: #777;
+}
+.no-data-hint.compact {
+  padding: 20px;
+}
+.macro-section-header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.macro-section-title {
+  color: #111;
+  font-size: 0.98rem;
+  font-weight: 700;
+  margin: 0 0 2px;
+}
+.macro-data-section,
+.macro-analysis-section {
+  border: 1px solid #eeeeee;
+  border-radius: 6px;
+  padding: 14px;
+}
+.macro-data-card {
+  background: #fafafa;
+  border: 1px solid #e9e9e9;
+  border-radius: 6px;
+  min-height: 96px;
+  padding: 12px;
+}
+.macro-data-value {
+  color: #111;
+  font-size: 1.05rem;
+  font-weight: 750;
+  margin: 6px 0 2px;
 }
 .xiv-error-bar {
   display: flex;
