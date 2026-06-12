@@ -34,6 +34,21 @@
           <button type="button" @click="loadSymbol('000858.SZ')">000858.SZ</button>
           <button type="button" @click="loadSymbol('000001.SZ')">000001.SZ</button>
         </div>
+        <div v-if="recentStocks.length" class="quick-symbols recent-symbols">
+          <span>最近使用</span>
+          <button
+            v-for="item in recentStocks"
+            :key="item.symbol"
+            type="button"
+            class="recent-stock-btn"
+            :title="item.symbol"
+            @click="loadSymbol(item.symbol)"
+          >
+            <strong>{{ item.name || item.symbol }}</strong>
+            <small v-if="item.name">{{ item.symbol }}</small>
+          </button>
+          <button type="button" class="clear-recent-btn" @click="clearRecentSymbols">清空</button>
+        </div>
       </div>
     </section>
 
@@ -438,6 +453,7 @@ const error = ref('')
 const payload = ref(null)
 const activePanel = ref('overview')
 const directSymbol = ref('')
+const recentStocks = ref([])
 const analysisMode = ref('multi_expert_v1')
 const analysisSubmitting = ref(false)
 const analysisSubmitStatus = ref('')
@@ -452,6 +468,8 @@ const sectionLoaded = ref({ quote: false, scores: false, financials: false, ai: 
 const radarRef = ref(null)
 let radarChart = null
 let analysisPollTimer = null
+
+const RECENT_SYMBOLS_KEY = 'stock-workbench:recent-symbols'
 
 const analysisModeOptions = [
   { title: '多专家', value: 'multi_expert_v1' },
@@ -719,6 +737,10 @@ async function loadSymbol(symbol) {
     const workbench = await getStockWorkbench(clean)
     if (canonicalSymbol(directSymbol.value) !== canonicalSymbol(clean)) return
     payload.value = workbench
+    rememberRecentStock({
+      symbol: workbench?.stock?.symbol || workbench?.symbol || clean,
+      name: workbench?.stock?.name || workbench?.stock?.stock_name || '',
+    })
     sectionLoaded.value = {
       quote: Boolean(workbench?.quote),
       scores: Boolean(workbench?.score),
@@ -756,6 +778,46 @@ function queueInitialSectionLoads() {
   Promise.all(tasks).catch((e) => {
     console.warn('load initial stock workbench sections failed', e)
   })
+}
+
+function loadRecentSymbols() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RECENT_SYMBOLS_KEY) || '[]')
+    recentStocks.value = Array.isArray(parsed)
+      ? parsed.map(normalizeRecentStock).filter((item) => item.symbol).slice(0, 8)
+      : []
+  } catch (_) {
+    recentStocks.value = []
+  }
+}
+
+function rememberRecentStock(stockItem) {
+  const item = normalizeRecentStock(stockItem)
+  if (!item.symbol) return
+  const next = [
+    item,
+    ...recentStocks.value.filter((row) => canonicalSymbol(row.symbol) !== canonicalSymbol(item.symbol)),
+  ].slice(0, 8)
+  recentStocks.value = next
+  localStorage.setItem(RECENT_SYMBOLS_KEY, JSON.stringify(next))
+}
+
+function normalizeRecentStock(value) {
+  if (typeof value === 'string') {
+    return { symbol: value.trim().toUpperCase(), name: '' }
+  }
+  if (!value || typeof value !== 'object') {
+    return { symbol: '', name: '' }
+  }
+  return {
+    symbol: String(value.symbol || value.ts_code || '').trim().toUpperCase(),
+    name: String(value.name || value.stock_name || '').trim(),
+  }
+}
+
+function clearRecentSymbols() {
+  recentStocks.value = []
+  localStorage.removeItem(RECENT_SYMBOLS_KEY)
 }
 
 async function loadWorkbenchSection(section, options = {}) {
@@ -1060,6 +1122,7 @@ async function onOpenWorkbench(e) {
 }
 
 onMounted(() => {
+  loadRecentSymbols()
   window.addEventListener('stock-workbench:set-symbol', onOpenWorkbench)
 })
 
@@ -1141,6 +1204,24 @@ h1, h2, h3 {
 }
 .quick-symbols button:hover {
   background: rgba(96, 165, 250, .24);
+}
+.quick-symbols .recent-stock-btn {
+  align-items: flex-start;
+  border-radius: 12px;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.2;
+  padding: 6px 10px;
+}
+.recent-stock-btn strong {
+  color: #e0f2fe;
+  font-size: 13px;
+}
+.recent-stock-btn small {
+  color: #93c5fd;
+  font-size: 11px;
+  opacity: .88;
 }
 .empty-state {
   padding: 44px;
