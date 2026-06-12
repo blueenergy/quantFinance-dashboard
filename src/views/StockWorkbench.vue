@@ -112,9 +112,9 @@
             <span>{{ ratingText }}</span>
           </div>
           <div>
-            <small>评分日</small>
-            <strong>{{ dataStatus.score_date || '-' }}</strong>
-            <span>{{ dataStatus.quote_date || '行情未覆盖' }}</span>
+            <small>数据日期</small>
+            <strong>评分 {{ dataStatus.score_date || '-' }}</strong>
+            <span>行情 {{ dataStatus.quote_date || '未覆盖' }}</span>
           </div>
         </div>
       </section>
@@ -351,6 +351,57 @@
         <v-window-item value="analysis">
           <section class="workbench-card">
             <div class="card-title-row">
+              <h3>交易状态</h3>
+              <span class="muted">
+                <template v-if="sectionLoading.trading">刷新中…</template>
+                <template v-else>自选 / 策略 / 持仓 / 信号</template>
+              </span>
+            </div>
+            <div class="financial-metrics">
+              <div>
+                <span>自选状态</span>
+                <strong>{{ watchlistContext.in_watchlist ? '已加入' : '未加入' }}</strong>
+              </div>
+              <div>
+                <span>绑定策略</span>
+                <strong>{{ watchlistStrategies.length }} 个</strong>
+              </div>
+              <div>
+                <span>持仓记录</span>
+                <strong>{{ tradingPositions.length }} 条</strong>
+              </div>
+              <div>
+                <span>最近信号</span>
+                <strong>{{ recentTradeSignals.length }} 条</strong>
+              </div>
+            </div>
+            <div v-if="watchlistStrategies.length || tradingPositions.length || recentTradeSignals.length" class="trading-context-grid">
+              <article v-if="watchlistStrategies.length">
+                <h4>自选策略</h4>
+                <p v-for="row in watchlistStrategies.slice(0, 3)" :key="`${row.symbol}-${row.strategy_key}`">
+                  {{ row.strategy_key || row.strategy || '未命名策略' }}
+                  <span>{{ row.enabled === false ? '停用' : '启用' }}</span>
+                </p>
+              </article>
+              <article v-if="tradingPositions.length">
+                <h4>持仓</h4>
+                <p v-for="row in tradingPositions.slice(0, 3)" :key="`${row.symbol}-${row.securities_account_id || row.account_id || row.updated_at}`">
+                  数量 {{ row.quantity ?? row.shares ?? row.volume ?? '-' }}
+                  <span>成本 {{ fmtNumber(row.avg_cost ?? row.cost_basis ?? row.cost_price) }}</span>
+                </p>
+              </article>
+              <article v-if="recentTradeSignals.length">
+                <h4>交易信号</h4>
+                <p v-for="row in recentTradeSignals.slice(0, 3)" :key="row.order_id || `${row.symbol}-${row.timestamp}`">
+                  {{ row.action || row.signal_type || '-' }}
+                  <span>{{ row.status || row.created_at || row.timestamp || '-' }}</span>
+                </p>
+              </article>
+            </div>
+            <div v-else class="muted-block">暂无自选策略、持仓或交易信号。</div>
+          </section>
+          <section class="workbench-card">
+            <div class="card-title-row">
               <h3>深度分析</h3>
               <div class="analysis-actions">
                 <span v-if="sectionLoading.ai" class="muted">刷新中…</span>
@@ -433,6 +484,7 @@ import {
   getStockWorkbenchFinancials,
   getStockWorkbenchQuote,
   getStockWorkbenchScores,
+  getStockWorkbenchTrading,
 } from '../api/stock'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
 import GrowthChart from '../components/GrowthChart.vue'
@@ -463,8 +515,9 @@ const indicatorRows = ref([])
 const balanceRows = ref([])
 const cashflowRows = ref([])
 const earnings = ref({})
-const sectionLoading = ref({ quote: false, scores: false, financials: false, ai: false })
-const sectionLoaded = ref({ quote: false, scores: false, financials: false, ai: false })
+const tradingContext = ref({})
+const sectionLoading = ref({ quote: false, scores: false, financials: false, ai: false, trading: false })
+const sectionLoaded = ref({ quote: false, scores: false, financials: false, ai: false, trading: false })
 const radarRef = ref(null)
 let radarChart = null
 let analysisPollTimer = null
@@ -487,6 +540,10 @@ const quoteDailyRows = computed(() => Array.isArray(payload.value?.daily_quotes)
 const latestDailyBasic = computed(() => payload.value?.daily_basic || {})
 const latestMoneyFlow = computed(() => payload.value?.money_flow || null)
 const quoteSectionDate = computed(() => dataStatus.value?.sections?.quote?.as_of || latestDailyBasic.value.trade_date || quote.value.trade_date || '')
+const watchlistContext = computed(() => tradingContext.value.watchlist || {})
+const watchlistStrategies = computed(() => Array.isArray(tradingContext.value.watchlist_strategies) ? tradingContext.value.watchlist_strategies : [])
+const tradingPositions = computed(() => Array.isArray(tradingContext.value.positions) ? tradingContext.value.positions : [])
+const recentTradeSignals = computed(() => Array.isArray(tradingContext.value.recent_signals) ? tradingContext.value.recent_signals : [])
 
 const stockSymbol = computed(() => stock.value.symbol || payload.value?.symbol || '-')
 const stockName = computed(() => stock.value.name || stock.value.stock_name || '')
@@ -577,6 +634,7 @@ const sectionStatusItems = computed(() => {
     { key: 'scores', label: '量化评分', panel: 'scores' },
     { key: 'financials', label: '财务业绩', panel: 'financial' },
     { key: 'ai', label: 'AI 分析', panel: 'analysis' },
+    { key: 'trading', label: '交易状态', panel: 'analysis' },
   ]
   return defs.map((def) => {
     const status = sections[def.key] || {}
@@ -585,6 +643,7 @@ const sectionStatusItems = computed(() => {
       scores: dataStatus.value.score_found,
       financials: Boolean(incomeRows.value.length || indicatorRows.value.length),
       ai: dataStatus.value.deep_analysis_found,
+      trading: Boolean(watchlistContext.value.in_watchlist || tradingPositions.value.length || recentTradeSignals.value.length),
     }[def.key]
     return {
       ...def,
@@ -706,7 +765,10 @@ watch(activePanel, async (panel) => {
   } else if (panel === 'financial') {
     await loadWorkbenchSection('financials')
   } else if (panel === 'analysis') {
-    await loadWorkbenchSection('ai')
+    await Promise.all([
+      loadWorkbenchSection('ai'),
+      loadWorkbenchSection('trading'),
+    ])
   }
 })
 
@@ -732,8 +794,8 @@ async function loadSymbol(symbol) {
     clearAnalysisPolling()
     analysisSubmitStatus.value = ''
     analysisSubmitError.value = ''
-    sectionLoaded.value = { quote: false, scores: false, financials: false, ai: false }
-    sectionLoading.value = { quote: false, scores: false, financials: false, ai: false }
+    sectionLoaded.value = { quote: false, scores: false, financials: false, ai: false, trading: false }
+    sectionLoading.value = { quote: false, scores: false, financials: false, ai: false, trading: false }
     const workbench = await getStockWorkbench(clean)
     if (canonicalSymbol(directSymbol.value) !== canonicalSymbol(clean)) return
     payload.value = workbench
@@ -746,12 +808,14 @@ async function loadSymbol(symbol) {
       scores: Boolean(workbench?.score),
       financials: false,
       ai: Boolean(workbench?.deep_analysis),
+      trading: false,
     }
     incomeRows.value = []
     indicatorRows.value = []
     balanceRows.value = []
     cashflowRows.value = []
     earnings.value = {}
+    tradingContext.value = {}
     queueInitialSectionLoads()
     await nextTick()
     renderRadar()
@@ -774,6 +838,7 @@ function queueInitialSectionLoads() {
     tasks.push(loadWorkbenchSection('financials', { force: true }))
   } else if (activePanel.value === 'analysis') {
     tasks.push(loadWorkbenchSection('ai', { force: true }))
+    tasks.push(loadWorkbenchSection('trading', { force: true }))
   }
   Promise.all(tasks).catch((e) => {
     console.warn('load initial stock workbench sections failed', e)
@@ -863,6 +928,11 @@ async function loadWorkbenchSection(section, options = {}) {
         analysis_history: Array.isArray(data?.analysis_history) ? data.analysis_history : [],
         analysis_history_total: data?.analysis_history_total || 0,
       })
+    } else if (section === 'trading') {
+      const data = await getStockWorkbenchTrading(symbol)
+      if (!isCurrentWorkbenchSymbol(symbol)) return
+      tradingContext.value = data || {}
+      mergeWorkbenchSection('trading', data, {})
     }
     sectionLoaded.value = { ...sectionLoaded.value, [section]: true }
   } catch (e) {
@@ -895,6 +965,9 @@ function mergeWorkbenchSection(section, data, updates) {
   } else if (section === 'ai') {
     nextStatus.deep_analysis_found = Boolean(updates.deep_analysis)
     nextStatus.analysis_created_at = status.as_of || nextStatus.analysis_created_at
+  } else if (section === 'trading') {
+    nextStatus.trading_found = Boolean(status.found)
+    nextStatus.trading_date = status.as_of || nextStatus.trading_date
   }
 
   payload.value = {
@@ -1557,6 +1630,32 @@ pre {
 .event-item small {
   color: #94a3b8;
   text-align: right;
+}
+.trading-context-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 14px;
+}
+.trading-context-grid article {
+  background: rgba(30, 41, 59, .56);
+  border: 1px solid rgba(148, 163, 184, .14);
+  border-radius: 12px;
+  padding: 14px;
+}
+.trading-context-grid h4 {
+  color: #e2e8f0;
+  margin: 0 0 10px;
+}
+.trading-context-grid p {
+  color: #f8fafc;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin: 8px 0 0;
+}
+.trading-context-grid span {
+  color: #94a3b8;
 }
 .muted-block {
   background: rgba(30, 41, 59, .56);
