@@ -201,9 +201,13 @@
 
           <section class="workbench-card">
             <div class="card-title-row">
-              <h3>最近日线</h3>
+              <h3>日线 K 线</h3>
               <span class="muted">最近 {{ quoteDailyRows.length }} 个交易日</span>
             </div>
+            <StockKLineChart
+              v-if="quoteDailyRows.length"
+              :records="quoteDailyRows"
+            />
             <div v-if="quoteDailyRows.length" class="quote-table-wrap">
               <table class="quote-table">
                 <thead>
@@ -396,6 +400,7 @@ import {
 } from '../api/stock'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
 import GrowthChart from '../components/GrowthChart.vue'
+import StockKLineChart from '../components/StockKLineChart.vue'
 import StockSearchInput from '../components/StockSearchInput.vue'
 
 const SCORE_DEFS = [
@@ -1339,6 +1344,7 @@ pre {
   white-space: pre-wrap;
 }
 .quote-table-wrap {
+  margin-top: 14px;
   overflow-x: auto;
 }
 .quote-table {
