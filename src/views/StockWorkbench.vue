@@ -108,7 +108,7 @@
         <v-tab value="overview">总览</v-tab>
         <v-tab value="quote">行情资金</v-tab>
         <v-tab value="scores">量化评分</v-tab>
-        <v-tab value="financial">财务快照</v-tab>
+        <v-tab value="financial">财务业绩</v-tab>
         <v-tab value="analysis">深度分析</v-tab>
       </v-tabs>
 
@@ -295,7 +295,10 @@
             <article class="workbench-card">
               <div class="card-title-row">
                 <h3>财务成长图</h3>
-                <span class="muted">最近 {{ financialChartData.length }} 期</span>
+                <span class="muted">
+                  最近 {{ financialChartData.length }} 期
+                  <template v-if="sectionLoading.financials"> · 刷新中…</template>
+                </span>
               </div>
               <GrowthChart v-if="financialChartData.length" :series="financialChartData" />
               <div v-else class="muted-block">暂无足够财务数据。</div>
@@ -309,6 +312,20 @@
                 </div>
               </div>
             </article>
+          </section>
+          <section class="workbench-card">
+            <div class="card-title-row">
+              <h3>业绩事件</h3>
+              <span class="muted">预告 / 快报 / 披露日历 / 调研</span>
+            </div>
+            <div v-if="earningsEvents.length" class="event-list">
+              <article v-for="event in earningsEvents" :key="`${event.type}-${event.date}-${event.title}`" class="event-item">
+                <span>{{ event.type }}</span>
+                <strong>{{ event.title }}</strong>
+                <small>{{ event.date || '-' }}</small>
+              </article>
+            </div>
+            <div v-else class="muted-block">暂无业绩事件。</div>
           </section>
         </v-window-item>
 
@@ -371,9 +388,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
 import {
-  getStockFinancial,
   getStockWorkbench,
   getStockWorkbenchAi,
+  getStockWorkbenchFinancials,
   getStockWorkbenchQuote,
   getStockWorkbenchScores,
 } from '../api/stock'
@@ -401,8 +418,11 @@ const analysisSubmitStatus = ref('')
 const analysisSubmitError = ref('')
 const incomeRows = ref([])
 const indicatorRows = ref([])
-const sectionLoading = ref({ quote: false, scores: false, ai: false })
-const sectionLoaded = ref({ quote: false, scores: false, ai: false })
+const balanceRows = ref([])
+const cashflowRows = ref([])
+const earnings = ref({})
+const sectionLoading = ref({ quote: false, scores: false, financials: false, ai: false })
+const sectionLoaded = ref({ quote: false, scores: false, financials: false, ai: false })
 const radarRef = ref(null)
 let radarChart = null
 let analysisPollTimer = null
@@ -510,6 +530,7 @@ const sectionStatusItems = computed(() => {
   const defs = [
     { key: 'quote', label: '行情资金', panel: 'quote' },
     { key: 'scores', label: '量化评分', panel: 'scores' },
+    { key: 'financials', label: '财务业绩', panel: 'financial' },
     { key: 'ai', label: 'AI 分析', panel: 'analysis' },
   ]
   return defs.map((def) => {
@@ -517,6 +538,7 @@ const sectionStatusItems = computed(() => {
     const fallbackFound = {
       quote: dataStatus.value.quote_found,
       scores: dataStatus.value.score_found,
+      financials: Boolean(incomeRows.value.length || indicatorRows.value.length),
       ai: dataStatus.value.deep_analysis_found,
     }[def.key]
     return {
@@ -571,6 +593,8 @@ const financialChartData = computed(() => {
 
 const financialMetrics = computed(() => {
   const latest = indicatorRows.value[0] || {}
+  const latestBalance = balanceRows.value[0] || {}
+  const latestCashflow = cashflowRows.value[0] || {}
   return [
     { label: 'ROE', value: fmtNumber(latest.roe || latest.roe_dt, 2, '%') },
     { label: '毛利率', value: fmtNumber(latest.grossprofit_margin, 2, '%') },
@@ -578,7 +602,19 @@ const financialMetrics = computed(() => {
     { label: '营收同比', value: fmtNumber(latest.tr_yoy || latest.or_yoy, 2, '%') },
     { label: 'PE TTM', value: fmtNumber((indicatorRows.value[0] || {}).pe_ttm || quote.value.pe_ttm) },
     { label: 'PB', value: fmtNumber((indicatorRows.value[0] || {}).pb || quote.value.pb) },
+    { label: '总资产', value: fmtAmount(latestBalance.total_assets) },
+    { label: '经营现金流', value: fmtAmount(latestCashflow.n_cashflow_act) },
   ]
+})
+
+const earningsEvents = computed(() => {
+  const rows = []
+  const source = earnings.value || {}
+  for (const row of source.forecast || []) rows.push({ type: '业绩预告', date: row.ann_date || row.end_date, title: row.type || row.summary || '业绩预告', raw: row })
+  for (const row of source.express || []) rows.push({ type: '业绩快报', date: row.ann_date || row.end_date, title: row.revenue ? `营收 ${fmtAmount(row.revenue)}` : '业绩快报', raw: row })
+  for (const row of source.disclosure || []) rows.push({ type: '披露日历', date: row.ann_date || row.pre_date, title: row.pre_date ? `预计披露 ${row.pre_date}` : '披露日历', raw: row })
+  for (const row of source.report_rc || []) rows.push({ type: '调研/研报', date: row.ann_date || row.end_date, title: row.organ_name || row.title || '调研/研报', raw: row })
+  return rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 8)
 })
 
 const quoteMetrics = computed(() => [
@@ -622,6 +658,8 @@ watch(activePanel, async (panel) => {
     await loadWorkbenchSection('quote')
   } else if (panel === 'scores') {
     await loadWorkbenchSection('scores')
+  } else if (panel === 'financial') {
+    await loadWorkbenchSection('financials')
   } else if (panel === 'analysis') {
     await loadWorkbenchSection('ai')
   }
@@ -649,23 +687,25 @@ async function loadSymbol(symbol) {
     clearAnalysisPolling()
     analysisSubmitStatus.value = ''
     analysisSubmitError.value = ''
-    sectionLoaded.value = { quote: false, scores: false, ai: false }
-    const [workbench, income, indicator] = await Promise.all([
-      getStockWorkbench(clean),
-      getStockFinancial(clean, 'income', 8).catch(() => []),
-      getStockFinancial(clean, 'indicator', 8).catch(() => []),
-    ])
+    sectionLoaded.value = { quote: false, scores: false, financials: false, ai: false }
+    const workbench = await getStockWorkbench(clean)
     payload.value = workbench
     sectionLoaded.value = {
       quote: Boolean(workbench?.quote),
       scores: Boolean(workbench?.score),
+      financials: false,
       ai: Boolean(workbench?.deep_analysis),
     }
-    incomeRows.value = Array.isArray(income) ? income : []
-    indicatorRows.value = Array.isArray(indicator) ? indicator : []
+    incomeRows.value = []
+    indicatorRows.value = []
+    balanceRows.value = []
+    cashflowRows.value = []
+    earnings.value = {}
     await loadWorkbenchSection('quote', { force: true })
     if (activePanel.value === 'scores') {
       await loadWorkbenchSection('scores', { force: true })
+    } else if (activePanel.value === 'financial') {
+      await loadWorkbenchSection('financials', { force: true })
     } else if (activePanel.value === 'analysis') {
       await loadWorkbenchSection('ai', { force: true })
     }
@@ -702,6 +742,14 @@ async function loadWorkbenchSection(section, options = {}) {
       })
       await nextTick()
       renderRadar()
+    } else if (section === 'financials') {
+      const data = await getStockWorkbenchFinancials(symbol)
+      incomeRows.value = Array.isArray(data?.income) ? data.income : []
+      indicatorRows.value = Array.isArray(data?.indicators) ? data.indicators : []
+      balanceRows.value = Array.isArray(data?.balance) ? data.balance : []
+      cashflowRows.value = Array.isArray(data?.cashflow) ? data.cashflow : []
+      earnings.value = data?.earnings || {}
+      mergeWorkbenchSection('financials', data, {})
     } else if (section === 'ai') {
       const data = await getStockWorkbenchAi(symbol)
       mergeWorkbenchSection('ai', data, {
@@ -731,6 +779,9 @@ function mergeWorkbenchSection(section, data, updates) {
   } else if (section === 'scores') {
     nextStatus.score_found = Boolean(updates.score)
     nextStatus.score_date = status.as_of || nextStatus.score_date
+  } else if (section === 'financials') {
+    nextStatus.financials_found = Boolean(status.found)
+    nextStatus.financials_date = status.as_of || nextStatus.financials_date
   } else if (section === 'ai') {
     nextStatus.deep_analysis_found = Boolean(updates.deep_analysis)
     nextStatus.analysis_created_at = status.as_of || nextStatus.analysis_created_at
@@ -1283,6 +1334,35 @@ pre {
 .quote-table th {
   color: #94a3b8;
   font-weight: 600;
+}
+.event-list {
+  display: grid;
+  gap: 10px;
+}
+.event-item {
+  align-items: center;
+  background: rgba(30, 41, 59, .56);
+  border: 1px solid rgba(148, 163, 184, .14);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 90px minmax(0, 1fr) 110px;
+  padding: 12px 14px;
+}
+.event-item span {
+  color: #93c5fd;
+  font-size: 12px;
+}
+.event-item strong {
+  color: #f8fafc;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.event-item small {
+  color: #94a3b8;
+  text-align: right;
 }
 .muted-block {
   background: rgba(30, 41, 59, .56);
