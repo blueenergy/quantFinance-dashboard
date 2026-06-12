@@ -377,6 +377,27 @@
             />
             <div v-else class="muted-block">暂无深度分析，可点击上方按钮直接发起分析任务。</div>
           </section>
+          <section class="workbench-card">
+            <div class="card-title-row">
+              <h3>最近分析历史</h3>
+              <span class="muted">最近 {{ analysisHistory.length }} 条</span>
+            </div>
+            <div v-if="analysisHistory.length" class="analysis-history-list">
+              <button
+                v-for="item in analysisHistory"
+                :key="item.id || item.created_at"
+                type="button"
+                class="analysis-history-item"
+                :class="{ active: item.id && item.id === deepAnalysis?.id }"
+                @click="selectAnalysisHistory(item)"
+              >
+                <span>{{ item.created_at || '-' }}</span>
+                <strong>{{ analysisHistoryTitle(item) }}</strong>
+                <small>{{ item.analysis_mode || 'classic' }}</small>
+              </button>
+            </div>
+            <div v-else class="muted-block">暂无历史分析。</div>
+          </section>
         </v-window-item>
       </v-window>
     </template>
@@ -442,6 +463,7 @@ const stock = computed(() => payload.value?.stock || {})
 const quote = computed(() => payload.value?.quote || {})
 const deepAnalysis = computed(() => payload.value?.deep_analysis || null)
 const dataStatus = computed(() => payload.value?.data_status || {})
+const analysisHistory = computed(() => Array.isArray(payload.value?.analysis_history) ? payload.value.analysis_history : [])
 const scoreHistory = computed(() => Array.isArray(payload.value?.score_history) ? payload.value.score_history : [])
 const quoteDailyRows = computed(() => Array.isArray(payload.value?.daily_quotes) ? payload.value.daily_quotes : [])
 const latestDailyBasic = computed(() => payload.value?.daily_basic || {})
@@ -776,6 +798,8 @@ async function loadWorkbenchSection(section, options = {}) {
       if (!isCurrentWorkbenchSymbol(symbol)) return
       mergeWorkbenchSection('ai', data, {
         deep_analysis: data?.deep_analysis || null,
+        analysis_history: Array.isArray(data?.analysis_history) ? data.analysis_history : [],
+        analysis_history_total: data?.analysis_history_total || 0,
       })
     }
     sectionLoaded.value = { ...sectionLoaded.value, [section]: true }
@@ -823,6 +847,25 @@ function clearAnalysisPolling() {
     clearInterval(analysisPollTimer)
     analysisPollTimer = null
   }
+}
+
+function selectAnalysisHistory(item) {
+  if (!item) return
+  payload.value = {
+    ...(payload.value || {}),
+    deep_analysis: item,
+  }
+}
+
+function analysisHistoryTitle(item) {
+  const analysis = item?.analysis || {}
+  return analysis.final_conclusion
+    || analysis.investment_advice
+    || analysis.long_term_forecast
+    || analysis.mid_term_forecast
+    || analysis.short_term_forecast
+    || item?.stock_name
+    || '查看分析详情'
 }
 
 async function submitDeepAnalysis() {
@@ -877,6 +920,10 @@ async function submitDeepAnalysis() {
           payload.value = {
             ...(payload.value || {}),
             deep_analysis: nextDeepAnalysis,
+            analysis_history: [
+              nextDeepAnalysis,
+              ...analysisHistory.value.filter((item) => item.id !== nextDeepAnalysis.id),
+            ],
             data_status: {
               ...(payload.value?.data_status || {}),
               deep_analysis_found: true,
@@ -1263,6 +1310,38 @@ h1, h2, h3 {
   color: #94a3b8;
   font-size: 13px;
   margin: -4px 0 14px;
+}
+.analysis-history-list {
+  display: grid;
+  gap: 10px;
+}
+.analysis-history-item {
+  background: rgba(30, 41, 59, .62);
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 12px;
+  color: #cbd5e1;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 170px minmax(0, 1fr) 110px;
+  padding: 12px 14px;
+  text-align: left;
+}
+.analysis-history-item:hover,
+.analysis-history-item.active {
+  background: rgba(96, 165, 250, .14);
+  border-color: rgba(96, 165, 250, .34);
+}
+.analysis-history-item span,
+.analysis-history-item small {
+  color: #94a3b8;
+  font-size: 12px;
+}
+.analysis-history-item strong {
+  color: #f8fafc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .score-radar {
   height: 360px;
