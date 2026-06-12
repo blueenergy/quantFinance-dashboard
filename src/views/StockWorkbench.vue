@@ -61,6 +61,21 @@
             <span v-if="stockIndustryL3">{{ stockIndustryL3 }}</span>
             <span v-for="code in indexCodes" :key="code">{{ code }}</span>
           </div>
+          <div class="section-status-row">
+            <button
+              v-for="item in sectionStatusItems"
+              :key="item.key"
+              type="button"
+              class="section-status-chip"
+              :class="{ 'is-missing': !item.found, 'is-stale': item.stale }"
+              :title="item.title"
+              @click="activePanel = item.panel"
+            >
+              <span>{{ item.label }}</span>
+              <strong>{{ item.found ? '已覆盖' : '暂无' }}</strong>
+              <small v-if="item.asOf">{{ item.asOf }}</small>
+            </button>
+          </div>
         </div>
         <div class="hero-metrics">
           <div>
@@ -91,6 +106,7 @@
 
       <v-tabs v-model="activePanel" class="workbench-tabs" color="primary">
         <v-tab value="overview">总览</v-tab>
+        <v-tab value="quote">行情资金</v-tab>
         <v-tab value="scores">量化评分</v-tab>
         <v-tab value="financial">财务快照</v-tab>
         <v-tab value="analysis">深度分析</v-tab>
@@ -123,6 +139,22 @@
             </article>
 
             <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>行情资金快照</h3>
+                <button type="button" class="text-link-button" @click="activePanel = 'quote'">查看详情</button>
+              </div>
+              <div class="financial-metrics">
+                <div v-for="metric in overviewQuoteMetrics" :key="metric.label">
+                  <span>{{ metric.label }}</span>
+                  <strong :class="metric.className">{{ metric.value }}</strong>
+                </div>
+              </div>
+              <div v-if="!quoteDailyRows.length && !latestMoneyFlow && !Object.keys(latestDailyBasic).length" class="muted-block">
+                暂无行情资金分区数据。
+              </div>
+            </article>
+
+            <article class="workbench-card">
               <h3>核心状态</h3>
               <div class="status-grid">
                 <div v-for="item in statusItems" :key="item.label">
@@ -131,6 +163,72 @@
                 </div>
               </div>
             </article>
+          </section>
+        </v-window-item>
+
+        <v-window-item value="quote">
+          <section class="panel-grid">
+            <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>行情估值</h3>
+                <span class="muted">
+                  {{ quoteSectionDate || '暂无日期' }}
+                  <template v-if="sectionLoading.quote"> · 刷新中…</template>
+                </span>
+              </div>
+              <div class="financial-metrics">
+                <div v-for="metric in quoteMetrics" :key="metric.label">
+                  <span>{{ metric.label }}</span>
+                  <strong>{{ metric.value }}</strong>
+                </div>
+              </div>
+            </article>
+
+            <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>资金流</h3>
+                <span class="muted">{{ latestMoneyFlow?.trade_date || '暂无日期' }}</span>
+              </div>
+              <div v-if="latestMoneyFlow" class="financial-metrics">
+                <div v-for="metric in moneyFlowMetrics" :key="metric.label">
+                  <span>{{ metric.label }}</span>
+                  <strong :class="metric.className">{{ metric.value }}</strong>
+                </div>
+              </div>
+              <div v-else class="muted-block">暂无该股票的资金流数据。</div>
+            </article>
+          </section>
+
+          <section class="workbench-card">
+            <div class="card-title-row">
+              <h3>最近日线</h3>
+              <span class="muted">最近 {{ quoteDailyRows.length }} 个交易日</span>
+            </div>
+            <div v-if="quoteDailyRows.length" class="quote-table-wrap">
+              <table class="quote-table">
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>收盘</th>
+                    <th>涨跌幅</th>
+                    <th>最高</th>
+                    <th>最低</th>
+                    <th>成交额</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in quoteDailyRows.slice(0, 10)" :key="row.trade_date">
+                    <td>{{ row.trade_date }}</td>
+                    <td>{{ fmtNumber(row.close) }}</td>
+                    <td :class="pctClass(row.pct_chg)">{{ fmtPct(row.pct_chg) }}</td>
+                    <td>{{ fmtNumber(row.high) }}</td>
+                    <td>{{ fmtNumber(row.low) }}</td>
+                    <td>{{ fmtAmount(row.amount) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="muted-block">暂无该股票的日线行情。</div>
           </section>
         </v-window-item>
 
@@ -156,6 +254,38 @@
                   <pre>{{ formatDetail(item.details) }}</pre>
                 </details>
               </article>
+            </div>
+            <div class="score-history-block">
+              <h4>评分历史</h4>
+              <div v-if="scoreHistory.length" class="quote-table-wrap">
+                <table class="quote-table">
+                  <thead>
+                    <tr>
+                      <th>日期</th>
+                      <th>综合</th>
+                      <th>技术</th>
+                      <th>基本面</th>
+                      <th>价值</th>
+                      <th>成长</th>
+                      <th>资金流</th>
+                      <th>动量</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in scoreHistory.slice(0, 12)" :key="row.score_date">
+                      <td>{{ row.score_date || '-' }}</td>
+                      <td>{{ fmtNumber(scoreRowComposite(row)) }}</td>
+                      <td>{{ fmtNumber(row.technical_score) }}</td>
+                      <td>{{ fmtNumber(row.fundamental_score) }}</td>
+                      <td>{{ fmtNumber(row.value_score) }}</td>
+                      <td>{{ fmtNumber(row.growth_score) }}</td>
+                      <td>{{ fmtNumber(row.money_flow_score) }}</td>
+                      <td>{{ fmtNumber(row.cycle_score) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="muted-block">暂无评分历史。</div>
             </div>
           </section>
         </v-window-item>
@@ -288,6 +418,10 @@ const quote = computed(() => payload.value?.quote || {})
 const deepAnalysis = computed(() => payload.value?.deep_analysis || null)
 const dataStatus = computed(() => payload.value?.data_status || {})
 const scoreHistory = computed(() => Array.isArray(payload.value?.score_history) ? payload.value.score_history : [])
+const quoteDailyRows = computed(() => Array.isArray(payload.value?.daily_quotes) ? payload.value.daily_quotes : [])
+const latestDailyBasic = computed(() => payload.value?.daily_basic || {})
+const latestMoneyFlow = computed(() => payload.value?.money_flow || null)
+const quoteSectionDate = computed(() => dataStatus.value?.sections?.quote?.as_of || latestDailyBasic.value.trade_date || quote.value.trade_date || '')
 
 const stockSymbol = computed(() => stock.value.symbol || payload.value?.symbol || '-')
 const stockName = computed(() => stock.value.name || stock.value.stock_name || '')
@@ -371,6 +505,29 @@ const statusItems = computed(() => [
   { label: '评分', value: dataStatus.value.score_found ? '已覆盖' : '未覆盖' },
   { label: 'AI分析', value: dataStatus.value.deep_analysis_found ? '已覆盖' : '未覆盖' },
 ])
+const sectionStatusItems = computed(() => {
+  const sections = dataStatus.value.sections || {}
+  const defs = [
+    { key: 'quote', label: '行情资金', panel: 'quote' },
+    { key: 'scores', label: '量化评分', panel: 'scores' },
+    { key: 'ai', label: 'AI 分析', panel: 'analysis' },
+  ]
+  return defs.map((def) => {
+    const status = sections[def.key] || {}
+    const fallbackFound = {
+      quote: dataStatus.value.quote_found,
+      scores: dataStatus.value.score_found,
+      ai: dataStatus.value.deep_analysis_found,
+    }[def.key]
+    return {
+      ...def,
+      found: status.found ?? fallbackFound,
+      stale: Boolean(status.stale),
+      asOf: status.as_of || '',
+      title: `${def.label}：${status.expected_freshness || '暂无新鲜度说明'}${status.source ? `；来源 ${status.source}` : ''}`,
+    }
+  })
+})
 
 const analysisObj = computed(() => deepAnalysis.value?.analysis || {})
 const analysisSummary = computed(() => {
@@ -424,6 +581,35 @@ const financialMetrics = computed(() => {
   ]
 })
 
+const quoteMetrics = computed(() => [
+  { label: '换手率', value: fmtNumber(latestDailyBasic.value.turnover_rate, 2, '%') },
+  { label: '量比', value: fmtNumber(latestDailyBasic.value.volume_ratio) },
+  { label: 'PE TTM', value: fmtNumber(latestDailyBasic.value.pe_ttm ?? latestDailyBasic.value.pe) },
+  { label: 'PB', value: fmtNumber(latestDailyBasic.value.pb) },
+  { label: '股息率 TTM', value: fmtNumber(latestDailyBasic.value.dv_ttm, 2, '%') },
+  { label: '流通市值', value: fmtAmount(latestDailyBasic.value.circ_mv) },
+  { label: '总市值', value: fmtAmount(latestDailyBasic.value.total_mv) },
+  { label: '日线样本', value: quoteDailyRows.value.length ? `${quoteDailyRows.value.length} 条` : '-' },
+])
+
+const moneyFlowMetrics = computed(() => {
+  const mf = latestMoneyFlow.value || {}
+  return [
+    { label: '主力净额', value: fmtAmount(mf.net_mf_amount), className: valueClass(mf.net_mf_amount) },
+    { label: '超大单买入', value: fmtAmount(mf.buy_elg_amount) },
+    { label: '超大单卖出', value: fmtAmount(mf.sell_elg_amount) },
+    { label: '大单买入', value: fmtAmount(mf.buy_lg_amount) },
+    { label: '大单卖出', value: fmtAmount(mf.sell_lg_amount) },
+    { label: '中单净额', value: fmtAmount(toNumber(mf.buy_md_amount) - toNumber(mf.sell_md_amount)) },
+  ]
+})
+const overviewQuoteMetrics = computed(() => [
+  { label: '换手率', value: fmtNumber(latestDailyBasic.value.turnover_rate, 2, '%') },
+  { label: 'PE TTM', value: fmtNumber(latestDailyBasic.value.pe_ttm ?? latestDailyBasic.value.pe) },
+  { label: 'PB', value: fmtNumber(latestDailyBasic.value.pb) },
+  { label: '主力净额', value: fmtAmount(latestMoneyFlow.value?.net_mf_amount), className: valueClass(latestMoneyFlow.value?.net_mf_amount) },
+])
+
 watch([scoreItems, activePanel], async () => {
   if (activePanel.value !== 'overview') return
   await nextTick()
@@ -432,7 +618,9 @@ watch([scoreItems, activePanel], async () => {
 
 watch(activePanel, async (panel) => {
   if (!payload.value) return
-  if (panel === 'scores') {
+  if (panel === 'quote') {
+    await loadWorkbenchSection('quote')
+  } else if (panel === 'scores') {
     await loadWorkbenchSection('scores')
   } else if (panel === 'analysis') {
     await loadWorkbenchSection('ai')
@@ -502,6 +690,9 @@ async function loadWorkbenchSection(section, options = {}) {
       const data = await getStockWorkbenchQuote(symbol)
       mergeWorkbenchSection('quote', data, {
         quote: data?.quote || null,
+        daily_quotes: Array.isArray(data?.daily_quotes) ? data.daily_quotes : [],
+        daily_basic: data?.daily_basic || null,
+        money_flow: data?.money_flow || null,
       })
     } else if (section === 'scores') {
       const data = await getStockWorkbenchScores(symbol)
@@ -677,6 +868,16 @@ function scorePercent(value) {
   return Math.max(0, Math.min(100, n))
 }
 
+function scoreRowComposite(row) {
+  const composite = row?.composite_score
+  if (composite && typeof composite === 'object') {
+    if (composite.balanced != null) return composite.balanced
+    const firstKey = Object.keys(composite).find((key) => composite[key] != null)
+    return firstKey ? composite[firstKey] : null
+  }
+  return composite
+}
+
 function toNumber(value) {
   const n = Number(value)
   return Number.isFinite(n) ? n : null
@@ -700,6 +901,22 @@ function fmtPct(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '-'
   return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`
+}
+
+function fmtAmount(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  if (Math.abs(n) >= 10000) return `${(n / 10000).toFixed(2)}亿`
+  return `${n.toFixed(2)}万`
+}
+
+function valueClass(value) {
+  const n = Number(value)
+  return n > 0 ? 'is-up' : n < 0 ? 'is-down' : ''
+}
+
+function pctClass(value) {
+  return valueClass(value)
 }
 
 async function onOpenWorkbench(e) {
@@ -833,6 +1050,60 @@ h1, h2, h3 {
   color: #bfdbfe;
   padding: 5px 10px;
 }
+.section-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.section-status-chip {
+  background: rgba(34, 197, 94, .10);
+  border: 1px solid rgba(34, 197, 94, .30);
+  border-radius: 14px;
+  color: #dcfce7;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  min-width: 116px;
+  padding: 9px 12px;
+  text-align: left;
+}
+.section-status-chip:hover {
+  background: rgba(34, 197, 94, .18);
+}
+.section-status-chip.is-missing {
+  background: rgba(148, 163, 184, .10);
+  border-color: rgba(148, 163, 184, .24);
+  color: #cbd5e1;
+}
+.section-status-chip.is-stale {
+  background: rgba(245, 158, 11, .12);
+  border-color: rgba(245, 158, 11, .35);
+  color: #fde68a;
+}
+.section-status-chip span {
+  font-size: 12px;
+  opacity: .86;
+}
+.section-status-chip strong {
+  font-size: 14px;
+}
+.section-status-chip small {
+  color: inherit;
+  font-size: 11px;
+  opacity: .72;
+}
+.text-link-button {
+  background: transparent;
+  border: 0;
+  color: #93c5fd;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+}
+.text-link-button:hover {
+  color: #bfdbfe;
+}
 .hero-metrics {
   display: grid;
   gap: 12px;
@@ -955,6 +1226,13 @@ h1, h2, h3 {
   color: #93c5fd;
   font-size: 24px;
 }
+.score-history-block {
+  margin-top: 22px;
+}
+.score-history-block h4 {
+  color: #e2e8f0;
+  margin: 0 0 12px;
+}
 .score-bar {
   background: rgba(148, 163, 184, .18);
   border-radius: 999px;
@@ -980,6 +1258,31 @@ pre {
   overflow: auto;
   padding: 12px;
   white-space: pre-wrap;
+}
+.quote-table-wrap {
+  overflow-x: auto;
+}
+.quote-table {
+  border-collapse: collapse;
+  min-width: 680px;
+  width: 100%;
+}
+.quote-table th,
+.quote-table td {
+  border-bottom: 1px solid rgba(148, 163, 184, .16);
+  color: #cbd5e1;
+  font-size: 13px;
+  padding: 10px 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+.quote-table th:first-child,
+.quote-table td:first-child {
+  text-align: left;
+}
+.quote-table th {
+  color: #94a3b8;
+  font-weight: 600;
 }
 .muted-block {
   background: rgba(30, 41, 59, .56);
