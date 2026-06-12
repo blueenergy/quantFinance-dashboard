@@ -351,6 +351,48 @@
         <v-window-item value="analysis">
           <section class="workbench-card">
             <div class="card-title-row">
+              <h3>AI 命中率</h3>
+              <span class="muted">
+                <template v-if="sectionLoading.ai">刷新中…</template>
+                <template v-else>基于已完成的历史评估</template>
+              </span>
+            </div>
+            <div class="financial-metrics">
+              <div>
+                <span>综合命中率</span>
+                <strong>{{ fmtPctPlain(evaluationSummary.hit_rate) }}</strong>
+              </div>
+              <div>
+                <span>严格准确率</span>
+                <strong>{{ fmtPctPlain(evaluationSummary.accuracy_rate) }}</strong>
+              </div>
+              <div>
+                <span>已评估 / 最近分析</span>
+                <strong>{{ evaluationSummary.evaluated_count || 0 }} / {{ evaluationSummary.recent_analyses || analysisHistory.length }}</strong>
+              </div>
+              <div>
+                <span>待评估</span>
+                <strong>{{ evaluationSummary.pending_count || 0 }} 条</strong>
+              </div>
+            </div>
+            <div v-if="evaluationRows.length" class="evaluation-list">
+              <article v-for="row in evaluationRows.slice(0, 3)" :key="row.history_id" class="evaluation-item">
+                <div>
+                  <span>{{ row.analysis_created_at || '-' }}</span>
+                  <strong>{{ row.title || '历史分析' }}</strong>
+                  <small>{{ row.summary || row.short_review || '暂无评估摘要' }}</small>
+                </div>
+                <b :class="['evaluation-badge', row.outcome_accuracy || 'unknown']">
+                  {{ accuracyLabel(row.outcome_accuracy) }}
+                </b>
+              </article>
+            </div>
+            <div v-else class="muted-block">
+              暂无已完成评估。可在个股深度分析历史中手动触发评估，完成后这里会汇总命中率。
+            </div>
+          </section>
+          <section class="workbench-card">
+            <div class="card-title-row">
               <h3>交易状态</h3>
               <span class="muted">
                 <template v-if="sectionLoading.trading">刷新中…</template>
@@ -459,7 +501,15 @@
               >
                 <span>{{ item.created_at || '-' }}</span>
                 <strong>{{ analysisHistoryTitle(item) }}</strong>
-                <small>{{ item.analysis_mode || 'classic' }}</small>
+                <small>
+                  {{ item.analysis_mode || 'classic' }}
+                  <b
+                    v-if="evaluationByHistoryId[item.id]"
+                    :class="['evaluation-inline-badge', evaluationByHistoryId[item.id].outcome_accuracy || 'unknown']"
+                  >
+                    {{ accuracyLabel(evaluationByHistoryId[item.id].outcome_accuracy) }}
+                  </b>
+                </small>
               </button>
             </div>
             <div v-else class="muted-block">暂无历史分析。</div>
@@ -535,6 +585,13 @@ const quote = computed(() => payload.value?.quote || {})
 const deepAnalysis = computed(() => payload.value?.deep_analysis || null)
 const dataStatus = computed(() => payload.value?.data_status || {})
 const analysisHistory = computed(() => Array.isArray(payload.value?.analysis_history) ? payload.value.analysis_history : [])
+const evaluationSummary = computed(() => payload.value?.evaluation_summary || {})
+const evaluationRows = computed(() => Array.isArray(evaluationSummary.value.latest_evaluations) ? evaluationSummary.value.latest_evaluations : [])
+const evaluationByHistoryId = computed(() => Object.fromEntries(
+  evaluationRows.value
+    .filter((row) => row.history_id)
+    .map((row) => [row.history_id, row]),
+))
 const scoreHistory = computed(() => Array.isArray(payload.value?.score_history) ? payload.value.score_history : [])
 const quoteDailyRows = computed(() => Array.isArray(payload.value?.daily_quotes) ? payload.value.daily_quotes : [])
 const latestDailyBasic = computed(() => payload.value?.daily_basic || {})
@@ -927,6 +984,7 @@ async function loadWorkbenchSection(section, options = {}) {
         deep_analysis: data?.deep_analysis || null,
         analysis_history: Array.isArray(data?.analysis_history) ? data.analysis_history : [],
         analysis_history_total: data?.analysis_history_total || 0,
+        evaluation_summary: data?.evaluation_summary || {},
       })
     } else if (section === 'trading') {
       const data = await getStockWorkbenchTrading(symbol)
@@ -1001,6 +1059,14 @@ function analysisHistoryTitle(item) {
     || analysis.short_term_forecast
     || item?.stock_name
     || '查看分析详情'
+}
+
+function accuracyLabel(value) {
+  return {
+    accurate: '准确',
+    mixed: '部分准确',
+    inaccurate: '不准确',
+  }[value] || value || '未评估'
 }
 
 async function submitDeepAnalysis() {
@@ -1167,6 +1233,12 @@ function fmtPct(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '-'
   return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`
+}
+
+function fmtPctPlain(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  return `${n.toFixed(1)}%`
 }
 
 function fmtAmount(value) {
@@ -1468,6 +1540,68 @@ h1, h2, h3 {
 .analysis-history-list {
   display: grid;
   gap: 10px;
+}
+.evaluation-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.evaluation-item {
+  align-items: center;
+  background: rgba(30, 41, 59, .62);
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px 14px;
+}
+.evaluation-item span,
+.evaluation-item small {
+  color: #94a3b8;
+  display: block;
+  font-size: 12px;
+}
+.evaluation-item strong {
+  color: #f8fafc;
+  display: block;
+  margin: 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.evaluation-badge,
+.evaluation-inline-badge {
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 999px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.evaluation-badge.accurate,
+.evaluation-inline-badge.accurate {
+  background: rgba(34, 197, 94, .14);
+  border-color: rgba(34, 197, 94, .34);
+  color: #86efac;
+}
+.evaluation-badge.mixed,
+.evaluation-inline-badge.mixed {
+  background: rgba(234, 179, 8, .14);
+  border-color: rgba(234, 179, 8, .34);
+  color: #fde68a;
+}
+.evaluation-badge.inaccurate,
+.evaluation-inline-badge.inaccurate {
+  background: rgba(239, 68, 68, .14);
+  border-color: rgba(239, 68, 68, .34);
+  color: #fca5a5;
+}
+.evaluation-inline-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
 }
 .analysis-history-item {
   background: rgba(30, 41, 59, .62);
