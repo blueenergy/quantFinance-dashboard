@@ -688,7 +688,9 @@ async function loadSymbol(symbol) {
     analysisSubmitStatus.value = ''
     analysisSubmitError.value = ''
     sectionLoaded.value = { quote: false, scores: false, financials: false, ai: false }
+    sectionLoading.value = { quote: false, scores: false, financials: false, ai: false }
     const workbench = await getStockWorkbench(clean)
+    if (canonicalSymbol(directSymbol.value) !== canonicalSymbol(clean)) return
     payload.value = workbench
     sectionLoaded.value = {
       quote: Boolean(workbench?.quote),
@@ -701,21 +703,32 @@ async function loadSymbol(symbol) {
     balanceRows.value = []
     cashflowRows.value = []
     earnings.value = {}
-    await loadWorkbenchSection('quote', { force: true })
-    if (activePanel.value === 'scores') {
-      await loadWorkbenchSection('scores', { force: true })
-    } else if (activePanel.value === 'financial') {
-      await loadWorkbenchSection('financials', { force: true })
-    } else if (activePanel.value === 'analysis') {
-      await loadWorkbenchSection('ai', { force: true })
-    }
+    queueInitialSectionLoads()
     await nextTick()
     renderRadar()
   } catch (e) {
-    error.value = e?.message || '股票工作台数据加载失败'
+    if (canonicalSymbol(directSymbol.value) === canonicalSymbol(clean)) {
+      error.value = e?.message || '股票工作台数据加载失败'
+    }
   } finally {
-    loading.value = false
+    if (canonicalSymbol(directSymbol.value) === canonicalSymbol(clean)) {
+      loading.value = false
+    }
   }
+}
+
+function queueInitialSectionLoads() {
+  const tasks = [loadWorkbenchSection('quote', { force: true })]
+  if (activePanel.value === 'scores') {
+    tasks.push(loadWorkbenchSection('scores', { force: true }))
+  } else if (activePanel.value === 'financial') {
+    tasks.push(loadWorkbenchSection('financials', { force: true }))
+  } else if (activePanel.value === 'analysis') {
+    tasks.push(loadWorkbenchSection('ai', { force: true }))
+  }
+  Promise.all(tasks).catch((e) => {
+    console.warn('load initial stock workbench sections failed', e)
+  })
 }
 
 async function loadWorkbenchSection(section, options = {}) {
@@ -728,6 +741,7 @@ async function loadWorkbenchSection(section, options = {}) {
   try {
     if (section === 'quote') {
       const data = await getStockWorkbenchQuote(symbol)
+      if (!isCurrentWorkbenchSymbol(symbol)) return
       mergeWorkbenchSection('quote', data, {
         quote: data?.quote || null,
         daily_quotes: Array.isArray(data?.daily_quotes) ? data.daily_quotes : [],
@@ -736,6 +750,7 @@ async function loadWorkbenchSection(section, options = {}) {
       })
     } else if (section === 'scores') {
       const data = await getStockWorkbenchScores(symbol)
+      if (!isCurrentWorkbenchSymbol(symbol)) return
       mergeWorkbenchSection('scores', data, {
         score: data?.score || null,
         score_history: Array.isArray(data?.score_history) ? data.score_history : [],
@@ -744,6 +759,7 @@ async function loadWorkbenchSection(section, options = {}) {
       renderRadar()
     } else if (section === 'financials') {
       const data = await getStockWorkbenchFinancials(symbol)
+      if (!isCurrentWorkbenchSymbol(symbol)) return
       incomeRows.value = Array.isArray(data?.income) ? data.income : []
       indicatorRows.value = Array.isArray(data?.indicators) ? data.indicators : []
       balanceRows.value = Array.isArray(data?.balance) ? data.balance : []
@@ -752,6 +768,7 @@ async function loadWorkbenchSection(section, options = {}) {
       mergeWorkbenchSection('financials', data, {})
     } else if (section === 'ai') {
       const data = await getStockWorkbenchAi(symbol)
+      if (!isCurrentWorkbenchSymbol(symbol)) return
       mergeWorkbenchSection('ai', data, {
         deep_analysis: data?.deep_analysis || null,
       })
@@ -760,7 +777,9 @@ async function loadWorkbenchSection(section, options = {}) {
   } catch (e) {
     console.warn(`load stock workbench section ${section} failed`, e)
   } finally {
-    sectionLoading.value = { ...sectionLoading.value, [section]: false }
+    if (isCurrentWorkbenchSymbol(symbol)) {
+      sectionLoading.value = { ...sectionLoading.value, [section]: false }
+    }
   }
 }
 
@@ -940,6 +959,15 @@ function firstFinite(values) {
     if (n != null) return n
   }
   return null
+}
+
+function canonicalSymbol(value) {
+  return String(value || '').trim().toUpperCase().split('.')[0]
+}
+
+function isCurrentWorkbenchSymbol(symbol) {
+  const current = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
+  return canonicalSymbol(symbol) === canonicalSymbol(current)
 }
 
 function fmtNumber(value, digits = 2, suffix = '') {
