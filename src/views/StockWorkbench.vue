@@ -66,7 +66,9 @@
           <div>
             <small>最新价</small>
             <strong>{{ fmtNumber(latestPrice) }}</strong>
+            <span v-if="sectionLoading.quote" class="muted">行情刷新中…</span>
             <span
+              v-else
               class="price-change-line"
               :class="changeClass"
               :title="priceChangeTitle"
@@ -136,7 +138,11 @@
           <section class="workbench-card">
             <div class="card-title-row">
               <h3>量化评分详情</h3>
-              <span class="muted">来自最新 `stock_scores` 文档</span>
+              <span class="muted">
+                来自最新 `stock_scores` 文档
+                <template v-if="scoreHistory.length"> · 最近 {{ scoreHistory.length }} 条历史</template>
+                <template v-if="sectionLoading.scores"> · 刷新中…</template>
+              </span>
             </div>
             <div class="score-grid">
               <article v-for="item in scoreItems" :key="item.key" class="score-card">
@@ -181,6 +187,7 @@
             <div class="card-title-row">
               <h3>深度分析</h3>
               <div class="analysis-actions">
+                <span v-if="sectionLoading.ai" class="muted">刷新中…</span>
                 <v-select
                   v-model="analysisMode"
                   :items="analysisModeOptions"
@@ -233,7 +240,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
-import { getStockFinancial, getStockWorkbench } from '../api/stock'
+import {
+  getStockFinancial,
+  getStockWorkbench,
+  getStockWorkbenchAi,
+  getStockWorkbenchQuote,
+  getStockWorkbenchScores,
+} from '../api/stock'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
 import GrowthChart from '../components/GrowthChart.vue'
 import StockSearchInput from '../components/StockSearchInput.vue'
@@ -245,7 +258,6 @@ const SCORE_DEFS = [
   { key: 'growth', label: '成长' },
   { key: 'money_flow', label: '资金流' },
   { key: 'cycle', label: '动量' },
-  { key: 'sentiment', label: '情绪' },
 ]
 
 const loading = ref(false)
@@ -259,6 +271,8 @@ const analysisSubmitStatus = ref('')
 const analysisSubmitError = ref('')
 const incomeRows = ref([])
 const indicatorRows = ref([])
+const sectionLoading = ref({ quote: false, scores: false, ai: false })
+const sectionLoaded = ref({ quote: false, scores: false, ai: false })
 const radarRef = ref(null)
 let radarChart = null
 let analysisPollTimer = null
@@ -273,6 +287,7 @@ const stock = computed(() => payload.value?.stock || {})
 const quote = computed(() => payload.value?.quote || {})
 const deepAnalysis = computed(() => payload.value?.deep_analysis || null)
 const dataStatus = computed(() => payload.value?.data_status || {})
+const scoreHistory = computed(() => Array.isArray(payload.value?.score_history) ? payload.value.score_history : [])
 
 const stockSymbol = computed(() => stock.value.symbol || payload.value?.symbol || '-')
 const stockName = computed(() => stock.value.name || stock.value.stock_name || '')
@@ -415,6 +430,15 @@ watch([scoreItems, activePanel], async () => {
   renderRadar()
 }, { deep: true })
 
+watch(activePanel, async (panel) => {
+  if (!payload.value) return
+  if (panel === 'scores') {
+    await loadWorkbenchSection('scores')
+  } else if (panel === 'analysis') {
+    await loadWorkbenchSection('ai')
+  }
+})
+
 function selectSearchCandidate(item) {
   if (!item) return
   const symbol = item.symbol || item.ts_code
@@ -437,20 +461,94 @@ async function loadSymbol(symbol) {
     clearAnalysisPolling()
     analysisSubmitStatus.value = ''
     analysisSubmitError.value = ''
+    sectionLoaded.value = { quote: false, scores: false, ai: false }
     const [workbench, income, indicator] = await Promise.all([
       getStockWorkbench(clean),
       getStockFinancial(clean, 'income', 8).catch(() => []),
       getStockFinancial(clean, 'indicator', 8).catch(() => []),
     ])
     payload.value = workbench
+    sectionLoaded.value = {
+      quote: Boolean(workbench?.quote),
+      scores: Boolean(workbench?.score),
+      ai: Boolean(workbench?.deep_analysis),
+    }
     incomeRows.value = Array.isArray(income) ? income : []
     indicatorRows.value = Array.isArray(indicator) ? indicator : []
+    await loadWorkbenchSection('quote', { force: true })
+    if (activePanel.value === 'scores') {
+      await loadWorkbenchSection('scores', { force: true })
+    } else if (activePanel.value === 'analysis') {
+      await loadWorkbenchSection('ai', { force: true })
+    }
     await nextTick()
     renderRadar()
   } catch (e) {
     error.value = e?.message || '股票工作台数据加载失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadWorkbenchSection(section, options = {}) {
+  const force = Boolean(options.force)
+  const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
+  if (!symbol || !payload.value) return
+  if (!force && sectionLoaded.value[section]) return
+
+  sectionLoading.value = { ...sectionLoading.value, [section]: true }
+  try {
+    if (section === 'quote') {
+      const data = await getStockWorkbenchQuote(symbol)
+      mergeWorkbenchSection('quote', data, {
+        quote: data?.quote || null,
+      })
+    } else if (section === 'scores') {
+      const data = await getStockWorkbenchScores(symbol)
+      mergeWorkbenchSection('scores', data, {
+        score: data?.score || null,
+        score_history: Array.isArray(data?.score_history) ? data.score_history : [],
+      })
+      await nextTick()
+      renderRadar()
+    } else if (section === 'ai') {
+      const data = await getStockWorkbenchAi(symbol)
+      mergeWorkbenchSection('ai', data, {
+        deep_analysis: data?.deep_analysis || null,
+      })
+    }
+    sectionLoaded.value = { ...sectionLoaded.value, [section]: true }
+  } catch (e) {
+    console.warn(`load stock workbench section ${section} failed`, e)
+  } finally {
+    sectionLoading.value = { ...sectionLoading.value, [section]: false }
+  }
+}
+
+function mergeWorkbenchSection(section, data, updates) {
+  const status = data?.data_status || {}
+  const nextStatus = {
+    ...(payload.value?.data_status || {}),
+    sections: {
+      ...(payload.value?.data_status?.sections || {}),
+      [section]: status,
+    },
+  }
+  if (section === 'quote') {
+    nextStatus.quote_found = Boolean(updates.quote)
+    nextStatus.quote_date = status.as_of || nextStatus.quote_date
+  } else if (section === 'scores') {
+    nextStatus.score_found = Boolean(updates.score)
+    nextStatus.score_date = status.as_of || nextStatus.score_date
+  } else if (section === 'ai') {
+    nextStatus.deep_analysis_found = Boolean(updates.deep_analysis)
+    nextStatus.analysis_created_at = status.as_of || nextStatus.analysis_created_at
+  }
+
+  payload.value = {
+    ...(payload.value || {}),
+    ...updates,
+    data_status: nextStatus,
   }
 }
 

@@ -71,6 +71,57 @@ export async function getStockWorkbench(symbol) {
 }
 
 /**
+ * 获取股票工作台行情资金分区
+ * @param {string} symbol - 股票代码
+ */
+export async function getStockWorkbenchQuote(symbol) {
+    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/quote`;
+
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: authHeaders()
+    });
+
+    if (!res.ok) throw new Error(`Failed to get stock workbench quote: ${res.status}`);
+    const result = await res.json();
+    return result.data;
+}
+
+/**
+ * 获取股票工作台量化评分分区
+ * @param {string} symbol - 股票代码
+ */
+export async function getStockWorkbenchScores(symbol) {
+    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/scores`;
+
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: authHeaders()
+    });
+
+    if (!res.ok) throw new Error(`Failed to get stock workbench scores: ${res.status}`);
+    const result = await res.json();
+    return result.data;
+}
+
+/**
+ * 获取股票工作台 AI 分析分区
+ * @param {string} symbol - 股票代码
+ */
+export async function getStockWorkbenchAi(symbol) {
+    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/ai`;
+
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: authHeaders()
+    });
+
+    if (!res.ok) throw new Error(`Failed to get stock workbench ai: ${res.status}`);
+    const result = await res.json();
+    return result.data;
+}
+
+/**
  * 获取股票财务报表数据
  * @param {string} symbol - 股票代码
  * @param {string} statement - income|balance|cashflow|indicator|daily_basic
