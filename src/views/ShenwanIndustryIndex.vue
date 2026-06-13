@@ -97,6 +97,49 @@
           <code>sw_daily</code> 后再试。
         </p>
 
+        <!-- 行业主力资金 -->
+        <div v-if="klineIndexCode" class="industry-money-section">
+          <div class="industry-money-header">
+            <h4 class="section-title">行业主力资金</h4>
+            <span v-if="industryMoneyLoading" class="muted">聚合中…</span>
+            <span v-else-if="industryMoneyCoverageText" :class="industryMoneyCoverageClass">
+              覆盖率 {{ industryMoneyCoverageText }}
+            </span>
+          </div>
+          <div v-if="industryMoneyError" class="err-msg">{{ industryMoneyError }}</div>
+          <MoneyFlowPanel
+            v-else
+            :history="industryMoneyRows"
+            :summary="industryMoneySummary"
+          />
+          <div v-if="industryMoneyLatest" class="industry-money-top-grid">
+            <article>
+              <h5>当日主力流入 Top</h5>
+              <button
+                v-for="item in industryMoneyLatest.top_inflow || []"
+                :key="`in-${item.con_code}`"
+                type="button"
+                @click="openDeepAnalysis(item)"
+              >
+                <span>{{ item.name || item.con_code }}</span>
+                <strong class="q-up">{{ fmtMoneyWan(item.main_net) }}</strong>
+              </button>
+            </article>
+            <article>
+              <h5>当日主力流出 Top</h5>
+              <button
+                v-for="item in industryMoneyLatest.top_outflow || []"
+                :key="`out-${item.con_code}`"
+                type="button"
+                @click="openDeepAnalysis(item)"
+              >
+                <span>{{ item.name || item.con_code }}</span>
+                <strong class="q-dn">{{ fmtMoneyWan(item.main_net) }}</strong>
+              </button>
+            </article>
+          </div>
+        </div>
+
         <!-- PE/PB 估值走势 -->
         <div v-if="pepbData.length" class="pepb-section">
           <h4 class="section-title">PE / PB 估值走势</h4>
@@ -207,6 +250,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, reactive } 
 import axios from 'axios'
 import { buildShenwanKlineOption } from '../utils/echarts/shenwanKlineOption.js'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
+import MoneyFlowPanel from '../components/MoneyFlowPanel.vue'
 
 const SRC = 'SW2021'
 const klineLimit = 800
@@ -216,6 +260,25 @@ const memberList = ref([])
 const memberLoading = ref(false)
 const memberError = ref('')
 const memberSort = ref('mv')
+
+const industryMoneyRows = ref([])
+const industryMoneySummary = ref({})
+const industryMoneyLoading = ref(false)
+const industryMoneyError = ref('')
+const industryMoneyLatest = computed(() => industryMoneyRows.value[industryMoneyRows.value.length - 1] || null)
+const industryMoneyCoverageText = computed(() => {
+  const latest = industryMoneyLatest.value
+  if (!latest || !latest.member_count) return ''
+  const ratio = Number(latest.coverage_ratio)
+  const pct = Number.isFinite(ratio) ? `${(ratio * 100).toFixed(0)}%` : '-'
+  return `${latest.covered_count || 0}/${latest.member_count}（${pct}）`
+})
+const industryMoneyCoverageClass = computed(() => {
+  const level = industryMoneyLatest.value?.coverage_level
+  if (level === 'ok') return 'coverage coverage-ok'
+  if (level === 'partial') return 'coverage coverage-partial'
+  return 'coverage coverage-low'
+})
 
 const sortedMemberList = computed(() => {
   const arr = [...memberList.value]
@@ -249,6 +312,35 @@ async function loadMembers (indexCode) {
     memberError.value = '成分股加载失败'
   } finally {
     memberLoading.value = false
+  }
+}
+
+async function loadIndustryMoneyFlow (indexCode) {
+  if (!indexCode) {
+    industryMoneyRows.value = []
+    industryMoneySummary.value = {}
+    industryMoneyError.value = ''
+    return
+  }
+  industryMoneyLoading.value = true
+  industryMoneyError.value = ''
+  industryMoneyRows.value = []
+  industryMoneySummary.value = {}
+  try {
+    const token = localStorage.getItem('access_token')
+    const { data } = await axios.get('/api/shenwan-index/money-flow', {
+      params: { index_code: indexCode, src: SRC, days: 60, current_only: true },
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    industryMoneyRows.value = Array.isArray(data?.data) ? data.data : []
+    industryMoneySummary.value = data?.summary || {}
+    if (data?.message && !industryMoneyRows.value.length) {
+      industryMoneyError.value = data.message
+    }
+  } catch (e) {
+    industryMoneyError.value = e?.response?.data?.detail || e.message || '行业资金流加载失败'
+  } finally {
+    industryMoneyLoading.value = false
   }
 }
 
@@ -529,6 +621,15 @@ function formatMvWan (wan) {
   return w.toFixed(2)
 }
 
+/** 资金流金额：money_flow 原始单位为万元。 */
+function fmtMoneyWan (wan) {
+  if (wan == null || !Number.isFinite(Number(wan))) return '—'
+  const w = Number(wan)
+  const sign = w > 0 ? '+' : ''
+  if (Math.abs(w) >= 1e4) return `${sign}${(w / 1e4).toFixed(2)} 亿`
+  return `${sign}${w.toFixed(2)} 万`
+}
+
 /** 成交额 Tushare 为千元，转为「亿元」展示 */
 function formatAmountQianYuan (q) {
   if (q == null || !Number.isFinite(Number(q))) return '—'
@@ -736,6 +837,7 @@ function onPickL3 (it) {
 
 // auto-load latest industry analysis when user selects an industry
 watch(klineIndexCode, (newCode) => {
+  loadIndustryMoneyFlow(newCode)
   if (newCode !== (industryAnalysisResult.value?._index_code)) {
     industryAnalysisResult.value = null
     industryAnalysisError.value = ''
@@ -927,6 +1029,90 @@ async function onNavigateToIndustry (e) {
 .section-title { font-size: 13px; font-weight: 600; color: #bbb; margin: 0 0 0.4rem; }
 .pepb-box { width: 100%; height: 180px; background: #121212; border: 1px solid #2a2a2a; border-radius: 6px; position: relative; }
 .pepb-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* 行业主力资金 */
+.industry-money-section {
+  margin-top: 1rem;
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 12px;
+}
+.industry-money-header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.industry-money-header .section-title { margin: 0; }
+.coverage {
+  border: 1px solid #333;
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 3px 9px;
+}
+.coverage-ok {
+  background: rgba(76, 175, 80, .14);
+  border-color: rgba(76, 175, 80, .34);
+  color: #a5d6a7;
+}
+.coverage-partial {
+  background: rgba(255, 193, 7, .14);
+  border-color: rgba(255, 193, 7, .34);
+  color: #ffe082;
+}
+.coverage-low {
+  background: rgba(244, 67, 54, .14);
+  border-color: rgba(244, 67, 54, .34);
+  color: #ef9a9a;
+}
+.industry-money-top-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-top: 12px;
+}
+.industry-money-top-grid article {
+  background: rgba(30, 30, 46, .58);
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  padding: 10px;
+}
+.industry-money-top-grid h5 {
+  color: #bbb;
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+.industry-money-top-grid button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, .12);
+  color: #ddd;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  width: 100%;
+}
+.industry-money-top-grid button:hover span {
+  color: #90caf9;
+}
+.industry-money-top-grid button:last-child {
+  border-bottom: 0;
+}
+.industry-money-top-grid span {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.industry-money-top-grid strong {
+  flex: 0 0 auto;
+  font-size: 12px;
+  margin-left: 12px;
+}
 
 /* 成分股 */
 .member-section { margin-top: 1rem; }

@@ -225,31 +225,46 @@
               v-if="quoteDailyRows.length"
               :records="quoteDailyRows"
             />
-            <div v-if="quoteDailyRows.length" class="quote-table-wrap">
-              <table class="quote-table">
-                <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th>收盘</th>
-                    <th>涨跌幅</th>
-                    <th>最高</th>
-                    <th>最低</th>
-                    <th>成交额</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in quoteDailyRows.slice(0, 10)" :key="row.trade_date">
-                    <td>{{ row.trade_date }}</td>
-                    <td>{{ fmtNumber(row.close) }}</td>
-                    <td :class="pctClass(row.pct_chg)">{{ fmtPct(row.pct_chg) }}</td>
-                    <td>{{ fmtNumber(row.high) }}</td>
-                    <td>{{ fmtNumber(row.low) }}</td>
-                    <td>{{ fmtAmount(row.amount) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <details v-if="quoteDailyRows.length" class="quote-details">
+              <summary>展开最近 10 日行情明细</summary>
+              <div class="quote-table-wrap">
+                <table class="quote-table">
+                  <thead>
+                    <tr>
+                      <th>日期</th>
+                      <th>收盘</th>
+                      <th>涨跌幅</th>
+                      <th>最高</th>
+                      <th>最低</th>
+                      <th>成交额</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in quoteDailyRows.slice(0, 10)" :key="row.trade_date">
+                      <td>{{ row.trade_date }}</td>
+                      <td>{{ fmtNumber(row.close) }}</td>
+                      <td :class="pctClass(row.pct_chg)">{{ fmtPct(row.pct_chg) }}</td>
+                      <td>{{ fmtNumber(row.high) }}</td>
+                      <td>{{ fmtNumber(row.low) }}</td>
+                      <td>{{ fmtAmount(row.amount) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </details>
             <div v-else class="muted-block">暂无该股票的日线行情。</div>
+          </section>
+
+          <section class="workbench-card">
+            <div class="card-title-row">
+              <h3>主力资金趋势</h3>
+              <span class="muted">金额单位：万元，展示按亿/万自动换算</span>
+            </div>
+            <MoneyFlowPanel
+              :latest="latestMoneyFlow"
+              :history="moneyFlowHistory"
+              :summary="moneyFlowSummary"
+            />
           </section>
         </v-window-item>
 
@@ -1044,6 +1059,7 @@ import {
 } from '../api/stock'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
 import GrowthChart from '../components/GrowthChart.vue'
+import MoneyFlowPanel from '../components/MoneyFlowPanel.vue'
 import StockKLineChart from '../components/StockKLineChart.vue'
 import StockSearchInput from '../components/StockSearchInput.vue'
 
@@ -1108,6 +1124,8 @@ const scoreHistory = computed(() => Array.isArray(payload.value?.score_history) 
 const quoteDailyRows = computed(() => Array.isArray(payload.value?.daily_quotes) ? payload.value.daily_quotes : [])
 const latestDailyBasic = computed(() => payload.value?.daily_basic || {})
 const latestMoneyFlow = computed(() => payload.value?.money_flow || null)
+const moneyFlowHistory = computed(() => Array.isArray(payload.value?.money_flow_history) ? payload.value.money_flow_history : [])
+const moneyFlowSummary = computed(() => payload.value?.money_flow_summary || {})
 const quoteSectionDate = computed(() => dataStatus.value?.sections?.quote?.as_of || latestDailyBasic.value.trade_date || quote.value.trade_date || '')
 const nineTurnDailyRows = computed(() => Array.isArray(payload.value?.nine_turn_daily_quotes) ? payload.value.nine_turn_daily_quotes : [])
 const nineTurnSignals = computed(() => {
@@ -1510,8 +1528,9 @@ const quoteMetrics = computed(() => [
 
 const moneyFlowMetrics = computed(() => {
   const mf = latestMoneyFlow.value || {}
+  const mainNet = moneyFlowSummary.value.main_net_today ?? mf.net_mf_amount
   return [
-    { label: '主力净额', value: fmtAmount(mf.net_mf_amount), className: valueClass(mf.net_mf_amount) },
+    { label: '主力净额', value: fmtWanAmount(mainNet), className: valueClass(mainNet) },
     { label: '超大单买入', value: fmtAmount(mf.buy_elg_amount) },
     { label: '超大单卖出', value: fmtAmount(mf.sell_elg_amount) },
     { label: '大单买入', value: fmtAmount(mf.buy_lg_amount) },
@@ -1523,7 +1542,7 @@ const overviewQuoteMetrics = computed(() => [
   { label: '换手率', value: fmtNumber(latestDailyBasic.value.turnover_rate, 2, '%') },
   { label: 'PE TTM', value: fmtNumber(latestDailyBasic.value.pe_ttm ?? latestDailyBasic.value.pe) },
   { label: 'PB', value: fmtNumber(latestDailyBasic.value.pb) },
-  { label: '主力净额', value: fmtAmount(latestMoneyFlow.value?.net_mf_amount), className: valueClass(latestMoneyFlow.value?.net_mf_amount) },
+  { label: '主力净额', value: fmtWanAmount(moneyFlowSummary.value.main_net_today ?? latestMoneyFlow.value?.net_mf_amount), className: valueClass(moneyFlowSummary.value.main_net_today ?? latestMoneyFlow.value?.net_mf_amount) },
 ])
 
 watch([scoreItems, activePanel], async () => {
@@ -1689,6 +1708,8 @@ async function loadWorkbenchSection(section, options = {}) {
         daily_quotes: Array.isArray(data?.daily_quotes) ? data.daily_quotes : [],
         daily_basic: data?.daily_basic || null,
         money_flow: data?.money_flow || null,
+        money_flow_history: Array.isArray(data?.money_flow_history) ? data.money_flow_history : [],
+        money_flow_summary: data?.money_flow_summary || {},
       })
     } else if (section === 'nine_turn') {
       const data = await getStockWorkbenchNineTurn(symbol)
@@ -2806,6 +2827,19 @@ pre {
 .quote-table-wrap {
   margin-top: 14px;
   overflow-x: auto;
+}
+.quote-details {
+  background: rgba(15, 23, 42, .36);
+  border: 1px solid rgba(148, 163, 184, .14);
+  border-radius: 12px;
+  margin-top: 14px;
+  padding: 10px 12px;
+}
+.quote-details summary {
+  color: #bfdbfe;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
 }
 .quote-table {
   border-collapse: collapse;
