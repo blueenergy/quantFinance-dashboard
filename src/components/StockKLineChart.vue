@@ -14,6 +14,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  markers: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const chartRef = ref(null)
@@ -42,7 +46,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => props.records,
+  () => [props.records, props.markers],
   () => {
     nextTick(() => {
       void renderChart()
@@ -87,6 +91,7 @@ async function renderChart() {
       formatVolShow,
       formatAmountQianYuan,
       formatMvWan,
+      markers: props.markers,
     }),
     true,
   )

@@ -13,7 +13,8 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
     toNumOrNull,
     formatVolShow,
     formatAmountQianYuan,
-    formatMvWan
+    formatMvWan,
+    markers = []
   } = formatters
 
   const times = data.map((r) => fmtAxis(r.trade_date))
@@ -82,7 +83,9 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
       xVol,
       xAmt,
       yVol,
-      yAmt
+      yAmt,
+      markers,
+      fmtAxis
     }),
     tooltip: buildShenwanTooltip(data, { fmtAxis, formatNum2, toNumOrNull, formatVolShow, formatAmountQianYuan, formatMvWan })
   }
@@ -199,8 +202,11 @@ function buildSeries (ctx) {
     xVol,
     xAmt,
     yVol,
-    yAmt
+    yAmt,
+    markers,
+    fmtAxis
   } = ctx
+  const markPointData = buildMarkerPoints(markers, fmtAxis)
   const s = [
     {
       name: 'K线',
@@ -213,7 +219,20 @@ function buildSeries (ctx) {
         color0: '#26a69a',
         borderColor: '#ef5350',
         borderColor0: '#26a69a'
-      }
+      },
+      ...(markPointData.length ? {
+        markPoint: {
+          symbol: 'circle',
+          symbolSize: 24,
+          data: markPointData,
+          label: {
+            color: '#fff',
+            fontSize: 11,
+            fontWeight: 700,
+            formatter: (params) => params?.data?.label || '9'
+          }
+        }
+      } : {})
     }
   ]
   if (hasPct) {
@@ -255,6 +274,31 @@ function buildSeries (ctx) {
     s[0].yAxisIndex = 0
   }
   return s
+}
+
+function buildMarkerPoints (markers, fmtAxis) {
+  if (!Array.isArray(markers) || !markers.length) return []
+  return markers
+    .map((marker) => {
+      const direction = marker.direction
+      const isTop = direction === 'up'
+      const date = fmtAxis(marker.trade_date)
+      const rawY = isTop ? marker.high : marker.low
+      const y = Number(rawY)
+      if (!date || !Number.isFinite(y)) return null
+      return {
+        name: marker.grade === 'strong' ? '强九转' : marker.grade === 'perfect' ? '完美九转' : '九转',
+        coord: [date, isTop ? y * 1.012 : y * 0.988],
+        value: marker.label || 9,
+        label: String(marker.label || 9),
+        itemStyle: {
+          color: isTop ? '#ef4444' : '#22c55e',
+          borderColor: marker.grade === 'normal' ? 'rgba(255,255,255,.55)' : '#f8fafc',
+          borderWidth: marker.grade === 'normal' ? 1 : 2
+        }
+      }
+    })
+    .filter(Boolean)
 }
 
 function buildShenwanTooltip (data, fmt) {

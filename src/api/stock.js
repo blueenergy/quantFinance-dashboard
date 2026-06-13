@@ -88,6 +88,23 @@ export async function getStockWorkbenchQuote(symbol) {
 }
 
 /**
+ * 获取股票工作台神奇九转分区
+ * @param {string} symbol - 股票代码
+ */
+export async function getStockWorkbenchNineTurn(symbol) {
+    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/nine-turn`;
+
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: authHeaders()
+    });
+
+    if (!res.ok) throw new Error(`Failed to get stock workbench nine-turn: ${res.status}`);
+    const result = await res.json();
+    return result.data;
+}
+
+/**
  * 获取股票工作台量化评分分区
  * @param {string} symbol - 股票代码
  */

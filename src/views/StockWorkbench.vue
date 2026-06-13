@@ -122,6 +122,7 @@
       <v-tabs v-model="activePanel" class="workbench-tabs" color="primary">
         <v-tab value="overview">总览</v-tab>
         <v-tab value="quote">行情资金</v-tab>
+        <v-tab value="nine-turn">神奇九转</v-tab>
         <v-tab value="scores">量化评分</v-tab>
         <v-tab value="financial">财务业绩</v-tab>
         <v-tab value="shareholders">股东筹码</v-tab>
@@ -249,6 +250,93 @@
               </table>
             </div>
             <div v-else class="muted-block">暂无该股票的日线行情。</div>
+          </section>
+        </v-window-item>
+
+        <v-window-item value="nine-turn">
+          <section class="panel-grid">
+            <article class="workbench-card nine-turn-latest-card">
+              <div class="card-title-row">
+                <h3>最近九转信号</h3>
+                <span class="muted">
+                  {{ nineTurnStatus.as_of || '暂无日期' }}
+                  <template v-if="sectionLoading.nine_turn"> · 刷新中…</template>
+                </span>
+              </div>
+              <div v-if="latestNineTurnSignal" class="nine-turn-summary">
+                <strong :class="nineturnSignalClass(latestNineTurnSignal)">
+                  {{ latestNineTurnSignal.label }} · {{ latestNineTurnSignal.grade_label }}
+                </strong>
+                <span>{{ latestNineTurnSignal.trade_date }} · 强度 {{ latestNineTurnSignal.strength }}/4</span>
+                <p>
+                  完美结构 {{ formatCheck(latestNineTurnSignal.perfect) }}，
+                  量能过滤 {{ formatCheck(latestNineTurnSignal.vol_filter_pass) }}，
+                  均线过滤 {{ formatCheck(latestNineTurnSignal.trend_filter_pass) }}
+                </p>
+              </div>
+              <div v-else class="muted-block">暂无已完成的九转信号。</div>
+            </article>
+
+            <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>规则说明</h3>
+                <span class="muted">Tushare 原始计数 + 本地增强</span>
+              </div>
+              <div class="nine-turn-rules">
+                <span>下九转：第 8/9 天低点低于第 6/7 天低点</span>
+                <span>上九转：第 8/9 天高点高于第 6/7 天高点</span>
+                <span>过滤：下九转缩量 + 站上 60 日线；上九转放量</span>
+              </div>
+            </article>
+          </section>
+
+          <section class="workbench-card">
+            <div class="card-title-row">
+              <h3>九转 K 线</h3>
+              <span class="muted">最近 {{ nineTurnDailyRows.length }} 个交易日 · {{ nineTurnSignals.length }} 个信号</span>
+            </div>
+            <StockKLineChart
+              v-if="nineTurnDailyRows.length"
+              :records="nineTurnDailyRows"
+              :markers="nineTurnMarkers"
+            />
+            <div v-else class="muted-block">暂无该股票的九转 K 线数据。</div>
+          </section>
+
+          <section class="workbench-card">
+            <div class="card-title-row">
+              <h3>信号明细</h3>
+              <span class="muted">普通 / 完美 / 强</span>
+            </div>
+            <div v-if="nineTurnSignals.length" class="quote-table-wrap">
+              <table class="quote-table">
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>方向</th>
+                    <th>分级</th>
+                    <th>完美结构</th>
+                    <th>量能过滤</th>
+                    <th>均线过滤</th>
+                    <th>收盘</th>
+                    <th>5日均量</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="signal in nineTurnSignals" :key="`${signal.trade_date}-${signal.direction}`">
+                    <td>{{ signal.trade_date }}</td>
+                    <td :class="nineturnSignalClass(signal)">{{ signal.label }}</td>
+                    <td>{{ signal.grade_label }}</td>
+                    <td>{{ formatCheck(signal.perfect) }}</td>
+                    <td>{{ formatCheck(signal.vol_filter_pass) }}</td>
+                    <td>{{ formatCheck(signal.trend_filter_pass) }}</td>
+                    <td>{{ fmtNumber(signal.close) }}</td>
+                    <td>{{ fmtNumber(signal.volume_ma) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="muted-block">暂无完成 9 计数的九转信号。</div>
           </section>
         </v-window-item>
 
@@ -948,6 +1036,7 @@ import {
   getStockWorkbench,
   getStockWorkbenchAi,
   getStockWorkbenchFinancials,
+  getStockWorkbenchNineTurn,
   getStockWorkbenchQuote,
   getStockWorkbenchScores,
   getStockWorkbenchShareholders,
@@ -984,8 +1073,8 @@ const cashflowRows = ref([])
 const earnings = ref({})
 const tradingContext = ref({})
 const financialMode = ref('quarterly')
-const sectionLoading = ref({ quote: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
-const sectionLoaded = ref({ quote: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
+const sectionLoading = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
+const sectionLoaded = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
 const shareholderData = ref({})
 const radarRef = ref(null)
 const holderNumberChartRef = ref(null)
@@ -1020,6 +1109,21 @@ const quoteDailyRows = computed(() => Array.isArray(payload.value?.daily_quotes)
 const latestDailyBasic = computed(() => payload.value?.daily_basic || {})
 const latestMoneyFlow = computed(() => payload.value?.money_flow || null)
 const quoteSectionDate = computed(() => dataStatus.value?.sections?.quote?.as_of || latestDailyBasic.value.trade_date || quote.value.trade_date || '')
+const nineTurnDailyRows = computed(() => Array.isArray(payload.value?.nine_turn_daily_quotes) ? payload.value.nine_turn_daily_quotes : [])
+const nineTurnSignals = computed(() => {
+  const rows = Array.isArray(payload.value?.nine_turn_signals) ? payload.value.nine_turn_signals : []
+  return [...rows].sort((a, b) => String(b.trade_date || '').localeCompare(String(a.trade_date || '')))
+})
+const latestNineTurnSignal = computed(() => payload.value?.latest_nine_turn_signal || nineTurnSignals.value[0] || null)
+const nineTurnStatus = computed(() => dataStatus.value?.sections?.nine_turn || {})
+const nineTurnMarkers = computed(() => nineTurnSignals.value.map((signal) => ({
+  trade_date: signal.trade_date,
+  direction: signal.direction,
+  label: signal.count || 9,
+  grade: signal.grade,
+  high: signal.high,
+  low: signal.low,
+})))
 const watchlistContext = computed(() => tradingContext.value.watchlist || {})
 const watchlistStrategies = computed(() => Array.isArray(tradingContext.value.watchlist_strategies) ? tradingContext.value.watchlist_strategies : [])
 const tradingPositions = computed(() => Array.isArray(tradingContext.value.positions) ? tradingContext.value.positions : [])
@@ -1120,6 +1224,7 @@ const sectionStatusItems = computed(() => {
   const sections = dataStatus.value.sections || {}
   const defs = [
     { key: 'quote', label: '行情资金', panel: 'quote' },
+    { key: 'nine_turn', label: '神奇九转', panel: 'nine-turn' },
     { key: 'scores', label: '量化评分', panel: 'scores' },
     { key: 'financials', label: '财务业绩', panel: 'financial' },
     { key: 'shareholders', label: '股东筹码', panel: 'shareholders' },
@@ -1130,6 +1235,7 @@ const sectionStatusItems = computed(() => {
     const status = sections[def.key] || {}
     const fallbackFound = {
       quote: dataStatus.value.quote_found,
+      nine_turn: Boolean(nineTurnSignals.value.length),
       scores: dataStatus.value.score_found,
       financials: Boolean(incomeRows.value.length || indicatorRows.value.length),
       shareholders: Boolean(shHolderNumbers.value.length || shHkHold.value.length),
@@ -1430,6 +1536,8 @@ watch(activePanel, async (panel) => {
   if (!payload.value) return
   if (panel === 'quote') {
     await loadWorkbenchSection('quote')
+  } else if (panel === 'nine-turn') {
+    await loadWorkbenchSection('nine_turn')
   } else if (panel === 'scores') {
     await loadWorkbenchSection('scores')
   } else if (panel === 'financial') {
@@ -1466,8 +1574,8 @@ async function loadSymbol(symbol) {
     clearAnalysisPolling()
     analysisSubmitStatus.value = ''
     analysisSubmitError.value = ''
-    sectionLoaded.value = { quote: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
-    sectionLoading.value = { quote: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
+    sectionLoaded.value = { quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
+    sectionLoading.value = { quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
     const workbench = await getStockWorkbench(clean)
     if (canonicalSymbol(directSymbol.value) !== canonicalSymbol(clean)) return
     payload.value = workbench
@@ -1477,6 +1585,7 @@ async function loadSymbol(symbol) {
     })
     sectionLoaded.value = {
       quote: Boolean(workbench?.quote),
+      nine_turn: false,
       scores: Boolean(workbench?.score),
       financials: false,
       ai: Boolean(workbench?.deep_analysis),
@@ -1509,6 +1618,8 @@ function queueInitialSectionLoads() {
   const tasks = [loadWorkbenchSection('quote', { force: true })]
   if (activePanel.value === 'scores') {
     tasks.push(loadWorkbenchSection('scores', { force: true }))
+  } else if (activePanel.value === 'nine-turn') {
+    tasks.push(loadWorkbenchSection('nine_turn', { force: true }))
   } else if (activePanel.value === 'financial') {
     tasks.push(loadWorkbenchSection('financials', { force: true }))
   } else if (activePanel.value === 'shareholders') {
@@ -1579,6 +1690,15 @@ async function loadWorkbenchSection(section, options = {}) {
         daily_basic: data?.daily_basic || null,
         money_flow: data?.money_flow || null,
       })
+    } else if (section === 'nine_turn') {
+      const data = await getStockWorkbenchNineTurn(symbol)
+      if (!isCurrentWorkbenchSymbol(symbol)) return
+      mergeWorkbenchSection('nine_turn', data, {
+        nine_turn_daily_quotes: Array.isArray(data?.daily_quotes) ? data.daily_quotes : [],
+        nine_turn_rows: Array.isArray(data?.nine_turn_rows) ? data.nine_turn_rows : [],
+        nine_turn_signals: Array.isArray(data?.signals) ? data.signals : [],
+        latest_nine_turn_signal: data?.latest_signal || null,
+      })
     } else if (section === 'scores') {
       const data = await getStockWorkbenchScores(symbol)
       if (!isCurrentWorkbenchSymbol(symbol)) return
@@ -1641,6 +1761,9 @@ function mergeWorkbenchSection(section, data, updates) {
   if (section === 'quote') {
     nextStatus.quote_found = Boolean(updates.quote)
     nextStatus.quote_date = status.as_of || nextStatus.quote_date
+  } else if (section === 'nine_turn') {
+    nextStatus.nine_turn_found = Boolean(status.found)
+    nextStatus.nine_turn_date = status.as_of || nextStatus.nine_turn_date
   } else if (section === 'scores') {
     nextStatus.score_found = Boolean(updates.score)
     nextStatus.score_date = status.as_of || nextStatus.score_date
@@ -2093,6 +2216,17 @@ function valueClass(value) {
   return n > 0 ? 'is-up' : n < 0 ? 'is-down' : ''
 }
 
+function nineturnSignalClass(signal) {
+  if (!signal) return ''
+  return signal.direction === 'up' ? 'is-up' : signal.direction === 'down' ? 'is-down' : ''
+}
+
+function formatCheck(value) {
+  if (value === true) return '通过'
+  if (value === false) return '未通过'
+  return '不适用'
+}
+
 function fmtShares(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '-'
@@ -2526,6 +2660,37 @@ h1, h2, h3 {
 }
 .financial-mode-toggle :deep(.v-btn--active) {
   color: #f8fafc;
+}
+.nine-turn-summary {
+  background: rgba(30, 41, 59, .62);
+  border: 1px solid rgba(148, 163, 184, .18);
+  border-radius: 14px;
+  padding: 16px;
+}
+.nine-turn-summary strong {
+  display: block;
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+.nine-turn-summary span,
+.nine-turn-summary p {
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+}
+.nine-turn-rules {
+  display: grid;
+  gap: 10px;
+}
+.nine-turn-rules span {
+  background: rgba(15, 23, 42, .58);
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 12px;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 12px;
 }
 .quality-card-grid {
   display: grid;
