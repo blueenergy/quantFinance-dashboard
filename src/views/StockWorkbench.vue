@@ -124,6 +124,7 @@
         <v-tab value="quote">行情资金</v-tab>
         <v-tab value="scores">量化评分</v-tab>
         <v-tab value="financial">财务业绩</v-tab>
+        <v-tab value="shareholders">股东筹码</v-tab>
         <v-tab value="analysis">深度分析</v-tab>
       </v-tabs>
 
@@ -565,6 +566,156 @@
           </section>
         </v-window-item>
 
+        <v-window-item value="shareholders">
+          <section class="workbench-card">
+            <div class="card-title-row">
+              <h3>股东筹码概览</h3>
+              <span class="muted">
+                <template v-if="sectionLoading.shareholders">刷新中…</template>
+                <template v-else>户数 {{ shSummary.holder_num_date || '-' }} · 北向 {{ shSummary.northbound_date || '-' }}</template>
+              </span>
+            </div>
+            <div class="financial-metrics">
+              <div>
+                <span>股东户数</span>
+                <strong>{{ shSummary.holder_num != null ? Math.round(shSummary.holder_num).toLocaleString() : '-' }}</strong>
+              </div>
+              <div>
+                <span>户数环比<small class="muted">（降为筹码集中）</small></span>
+                <strong :class="holderTrendClass(shSummary.holder_num_chg_pct)">{{ fmtPct(shSummary.holder_num_chg_pct) }}</strong>
+              </div>
+              <div>
+                <span>北向持股占比</span>
+                <strong>{{ fmtNullablePct(shSummary.northbound_ratio) }}</strong>
+              </div>
+              <div>
+                <span>北向占比变动</span>
+                <strong :class="pctClass(shSummary.northbound_ratio_chg)">{{ shSummary.northbound_ratio_chg != null ? `${shSummary.northbound_ratio_chg > 0 ? '+' : ''}${shSummary.northbound_ratio_chg.toFixed(2)}pct` : '-' }}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel-grid">
+            <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>股东户数趋势</h3>
+                <span class="muted">按报告期</span>
+              </div>
+              <div v-if="shHolderNumbers.length" class="quote-table-wrap">
+                <table class="quote-table">
+                  <thead>
+                    <tr><th>报告期</th><th>股东户数</th><th>环比</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, idx) in shHolderNumbers.slice(0, 12)" :key="row.end_date">
+                      <td>{{ row.end_date }}</td>
+                      <td>{{ row.holder_num != null ? Math.round(row.holder_num).toLocaleString() : '-' }}</td>
+                      <td :class="holderTrendClass(holderNumQoq(idx))">{{ fmtPct(holderNumQoq(idx)) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="muted-block">暂无股东户数数据。</div>
+            </article>
+
+            <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>北向持股（沪深港股通）</h3>
+                <span class="muted">2024-08 起按季披露</span>
+              </div>
+              <div v-if="shHkHold.length" class="quote-table-wrap">
+                <table class="quote-table">
+                  <thead>
+                    <tr><th>日期</th><th>持股量</th><th>占流通比</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in shHkHold.slice(0, 12)" :key="row.trade_date">
+                      <td>{{ row.trade_date }}</td>
+                      <td>{{ fmtShares(row.vol) }}</td>
+                      <td>{{ fmtNullablePct(row.ratio) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="muted-block">暂无北向持股数据。</div>
+            </article>
+          </section>
+
+          <section class="workbench-card">
+            <div class="card-title-row">
+              <h3>股东增减持</h3>
+              <span class="muted">公告驱动</span>
+            </div>
+            <div v-if="shHolderTrades.length" class="quote-table-wrap">
+              <table class="quote-table">
+                <thead>
+                  <tr><th>公告日</th><th>股东</th><th>方向</th><th>变动股数</th><th>占比</th><th>变动后持股比</th><th>均价</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(row, idx) in shHolderTrades.slice(0, 15)" :key="`${row.ann_date}-${row.holder_name}-${idx}`">
+                    <td>{{ row.ann_date }}</td>
+                    <td class="cell-name">{{ row.holder_name || '-' }}</td>
+                    <td :class="row.in_de === 'IN' ? 'is-up' : row.in_de === 'DE' ? 'is-down' : ''">{{ inDeLabel(row.in_de) }}</td>
+                    <td>{{ fmtShares(row.change_vol) }}</td>
+                    <td>{{ fmtNullablePct(row.change_ratio) }}</td>
+                    <td>{{ fmtNullablePct(row.after_ratio) }}</td>
+                    <td>{{ fmtNullableNumber(row.avg_price) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="muted-block">暂无股东增减持记录。</div>
+          </section>
+
+          <section class="panel-grid">
+            <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>限售解禁</h3>
+                <span class="muted">float_date 为解禁日</span>
+              </div>
+              <div v-if="shShareFloats.length" class="quote-table-wrap">
+                <table class="quote-table">
+                  <thead>
+                    <tr><th>解禁日</th><th>类型</th><th>解禁股数</th><th>占比</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, idx) in shShareFloats.slice(0, 12)" :key="`${row.float_date}-${idx}`">
+                      <td>{{ row.float_date }}<small v-if="isFutureDate(row.float_date)" class="badge-upcoming">待解禁</small></td>
+                      <td class="cell-name">{{ row.share_type || '-' }}</td>
+                      <td>{{ fmtShares(row.float_share) }}</td>
+                      <td>{{ fmtNullablePct(row.float_ratio) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="muted-block">暂无限售解禁数据。</div>
+            </article>
+
+            <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>股票回购</h3>
+                <span class="muted">含回购阶段</span>
+              </div>
+              <div v-if="shRepurchases.length" class="quote-table-wrap">
+                <table class="quote-table">
+                  <thead>
+                    <tr><th>公告日</th><th>阶段</th><th>回购股数</th><th>金额</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, idx) in shRepurchases.slice(0, 12)" :key="`${row.ann_date}-${row.proc}-${idx}`">
+                      <td>{{ row.ann_date }}</td>
+                      <td class="cell-name">{{ row.proc || '-' }}</td>
+                      <td>{{ fmtShares(row.vol) }}</td>
+                      <td>{{ fmtStatementAmount(row.amount) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="muted-block">暂无股票回购数据。</div>
+            </article>
+          </section>
+        </v-window-item>
+
         <v-window-item value="analysis">
           <section class="workbench-card">
             <div class="card-title-row">
@@ -751,6 +902,7 @@ import {
   getStockWorkbenchFinancials,
   getStockWorkbenchQuote,
   getStockWorkbenchScores,
+  getStockWorkbenchShareholders,
   getStockWorkbenchTrading,
 } from '../api/stock'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
@@ -784,8 +936,9 @@ const cashflowRows = ref([])
 const earnings = ref({})
 const tradingContext = ref({})
 const financialMode = ref('quarterly')
-const sectionLoading = ref({ quote: false, scores: false, financials: false, ai: false, trading: false })
-const sectionLoaded = ref({ quote: false, scores: false, financials: false, ai: false, trading: false })
+const sectionLoading = ref({ quote: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
+const sectionLoaded = ref({ quote: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
+const shareholderData = ref({})
 const radarRef = ref(null)
 let radarChart = null
 let analysisPollTimer = null
@@ -819,6 +972,12 @@ const watchlistContext = computed(() => tradingContext.value.watchlist || {})
 const watchlistStrategies = computed(() => Array.isArray(tradingContext.value.watchlist_strategies) ? tradingContext.value.watchlist_strategies : [])
 const tradingPositions = computed(() => Array.isArray(tradingContext.value.positions) ? tradingContext.value.positions : [])
 const recentTradeSignals = computed(() => Array.isArray(tradingContext.value.recent_signals) ? tradingContext.value.recent_signals : [])
+const shSummary = computed(() => shareholderData.value.summary || {})
+const shHolderNumbers = computed(() => Array.isArray(shareholderData.value.holder_numbers) ? shareholderData.value.holder_numbers : [])
+const shHkHold = computed(() => Array.isArray(shareholderData.value.hk_hold) ? shareholderData.value.hk_hold : [])
+const shHolderTrades = computed(() => Array.isArray(shareholderData.value.holder_trades) ? shareholderData.value.holder_trades : [])
+const shShareFloats = computed(() => Array.isArray(shareholderData.value.share_floats) ? shareholderData.value.share_floats : [])
+const shRepurchases = computed(() => Array.isArray(shareholderData.value.repurchases) ? shareholderData.value.repurchases : [])
 
 const stockSymbol = computed(() => stock.value.symbol || payload.value?.symbol || '-')
 const stockName = computed(() => stock.value.name || stock.value.stock_name || '')
@@ -1218,6 +1377,8 @@ watch(activePanel, async (panel) => {
     await loadWorkbenchSection('scores')
   } else if (panel === 'financial') {
     await loadWorkbenchSection('financials')
+  } else if (panel === 'shareholders') {
+    await loadWorkbenchSection('shareholders')
   } else if (panel === 'analysis') {
     await Promise.all([
       loadWorkbenchSection('ai'),
@@ -1248,8 +1409,8 @@ async function loadSymbol(symbol) {
     clearAnalysisPolling()
     analysisSubmitStatus.value = ''
     analysisSubmitError.value = ''
-    sectionLoaded.value = { quote: false, scores: false, financials: false, ai: false, trading: false }
-    sectionLoading.value = { quote: false, scores: false, financials: false, ai: false, trading: false }
+    sectionLoaded.value = { quote: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
+    sectionLoading.value = { quote: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
     const workbench = await getStockWorkbench(clean)
     if (canonicalSymbol(directSymbol.value) !== canonicalSymbol(clean)) return
     payload.value = workbench
@@ -1263,6 +1424,7 @@ async function loadSymbol(symbol) {
       financials: false,
       ai: Boolean(workbench?.deep_analysis),
       trading: false,
+      shareholders: false,
     }
     incomeRows.value = []
     indicatorRows.value = []
@@ -1270,6 +1432,7 @@ async function loadSymbol(symbol) {
     cashflowRows.value = []
     earnings.value = {}
     tradingContext.value = {}
+    shareholderData.value = {}
     queueInitialSectionLoads()
     await nextTick()
     renderRadar()
@@ -1290,6 +1453,8 @@ function queueInitialSectionLoads() {
     tasks.push(loadWorkbenchSection('scores', { force: true }))
   } else if (activePanel.value === 'financial') {
     tasks.push(loadWorkbenchSection('financials', { force: true }))
+  } else if (activePanel.value === 'shareholders') {
+    tasks.push(loadWorkbenchSection('shareholders', { force: true }))
   } else if (activePanel.value === 'analysis') {
     tasks.push(loadWorkbenchSection('ai', { force: true }))
     tasks.push(loadWorkbenchSection('trading', { force: true }))
@@ -1388,6 +1553,11 @@ async function loadWorkbenchSection(section, options = {}) {
       if (!isCurrentWorkbenchSymbol(symbol)) return
       tradingContext.value = data || {}
       mergeWorkbenchSection('trading', data, {})
+    } else if (section === 'shareholders') {
+      const data = await getStockWorkbenchShareholders(symbol)
+      if (!isCurrentWorkbenchSymbol(symbol)) return
+      shareholderData.value = data || {}
+      mergeWorkbenchSection('shareholders', data, {})
     }
     sectionLoaded.value = { ...sectionLoaded.value, [section]: true }
   } catch (e) {
@@ -1745,6 +1915,41 @@ function fmtStatementAmount(value) {
 function valueClass(value) {
   const n = Number(value)
   return n > 0 ? 'is-up' : n < 0 ? 'is-down' : ''
+}
+
+function fmtShares(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  if (Math.abs(n) >= 100000000) return `${(n / 100000000).toFixed(2)}亿股`
+  if (Math.abs(n) >= 10000) return `${(n / 10000).toFixed(2)}万股`
+  return `${n.toFixed(0)}股`
+}
+
+// 股东户数下降视为筹码集中（利多→红），上升视为分散（利空→绿）。
+function holderTrendClass(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n === 0) return ''
+  return n < 0 ? 'is-up' : 'is-down'
+}
+
+function holderNumQoq(idx) {
+  const rows = shHolderNumbers.value
+  const curr = Number(rows[idx]?.holder_num)
+  const prev = Number(rows[idx + 1]?.holder_num)
+  if (!Number.isFinite(curr) || !Number.isFinite(prev) || prev === 0) return null
+  return (curr - prev) / Math.abs(prev) * 100
+}
+
+function inDeLabel(value) {
+  return value === 'IN' ? '增持' : value === 'DE' ? '减持' : (value || '-')
+}
+
+function isFutureDate(value) {
+  const s = String(value || '').replace(/-/g, '')
+  if (s.length !== 8) return false
+  const today = new Date()
+  const ymd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
+  return s > ymd
 }
 
 function pctClass(value) {
@@ -2277,6 +2482,20 @@ pre {
 }
 .report-rc-table {
   min-width: 1280px;
+}
+.quote-table td.cell-name {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.badge-upcoming {
+  background: rgba(248, 113, 113, .16);
+  border-radius: 4px;
+  color: #f87171;
+  font-size: 11px;
+  margin-left: 6px;
+  padding: 1px 5px;
 }
 .financial-raw-sections {
   display: grid;

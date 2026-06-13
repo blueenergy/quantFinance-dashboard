@@ -156,6 +156,23 @@ export async function getStockWorkbenchTrading(symbol) {
 }
 
 /**
+ * 获取股票工作台股东筹码分区
+ * @param {string} symbol - 股票代码
+ */
+export async function getStockWorkbenchShareholders(symbol) {
+    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/shareholders`;
+
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: authHeaders()
+    });
+
+    if (!res.ok) throw new Error(`Failed to get stock workbench shareholders: ${res.status}`);
+    const result = await res.json();
+    return result.data;
+}
+
+/**
  * 获取股票财务报表数据
  * @param {string} symbol - 股票代码
  * @param {string} statement - income|balance|cashflow|indicator|daily_basic
