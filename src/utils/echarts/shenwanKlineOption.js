@@ -32,8 +32,9 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
   })
   const showPctLine = _meta?.showPctLine === true
   const hasPct = showPctLine && pcts.some((p) => p != null)
-  const ma55 = movingAverage(closes, 55)
-  const ma233 = movingAverage(closes, 233)
+  const maPeriods = movingAveragePeriods(_meta?.tf)
+  const maFast = movingAverage(closes, maPeriods.fast)
+  const maSlow = movingAverage(closes, maPeriods.slow)
   const vols = data.map((r) => toNumOrNull(r.vol))
   const hasVol = vols.some((v) => v != null)
   const amounts = data.map((r) => toNumOrNull(r.amount))
@@ -77,8 +78,9 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
       : [{ type: 'inside' }, { type: 'slider', height: 18, bottom: 6 }],
     series: buildSeries({
       ohlc,
-      ma55,
-      ma233,
+      maFast,
+      maSlow,
+      maPeriods,
       pcts,
       hasPct,
       hasSub,
@@ -167,15 +169,35 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
       : [{ type: 'value', scale: true, gridIndex: 0, splitLine: { lineStyle: { color: '#333' } } }]
     return {
       grid: [
-        { left: 50, right: hasPct ? 56 : 20, top: 32, height: '48%' },
-        { left: 50, right: 20, top: '60%', height: '14%' },
-        { left: 50, right: 20, top: '76%', height: '12%' }
+        { left: 50, right: hasPct ? 56 : 20, top: 32, height: '44%' },
+        { left: 50, right: 20, top: '57%', height: '17%' },
+        { left: 50, right: 20, top: '77%', height: '15%' }
       ],
       xAxis: [xAxis0(times), xAxisH(times, 1), xAxisSubBottom(times, 2)],
       yAxis: [
         ...yMain,
-        { type: 'value', name: '量(手)', nameLocation: 'end', nameGap: 0, nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] }, scale: true, gridIndex: 1, splitLine: { show: true, lineStyle: { color: '#2a2a2a' } } },
-        { type: 'value', name: '额(亿)', nameLocation: 'end', nameGap: 0, nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] }, scale: true, gridIndex: 2, splitLine: { show: true, lineStyle: { color: '#2a2a2a' } } }
+        {
+          type: 'value',
+          name: '量(手)',
+          nameLocation: 'end',
+          nameGap: 0,
+          nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
+          axisLabel: { formatter: compactVolumeLabel },
+          scale: true,
+          gridIndex: 1,
+          splitLine: { show: true, lineStyle: { color: '#2a2a2a' } }
+        },
+        {
+          type: 'value',
+          name: '额(亿)',
+          nameLocation: 'end',
+          nameGap: 0,
+          nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
+          axisLabel: { formatter: compactNumberLabel },
+          scale: true,
+          gridIndex: 2,
+          splitLine: { show: true, lineStyle: { color: '#2a2a2a' } }
+        }
       ],
       xZoomIdx: [0, 1, 2]
     }
@@ -188,13 +210,23 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
     : [{ type: 'value', scale: true, gridIndex: 0, splitLine: { lineStyle: { color: '#333' } } }]
   return {
     grid: [
-      { left: 50, right: hasPct ? 56 : 20, top: 32, height: '55%' },
-      { left: 50, right: 20, top: '64%', height: '22%' }
+      { left: 50, right: hasPct ? 56 : 20, top: 32, height: '52%' },
+      { left: 50, right: 20, top: '62%', height: '27%' }
     ],
     xAxis: [xAxis0(times), xAxisSubBottom(times, 1)],
     yAxis: [
       ...yMainSingle,
-      { type: 'value', name: hasVol ? '量(手)' : '额(亿)', nameLocation: 'end', nameGap: 0, nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] }, scale: true, gridIndex: 1, splitLine: { show: true, lineStyle: { color: '#2a2a2a' } } }
+      {
+        type: 'value',
+        name: hasVol ? '量(手)' : '额(亿)',
+        nameLocation: 'end',
+        nameGap: 0,
+        nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
+        axisLabel: { formatter: hasVol ? compactVolumeLabel : compactNumberLabel },
+        scale: true,
+        gridIndex: 1,
+        splitLine: { show: true, lineStyle: { color: '#2a2a2a' } }
+      }
     ],
     xZoomIdx: [0, 1]
   }
@@ -203,8 +235,9 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
 function buildSeries (ctx) {
   const {
     ohlc,
-    ma55,
-    ma233,
+    maFast,
+    maSlow,
+    maPeriods,
     pcts,
     hasPct,
     hasSub,
@@ -248,8 +281,8 @@ function buildSeries (ctx) {
       } : {})
     }
   ]
-  s.push(movingAverageSeries('MA55', ma55, '#facc15', 3))
-  s.push(movingAverageSeries('MA233', ma233, '#a855f7', 2))
+  s.push(movingAverageSeries(`MA${maPeriods.fast}`, maFast, '#facc15', 3))
+  s.push(movingAverageSeries(`MA${maPeriods.slow}`, maSlow, '#a855f7', 2))
   if (hasPct) {
     s.push({
       name: '涨跌幅%',
@@ -291,6 +324,13 @@ function buildSeries (ctx) {
   return s
 }
 
+function movingAveragePeriods (tf) {
+  const normalized = String(tf || '1d').toLowerCase()
+  if (normalized === '1w' || normalized === 'w') return { fast: 11, slow: 46 }
+  if (normalized === '1m' || normalized === 'm') return { fast: 12, slow: 36 }
+  return { fast: 55, slow: 233 }
+}
+
 function movingAverage (values, windowSize) {
   let sum = 0
   let count = 0
@@ -327,6 +367,28 @@ function movingAverageSeries (name, data, color, z) {
     emphasis: { focus: 'series' },
     z
   }
+}
+
+function compactVolumeLabel (value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return ''
+  const abs = Math.abs(n)
+  if (abs >= 100000000) return `${trimFixed(n / 100000000, 1)}亿`
+  if (abs >= 10000) return `${trimFixed(n / 10000, 1)}万`
+  return trimFixed(n, 0)
+}
+
+function compactNumberLabel (value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return ''
+  const abs = Math.abs(n)
+  if (abs >= 10000) return `${trimFixed(n / 10000, 1)}万`
+  if (abs >= 1000) return trimFixed(n / 1000, 1) + 'k'
+  return trimFixed(n, abs >= 10 ? 0 : 1)
+}
+
+function trimFixed (value, digits) {
+  return Number(value).toFixed(digits).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1')
 }
 
 function buildMarkerPoints (markers, fmtAxis) {
@@ -383,7 +445,7 @@ function buildShenwanTooltip (data, fmt) {
         if (p.seriesName === '涨跌幅%' && p.data != null) {
           return `涨跌幅 ${Number(p.data).toFixed(2)}%`
         }
-        if ((p.seriesName === 'MA55' || p.seriesName === 'MA233') && p.data != null) {
+        if (typeof p.seriesName === 'string' && /^MA\d+$/.test(p.seriesName) && p.data != null) {
           return `${p.seriesName} ${formatNum2(p.data)}`
         }
         if (p.seriesName === '成交量') {

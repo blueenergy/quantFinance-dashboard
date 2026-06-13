@@ -18,6 +18,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  tf: {
+    type: String,
+    default: '1d',
+  },
 })
 
 const chartRef = ref(null)
@@ -46,7 +50,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => [props.records, props.markers],
+  () => [props.records, props.markers, props.tf],
   () => {
     nextTick(() => {
       void renderChart()
@@ -92,7 +96,7 @@ async function renderChart() {
       formatAmountQianYuan,
       formatMvWan,
       markers: props.markers,
-    }),
+    }, { tf: props.tf }),
     true,
   )
   instance.resize()

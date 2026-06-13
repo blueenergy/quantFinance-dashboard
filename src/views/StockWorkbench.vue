@@ -218,15 +218,29 @@
 
           <section class="workbench-card">
             <div class="card-title-row">
-              <h3>日线 K 线</h3>
-              <span class="muted">最近 {{ quoteDailyRows.length }} 个交易日</span>
+              <h3>{{ quoteKlineTitle }}</h3>
+              <div class="quote-kline-actions">
+                <div class="quote-kline-tf">
+                  <button
+                    v-for="item in quoteKlineTfOptions"
+                    :key="item.value"
+                    type="button"
+                    :class="{ on: quoteKlineTf === item.value }"
+                    @click="quoteKlineTf = item.value"
+                  >
+                    {{ item.label }}
+                  </button>
+                </div>
+                <span class="muted">最近 {{ quoteKlineRows.length }} 根</span>
+              </div>
             </div>
             <StockKLineChart
-              v-if="quoteDailyRows.length"
-              :records="quoteDailyRows"
+              v-if="quoteKlineRows.length"
+              :records="quoteKlineRows"
+              :tf="quoteKlineTf"
             />
-            <details v-if="quoteDailyRows.length" class="quote-details">
-              <summary>展开最近 10 日行情明细</summary>
+            <details v-if="quoteKlineRows.length" class="quote-details">
+              <summary>展开最近 10 根{{ quoteKlineShortLabel }}行情明细</summary>
               <div class="quote-table-wrap">
                 <table class="quote-table">
                   <thead>
@@ -240,10 +254,10 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="row in quoteDailyRows.slice(0, 10)" :key="row.trade_date">
+                    <tr v-for="row in quoteKlineRows.slice(0, 10)" :key="row.trade_date">
                       <td>{{ row.trade_date }}</td>
                       <td>{{ fmtNumber(row.close) }}</td>
-                      <td :class="pctClass(row.pct_chg)">{{ fmtPct(row.pct_chg) }}</td>
+                      <td :class="pctClass(row.pct_chg ?? row.pct_change)">{{ fmtPct(row.pct_chg ?? row.pct_change) }}</td>
                       <td>{{ fmtNumber(row.high) }}</td>
                       <td>{{ fmtNumber(row.low) }}</td>
                       <td>{{ fmtAmount(row.amount) }}</td>
@@ -252,7 +266,7 @@
                 </table>
               </div>
             </details>
-            <div v-else class="muted-block">暂无该股票的日线行情。</div>
+            <div v-else class="muted-block">暂无该股票的{{ quoteKlineShortLabel }}行情。</div>
           </section>
 
           <section class="workbench-card">
@@ -1089,6 +1103,7 @@ const cashflowRows = ref([])
 const earnings = ref({})
 const tradingContext = ref({})
 const financialMode = ref('quarterly')
+const quoteKlineTf = ref('1d')
 const sectionLoading = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
 const sectionLoaded = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
 const shareholderData = ref({})
@@ -1122,6 +1137,8 @@ const evaluationByHistoryId = computed(() => Object.fromEntries(
 ))
 const scoreHistory = computed(() => Array.isArray(payload.value?.score_history) ? payload.value.score_history : [])
 const quoteDailyRows = computed(() => Array.isArray(payload.value?.daily_quotes) ? payload.value.daily_quotes : [])
+const quoteWeeklyRows = computed(() => Array.isArray(payload.value?.weekly_quotes) ? payload.value.weekly_quotes : [])
+const quoteMonthlyRows = computed(() => Array.isArray(payload.value?.monthly_quotes) ? payload.value.monthly_quotes : [])
 const latestDailyBasic = computed(() => payload.value?.daily_basic || {})
 const latestMoneyFlow = computed(() => payload.value?.money_flow || null)
 const moneyFlowHistory = computed(() => Array.isArray(payload.value?.money_flow_history) ? payload.value.money_flow_history : [])
@@ -1155,6 +1172,22 @@ const shRepurchases = computed(() => Array.isArray(shareholderData.value.repurch
 const shTop10Change = computed(() => shareholderData.value.top10_float_change || {})
 const shIntlNew = computed(() => Array.isArray(shTop10Change.value.intl_new) ? shTop10Change.value.intl_new : [])
 const shHksc = computed(() => shTop10Change.value.hksc || {})
+
+const quoteKlineTfOptions = [
+  { value: '1d', label: '日 K', title: '日线 K 线', shortLabel: '日线' },
+  { value: '1w', label: '周 K', title: '周线 K 线', shortLabel: '周线' },
+  { value: '1m', label: '月 K', title: '月线 K 线', shortLabel: '月线' },
+]
+const quoteKlineTfMeta = computed(
+  () => quoteKlineTfOptions.find((item) => item.value === quoteKlineTf.value) || quoteKlineTfOptions[0],
+)
+const quoteKlineTitle = computed(() => quoteKlineTfMeta.value.title)
+const quoteKlineShortLabel = computed(() => quoteKlineTfMeta.value.shortLabel)
+const quoteKlineRows = computed(() => {
+  if (quoteKlineTf.value === '1w') return quoteWeeklyRows.value
+  if (quoteKlineTf.value === '1m') return quoteMonthlyRows.value
+  return quoteDailyRows.value
+})
 
 const stockSymbol = computed(() => stock.value.symbol || payload.value?.symbol || '-')
 const stockName = computed(() => stock.value.name || stock.value.stock_name || '')
@@ -1706,6 +1739,8 @@ async function loadWorkbenchSection(section, options = {}) {
       mergeWorkbenchSection('quote', data, {
         quote: data?.quote || null,
         daily_quotes: Array.isArray(data?.daily_quotes) ? data.daily_quotes : [],
+        weekly_quotes: Array.isArray(data?.weekly_quotes) ? data.weekly_quotes : [],
+        monthly_quotes: Array.isArray(data?.monthly_quotes) ? data.monthly_quotes : [],
         daily_basic: data?.daily_basic || null,
         money_flow: data?.money_flow || null,
         money_flow_history: Array.isArray(data?.money_flow_history) ? data.money_flow_history : [],
@@ -2559,6 +2594,37 @@ h1, h2, h3 {
   gap: 12px;
   justify-content: space-between;
   margin-bottom: 14px;
+}
+.quote-kline-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.quote-kline-tf {
+  background: rgba(15, 23, 42, .72);
+  border: 1px solid rgba(148, 163, 184, .18);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+}
+.quote-kline-tf button {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+.quote-kline-tf button:hover {
+  color: #dbeafe;
+}
+.quote-kline-tf button.on {
+  background: rgba(37, 99, 235, .88);
+  color: #fff;
 }
 .analysis-actions {
   align-items: center;
