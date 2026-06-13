@@ -1,5 +1,5 @@
 /**
- * 申万行业指数 K 线 ECharts option（K + 可选涨跌幅% + 量/额 副图）。
+ * 申万行业指数 K 线 ECharts option（K + 均线 + 可选涨跌幅% + 量/额 副图）。
  * 与 ETF 前复权三格图数据字段不同，故单独成模块；后续可在更底层抽象复用「多 grid 同步缩放」模式。
  *
  * @param {Array<Record<string, *>>} data  sw_daily 行（时间升序）
@@ -18,6 +18,7 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
   } = formatters
 
   const times = data.map((r) => fmtAxis(r.trade_date))
+  const closes = data.map((r) => toNumOrNull(r.close))
   const ohlc = data.map((r) => {
     const o = finiteOrFallback(r.open, 0)
     const cl = finiteOrFallback(r.close, 0)
@@ -29,7 +30,10 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
     const p = toNumOrNull(r.pct_change)
     return p == null || !Number.isFinite(p) ? null : p
   })
-  const hasPct = pcts.some((p) => p != null)
+  const showPctLine = _meta?.showPctLine === true
+  const hasPct = showPctLine && pcts.some((p) => p != null)
+  const ma55 = movingAverage(closes, 55)
+  const ma233 = movingAverage(closes, 233)
   const vols = data.map((r) => toNumOrNull(r.vol))
   const hasVol = vols.some((v) => v != null)
   const amounts = data.map((r) => toNumOrNull(r.amount))
@@ -73,6 +77,8 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
       : [{ type: 'inside' }, { type: 'slider', height: 18, bottom: 6 }],
     series: buildSeries({
       ohlc,
+      ma55,
+      ma233,
       pcts,
       hasPct,
       hasSub,
@@ -197,6 +203,8 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
 function buildSeries (ctx) {
   const {
     ohlc,
+    ma55,
+    ma233,
     pcts,
     hasPct,
     hasSub,
@@ -240,6 +248,8 @@ function buildSeries (ctx) {
       } : {})
     }
   ]
+  s.push(movingAverageSeries('MA55', ma55, '#facc15', 3))
+  s.push(movingAverageSeries('MA233', ma233, '#a855f7', 2))
   if (hasPct) {
     s.push({
       name: '涨跌幅%',
@@ -279,6 +289,44 @@ function buildSeries (ctx) {
     s[0].yAxisIndex = 0
   }
   return s
+}
+
+function movingAverage (values, windowSize) {
+  let sum = 0
+  let count = 0
+  const result = []
+  for (let i = 0; i < values.length; i += 1) {
+    const value = values[i]
+    if (value != null) {
+      sum += value
+      count += 1
+    }
+    if (i >= windowSize) {
+      const dropped = values[i - windowSize]
+      if (dropped != null) {
+        sum -= dropped
+        count -= 1
+      }
+    }
+    result.push(i >= windowSize - 1 && count === windowSize ? Number((sum / windowSize).toFixed(4)) : null)
+  }
+  return result
+}
+
+function movingAverageSeries (name, data, color, z) {
+  return {
+    name,
+    type: 'line',
+    xAxisIndex: 0,
+    yAxisIndex: 0,
+    data,
+    showSymbol: false,
+    smooth: false,
+    connectNulls: false,
+    lineStyle: { width: 1.2, color },
+    emphasis: { focus: 'series' },
+    z
+  }
 }
 
 function buildMarkerPoints (markers, fmtAxis) {
@@ -334,6 +382,9 @@ function buildShenwanTooltip (data, fmt) {
         }
         if (p.seriesName === '涨跌幅%' && p.data != null) {
           return `涨跌幅 ${Number(p.data).toFixed(2)}%`
+        }
+        if ((p.seriesName === 'MA55' || p.seriesName === 'MA233') && p.data != null) {
+          return `${p.seriesName} ${formatNum2(p.data)}`
         }
         if (p.seriesName === '成交量') {
           const v = p.data
