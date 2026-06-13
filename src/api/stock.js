@@ -88,6 +88,24 @@ export async function getStockWorkbenchQuote(symbol) {
 }
 
 /**
+ * 获取股票工作台指定周期 K 线
+ * @param {string} symbol - 股票代码
+ * @param {string} tf - 1d / 1w / 1m
+ */
+export async function getStockWorkbenchKline(symbol, tf = '1d') {
+    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/kline?tf=${encodeURIComponent(tf)}`;
+
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: authHeaders()
+    });
+
+    if (!res.ok) throw new Error(`Failed to get stock workbench kline: ${res.status}`);
+    const result = await res.json();
+    return result.data;
+}
+
+/**
  * 获取股票工作台神奇九转分区
  * @param {string} symbol - 股票代码
  */

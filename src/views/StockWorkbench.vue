@@ -266,6 +266,7 @@
                 </table>
               </div>
             </details>
+            <div v-else-if="quoteKlineIsLoading" class="muted-block">正在加载{{ quoteKlineShortLabel }}行情…</div>
             <div v-else class="muted-block">暂无该股票的{{ quoteKlineShortLabel }}行情。</div>
           </section>
 
@@ -1065,6 +1066,7 @@ import {
   getStockWorkbench,
   getStockWorkbenchAi,
   getStockWorkbenchFinancials,
+  getStockWorkbenchKline,
   getStockWorkbenchNineTurn,
   getStockWorkbenchQuote,
   getStockWorkbenchScores,
@@ -1104,6 +1106,7 @@ const earnings = ref({})
 const tradingContext = ref({})
 const financialMode = ref('quarterly')
 const quoteKlineTf = ref('1d')
+const quoteKlineLoading = ref({ '1d': false, '1w': false, '1m': false })
 const sectionLoading = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
 const sectionLoaded = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
 const shareholderData = ref({})
@@ -1188,6 +1191,9 @@ const quoteKlineRows = computed(() => {
   if (quoteKlineTf.value === '1m') return quoteMonthlyRows.value
   return quoteDailyRows.value
 })
+const quoteKlineIsLoading = computed(() => quoteKlineTf.value === '1d'
+  ? Boolean(sectionLoading.value.quote)
+  : Boolean(quoteKlineLoading.value[quoteKlineTf.value]))
 
 const stockSymbol = computed(() => stock.value.symbol || payload.value?.symbol || '-')
 const stockName = computed(() => stock.value.name || stock.value.stock_name || '')
@@ -1604,6 +1610,10 @@ watch(activePanel, async (panel) => {
   }
 })
 
+watch(quoteKlineTf, (tf) => {
+  void ensureQuoteKline(tf)
+})
+
 function selectSearchCandidate(item) {
   if (!item) return
   const symbol = item.symbol || item.ts_code
@@ -1630,6 +1640,7 @@ async function loadSymbol(symbol) {
     analysisSubmitError.value = ''
     sectionLoaded.value = { quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
     sectionLoading.value = { quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
+    quoteKlineLoading.value = { '1d': false, '1w': false, '1m': false }
     const workbench = await getStockWorkbench(clean)
     if (canonicalSymbol(directSymbol.value) !== canonicalSymbol(clean)) return
     payload.value = {
@@ -1704,6 +1715,9 @@ function queueInitialSectionLoads(options = {}) {
   const tasks = []
   if (options.deferQuote) {
     scheduleIdleSectionLoad('quote')
+    if (activePanel.value === 'quote' && quoteKlineTf.value !== '1d') {
+      scheduleIdleTask(() => { void ensureQuoteKline(quoteKlineTf.value) })
+    }
   } else {
     tasks.push(loadWorkbenchSection('quote', { force: true }))
   }
@@ -1727,16 +1741,19 @@ function queueInitialSectionLoads(options = {}) {
 }
 
 function scheduleIdleSectionLoad(section) {
-  const run = () => {
+  scheduleIdleTask(() => {
     loadWorkbenchSection(section, { force: true }).catch((e) => {
       console.warn(`load deferred stock workbench section ${section} failed`, e)
     })
-  }
+  })
+}
+
+function scheduleIdleTask(callback) {
   if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-    window.requestIdleCallback(run, { timeout: 800 })
+    window.requestIdleCallback(callback, { timeout: 800 })
     return
   }
-  window.setTimeout(run, 80)
+  window.setTimeout(callback, 80)
 }
 
 function loadRecentSymbols() {
@@ -1793,8 +1810,6 @@ async function loadWorkbenchSection(section, options = {}) {
       mergeWorkbenchSection('quote', data, {
         quote: data?.quote || null,
         daily_quotes: Array.isArray(data?.daily_quotes) ? data.daily_quotes : [],
-        weekly_quotes: Array.isArray(data?.weekly_quotes) ? data.weekly_quotes : [],
-        monthly_quotes: Array.isArray(data?.monthly_quotes) ? data.monthly_quotes : [],
         daily_basic: data?.daily_basic || null,
         money_flow: data?.money_flow || null,
         money_flow_history: Array.isArray(data?.money_flow_history) ? data.money_flow_history : [],
@@ -1855,6 +1870,43 @@ async function loadWorkbenchSection(section, options = {}) {
   } finally {
     if (isCurrentWorkbenchSymbol(symbol)) {
       sectionLoading.value = { ...sectionLoading.value, [section]: false }
+    }
+  }
+}
+
+async function ensureQuoteKline(tf = quoteKlineTf.value) {
+  if (!payload.value) return
+  if (tf === '1d') {
+    if (!quoteDailyRows.value.length) await loadWorkbenchSection('quote')
+    return
+  }
+  if (tf === '1w' && quoteWeeklyRows.value.length) return
+  if (tf === '1m' && quoteMonthlyRows.value.length) return
+
+  const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
+  if (!symbol) return
+  quoteKlineLoading.value = { ...quoteKlineLoading.value, [tf]: true }
+  try {
+    const data = await getStockWorkbenchKline(symbol, tf)
+    if (!isCurrentWorkbenchSymbol(symbol)) return
+    const rows = Array.isArray(data?.rows) ? data.rows : []
+    payload.value = {
+      ...(payload.value || {}),
+      ...(tf === '1w' ? { weekly_quotes: rows } : {}),
+      ...(tf === '1m' ? { monthly_quotes: rows } : {}),
+      data_status: {
+        ...(payload.value?.data_status || {}),
+        sections: {
+          ...(payload.value?.data_status?.sections || {}),
+          [`kline_${tf}`]: data?.data_status || {},
+        },
+      },
+    }
+  } catch (e) {
+    console.warn(`load stock workbench kline ${tf} failed`, e)
+  } finally {
+    if (isCurrentWorkbenchSymbol(symbol)) {
+      quoteKlineLoading.value = { ...quoteKlineLoading.value, [tf]: false }
     }
   }
 }
