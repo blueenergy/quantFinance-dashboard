@@ -19,10 +19,10 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
 
   const times = data.map((r) => fmtAxis(r.trade_date))
   const ohlc = data.map((r) => {
-    const o = Number(r.open) || 0
-    const cl = Number(r.close) || 0
-    const l = Number(r.low) != null ? Number(r.low) : Math.min(o, cl)
-    const h = Number(r.high) != null ? Number(r.high) : Math.max(o, cl)
+    const o = finiteOrFallback(r.open, 0)
+    const cl = finiteOrFallback(r.close, 0)
+    const l = finiteOrFallback(r.low, Math.min(o, cl))
+    const h = finiteOrFallback(r.high, Math.max(o, cl))
     return [o, cl, l, h]
   })
   const pcts = data.map((r) => {
@@ -95,6 +95,11 @@ function barUpDnColor (o, c) {
   const open = Number(o) || 0
   const close = Number(c) || 0
   return close >= open ? '#b71c1c' : '#1b5e20'
+}
+
+function finiteOrFallback (value, fallback) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : fallback
 }
 
 function xAxis0 (times) {
@@ -320,8 +325,11 @@ function buildShenwanTooltip (data, fmt) {
         formatMvWan
       } = fmt
       const t = params.map((p) => {
-        if (p.seriesName === 'K线' && p.data && p.data.length >= 4) {
-          const [o, c, l, h] = p.data
+        if (p.seriesName === 'K线') {
+          const o = toNumOrNull(d.open)
+          const c = toNumOrNull(d.close)
+          const l = toNumOrNull(d.low)
+          const h = toNumOrNull(d.high)
           return `开 ${formatNum2(o)}　收 ${formatNum2(c)}<br/>低 ${formatNum2(l)}　高 ${formatNum2(h)}`
         }
         if (p.seriesName === '涨跌幅%' && p.data != null) {
