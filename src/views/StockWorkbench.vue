@@ -255,12 +255,15 @@
                   </thead>
                   <tbody>
                     <tr v-for="row in quoteKlineRows.slice(0, 10)" :key="row.trade_date">
-                      <td>{{ row.trade_date }}</td>
+                      <td>
+                        {{ row.trade_date }}
+                        <span v-if="row.is_partial" class="partial-kline-tag">未完</span>
+                      </td>
                       <td>{{ fmtNumber(row.close) }}</td>
                       <td :class="pctClass(row.pct_chg ?? row.pct_change)">{{ fmtPct(row.pct_chg ?? row.pct_change) }}</td>
                       <td>{{ fmtNumber(row.high) }}</td>
                       <td>{{ fmtNumber(row.low) }}</td>
-                      <td>{{ fmtAmount(row.amount) }}</td>
+                      <td>{{ fmtKlineAmount(row) }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -2442,6 +2445,15 @@ function fmtAmount(value) {
   return `${n.toFixed(2)}万`
 }
 
+function fmtKlineAmount(row) {
+  const n = Number(row?.amount)
+  if (!Number.isFinite(n)) return '-'
+  const unit = String(row?.amount_unit || 'qian_yuan').toLowerCase()
+  if (unit === 'yuan') return `${(n / 100000000).toFixed(2)}亿`
+  if (unit === 'wan_yuan') return `${(n / 10000).toFixed(2)}亿`
+  return `${(n / 100000).toFixed(2)}亿`
+}
+
 function fmtStatementAmount(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '-'
@@ -3111,6 +3123,16 @@ pre {
 .quote-table th {
   color: #94a3b8;
   font-weight: 600;
+}
+.partial-kline-tag {
+  background: rgba(96, 165, 250, .14);
+  border: 1px solid rgba(96, 165, 250, .34);
+  border-radius: 999px;
+  color: #bfdbfe;
+  display: inline-flex;
+  font-size: 11px;
+  margin-left: 6px;
+  padding: 1px 6px;
 }
 .report-rc-table {
   min-width: 1280px;

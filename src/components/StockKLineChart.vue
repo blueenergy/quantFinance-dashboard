@@ -93,7 +93,7 @@ async function renderChart() {
       formatNum2,
       toNumOrNull,
       formatVolShow,
-      formatAmountQianYuan,
+      formatAmount: formatAmountByUnit,
       formatMvWan,
       markers: props.markers,
     }, { tf: props.tf }),
@@ -126,9 +126,12 @@ function formatVolShow(value) {
   return `${n.toFixed(0)}手`
 }
 
-function formatAmountQianYuan(value) {
+function formatAmountByUnit(value, unit = 'qian_yuan') {
   const n = Number(value)
   if (!Number.isFinite(n)) return '-'
+  const normalized = String(unit || 'qian_yuan').toLowerCase()
+  if (normalized === 'yuan') return `${(n / 100000000).toFixed(2)}亿`
+  if (normalized === 'wan_yuan') return `${(n / 10000).toFixed(2)}亿`
   return `${(n / 100000).toFixed(2)}亿`
 }
 

@@ -12,7 +12,7 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
     formatNum2,
     toNumOrNull,
     formatVolShow,
-    formatAmountQianYuan,
+    formatAmount = formatAmountByUnit,
     formatMvWan,
     markers = []
   } = formatters
@@ -35,10 +35,10 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
   const maPeriods = movingAveragePeriods(_meta?.tf)
   const maFast = movingAverage(closes, maPeriods.fast)
   const maSlow = movingAverage(closes, maPeriods.slow)
-  const vols = data.map((r) => toNumOrNull(r.vol))
+  const vols = data.map((r) => volumeToHands(r))
   const hasVol = vols.some((v) => v != null)
-  const amounts = data.map((r) => toNumOrNull(r.amount))
-  const hasAmt = amounts.some((a) => a != null)
+  const amountYi = data.map((r) => amountToYi(r))
+  const hasAmt = amountYi.some((a) => a != null)
   const volData = hasVol
     ? vols.map((v, i) => {
         const d = data[i]
@@ -49,7 +49,7 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
       })
     : []
   const amountData = hasAmt
-    ? amounts.map((v) => (v == null || !Number.isFinite(v) ? 0 : v))
+    ? amountYi.map((v) => (v == null || !Number.isFinite(v) ? 0 : v))
     : []
 
   const hasSub = hasVol || hasAmt
@@ -95,7 +95,7 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
       markers,
       fmtAxis
     }),
-    tooltip: buildShenwanTooltip(data, { fmtAxis, formatNum2, toNumOrNull, formatVolShow, formatAmountQianYuan, formatMvWan })
+    tooltip: buildShenwanTooltip(data, { fmtAxis, formatNum2, toNumOrNull, formatVolShow, formatAmount, formatMvWan })
   }
 }
 
@@ -108,6 +108,33 @@ function barUpDnColor (o, c) {
 function finiteOrFallback (value, fallback) {
   const n = Number(value)
   return Number.isFinite(n) ? n : fallback
+}
+
+function amountToYi (row) {
+  const n = Number(row?.amount)
+  if (!Number.isFinite(n)) return null
+  const unit = String(row?.amount_unit || 'qian_yuan').toLowerCase()
+  if (unit === 'yuan') return n / 100000000
+  if (unit === 'wan_yuan') return n / 10000
+  return n / 100000
+}
+
+function volumeToHands (row) {
+  const raw = row?.vol ?? row?.volume
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return null
+  const unit = String(row?.volume_unit || 'hands').toLowerCase()
+  if (unit === 'shares' || unit === 'share') return n / 100
+  return n
+}
+
+function formatAmountByUnit (value, unit = 'qian_yuan') {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  const normalized = String(unit || 'qian_yuan').toLowerCase()
+  if (normalized === 'yuan') return `${(n / 100000000).toFixed(2)}亿`
+  if (normalized === 'wan_yuan') return `${(n / 10000).toFixed(2)}亿`
+  return `${(n / 100000).toFixed(2)}亿`
 }
 
 function xAxis0 (times) {
@@ -303,18 +330,20 @@ function buildSeries (ctx) {
       xAxisIndex: xVol,
       yAxisIndex: yVol,
       data: volData,
-      barMaxWidth: 6
+      barMaxWidth: 6,
+      barMinHeight: 2
     })
   }
   if (hasSub && hasAmt) {
     s.push({
-      name: '成交额(千元→亿轴)',
+      name: '成交额(亿)',
       type: 'bar',
       xAxisIndex: xAmt,
       yAxisIndex: yAmt,
-      data: amountData.map((q) => (q == null ? 0 : q / 1e5)),
+      data: amountData,
       itemStyle: { color: 'rgba(100, 181, 246, 0.65)' },
-      barMaxWidth: 6
+      barMaxWidth: 6,
+      barMinHeight: 2
     })
   }
   if (!hasSub) {
@@ -431,7 +460,7 @@ function buildShenwanTooltip (data, fmt) {
         formatNum2,
         toNumOrNull,
         formatVolShow,
-        formatAmountQianYuan,
+        formatAmount,
         formatMvWan
       } = fmt
       const t = params.map((p) => {
@@ -455,7 +484,7 @@ function buildShenwanTooltip (data, fmt) {
         }
         if (p.seriesName && p.seriesName.indexOf('成交额') === 0) {
           const y = toNumOrNull(d.amount)
-          return `成交额 ${formatAmountQianYuan(y)}（Tushare 为千元）`
+          return `成交额 ${formatAmount(y, d.amount_unit)}`
         }
         return ''
       }).filter(Boolean)
@@ -465,7 +494,8 @@ function buildShenwanTooltip (data, fmt) {
       if (d.float_mv != null) extra.push(`流通市值 ${formatMvWan(d.float_mv)}`)
       if (d.total_mv != null) extra.push(`总市值 ${formatMvWan(d.total_mv)}`)
       const body = t.concat(extra).filter(Boolean).join('<br/>')
-      return `<div class="k-tip"><strong>${fmtAxis(d.trade_date)}</strong><br/>${body}</div>`
+      const partialLabel = d.is_partial ? '（未完周期，日线动态聚合）' : ''
+      return `<div class="k-tip"><strong>${fmtAxis(d.trade_date)}${partialLabel}</strong><br/>${body}</div>`
     }
   }
 }
