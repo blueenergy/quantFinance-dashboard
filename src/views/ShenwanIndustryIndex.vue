@@ -111,6 +111,9 @@
             v-else
             :history="industryMoneyRows"
             :summary="industryMoneySummary"
+            :period="tf"
+            :kline-rows="klineData"
+            :loading="industryMoneyLoading"
           />
           <div v-if="industryMoneyLatest" class="industry-money-top-grid">
             <article>
@@ -329,7 +332,7 @@ async function loadIndustryMoneyFlow (indexCode) {
   try {
     const token = localStorage.getItem('access_token')
     const { data } = await axios.get('/api/shenwan-index/money-flow', {
-      params: { index_code: indexCode, src: SRC, days: 60, current_only: true },
+      params: { index_code: indexCode, src: SRC, days: moneyFlowDaysForTf(tf.value), current_only: true },
       headers: { Authorization: `Bearer ${token}` },
     })
     industryMoneyRows.value = Array.isArray(data?.data) ? data.data : []
@@ -342,6 +345,12 @@ async function loadIndustryMoneyFlow (indexCode) {
   } finally {
     industryMoneyLoading.value = false
   }
+}
+
+function moneyFlowDaysForTf (tfVal) {
+  if (tfVal === '1m') return 1500
+  if (tfVal === '1w') return 520
+  return 60
 }
 
 function openDeepAnalysis (member) {
@@ -837,7 +846,6 @@ function onPickL3 (it) {
 
 // auto-load latest industry analysis when user selects an industry
 watch(klineIndexCode, (newCode) => {
-  loadIndustryMoneyFlow(newCode)
   if (newCode !== (industryAnalysisResult.value?._index_code)) {
     industryAnalysisResult.value = null
     industryAnalysisError.value = ''
@@ -845,6 +853,10 @@ watch(klineIndexCode, (newCode) => {
     industryAnalysisCreatedAt.value = null
     loadLatestIndustryAnalysis(newCode)
   }
+})
+
+watch([klineIndexCode, tf], () => {
+  loadIndustryMoneyFlow(klineIndexCode.value)
 })
 
 watch([klineIndexCode, tf, startD, endD], () => {
