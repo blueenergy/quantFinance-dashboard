@@ -334,7 +334,10 @@
               <div v-else class="muted-block">暂无足够财务数据。</div>
             </article>
             <article class="workbench-card">
-              <h3>核心财务指标</h3>
+              <div class="card-title-row">
+                <h3>核心财务指标</h3>
+                <span class="muted">{{ financialMetricsPeriodText }}</span>
+              </div>
               <div class="financial-metrics">
                 <div v-for="metric in financialMetrics" :key="metric.label">
                   <span>{{ metric.label }}</span>
@@ -345,8 +348,26 @@
           </section>
           <section class="workbench-card">
             <div class="card-title-row">
+              <h3>财务质量摘要</h3>
+              <span class="muted">基于当前{{ financialModeLabel }}口径与最新财报数据</span>
+            </div>
+            <div v-if="financialQualityCards.length" class="quality-card-grid">
+              <article
+                v-for="card in financialQualityCards"
+                :key="card.key"
+                :class="['quality-card', `quality-card--${card.level}`]"
+              >
+                <span>{{ card.label }}</span>
+                <strong>{{ card.title }}</strong>
+                <small>{{ card.detail }}</small>
+              </article>
+            </div>
+            <div v-else class="muted-block">暂无足够财务数据生成质量摘要。</div>
+          </section>
+          <section class="workbench-card">
+            <div class="card-title-row">
               <h3>业绩事件</h3>
-              <span class="muted">预告 / 快报 / 披露日历 / 调研</span>
+              <span class="muted">预告 / 快报 / 披露日历</span>
             </div>
             <div v-if="earningsEvents.length" class="event-list">
               <article v-for="event in earningsEvents" :key="`${event.type}-${event.date}-${event.title}`" class="event-item">
@@ -356,6 +377,55 @@
               </article>
             </div>
             <div v-else class="muted-block">暂无业绩事件。</div>
+          </section>
+          <section class="workbench-card">
+            <div class="card-title-row">
+              <h3>卖方研报</h3>
+              <span class="muted">最近 {{ reportRcRows.length }} 条，来自 Tushare report_rc</span>
+            </div>
+            <div v-if="reportRcRows.length" class="quote-table-wrap">
+              <table class="quote-table report-rc-table">
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>券商</th>
+                    <th>评级</th>
+                    <th>目标价</th>
+                    <th>预测期</th>
+                    <th>营收</th>
+                    <th>营业利润</th>
+                    <th>利润总额</th>
+                    <th>净利润</th>
+                    <th>EPS</th>
+                    <th>PE</th>
+                    <th>股息率</th>
+                    <th>ROE</th>
+                    <th>EV/EBITDA</th>
+                    <th>报告标题</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in reportRcRows" :key="`${row.report_date || row.create_time}-${row.org_name}-${row.report_title}`">
+                    <td>{{ blankDash(row.report_date || row.create_time) }}</td>
+                    <td>{{ blankDash(row.org_name || row.organ_name || row.org) }}</td>
+                    <td>{{ blankDash(row.rating_name || row.rating) }}</td>
+                    <td>{{ reportRcTargetRange(row) || '-' }}</td>
+                    <td>{{ blankDash(row.quarter) }}</td>
+                    <td>{{ fmtWanAmount(row.op_rt) }}</td>
+                    <td>{{ fmtWanAmount(row.op_pr) }}</td>
+                    <td>{{ fmtWanAmount(row.tp) }}</td>
+                    <td>{{ fmtWanAmount(row.np) }}</td>
+                    <td>{{ fmtNullableNumber(row.eps) }}</td>
+                    <td>{{ fmtNullableNumber(row.pe) }}</td>
+                    <td>{{ fmtNullablePct(row.rd) }}</td>
+                    <td>{{ fmtNullablePct(row.roe) }}</td>
+                    <td>{{ fmtNullableNumber(row.ev_ebitda) }}</td>
+                    <td class="report-title-cell">{{ blankDash(row.report_title || row.title || row.name) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="muted-block">暂无卖方研报数据。</div>
           </section>
         </v-window-item>
 
@@ -839,14 +909,114 @@ const financialMetrics = computed(() => {
   ]
 })
 
+const financialMetricsPeriodText = computed(() => {
+  const latest = indicatorRows.value[0] || {}
+  const latestBalance = balanceRows.value[0] || {}
+  const latestCashflow = cashflowRows.value[0] || {}
+  const parts = [
+    ['指标', latest.end_date || latest.period || latest.report_date],
+    ['资产负债', latestBalance.end_date || latestBalance.period || latestBalance.report_date],
+    ['现金流', latestCashflow.end_date || latestCashflow.period || latestCashflow.report_date],
+  ].filter(([, value]) => value)
+  if (!parts.length) return '暂无报告期'
+  return parts.map(([label, value]) => `${label} ${value}`).join(' · ')
+})
+
+const financialQualityCards = computed(() => {
+  const rows = financialChartData.value
+  const latest = rows[rows.length - 1] || {}
+  const previous = rows[rows.length - 2] || {}
+  const latestIndicator = indicatorRows.value[0] || {}
+  const latestBalance = balanceRows.value[0] || {}
+  const latestCashflow = cashflowRows.value[0] || {}
+  const latestIncome = incomeRows.value[0] || {}
+
+  const cards = []
+  if (latest.tr_yoy != null || latest.netprofit_yoy != null) {
+    const revenueYoy = toNumber(latest.tr_yoy)
+    const profitYoy = toNumber(latest.netprofit_yoy)
+    const improving = [revenueYoy, profitYoy].filter((v) => v != null && v > 0).length
+    cards.push({
+      key: 'growth',
+      label: '增长质量',
+      level: improving >= 2 ? 'good' : improving === 1 ? 'neutral' : 'warn',
+      title: improving >= 2 ? '收入利润同步增长' : improving === 1 ? '增长结构分化' : '增长承压',
+      detail: `营收同比 ${fmtPctPlain(revenueYoy)}，净利同比 ${fmtPctPlain(profitYoy)}。`,
+    })
+  }
+
+  const grossMargin = toNumber(latest.grossprofit_margin ?? latest.gross_margin ?? latestIndicator.grossprofit_margin)
+  const roe = toNumber(latest.roe ?? latestIndicator.roe ?? latestIndicator.roe_dt)
+  if (grossMargin != null || roe != null) {
+    const stableMargin = previous.grossprofit_margin == null || grossMargin == null
+      ? true
+      : grossMargin >= previous.grossprofit_margin - 1
+    const strongProfitability = (roe != null && roe >= 10) || (grossMargin != null && grossMargin >= 25)
+    cards.push({
+      key: 'profitability',
+      label: '盈利质量',
+      level: strongProfitability && stableMargin ? 'good' : stableMargin ? 'neutral' : 'warn',
+      title: strongProfitability && stableMargin ? '盈利能力较稳' : stableMargin ? '盈利能力一般' : '毛利率走弱',
+      detail: `毛利率 ${fmtPctPlain(grossMargin)}，ROE ${fmtPctPlain(roe)}。`,
+    })
+  }
+
+  const operatingCashflow = toNumber(latestCashflow.n_cashflow_act)
+  const netProfit = toNumber(latestIncome.n_income_attr_p ?? latestIncome.n_income ?? latest.cumulative_net_profit)
+  if (operatingCashflow != null || netProfit != null) {
+    const ratio = netProfit ? operatingCashflow / Math.abs(netProfit) : null
+    cards.push({
+      key: 'cashflow',
+      label: '现金流质量',
+      level: ratio == null ? 'neutral' : ratio >= 0.8 ? 'good' : ratio >= 0 ? 'neutral' : 'warn',
+      title: ratio == null ? '现金流待观察' : ratio >= 0.8 ? '现金流匹配利润' : ratio >= 0 ? '现金流弱于利润' : '经营现金流为负',
+      detail: `经营现金流 ${fmtStatementAmount(operatingCashflow)}，归母净利 ${fmtStatementAmount(netProfit)}。`,
+    })
+  }
+
+  const debtToAssets = firstFinite([
+    latestIndicator.debt_to_assets,
+    latestBalance.debt_to_assets,
+    ratioPct(latestBalance.total_liab, latestBalance.total_assets),
+  ])
+  if (debtToAssets != null) {
+    cards.push({
+      key: 'leverage',
+      label: '资产负债',
+      level: debtToAssets <= 45 ? 'good' : debtToAssets <= 65 ? 'neutral' : 'warn',
+      title: debtToAssets <= 45 ? '杠杆水平较低' : debtToAssets <= 65 ? '杠杆水平适中' : '杠杆压力偏高',
+      detail: `资产负债率 ${fmtPctPlain(debtToAssets)}，总资产 ${fmtStatementAmount(latestBalance.total_assets)}。`,
+    })
+  }
+
+  const receivablesRatio = ratioPct(sumFinite(latestBalance.accounts_receiv, latestBalance.notes_receiv), latestBalance.total_assets)
+  const inventoryRatio = ratioPct(latestBalance.inventories, latestBalance.total_assets)
+  if (receivablesRatio != null || inventoryRatio != null) {
+    const riskHigh = (receivablesRatio != null && receivablesRatio > 20) || (inventoryRatio != null && inventoryRatio > 20)
+    cards.push({
+      key: 'risk',
+      label: '风险项',
+      level: riskHigh ? 'warn' : 'good',
+      title: riskHigh ? '营运资产占比较高' : '营运资产压力不高',
+      detail: `应收/票据占资产 ${fmtPctPlain(receivablesRatio)}，存货占资产 ${fmtPctPlain(inventoryRatio)}。`,
+    })
+  }
+
+  return cards
+})
+
 const earningsEvents = computed(() => {
   const rows = []
   const source = earnings.value || {}
   for (const row of source.forecast || []) rows.push({ type: '业绩预告', date: row.ann_date || row.end_date, title: row.type || row.summary || '业绩预告', raw: row })
   for (const row of source.express || []) rows.push({ type: '业绩快报', date: row.ann_date || row.end_date, title: row.revenue ? `营收 ${fmtStatementAmount(row.revenue)}` : '业绩快报', raw: row })
   for (const row of source.disclosure || []) rows.push({ type: '披露日历', date: row.ann_date || row.pre_date, title: row.pre_date ? `预计披露 ${row.pre_date}` : '披露日历', raw: row })
-  for (const row of source.report_rc || []) rows.push({ type: '调研/研报', date: row.ann_date || row.end_date, title: row.organ_name || row.title || '调研/研报', raw: row })
   return rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 8)
+})
+
+const reportRcRows = computed(() => {
+  const rows = Array.isArray(earnings.value?.report_rc) ? earnings.value.report_rc : []
+  return [...rows].sort((a, b) => String(b.report_date || b.create_time || '').localeCompare(String(a.report_date || a.create_time || '')))
 })
 
 const quoteMetrics = computed(() => [
@@ -1315,6 +1485,54 @@ function calcYoy(current, previous) {
   return ((a - b) / Math.abs(b)) * 100
 }
 
+function reportRcTargetRange(row = {}) {
+  const minPrice = toNumber(row.min_price)
+  const maxPrice = toNumber(row.max_price)
+  if (minPrice != null && maxPrice != null && minPrice > 0 && maxPrice > 0) {
+    return minPrice === maxPrice
+      ? `目标价 ${fmtNumber(minPrice)}元`
+      : `目标价 ${fmtNumber(minPrice)}-${fmtNumber(maxPrice)}元`
+  }
+  if (maxPrice != null && maxPrice > 0) return `目标价 ${fmtNumber(maxPrice)}元`
+  if (minPrice != null && minPrice > 0) return `目标价 ${fmtNumber(minPrice)}元`
+  return ''
+}
+
+function blankDash(value) {
+  const text = String(value ?? '').trim()
+  return text || '-'
+}
+
+function fmtNullableNumber(value, digits = 2) {
+  const n = toNumber(value)
+  return n == null ? '-' : n.toFixed(digits)
+}
+
+function fmtNullablePct(value) {
+  const n = toNumber(value)
+  return n == null ? '-' : `${n.toFixed(2)}%`
+}
+
+function fmtWanAmount(value) {
+  const n = toNumber(value)
+  if (n == null) return '-'
+  if (Math.abs(n) >= 10000) return `${(n / 10000).toFixed(2)}亿`
+  return `${n.toFixed(2)}万`
+}
+
+function ratioPct(numerator, denominator) {
+  const a = toNumber(numerator)
+  const b = toNumber(denominator)
+  if (a == null || b == null || b === 0) return null
+  return (a / Math.abs(b)) * 100
+}
+
+function sumFinite(...values) {
+  const numbers = values.map(toNumber).filter((value) => value != null)
+  if (!numbers.length) return null
+  return numbers.reduce((sum, value) => sum + value, 0)
+}
+
 function canonicalSymbol(value) {
   return String(value || '').trim().toUpperCase().split('.')[0]
 }
@@ -1753,6 +1971,42 @@ h1, h2, h3 {
 .financial-mode-toggle :deep(.v-btn--active) {
   color: #f8fafc;
 }
+.quality-card-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.quality-card {
+  background: rgba(30, 41, 59, .62);
+  border: 1px solid rgba(148, 163, 184, .18);
+  border-radius: 14px;
+  padding: 14px;
+}
+.quality-card span {
+  color: #94a3b8;
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.quality-card strong {
+  color: #f8fafc;
+  display: block;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.quality-card small {
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+.quality-card--good {
+  border-color: rgba(34, 197, 94, .35);
+}
+.quality-card--neutral {
+  border-color: rgba(234, 179, 8, .32);
+}
+.quality-card--warn {
+  border-color: rgba(239, 68, 68, .35);
+}
 .summary-line {
   color: #f8fafc;
   font-size: 18px;
@@ -1853,6 +2107,17 @@ pre {
 .quote-table th {
   color: #94a3b8;
   font-weight: 600;
+}
+.report-rc-table {
+  min-width: 1280px;
+}
+.report-title-cell {
+  max-width: 360px;
+  min-width: 260px;
+  overflow: hidden;
+  text-align: left !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .event-list {
   display: grid;
