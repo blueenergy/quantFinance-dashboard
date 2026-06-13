@@ -366,6 +366,142 @@
           </section>
           <section class="workbench-card">
             <div class="card-title-row">
+              <h3>原始财报明细</h3>
+              <span class="muted">最近 8 期关键字段，金额按报表元口径换算</span>
+            </div>
+            <div class="financial-raw-sections">
+              <details open>
+                <summary>利润表</summary>
+                <div v-if="incomeReportSections.length" class="financial-report-groups">
+                  <div v-for="section in incomeReportSections" :key="section.key" class="financial-report-group">
+                    <h4>{{ section.label }}</h4>
+                    <div class="quote-table-wrap">
+                      <table class="quote-table financial-raw-table">
+                        <thead>
+                          <tr>
+                            <th>报告期</th>
+                            <th>公告日</th>
+                            <th>营业总收入</th>
+                            <th>营业收入</th>
+                            <th>归母净利</th>
+                            <th>净利润</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="row in section.rows.slice(0, 8)" :key="`income-${section.key}-${statementPeriod(row)}`">
+                            <td>{{ statementPeriod(row) }}</td>
+                            <td>{{ blankDash(row.ann_date || row.f_ann_date) }}</td>
+                            <td>{{ fmtStatementAmount(row.total_revenue) }}</td>
+                            <td>{{ fmtStatementAmount(row.revenue) }}</td>
+                            <td>{{ fmtStatementAmount(row.n_income_attr_p) }}</td>
+                            <td>{{ fmtStatementAmount(row.n_income) }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="muted-block">暂无利润表明细。</div>
+              </details>
+              <details>
+                <summary>资产负债表</summary>
+                <div v-if="balanceRows.length" class="quote-table-wrap">
+                  <table class="quote-table financial-raw-table">
+                    <thead>
+                      <tr>
+                        <th>报告期</th>
+                        <th>公告日</th>
+                        <th>总资产</th>
+                        <th>总负债</th>
+                        <th>股东权益</th>
+                        <th>应收账款</th>
+                        <th>存货</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="row in balanceRows.slice(0, 8)" :key="`balance-${statementPeriod(row)}`">
+                        <td>{{ statementPeriod(row) }}</td>
+                        <td>{{ blankDash(row.ann_date || row.f_ann_date) }}</td>
+                        <td>{{ fmtStatementAmount(row.total_assets) }}</td>
+                        <td>{{ fmtStatementAmount(row.total_liab) }}</td>
+                        <td>{{ fmtStatementAmount(row.total_hldr_eqy_exc_min_int || row.total_hldr_eqy_inc_min_int) }}</td>
+                        <td>{{ fmtStatementAmount(row.accounts_receiv) }}</td>
+                        <td>{{ fmtStatementAmount(row.inventories) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div v-else class="muted-block">暂无资产负债表明细。</div>
+              </details>
+              <details>
+                <summary>现金流量表</summary>
+                <div v-if="cashflowReportSections.length" class="financial-report-groups">
+                  <div v-for="section in cashflowReportSections" :key="section.key" class="financial-report-group">
+                    <h4>{{ section.label }}</h4>
+                    <div class="quote-table-wrap">
+                      <table class="quote-table financial-raw-table">
+                        <thead>
+                          <tr>
+                            <th>报告期</th>
+                            <th>公告日</th>
+                            <th>经营现金流</th>
+                            <th>投资现金流</th>
+                            <th>筹资现金流</th>
+                            <th>购建长期资产</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="row in section.rows.slice(0, 8)" :key="`cashflow-${section.key}-${statementPeriod(row)}`">
+                            <td>{{ statementPeriod(row) }}</td>
+                            <td>{{ blankDash(row.ann_date || row.f_ann_date) }}</td>
+                            <td>{{ fmtStatementAmount(row.n_cashflow_act) }}</td>
+                            <td>{{ fmtStatementAmount(row.n_cashflow_inv_act) }}</td>
+                            <td>{{ fmtStatementAmount(row.n_cash_flows_fnc_act) }}</td>
+                            <td>{{ fmtStatementAmount(row.c_pay_acq_const_fiolta) }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="muted-block">暂无现金流量表明细。</div>
+              </details>
+              <details>
+                <summary>财务指标</summary>
+                <div v-if="indicatorRows.length" class="quote-table-wrap">
+                  <table class="quote-table financial-raw-table">
+                    <thead>
+                      <tr>
+                        <th>报告期</th>
+                        <th>公告日</th>
+                        <th>ROE</th>
+                        <th>毛利率</th>
+                        <th>营收同比</th>
+                        <th>净利同比</th>
+                        <th>资产负债率</th>
+                        <th>流动比率</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="row in indicatorRows.slice(0, 8)" :key="`indicator-${statementPeriod(row)}`">
+                        <td>{{ statementPeriod(row) }}</td>
+                        <td>{{ blankDash(row.ann_date || row.f_ann_date) }}</td>
+                        <td>{{ fmtNullablePct(row.roe || row.roe_dt) }}</td>
+                        <td>{{ fmtNullablePct(row.grossprofit_margin) }}</td>
+                        <td>{{ fmtNullablePct(row.tr_yoy || row.or_yoy) }}</td>
+                        <td>{{ fmtNullablePct(row.netprofit_yoy || row.profit_to_gr) }}</td>
+                        <td>{{ fmtNullablePct(row.debt_to_assets) }}</td>
+                        <td>{{ fmtNullableNumber(row.current_ratio) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div v-else class="muted-block">暂无财务指标明细。</div>
+              </details>
+            </div>
+          </section>
+          <section class="workbench-card">
+            <div class="card-title-row">
               <h3>业绩事件</h3>
               <span class="muted">预告 / 快报 / 披露日历</span>
             </div>
@@ -921,6 +1057,26 @@ const financialMetricsPeriodText = computed(() => {
   if (!parts.length) return '暂无报告期'
   return parts.map(([label, value]) => `${label} ${value}`).join(' · ')
 })
+
+const incomeReportSections = computed(() => groupStatementRowsByReportType(incomeRows.value))
+const cashflowReportSections = computed(() => groupStatementRowsByReportType(cashflowRows.value))
+
+function groupStatementRowsByReportType(rows) {
+  const grouped = new Map()
+  for (const row of rows || []) {
+    const key = String(row.report_type ?? row.report_type_name ?? 'unknown')
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        key,
+        label: statementReportTypeLabel(row.report_type ?? row.report_type_name),
+        rows: [],
+      })
+    }
+    grouped.get(key).rows.push(row)
+  }
+  const order = { '1': 1, '2': 2, unknown: 99 }
+  return [...grouped.values()].sort((a, b) => (order[a.key] || 50) - (order[b.key] || 50))
+}
 
 const financialQualityCards = computed(() => {
   const rows = financialChartData.value
@@ -1501,6 +1657,17 @@ function reportRcTargetRange(row = {}) {
 function blankDash(value) {
   const text = String(value ?? '').trim()
   return text || '-'
+}
+
+function statementPeriod(row = {}) {
+  return blankDash(row.end_date || row.period || row.report_date)
+}
+
+function statementReportTypeLabel(value) {
+  const text = String(value ?? '').trim()
+  if (text === '1') return '合并报表（report_type=1）'
+  if (text === '2') return '单季度报表（report_type=2）'
+  return text ? `report_type=${text}` : '未标注口径'
 }
 
 function fmtNullableNumber(value, digits = 2) {
@@ -2110,6 +2277,33 @@ pre {
 }
 .report-rc-table {
   min-width: 1280px;
+}
+.financial-raw-sections {
+  display: grid;
+  gap: 12px;
+}
+.financial-raw-sections details {
+  background: rgba(30, 41, 59, .46);
+  border: 1px solid rgba(148, 163, 184, .14);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.financial-raw-sections summary {
+  color: #bfdbfe;
+  cursor: pointer;
+  font-weight: 700;
+}
+.financial-raw-table {
+  min-width: 860px;
+}
+.financial-report-groups {
+  display: grid;
+  gap: 16px;
+}
+.financial-report-group h4 {
+  color: #e2e8f0;
+  font-size: 14px;
+  margin: 4px 0 0;
 }
 .report-title-cell {
   max-width: 360px;
