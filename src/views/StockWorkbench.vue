@@ -1051,7 +1051,7 @@
       </v-window>
     </template>
 
-    <v-overlay :model-value="loading" class="align-center justify-center" persistent>
+    <v-overlay :model-value="loading && !payload" class="align-center justify-center" persistent>
       <v-progress-circular indeterminate size="48" />
     </v-overlay>
   </div>
@@ -1620,6 +1620,8 @@ async function loadSymbol(symbol) {
   const clean = String(symbol || '').trim()
   if (!clean) return
   directSymbol.value = clean
+  const optimistic = createWorkbenchShell(clean)
+  payload.value = optimistic
   loading.value = true
   error.value = ''
   try {
@@ -1630,7 +1632,18 @@ async function loadSymbol(symbol) {
     sectionLoading.value = { quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
     const workbench = await getStockWorkbench(clean)
     if (canonicalSymbol(directSymbol.value) !== canonicalSymbol(clean)) return
-    payload.value = workbench
+    payload.value = {
+      ...optimistic,
+      ...workbench,
+      data_status: {
+        ...(optimistic.data_status || {}),
+        ...(workbench?.data_status || {}),
+        sections: {
+          ...(optimistic.data_status?.sections || {}),
+          ...(workbench?.data_status?.sections || {}),
+        },
+      },
+    }
     rememberRecentStock({
       symbol: workbench?.stock?.symbol || workbench?.symbol || clean,
       name: workbench?.stock?.name || workbench?.stock?.stock_name || '',
@@ -1652,7 +1665,7 @@ async function loadSymbol(symbol) {
     tradingContext.value = {}
     shareholderData.value = {}
     disposeShareholderCharts()
-    queueInitialSectionLoads()
+    queueInitialSectionLoads({ deferQuote: true })
     await nextTick()
     renderRadar()
   } catch (e) {
@@ -1666,8 +1679,34 @@ async function loadSymbol(symbol) {
   }
 }
 
-function queueInitialSectionLoads() {
-  const tasks = [loadWorkbenchSection('quote', { force: true })]
+function createWorkbenchShell(symbol) {
+  const normalized = String(symbol || '').trim().toUpperCase()
+  return {
+    symbol: normalized,
+    stock: { symbol: normalized },
+    quote: null,
+    score: null,
+    deep_analysis: null,
+    data_status: {
+      stock_found: true,
+      quote_found: false,
+      score_found: false,
+      deep_analysis_found: false,
+      quote_date: '',
+      score_date: '',
+      analysis_created_at: '',
+      sections: {},
+    },
+  }
+}
+
+function queueInitialSectionLoads(options = {}) {
+  const tasks = []
+  if (options.deferQuote) {
+    scheduleIdleSectionLoad('quote')
+  } else {
+    tasks.push(loadWorkbenchSection('quote', { force: true }))
+  }
   if (activePanel.value === 'scores') {
     tasks.push(loadWorkbenchSection('scores', { force: true }))
   } else if (activePanel.value === 'nine-turn') {
@@ -1680,9 +1719,24 @@ function queueInitialSectionLoads() {
     tasks.push(loadWorkbenchSection('ai', { force: true }))
     tasks.push(loadWorkbenchSection('trading', { force: true }))
   }
-  Promise.all(tasks).catch((e) => {
-    console.warn('load initial stock workbench sections failed', e)
-  })
+  if (tasks.length) {
+    Promise.all(tasks).catch((e) => {
+      console.warn('load initial stock workbench sections failed', e)
+    })
+  }
+}
+
+function scheduleIdleSectionLoad(section) {
+  const run = () => {
+    loadWorkbenchSection(section, { force: true }).catch((e) => {
+      console.warn(`load deferred stock workbench section ${section} failed`, e)
+    })
+  }
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(run, { timeout: 800 })
+    return
+  }
+  window.setTimeout(run, 80)
 }
 
 function loadRecentSymbols() {
