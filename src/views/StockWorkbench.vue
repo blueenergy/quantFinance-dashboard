@@ -315,10 +315,21 @@
               <div class="card-title-row">
                 <h3>财务成长图</h3>
                 <span class="muted">
-                  最近 {{ financialChartData.length }} 期
+                  {{ financialModeLabel }} · 最近 {{ financialChartData.length }} 期
                   <template v-if="sectionLoading.financials"> · 刷新中…</template>
                 </span>
               </div>
+              <v-btn-toggle
+                v-model="financialMode"
+                class="financial-mode-toggle"
+                color="primary"
+                density="compact"
+                mandatory
+                variant="outlined"
+              >
+                <v-btn value="quarterly">单季对比</v-btn>
+                <v-btn value="annual">年度对比</v-btn>
+              </v-btn-toggle>
               <GrowthChart v-if="financialChartData.length" :series="financialChartData" />
               <div v-else class="muted-block">暂无足够财务数据。</div>
             </article>
@@ -566,6 +577,7 @@ const balanceRows = ref([])
 const cashflowRows = ref([])
 const earnings = ref({})
 const tradingContext = ref({})
+const financialMode = ref('quarterly')
 const sectionLoading = ref({ quote: false, scores: false, financials: false, ai: false, trading: false })
 const sectionLoaded = ref({ quote: false, scores: false, financials: false, ai: false, trading: false })
 const radarRef = ref(null)
@@ -738,19 +750,78 @@ const financialChartData = computed(() => {
   const rows = indicatorRows.value.map((indicator) => {
     const period = indicator.end_date || indicator.period || indicator.report_date
     const income = incomeByPeriod.get(period) || {}
+    const quarter = reportQuarter(period)
     return {
       period,
+      year: reportYear(period),
+      quarter,
+      periodLabel: quarter ? `${reportYear(period)}Q${quarter}` : period,
+      cumulative_revenue: toNumber(income.revenue || income.total_revenue || indicator.revenue),
+      cumulative_net_profit: toNumber(income.n_income_attr_p || income.net_profit || indicator.net_profit),
       revenue: toNumber(income.revenue || income.total_revenue || indicator.revenue),
       net_profit: toNumber(income.n_income_attr_p || income.net_profit || indicator.net_profit),
+      tr_yoy: toNumber(indicator.tr_yoy || indicator.or_yoy || indicator.revenue_yoy),
       revenue_yoy: toNumber(indicator.tr_yoy || indicator.or_yoy || indicator.revenue_yoy),
       netprofit_yoy: toNumber(indicator.netprofit_yoy || indicator.profit_to_gr),
       dt_netprofit_yoy: toNumber(indicator.dt_netprofit_yoy),
+      grossprofit_margin: toNumber(indicator.grossprofit_margin),
       gross_margin: toNumber(indicator.grossprofit_margin),
       roe: toNumber(indicator.roe || indicator.roe_dt),
     }
-  }).filter((row) => row.period)
-  return rows.reverse()
+  }).filter((row) => row.period && row.year && row.quarter)
+    .sort((a, b) => String(a.period).localeCompare(String(b.period)))
+
+  const byYearQuarter = new Map(rows.map((row) => [`${row.year}-${row.quarter}`, row]))
+  const normalized = rows
+    .filter((row) => financialMode.value === 'annual' ? row.quarter === 4 : true)
+    .map((row) => {
+      if (financialMode.value === 'annual') {
+        return {
+          ...row,
+          period: String(row.year),
+          tr_yoy: row.revenue_yoy,
+        }
+      }
+      const previousQuarter = row.quarter > 1 ? byYearQuarter.get(`${row.year}-${row.quarter - 1}`) : null
+      const previousYearSameQuarter = byYearQuarter.get(`${row.year - 1}-${row.quarter}`)
+      const revenue = row.quarter === 1
+        ? row.cumulative_revenue
+        : diffOrNull(row.cumulative_revenue, previousQuarter?.cumulative_revenue)
+      const netProfit = row.quarter === 1
+        ? row.cumulative_net_profit
+        : diffOrNull(row.cumulative_net_profit, previousQuarter?.cumulative_net_profit)
+      const priorRevenue = previousYearSameQuarter
+        ? (row.quarter === 1
+          ? previousYearSameQuarter.cumulative_revenue
+          : diffOrNull(
+            previousYearSameQuarter.cumulative_revenue,
+            byYearQuarter.get(`${row.year - 1}-${row.quarter - 1}`)?.cumulative_revenue,
+          ))
+        : null
+      const priorNetProfit = previousYearSameQuarter
+        ? (row.quarter === 1
+          ? previousYearSameQuarter.cumulative_net_profit
+          : diffOrNull(
+            previousYearSameQuarter.cumulative_net_profit,
+            byYearQuarter.get(`${row.year - 1}-${row.quarter - 1}`)?.cumulative_net_profit,
+          ))
+        : null
+      return {
+        ...row,
+        period: row.periodLabel,
+        revenue,
+        net_profit: netProfit,
+        tr_yoy: calcYoy(revenue, priorRevenue),
+        revenue_yoy: calcYoy(revenue, priorRevenue),
+        netprofit_yoy: calcYoy(netProfit, priorNetProfit),
+      }
+    })
+    .filter((row) => row.revenue != null || row.net_profit != null || row.tr_yoy != null || row.netprofit_yoy != null)
+
+  return normalized.slice(-8)
 })
+
+const financialModeLabel = computed(() => financialMode.value === 'annual' ? '年度对比' : '单季对比')
 
 const financialMetrics = computed(() => {
   const latest = indicatorRows.value[0] || {}
@@ -763,8 +834,8 @@ const financialMetrics = computed(() => {
     { label: '营收同比', value: fmtNumber(latest.tr_yoy || latest.or_yoy, 2, '%') },
     { label: 'PE TTM', value: fmtNumber((indicatorRows.value[0] || {}).pe_ttm || quote.value.pe_ttm) },
     { label: 'PB', value: fmtNumber((indicatorRows.value[0] || {}).pb || quote.value.pb) },
-    { label: '总资产', value: fmtAmount(latestBalance.total_assets) },
-    { label: '经营现金流', value: fmtAmount(latestCashflow.n_cashflow_act) },
+    { label: '总资产', value: fmtStatementAmount(latestBalance.total_assets) },
+    { label: '经营现金流', value: fmtStatementAmount(latestCashflow.n_cashflow_act) },
   ]
 })
 
@@ -772,7 +843,7 @@ const earningsEvents = computed(() => {
   const rows = []
   const source = earnings.value || {}
   for (const row of source.forecast || []) rows.push({ type: '业绩预告', date: row.ann_date || row.end_date, title: row.type || row.summary || '业绩预告', raw: row })
-  for (const row of source.express || []) rows.push({ type: '业绩快报', date: row.ann_date || row.end_date, title: row.revenue ? `营收 ${fmtAmount(row.revenue)}` : '业绩快报', raw: row })
+  for (const row of source.express || []) rows.push({ type: '业绩快报', date: row.ann_date || row.end_date, title: row.revenue ? `营收 ${fmtStatementAmount(row.revenue)}` : '业绩快报', raw: row })
   for (const row of source.disclosure || []) rows.push({ type: '披露日历', date: row.ann_date || row.pre_date, title: row.pre_date ? `预计披露 ${row.pre_date}` : '披露日历', raw: row })
   for (const row of source.report_rc || []) rows.push({ type: '调研/研报', date: row.ann_date || row.end_date, title: row.organ_name || row.title || '调研/研报', raw: row })
   return rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 8)
@@ -1214,6 +1285,36 @@ function firstFinite(values) {
   return null
 }
 
+function reportYear(period) {
+  const text = String(period || '')
+  const year = Number(text.slice(0, 4))
+  return Number.isFinite(year) ? year : null
+}
+
+function reportQuarter(period) {
+  const suffix = String(period || '').slice(4)
+  return {
+    '0331': 1,
+    '0630': 2,
+    '0930': 3,
+    '1231': 4,
+  }[suffix] || null
+}
+
+function diffOrNull(current, previous) {
+  const a = toNumber(current)
+  const b = toNumber(previous)
+  if (a == null || b == null) return null
+  return a - b
+}
+
+function calcYoy(current, previous) {
+  const a = toNumber(current)
+  const b = toNumber(previous)
+  if (a == null || b == null || b === 0) return null
+  return ((a - b) / Math.abs(b)) * 100
+}
+
 function canonicalSymbol(value) {
   return String(value || '').trim().toUpperCase().split('.')[0]
 }
@@ -1246,6 +1347,14 @@ function fmtAmount(value) {
   if (!Number.isFinite(n)) return '-'
   if (Math.abs(n) >= 10000) return `${(n / 10000).toFixed(2)}亿`
   return `${n.toFixed(2)}万`
+}
+
+function fmtStatementAmount(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  if (Math.abs(n) >= 100000000) return `${(n / 100000000).toFixed(2)}亿`
+  if (Math.abs(n) >= 10000) return `${(n / 10000).toFixed(2)}万`
+  return `${n.toFixed(2)}元`
 }
 
 function valueClass(value) {
@@ -1634,6 +1743,15 @@ h1, h2, h3 {
 .score-radar {
   height: 360px;
   min-height: 360px;
+}
+.financial-mode-toggle {
+  margin: 14px 0 10px;
+}
+.financial-mode-toggle :deep(.v-btn) {
+  color: #cbd5e1;
+}
+.financial-mode-toggle :deep(.v-btn--active) {
+  color: #f8fafc;
 }
 .summary-line {
   color: #f8fafc;
