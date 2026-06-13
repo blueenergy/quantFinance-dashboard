@@ -277,8 +277,11 @@
             </div>
             <MoneyFlowPanel
               :latest="latestMoneyFlow"
-              :history="moneyFlowHistory"
+              :history="activeMoneyFlowHistory"
               :summary="moneyFlowSummary"
+              :period="quoteKlineTf"
+              :kline-rows="quoteKlineRows"
+              :loading="moneyFlowIsLoading"
             />
           </section>
         </v-window-item>
@@ -1067,6 +1070,7 @@ import {
   getStockWorkbenchAi,
   getStockWorkbenchFinancials,
   getStockWorkbenchKline,
+  getStockWorkbenchMoneyFlow,
   getStockWorkbenchNineTurn,
   getStockWorkbenchQuote,
   getStockWorkbenchScores,
@@ -1107,6 +1111,7 @@ const tradingContext = ref({})
 const financialMode = ref('quarterly')
 const quoteKlineTf = ref('1d')
 const quoteKlineLoading = ref({ '1d': false, '1w': false, '1m': false })
+const moneyFlowLoading = ref({ '1d': false, '1w': false, '1m': false })
 const sectionLoading = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
 const sectionLoaded = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
 const shareholderData = ref({})
@@ -1145,6 +1150,7 @@ const quoteMonthlyRows = computed(() => Array.isArray(payload.value?.monthly_quo
 const latestDailyBasic = computed(() => payload.value?.daily_basic || {})
 const latestMoneyFlow = computed(() => payload.value?.money_flow || null)
 const moneyFlowHistory = computed(() => Array.isArray(payload.value?.money_flow_history) ? payload.value.money_flow_history : [])
+const moneyFlowHistoryByTf = computed(() => payload.value?.money_flow_history_by_tf || {})
 const moneyFlowSummary = computed(() => payload.value?.money_flow_summary || {})
 const quoteSectionDate = computed(() => dataStatus.value?.sections?.quote?.as_of || latestDailyBasic.value.trade_date || quote.value.trade_date || '')
 const nineTurnDailyRows = computed(() => Array.isArray(payload.value?.nine_turn_daily_quotes) ? payload.value.nine_turn_daily_quotes : [])
@@ -1194,6 +1200,14 @@ const quoteKlineRows = computed(() => {
 const quoteKlineIsLoading = computed(() => quoteKlineTf.value === '1d'
   ? Boolean(sectionLoading.value.quote)
   : Boolean(quoteKlineLoading.value[quoteKlineTf.value]))
+const activeMoneyFlowHistory = computed(() => {
+  if (quoteKlineTf.value === '1d') return moneyFlowHistory.value
+  const rows = moneyFlowHistoryByTf.value?.[quoteKlineTf.value]
+  return Array.isArray(rows) ? rows : []
+})
+const moneyFlowIsLoading = computed(() => quoteKlineTf.value === '1d'
+  ? Boolean(sectionLoading.value.quote)
+  : Boolean(moneyFlowLoading.value[quoteKlineTf.value] || quoteKlineLoading.value[quoteKlineTf.value]))
 
 const stockSymbol = computed(() => stock.value.symbol || payload.value?.symbol || '-')
 const stockName = computed(() => stock.value.name || stock.value.stock_name || '')
@@ -1594,6 +1608,12 @@ watch(activePanel, async (panel) => {
   if (!payload.value) return
   if (panel === 'quote') {
     await loadWorkbenchSection('quote')
+    if (quoteKlineTf.value !== '1d') {
+      await Promise.all([
+        ensureQuoteKline(quoteKlineTf.value),
+        ensureQuoteMoneyFlow(quoteKlineTf.value),
+      ])
+    }
   } else if (panel === 'nine-turn') {
     await loadWorkbenchSection('nine_turn')
   } else if (panel === 'scores') {
@@ -1611,7 +1631,10 @@ watch(activePanel, async (panel) => {
 })
 
 watch(quoteKlineTf, (tf) => {
-  void ensureQuoteKline(tf)
+  void Promise.all([
+    ensureQuoteKline(tf),
+    ensureQuoteMoneyFlow(tf),
+  ])
 })
 
 function selectSearchCandidate(item) {
@@ -1641,6 +1664,7 @@ async function loadSymbol(symbol) {
     sectionLoaded.value = { quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
     sectionLoading.value = { quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
     quoteKlineLoading.value = { '1d': false, '1w': false, '1m': false }
+    moneyFlowLoading.value = { '1d': false, '1w': false, '1m': false }
     const workbench = await getStockWorkbench(clean)
     if (canonicalSymbol(directSymbol.value) !== canonicalSymbol(clean)) return
     payload.value = {
@@ -1716,7 +1740,12 @@ function queueInitialSectionLoads(options = {}) {
   if (options.deferQuote) {
     scheduleIdleSectionLoad('quote')
     if (activePanel.value === 'quote' && quoteKlineTf.value !== '1d') {
-      scheduleIdleTask(() => { void ensureQuoteKline(quoteKlineTf.value) })
+      scheduleIdleTask(() => {
+        void Promise.all([
+          ensureQuoteKline(quoteKlineTf.value),
+          ensureQuoteMoneyFlow(quoteKlineTf.value),
+        ])
+      })
     }
   } else {
     tasks.push(loadWorkbenchSection('quote', { force: true }))
@@ -1807,12 +1836,17 @@ async function loadWorkbenchSection(section, options = {}) {
     if (section === 'quote') {
       const data = await getStockWorkbenchQuote(symbol)
       if (!isCurrentWorkbenchSymbol(symbol)) return
+      const dailyMoneyFlowHistory = Array.isArray(data?.money_flow_history) ? data.money_flow_history : []
       mergeWorkbenchSection('quote', data, {
         quote: data?.quote || null,
         daily_quotes: Array.isArray(data?.daily_quotes) ? data.daily_quotes : [],
         daily_basic: data?.daily_basic || null,
         money_flow: data?.money_flow || null,
-        money_flow_history: Array.isArray(data?.money_flow_history) ? data.money_flow_history : [],
+        money_flow_history: dailyMoneyFlowHistory,
+        money_flow_history_by_tf: {
+          ...(payload.value?.money_flow_history_by_tf || {}),
+          '1d': dailyMoneyFlowHistory,
+        },
         money_flow_summary: data?.money_flow_summary || {},
       })
     } else if (section === 'nine_turn') {
@@ -1882,6 +1916,7 @@ async function ensureQuoteKline(tf = quoteKlineTf.value) {
   }
   if (tf === '1w' && quoteWeeklyRows.value.length) return
   if (tf === '1m' && quoteMonthlyRows.value.length) return
+  if (quoteKlineLoading.value[tf]) return
 
   const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
   if (!symbol) return
@@ -1907,6 +1942,48 @@ async function ensureQuoteKline(tf = quoteKlineTf.value) {
   } finally {
     if (isCurrentWorkbenchSymbol(symbol)) {
       quoteKlineLoading.value = { ...quoteKlineLoading.value, [tf]: false }
+    }
+  }
+}
+
+async function ensureQuoteMoneyFlow(tf = quoteKlineTf.value) {
+  if (!payload.value) return
+  if (tf === '1d') {
+    if (!moneyFlowHistory.value.length) await loadWorkbenchSection('quote')
+    return
+  }
+  const existing = payload.value?.money_flow_history_by_tf?.[tf]
+  if (Array.isArray(existing) && existing.length) return
+  if (moneyFlowLoading.value[tf]) return
+
+  const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
+  if (!symbol) return
+  moneyFlowLoading.value = { ...moneyFlowLoading.value, [tf]: true }
+  try {
+    const data = await getStockWorkbenchMoneyFlow(symbol, tf)
+    if (!isCurrentWorkbenchSymbol(symbol)) return
+    const rows = Array.isArray(data?.history) ? data.history : []
+    payload.value = {
+      ...(payload.value || {}),
+      money_flow: payload.value?.money_flow || data?.latest || null,
+      money_flow_summary: payload.value?.money_flow_summary || data?.summary || {},
+      money_flow_history_by_tf: {
+        ...(payload.value?.money_flow_history_by_tf || {}),
+        [tf]: rows,
+      },
+      data_status: {
+        ...(payload.value?.data_status || {}),
+        sections: {
+          ...(payload.value?.data_status?.sections || {}),
+          [`money_flow_${tf}`]: data?.data_status || {},
+        },
+      },
+    }
+  } catch (e) {
+    console.warn(`load stock workbench money flow ${tf} failed`, e)
+  } finally {
+    if (isCurrentWorkbenchSymbol(symbol)) {
+      moneyFlowLoading.value = { ...moneyFlowLoading.value, [tf]: false }
     }
   }
 }

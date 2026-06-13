@@ -13,14 +13,16 @@
       <span><i class="legend-dot legend-elg-down"></i>流出绿</span>
       <span><i class="legend-dot legend-lg-up"></i>大单净额：流入橙</span>
       <span><i class="legend-dot legend-lg-down"></i>流出青</span>
-      <span><i class="legend-line legend-main"></i>5日主力累计</span>
+      <span v-if="periodMeta.showRollingLine"><i class="legend-line legend-main"></i>{{ periodMeta.rollingLabel }}</span>
     </div>
 
     <div v-show="historyRows.length" ref="chartRef" class="money-flow-chart"></div>
-    <div v-if="!historyRows.length" class="money-flow-empty">暂无该股票的资金流历史。</div>
+    <div v-if="!historyRows.length" class="money-flow-empty">
+      {{ loading ? `正在加载${periodMeta.shortLabel}资金流…` : `暂无该股票的${periodMeta.shortLabel}资金流历史。` }}
+    </div>
 
     <details v-if="historyRows.length" class="money-flow-details">
-      <summary>展开最近 10 日资金流明细</summary>
+      <summary>展开最近 10 {{ periodMeta.unitLabel }}资金流明细</summary>
       <div class="money-flow-table-wrap">
         <table class="money-flow-table">
           <thead>
@@ -66,6 +68,18 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
+  period: {
+    type: String,
+    default: '1d',
+  },
+  klineRows: {
+    type: Array,
+    default: () => [],
+  },
+  loading: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const chartRef = ref(null)
@@ -73,12 +87,14 @@ let echarts = null
 let chart = null
 let resizeObserver = null
 
-const historyRows = computed(() => {
+const periodMeta = computed(() => periodConfig(props.period))
+const sourceRows = computed(() => {
   const rows = Array.isArray(props.history) ? props.history.filter((row) => row?.trade_date) : []
   if (rows.length) return rows
   const latest = latestToHistoryRow(props.latest)
   return latest ? [latest] : []
 })
+const historyRows = computed(() => aggregateMoneyFlowRows(sourceRows.value, props.period, props.klineRows))
 const recentRows = computed(() => [...historyRows.value]
   .sort((a, b) => String(b.trade_date || '').localeCompare(String(a.trade_date || '')))
   .slice(0, 10))
@@ -170,7 +186,12 @@ async function renderChart() {
     await waitForVisibleSize()
   }
   instance.setOption(
-    buildMoneyFlowOption(historyRows.value, { fmtAxis, fmtWanAmount }),
+    buildMoneyFlowOption(historyRows.value, {
+      fmtAxis,
+      fmtWanAmount,
+      rollingLabel: periodMeta.value.rollingLabel,
+      showRollingLine: periodMeta.value.showRollingLine,
+    }),
     true,
   )
   instance.resize()
@@ -213,6 +234,58 @@ function latestToHistoryRow(row) {
   }
 }
 
+function aggregateMoneyFlowRows(rows, period, klineRows = []) {
+  const sortedRows = [...(rows || [])]
+    .filter((row) => row?.trade_date)
+    .sort((a, b) => String(a.trade_date || '').localeCompare(String(b.trade_date || '')))
+  if (period === '1d') return sortedRows
+
+  const sortedKlines = [...(klineRows || [])]
+    .filter((row) => row?.trade_date)
+    .sort((a, b) => String(a.trade_date || '').localeCompare(String(b.trade_date || '')))
+  if (!sortedRows.length || !sortedKlines.length) return []
+
+  const buckets = []
+  let rowIdx = 0
+  let previousEnd = ''
+  sortedKlines.forEach((kline) => {
+    const end = String(kline.trade_date || '')
+    const bucketRows = []
+    while (rowIdx < sortedRows.length) {
+      const tradeDate = String(sortedRows[rowIdx]?.trade_date || '')
+      if (tradeDate <= previousEnd) {
+        rowIdx += 1
+        continue
+      }
+      if (tradeDate > end) break
+      bucketRows.push(sortedRows[rowIdx])
+      rowIdx += 1
+    }
+    if (bucketRows.length) {
+      buckets.push(aggregateBucket(bucketRows, end))
+    }
+    previousEnd = end
+  })
+  return buckets
+}
+
+function aggregateBucket(rows, tradeDate) {
+  const fields = ['elg_net', 'lg_net', 'main_net', 'md_net', 'sm_net', 'net_mf_amount', 'amount']
+  const result = {
+    symbol: rows[rows.length - 1]?.symbol || rows[rows.length - 1]?.ts_code,
+    ts_code: rows[rows.length - 1]?.ts_code,
+    trade_date: tradeDate,
+    period_start: rows[0]?.trade_date,
+    sample_count: rows.length,
+    unit: 'wan_yuan',
+  }
+  fields.forEach((field) => {
+    const values = rows.map((row) => toNumber(row?.[field])).filter((value) => value != null)
+    result[field] = values.length ? values.reduce((sum, value) => sum + value, 0) : null
+  })
+  return result
+}
+
 function amountDiff(buy, sell) {
   const b = toNumber(buy)
   const s = toNumber(sell)
@@ -248,6 +321,31 @@ function streakValue(value) {
   const n = Number(value)
   if (!Number.isFinite(n) || n === 0) return '-'
   return `${Math.abs(n)} 天`
+}
+
+function periodConfig(period) {
+  if (period === '1w') {
+    return {
+      shortLabel: '周线',
+      unitLabel: '周',
+      rollingLabel: '5周主力累计',
+      showRollingLine: true,
+    }
+  }
+  if (period === '1m') {
+    return {
+      shortLabel: '月线',
+      unitLabel: '月',
+      rollingLabel: '5月主力累计',
+      showRollingLine: false,
+    }
+  }
+  return {
+    shortLabel: '日线',
+    unitLabel: '日',
+    rollingLabel: '5日主力累计',
+    showRollingLine: true,
+  }
 }
 </script>
 

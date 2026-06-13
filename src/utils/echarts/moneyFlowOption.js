@@ -2,6 +2,8 @@ export function buildMoneyFlowOption(rows, formatters = {}) {
   const {
     fmtAxis = (value) => String(value || ''),
     fmtWanAmount = defaultFmtWanAmount,
+    rollingLabel = '5日主力累计',
+    showRollingLine = true,
   } = formatters
   const data = [...(rows || [])]
     .sort((a, b) => String(a.trade_date || '').localeCompare(String(b.trade_date || '')))
@@ -11,6 +13,32 @@ export function buildMoneyFlowOption(rows, formatters = {}) {
   const lgNet = data.map((row) => toFinite(row.lg_net))
   const mainNet = data.map((row) => toFinite(row.main_net))
   const mainNet5d = data.map((_, idx) => rollingSum(mainNet, idx, 5))
+  const series = [
+    {
+      name: '超大单净额',
+      type: 'bar',
+      stack: 'main',
+      data: elgNet.map((value) => barPoint(value, { up: '#ef4444', down: '#22c55e' })),
+      barMaxWidth: 18,
+    },
+    {
+      name: '大单净额',
+      type: 'bar',
+      stack: 'main',
+      data: lgNet.map((value) => barPoint(value, { up: '#fb923c', down: '#14b8a6' })),
+      barMaxWidth: 18,
+    },
+  ]
+  if (showRollingLine) {
+    series.push({
+      name: rollingLabel,
+      type: 'line',
+      smooth: true,
+      symbol: 'none',
+      data: mainNet5d,
+      lineStyle: { width: 2, color: '#60a5fa' },
+    })
+  }
 
   return {
     backgroundColor: 'transparent',
@@ -33,6 +61,7 @@ export function buildMoneyFlowOption(rows, formatters = {}) {
           `大单：${fmtWanAmount(row.lg_net)}`,
           `中单：${fmtWanAmount(row.md_net)}`,
           `小单：${fmtWanAmount(row.sm_net)}`,
+          ...(showRollingLine ? [`${rollingLabel}：${fmtWanAmount(mainNet5d[idx])}`] : []),
         ].join('<br/>')
       },
     },
@@ -59,30 +88,7 @@ export function buildMoneyFlowOption(rows, formatters = {}) {
       { type: 'inside' },
       { type: 'slider', height: 18, bottom: 16, borderColor: 'rgba(148, 163, 184, .25)' },
     ],
-    series: [
-      {
-        name: '超大单净额',
-        type: 'bar',
-        stack: 'main',
-        data: elgNet.map((value) => barPoint(value, { up: '#ef4444', down: '#22c55e' })),
-        barMaxWidth: 18,
-      },
-      {
-        name: '大单净额',
-        type: 'bar',
-        stack: 'main',
-        data: lgNet.map((value) => barPoint(value, { up: '#fb923c', down: '#14b8a6' })),
-        barMaxWidth: 18,
-      },
-      {
-        name: '5日主力累计',
-        type: 'line',
-        smooth: true,
-        symbol: 'none',
-        data: mainNet5d,
-        lineStyle: { width: 2, color: '#60a5fa' },
-      },
-    ],
+    series,
   }
 }
 
