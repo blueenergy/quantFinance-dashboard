@@ -592,6 +592,14 @@
                 <span>北向占比变动</span>
                 <strong :class="pctClass(shSummary.northbound_ratio_chg)">{{ shSummary.northbound_ratio_chg != null ? `${shSummary.northbound_ratio_chg > 0 ? '+' : ''}${shSummary.northbound_ratio_chg.toFixed(2)}pct` : '-' }}</strong>
               </div>
+              <div>
+                <span>外资机构新进</span>
+                <strong>{{ shSummary.intl_new_count || 0 }} 家</strong>
+              </div>
+              <div>
+                <span>香港中央结算变化</span>
+                <strong :class="pctClass(shSummary.hksc_hold_ratio_chg)">{{ shSummary.hksc_hold_ratio_chg != null ? `${shSummary.hksc_hold_ratio_chg > 0 ? '+' : ''}${shSummary.hksc_hold_ratio_chg.toFixed(2)}pct` : '-' }}</strong>
+              </div>
             </div>
           </section>
 
@@ -601,6 +609,7 @@
                 <h3>股东户数趋势</h3>
                 <span class="muted">按报告期</span>
               </div>
+              <div v-if="shHolderNumbers.length" ref="holderNumberChartRef" class="shareholder-mini-chart"></div>
               <div v-if="shHolderNumbers.length" class="quote-table-wrap">
                 <table class="quote-table">
                   <thead>
@@ -623,6 +632,7 @@
                 <h3>北向持股（沪深港股通）</h3>
                 <span class="muted">2024-08 起按季披露</span>
               </div>
+              <div v-if="shHkHold.length" ref="hkHoldChartRef" class="shareholder-mini-chart"></div>
               <div v-if="shHkHold.length" class="quote-table-wrap">
                 <table class="quote-table">
                   <thead>
@@ -639,6 +649,44 @@
               </div>
               <div v-else class="muted-block">暂无北向持股数据。</div>
             </article>
+          </section>
+
+          <section class="workbench-card">
+            <div class="card-title-row">
+              <h3>前十大流通股东变化</h3>
+              <span class="muted">
+                {{ shTop10Change.period_curr || '-' }}
+                <template v-if="shTop10Change.period_prev"> vs {{ shTop10Change.period_prev }}</template>
+              </span>
+            </div>
+            <div v-if="shTop10Change.period_curr" class="shareholder-signal-grid">
+              <article>
+                <h4>国际机构/外资席位新进</h4>
+                <div v-if="shIntlNew.length" class="chip-list">
+                  <span v-for="row in shIntlNew" :key="`${row.norm_key}-${row.holder_name}`" class="chip-pill">
+                    {{ row.norm_label }} · {{ row.holder_name }} · {{ fmtShares(row.hold_amount) }} · {{ fmtNullablePct(row.hold_ratio) }}
+                  </span>
+                </div>
+                <p v-else class="muted">最近两期未识别到高盛/摩根/UBS 等国际机构新进。</p>
+              </article>
+              <article>
+                <h4>香港中央结算有限公司</h4>
+                <template v-if="shHksc.current">
+                  <p>
+                    本期 {{ fmtShares(shHksc.current.hold_amount) }} · {{ fmtNullablePct(shHksc.current.hold_ratio) }}
+                  </p>
+                  <p>
+                    较上期
+                    <strong :class="valueClass(shHksc.hold_amount_chg)">{{ fmtSignedShares(shHksc.hold_amount_chg) }}</strong>
+                    /
+                    <strong :class="pctClass(shHksc.hold_ratio_chg)">{{ shHksc.hold_ratio_chg != null ? `${shHksc.hold_ratio_chg > 0 ? '+' : ''}${shHksc.hold_ratio_chg.toFixed(2)}pct` : '-' }}</strong>
+                  </p>
+                  <small>北向集合账户,不是单一外资机构,但持仓变化本身值得跟踪。</small>
+                </template>
+                <p v-else class="muted">本期未进入前十大流通股东。</p>
+              </article>
+            </div>
+            <div v-else class="muted-block">暂无前十大流通股东变化数据。</div>
           </section>
 
           <section class="workbench-card">
@@ -940,7 +988,11 @@ const sectionLoading = ref({ quote: false, scores: false, financials: false, ai:
 const sectionLoaded = ref({ quote: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
 const shareholderData = ref({})
 const radarRef = ref(null)
+const holderNumberChartRef = ref(null)
+const hkHoldChartRef = ref(null)
 let radarChart = null
+let holderNumberChart = null
+let hkHoldChart = null
 let analysisPollTimer = null
 
 const RECENT_SYMBOLS_KEY = 'stock-workbench:recent-symbols'
@@ -978,6 +1030,9 @@ const shHkHold = computed(() => Array.isArray(shareholderData.value.hk_hold) ? s
 const shHolderTrades = computed(() => Array.isArray(shareholderData.value.holder_trades) ? shareholderData.value.holder_trades : [])
 const shShareFloats = computed(() => Array.isArray(shareholderData.value.share_floats) ? shareholderData.value.share_floats : [])
 const shRepurchases = computed(() => Array.isArray(shareholderData.value.repurchases) ? shareholderData.value.repurchases : [])
+const shTop10Change = computed(() => shareholderData.value.top10_float_change || {})
+const shIntlNew = computed(() => Array.isArray(shTop10Change.value.intl_new) ? shTop10Change.value.intl_new : [])
+const shHksc = computed(() => shTop10Change.value.hksc || {})
 
 const stockSymbol = computed(() => stock.value.symbol || payload.value?.symbol || '-')
 const stockName = computed(() => stock.value.name || stock.value.stock_name || '')
@@ -1067,6 +1122,7 @@ const sectionStatusItems = computed(() => {
     { key: 'quote', label: '行情资金', panel: 'quote' },
     { key: 'scores', label: '量化评分', panel: 'scores' },
     { key: 'financials', label: '财务业绩', panel: 'financial' },
+    { key: 'shareholders', label: '股东筹码', panel: 'shareholders' },
     { key: 'ai', label: 'AI 分析', panel: 'analysis' },
     { key: 'trading', label: '交易状态', panel: 'analysis' },
   ]
@@ -1076,6 +1132,7 @@ const sectionStatusItems = computed(() => {
       quote: dataStatus.value.quote_found,
       scores: dataStatus.value.score_found,
       financials: Boolean(incomeRows.value.length || indicatorRows.value.length),
+      shareholders: Boolean(shHolderNumbers.value.length || shHkHold.value.length),
       ai: dataStatus.value.deep_analysis_found,
       trading: Boolean(watchlistContext.value.in_watchlist || tradingPositions.value.length || recentTradeSignals.value.length),
     }[def.key]
@@ -1433,6 +1490,7 @@ async function loadSymbol(symbol) {
     earnings.value = {}
     tradingContext.value = {}
     shareholderData.value = {}
+    disposeShareholderCharts()
     queueInitialSectionLoads()
     await nextTick()
     renderRadar()
@@ -1558,6 +1616,8 @@ async function loadWorkbenchSection(section, options = {}) {
       if (!isCurrentWorkbenchSymbol(symbol)) return
       shareholderData.value = data || {}
       mergeWorkbenchSection('shareholders', data, {})
+      await nextTick()
+      renderShareholderCharts()
     }
     sectionLoaded.value = { ...sectionLoaded.value, [section]: true }
   } catch (e) {
@@ -1747,6 +1807,122 @@ function renderRadar() {
   radarChart.resize()
 }
 
+function renderShareholderCharts() {
+  renderHolderNumberChart()
+  renderHkHoldChart()
+}
+
+function renderHolderNumberChart() {
+  const rows = shHolderNumbers.value
+    .slice(0, 12)
+    .reverse()
+    .map((row) => ({
+      date: row.end_date,
+      value: toNumber(row.holder_num),
+    }))
+    .filter((row) => row.date && row.value != null)
+  if (!holderNumberChartRef.value || !rows.length) return
+  if (!holderNumberChart) holderNumberChart = echarts.init(holderNumberChartRef.value)
+  holderNumberChart.setOption({
+    backgroundColor: 'transparent',
+    grid: { left: 44, right: 18, top: 20, bottom: 28 },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (items) => {
+        const row = items?.[0]
+        return row ? `${row.axisValue}<br/>股东户数：${Number(row.data).toLocaleString()}` : ''
+      },
+    },
+    xAxis: {
+      type: 'category',
+      data: rows.map((row) => row.date),
+      axisLabel: { color: '#94a3b8', fontSize: 11 },
+      axisLine: { lineStyle: { color: 'rgba(148,163,184,.3)' } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        color: '#94a3b8',
+        formatter: (value) => {
+          if (Math.abs(value) >= 10000) return `${Math.round(value / 10000)}万`
+          return `${Math.round(value)}`
+        },
+      },
+      splitLine: { lineStyle: { color: 'rgba(148,163,184,.16)' } },
+    },
+    series: [{
+      type: 'line',
+      data: rows.map((row) => row.value),
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 6,
+      lineStyle: { color: '#60a5fa', width: 2 },
+      itemStyle: { color: '#93c5fd' },
+      areaStyle: { color: 'rgba(96,165,250,.14)' },
+    }],
+  })
+  holderNumberChart.resize()
+}
+
+function renderHkHoldChart() {
+  const rows = shHkHold.value
+    .slice(0, 12)
+    .reverse()
+    .map((row) => ({
+      date: row.trade_date,
+      ratio: toNumber(row.ratio),
+    }))
+    .filter((row) => row.date && row.ratio != null)
+  if (!hkHoldChartRef.value || !rows.length) return
+  if (!hkHoldChart) hkHoldChart = echarts.init(hkHoldChartRef.value)
+  hkHoldChart.setOption({
+    backgroundColor: 'transparent',
+    grid: { left: 42, right: 18, top: 20, bottom: 28 },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (items) => {
+        const row = items?.[0]
+        return row ? `${row.axisValue}<br/>北向占比：${Number(row.data).toFixed(2)}%` : ''
+      },
+    },
+    xAxis: {
+      type: 'category',
+      data: rows.map((row) => row.date),
+      axisLabel: { color: '#94a3b8', fontSize: 11 },
+      axisLine: { lineStyle: { color: 'rgba(148,163,184,.3)' } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: '#94a3b8', formatter: (value) => `${value}%` },
+      splitLine: { lineStyle: { color: 'rgba(148,163,184,.16)' } },
+    },
+    series: [{
+      type: 'line',
+      data: rows.map((row) => row.ratio),
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 6,
+      lineStyle: { color: '#f97316', width: 2 },
+      itemStyle: { color: '#fb923c' },
+      areaStyle: { color: 'rgba(249,115,22,.13)' },
+    }],
+  })
+  hkHoldChart.resize()
+}
+
+function disposeShareholderCharts() {
+  if (holderNumberChart) {
+    holderNumberChart.dispose()
+    holderNumberChart = null
+  }
+  if (hkHoldChart) {
+    hkHoldChart.dispose()
+    hkHoldChart = null
+  }
+}
+
 function formatDetail(detail) {
   if (!detail || !Object.keys(detail).length) return '暂无详情'
   return JSON.stringify(detail, null, 2)
@@ -1925,6 +2101,13 @@ function fmtShares(value) {
   return `${n.toFixed(0)}股`
 }
 
+function fmtSignedShares(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  const absText = fmtShares(Math.abs(n))
+  return `${n > 0 ? '+' : n < 0 ? '-' : ''}${absText}`
+}
+
 // 股东户数下降视为筹码集中（利多→红），上升视为分散（利空→绿）。
 function holderTrendClass(value) {
   const n = Number(value)
@@ -1977,6 +2160,7 @@ onBeforeUnmount(() => {
     radarChart.dispose()
     radarChart = null
   }
+  disposeShareholderCharts()
 })
 </script>
 
@@ -2488,6 +2672,47 @@ pre {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.shareholder-mini-chart {
+  height: 180px;
+  margin-bottom: 10px;
+  width: 100%;
+}
+.shareholder-signal-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.shareholder-signal-grid article {
+  background: rgba(15, 23, 42, .45);
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 12px;
+  padding: 12px;
+}
+.shareholder-signal-grid h4 {
+  color: #e2e8f0;
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.shareholder-signal-grid p {
+  color: #cbd5e1;
+  margin: 6px 0;
+}
+.shareholder-signal-grid small {
+  color: #94a3b8;
+}
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip-pill {
+  background: rgba(96, 165, 250, .14);
+  border: 1px solid rgba(96, 165, 250, .24);
+  border-radius: 999px;
+  color: #bfdbfe;
+  font-size: 12px;
+  padding: 5px 10px;
 }
 .badge-upcoming {
   background: rgba(248, 113, 113, .16);
