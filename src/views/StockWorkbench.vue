@@ -717,8 +717,8 @@
                 <strong :class="pctClass(shSummary.northbound_ratio_chg)">{{ shSummary.northbound_ratio_chg != null ? `${shSummary.northbound_ratio_chg > 0 ? '+' : ''}${shSummary.northbound_ratio_chg.toFixed(2)}pct` : '-' }}</strong>
               </div>
               <div>
-                <span>外资机构新进</span>
-                <strong>{{ shSummary.intl_new_count || 0 }} 家</strong>
+                <span>外资机构变化</span>
+                <strong>{{ shSummary.intl_change_count ?? shSummary.intl_new_count ?? 0 }} 家</strong>
               </div>
               <div>
                 <span>香港中央结算变化</span>
@@ -785,13 +785,26 @@
             </div>
             <div v-if="shTop10Change.period_curr" class="shareholder-signal-grid">
               <article>
-                <h4>国际机构/外资席位新进</h4>
-                <div v-if="shIntlNew.length" class="chip-list">
-                  <span v-for="row in shIntlNew" :key="`${row.norm_key}-${row.holder_name}`" class="chip-pill">
-                    {{ row.norm_label }} · {{ row.holder_name }} · {{ fmtShares(row.hold_amount) }} · {{ fmtNullablePct(row.hold_ratio) }}
+                <h4>国际机构/外资席位变化</h4>
+                <div v-if="shIntlChanges.length" class="chip-list">
+                  <span
+                    v-for="row in shIntlChanges"
+                    :key="`${row.norm_key}-${row.current?.holder_name || row.previous?.holder_name || row.holder_name}`"
+                    class="chip-pill"
+                  >
+                    {{ row.norm_label }} · {{ top10ChangeLabel(row.change_type) }}
+                    <template v-if="row.current">
+                      · 本期 {{ fmtShares(row.current.hold_amount) }} / {{ fmtNullablePct(row.current.hold_ratio) }}
+                    </template>
+                    <template v-if="row.previous && row.change_type === 'exited'">
+                      · 上期 {{ fmtShares(row.previous.hold_amount) }} / {{ fmtNullablePct(row.previous.hold_ratio) }}
+                    </template>
+                    <template v-if="row.hold_ratio_chg != null && !['new', 'exited'].includes(row.change_type)">
+                      · {{ top10RatioChangeText(row) }}
+                    </template>
                   </span>
                 </div>
-                <p v-else class="muted">最近两期未识别到高盛/摩根/UBS 等国际机构新进。</p>
+                <p v-else class="muted">最近两期未识别到高盛/摩根/UBS 等国际机构持仓变化。</p>
               </article>
               <article>
                 <h4>香港中央结算有限公司</h4>
@@ -800,10 +813,10 @@
                     本期 {{ fmtShares(shHksc.current.hold_amount) }} · {{ fmtNullablePct(shHksc.current.hold_ratio) }}
                   </p>
                   <p>
-                    较上期
+                    较上期 {{ top10ChangeLabel(shHksc.change_type) }}
                     <strong :class="valueClass(shHksc.hold_amount_chg)">{{ fmtSignedShares(shHksc.hold_amount_chg) }}</strong>
                     /
-                    <strong :class="pctClass(shHksc.hold_ratio_chg)">{{ shHksc.hold_ratio_chg != null ? `${shHksc.hold_ratio_chg > 0 ? '+' : ''}${shHksc.hold_ratio_chg.toFixed(2)}pct` : '-' }}</strong>
+                    <strong :class="pctClass(shHksc.hold_ratio_chg)">{{ top10RatioChangeText(shHksc) }}</strong>
                   </p>
                   <small>北向集合账户,不是单一外资机构,但持仓变化本身值得跟踪。</small>
                 </template>
@@ -816,9 +829,14 @@
           <section class="workbench-card">
             <div class="card-title-row">
               <h3>股东增减持</h3>
-              <span class="muted">公告驱动</span>
+              <span class="muted">
+                公告驱动 · {{ shHolderTrades.length || 0 }} 条
+                <button type="button" class="text-link-button" @click="shareholderTradesExpanded = !shareholderTradesExpanded">
+                  {{ shareholderTradesExpanded ? '收起' : '展开' }}
+                </button>
+              </span>
             </div>
-            <div v-if="shHolderTrades.length" class="quote-table-wrap">
+            <div v-if="shareholderTradesExpanded && shHolderTrades.length" class="quote-table-wrap">
               <table class="quote-table">
                 <thead>
                   <tr><th>公告日</th><th>股东</th><th>方向</th><th>变动股数</th><th>占比</th><th>变动后持股比</th><th>均价</th></tr>
@@ -836,7 +854,8 @@
                 </tbody>
               </table>
             </div>
-            <div v-else class="muted-block">暂无股东增减持记录。</div>
+            <div v-else-if="shareholderTradesExpanded" class="muted-block">暂无股东增减持记录。</div>
+            <div v-else class="muted-block">默认收起公告驱动的股东增减持明细，可展开查看。</div>
           </section>
 
           <section class="panel-grid">
@@ -1118,6 +1137,7 @@ const moneyFlowLoading = ref({ '1d': false, '1w': false, '1m': false })
 const sectionLoading = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
 const sectionLoaded = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
 const shareholderData = ref({})
+const shareholderTradesExpanded = ref(false)
 const radarRef = ref(null)
 const holderNumberChartRef = ref(null)
 const hkHoldChartRef = ref(null)
@@ -1183,6 +1203,22 @@ const shShareFloats = computed(() => Array.isArray(shareholderData.value.share_f
 const shRepurchases = computed(() => Array.isArray(shareholderData.value.repurchases) ? shareholderData.value.repurchases : [])
 const shTop10Change = computed(() => shareholderData.value.top10_float_change || {})
 const shIntlNew = computed(() => Array.isArray(shTop10Change.value.intl_new) ? shTop10Change.value.intl_new : [])
+const shIntlChanges = computed(() => {
+  if (Array.isArray(shTop10Change.value.intl_changes)) {
+    return shTop10Change.value.intl_changes.filter((row) => row?.change_type !== 'unchanged')
+  }
+  return shIntlNew.value.map((row) => ({
+    norm_key: row.norm_key,
+    norm_label: row.norm_label,
+    holder_name: row.holder_name,
+    change_type: 'new',
+    current: row,
+    previous: null,
+    hold_amount_chg: null,
+    hold_ratio_chg: null,
+    hold_ratio_rel_chg_pct: null,
+  }))
+})
 const shHksc = computed(() => shTop10Change.value.hksc || {})
 
 const quoteKlineTfOptions = [
@@ -1668,6 +1704,7 @@ async function loadSymbol(symbol) {
     sectionLoading.value = { quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
     quoteKlineLoading.value = { '1d': false, '1w': false, '1m': false }
     moneyFlowLoading.value = { '1d': false, '1w': false, '1m': false }
+    shareholderTradesExpanded.value = false
     const workbench = await getStockWorkbench(clean)
     if (canonicalSymbol(directSymbol.value) !== canonicalSymbol(clean)) return
     payload.value = {
@@ -2491,6 +2528,39 @@ function fmtSignedShares(value) {
   if (!Number.isFinite(n)) return '-'
   const absText = fmtShares(Math.abs(n))
   return `${n > 0 ? '+' : n < 0 ? '-' : ''}${absText}`
+}
+
+function signedPctPoint(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  return `${n > 0 ? '+' : ''}${n.toFixed(2)}pct`
+}
+
+function signedRelativePct(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  return `${n > 0 ? '+' : ''}${n.toFixed(1)}%`
+}
+
+function top10RatioChangeText(row) {
+  if (!row) return '-'
+  const pointText = signedPctPoint(row.hold_ratio_chg)
+  const relText = signedRelativePct(row.hold_ratio_rel_chg_pct)
+  if (pointText === '-' && relText === '-') return '-'
+  if (relText === '-') return `占比 ${pointText}`
+  if (pointText === '-') return `相对 ${relText}`
+  return `占比 ${pointText}（相对 ${relText}）`
+}
+
+function top10ChangeLabel(value) {
+  const labels = {
+    increased: '增持',
+    decreased: '减持',
+    new: '新进',
+    exited: '退出',
+    unchanged: '不变',
+  }
+  return labels[value] || '变化未知'
 }
 
 // 股东户数下降视为筹码集中（利多→红），上升视为分散（利空→绿）。
