@@ -36,12 +36,15 @@ RUN apk add --no-cache bash gettext
 
 # 3. Config
 # BACKEND_URL: FastAPI backend address (default: same host port 3001)
-# MCP_URL: dedicated MCP backend address for /api/mcp
+# MCP_URL: legacy/default MCP backend address for /api/mcp
+# MCP_READ_URL / MCP_ACTIONS_URL: split MCP backends for /api/mcp/read and /api/mcp/actions
 # ASSISTANT_URL: quant-assistant service address for /assistant/* proxying
 # WS_WORKER_HOST: worker host for /ws/<port> proxy
 # SSL_CERT / SSL_KEY: cert paths, mount via -v at runtime (optional)
 ENV BACKEND_URL=http://localhost:3001 \
     MCP_URL=http://localhost:3002 \
+    MCP_READ_URL=http://localhost:3002 \
+    MCP_ACTIONS_URL=http://localhost:3003 \
     ASSISTANT_URL=http://localhost:8002 \
     WS_WORKER_HOST=127.0.0.1 \
     SSL_CERT="" \
