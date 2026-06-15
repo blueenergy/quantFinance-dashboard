@@ -731,10 +731,15 @@
             <article class="workbench-card">
               <div class="card-title-row">
                 <h3>股东户数趋势</h3>
-                <span class="muted">按报告期</span>
+                <span class="muted">
+                  按报告期 · {{ shHolderNumbers.length || 0 }} 条
+                  <button type="button" class="text-link-button" @click="holderNumberTableExpanded = !holderNumberTableExpanded">
+                    {{ holderNumberTableExpanded ? '收起明细' : '展开明细' }}
+                  </button>
+                </span>
               </div>
               <div v-if="shHolderNumbers.length" ref="holderNumberChartRef" class="shareholder-mini-chart"></div>
-              <div v-if="shHolderNumbers.length" class="quote-table-wrap">
+              <div v-if="holderNumberTableExpanded && shHolderNumbers.length" class="quote-table-wrap">
                 <table class="quote-table">
                   <thead>
                     <tr><th>报告期</th><th>股东户数</th><th>环比</th></tr>
@@ -748,6 +753,8 @@
                   </tbody>
                 </table>
               </div>
+              <div v-else-if="holderNumberTableExpanded" class="muted-block">暂无股东户数数据。</div>
+              <div v-else-if="shHolderNumbers.length" class="muted-block">明细表默认收起，图表已展示主要趋势。</div>
               <div v-else class="muted-block">暂无股东户数数据。</div>
             </article>
 
@@ -862,9 +869,14 @@
             <article class="workbench-card">
               <div class="card-title-row">
                 <h3>限售解禁</h3>
-                <span class="muted">float_date 为解禁日</span>
+                <span class="muted">
+                  float_date 为解禁日 · {{ shShareFloats.length || 0 }} 条
+                  <button type="button" class="text-link-button" @click="shareFloatExpanded = !shareFloatExpanded">
+                    {{ shareFloatExpanded ? '收起' : '展开' }}
+                  </button>
+                </span>
               </div>
-              <div v-if="shShareFloats.length" class="quote-table-wrap">
+              <div v-if="shareFloatExpanded && shShareFloats.length" class="quote-table-wrap">
                 <table class="quote-table">
                   <thead>
                     <tr><th>解禁日</th><th>类型</th><th>解禁股数</th><th>占比</th></tr>
@@ -879,7 +891,8 @@
                   </tbody>
                 </table>
               </div>
-              <div v-else class="muted-block">暂无限售解禁数据。</div>
+              <div v-else-if="shareFloatExpanded" class="muted-block">暂无限售解禁数据。</div>
+              <div v-else class="muted-block">默认收起限售解禁明细，可展开查看。</div>
             </article>
 
             <article class="workbench-card">
@@ -1137,7 +1150,9 @@ const moneyFlowLoading = ref({ '1d': false, '1w': false, '1m': false })
 const sectionLoading = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
 const sectionLoaded = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
 const shareholderData = ref({})
+const holderNumberTableExpanded = ref(false)
 const shareholderTradesExpanded = ref(false)
+const shareFloatExpanded = ref(false)
 const radarRef = ref(null)
 const holderNumberChartRef = ref(null)
 const hkHoldChartRef = ref(null)
@@ -1704,7 +1719,9 @@ async function loadSymbol(symbol) {
     sectionLoading.value = { quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
     quoteKlineLoading.value = { '1d': false, '1w': false, '1m': false }
     moneyFlowLoading.value = { '1d': false, '1w': false, '1m': false }
+    holderNumberTableExpanded.value = false
     shareholderTradesExpanded.value = false
+    shareFloatExpanded.value = false
     const workbench = await getStockWorkbench(clean)
     if (canonicalSymbol(directSymbol.value) !== canonicalSymbol(clean)) return
     payload.value = {
