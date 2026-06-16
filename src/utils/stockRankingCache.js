@@ -27,6 +27,7 @@ function cloneRankings(arr) {
  *   displayLimit: number,
  *   rankingStrategy: string,
  *   sortBy?: string,
+ *   rankingWeights?: Record<string, number>,
  *   dateParam: string,
  *   selectedDates: string[],
  *   selectedStocks: string[],
@@ -43,6 +44,7 @@ export function buildStockRankingCacheKey(state) {
     displayLimit,
     rankingStrategy,
     sortBy = 'composite',
+    rankingWeights = {},
     dateParam,
     selectedDates = [],
     selectedStocks = [],
@@ -53,24 +55,32 @@ export function buildStockRankingCacheKey(state) {
   } = state
 
   const dp = dateParam || ''
+  const weightsSeg =
+    sortBy === 'weighted'
+      ? `|w:${Object.entries(rankingWeights || {})
+          .filter(([, v]) => Number(v) > 0)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([k, v]) => `${k}:${Number(v)}`)
+          .join(',')}`
+      : ''
   const pageSeg =
     pageSize != null && pageSize > 0 ? `|o:${pageOffset}|ps:${pageSize}` : ''
 
   switch (viewMode) {
     case 'ranking':
-      return `ranking|${displayLimit}|${rankingStrategy}|${sortBy}|${dp || 'latest'}`
+      return `ranking|${displayLimit}|${rankingStrategy}|${sortBy}${weightsSeg}|${dp || 'latest'}`
     case 'selected': {
       if (!selectedStocks.length) return null
       const d = selectedDates.length ? [...selectedDates].sort().join(',') : ''
       const syms = [...selectedStocks].sort().join(',')
       const tail = syms.length > 1500 ? `h:${djb2Hash(syms)}|n:${selectedStocks.length}` : `s:${syms}`
-      return `selected|${rankingStrategy}|${sortBy}|${dp}|d:${d}|${tail}${pageSeg}`
+      return `selected|${rankingStrategy}|${sortBy}${weightsSeg}|${dp}|d:${d}|${tail}${pageSeg}`
     }
     case 'watchlist': {
       if (!watchlistSymbols.length) return null
       const syms = [...watchlistSymbols].sort().join(',')
       const tail = syms.length > 1500 ? `h:${djb2Hash(syms)}|n:${watchlistSymbols.length}` : `s:${syms}`
-      return `watchlist|${rankingStrategy}|${sortBy}|${dp}|${tail}${pageSeg}`
+      return `watchlist|${rankingStrategy}|${sortBy}${weightsSeg}|${dp}|${tail}${pageSeg}`
     }
     case 'hs300':
     case 'csi500':
@@ -78,7 +88,7 @@ export function buildStockRankingCacheKey(state) {
     case 'a500':
     case 'star50': {
       const dseg = dp || 'latest'
-      return `${viewMode}|${rankingStrategy}|${sortBy}|${dseg}${pageSeg}`
+      return `${viewMode}|${rankingStrategy}|${sortBy}${weightsSeg}|${dseg}${pageSeg}`
     }
     default:
       return null

@@ -11,6 +11,7 @@
     :displayLimit="displayLimit"
     :rankingStrategy="rankingStrategy"
     :sortBy="sortBy"
+    :rankingWeights="rankingWeights"
     :stockInput="stockInput"
     :stockSuggestions="stockSuggestions"
     :selectedStocks="selectedStocks"
@@ -24,6 +25,7 @@
     @change-display-limit="handleChildDisplayLimitChange"
     @change-ranking-strategy="handleChildRankingStrategyChange"
     @change-sort-by="handleChildSortByChange"
+    @change-ranking-weights="handleChildRankingWeightsChange"
     @stock-input="handleChildStockInput"
     @add-stock="addStockToQuery"
     @clear-selected-stocks="clearSelectedStocks"
@@ -100,6 +102,7 @@
         <RankingTable
           :displayRows="displayRows"
           :viewMode="viewMode"
+          :sortBy="sortBy"
           :formatDateDisplay="formatDateDisplay"
           :getScoreClass="getScoreClass"
           :getRankClass="getRankClass"
@@ -311,7 +314,16 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import StockRankingControls from './StockRankingControls.vue'
 import RankingTable from './RankingTable.vue'
 import axios from 'axios'
-import { getCompositeScore, formatDateDisplay, generateCSV as utilGenerateCSV, deduplicateStocksByLatestDate } from '../utils/scoreUtils.js'
+import {
+  DEFAULT_RANKING_WEIGHTS,
+  getCompositeScore,
+  formatDateDisplay,
+  generateCSV as utilGenerateCSV,
+  deduplicateStocksByLatestDate,
+  normalizeRankingWeights,
+  serializeRankingWeights,
+  weightedDimensionScore,
+} from '../utils/scoreUtils.js'
 import { computeDisplayRows } from '../utils/displayRows.js'
 import { loadStockRankingPrefs, saveStockRankingPrefs } from '../utils/stockRankingPrefs.js'
 import {
@@ -431,6 +443,7 @@ const selectedDates = ref(_srp?.selectedDates?.length ? [..._srp.selectedDates] 
 // perStockStrategies: map { SYMBOL: 'balanced'|'aggressive'|'conservative' } for per-symbol overrides
 const rankingStrategy = ref(_srp?.rankingStrategy ?? 'balanced')
 const sortBy = ref(_srp?.sortBy ?? 'composite')
+const rankingWeights = ref(normalizeRankingWeights(_srp?.rankingWeights || DEFAULT_RANKING_WEIGHTS))
 const perStockStrategies = ref(
   _srp?.perStockStrategies && typeof _srp.perStockStrategies === 'object'
     ? { ..._srp.perStockStrategies }
@@ -446,6 +459,7 @@ function schedulePersistStockRankingPrefs() {
       displayLimit: displayLimit.value,
       rankingStrategy: rankingStrategy.value,
       sortBy: sortBy.value,
+      rankingWeights: rankingWeights.value,
       selectedDate: selectedDate.value,
       selectedDates: [...selectedDates.value],
       selectedStocks: [...selectedStocks.value],
@@ -455,7 +469,7 @@ function schedulePersistStockRankingPrefs() {
 }
 
 watch(
-  [viewMode, displayLimit, rankingStrategy, sortBy, selectedDate, selectedDates, selectedStocks, perStockStrategies],
+  [viewMode, displayLimit, rankingStrategy, sortBy, rankingWeights, selectedDate, selectedDates, selectedStocks, perStockStrategies],
   schedulePersistStockRankingPrefs,
   { deep: true }
 )
@@ -640,6 +654,12 @@ function getSortScoreForRow(row, date = '') {
     }
     return Number(getCompositeScore(row, strategy) || 0)
   }
+  if (key === 'weighted') {
+    if (date && row.per_date_fields?.[date]) {
+      return weightedDimensionScore(row.per_date_fields[date], rankingWeights.value)
+    }
+    return Number(row.weighted_score ?? weightedDimensionScore(row, rankingWeights.value) ?? 0)
+  }
   const field = SORT_SCORE_FIELDS[key]
   if (!field) return 0
   if (date && row.per_date_fields?.[date]) {
@@ -697,6 +717,7 @@ async function fetchRankings() {
       displayLimit: displayLimit.value,
       rankingStrategy: rankingStrategy.value,
       sortBy: sortBy.value,
+      rankingWeights: rankingWeights.value,
       dateParam,
       selectedDates: selectedDates.value,
       selectedStocks: selectedStocks.value,
@@ -717,6 +738,10 @@ async function fetchRankings() {
       hadWarmCache = true
     }
     loading.value = !hadWarmCache
+    const weightsParam = sortBy.value === 'weighted' ? serializeRankingWeights(rankingWeights.value) : ''
+    const appendWeightedQuery = (parts) => {
+      if (weightsParam) parts.push(`weights=${encodeURIComponent(weightsParam)}`)
+    }
 
     switch (viewMode.value) {
       case 'ranking': {
@@ -725,6 +750,7 @@ async function fetchRankings() {
         // include selected ranking strategy so server can sort accordingly
         if (rankingStrategy.value) url += `&strategy=${encodeURIComponent(rankingStrategy.value)}`
         if (sortBy.value) url += `&sort_by=${encodeURIComponent(sortBy.value)}`
+        if (weightsParam) url += `&weights=${encodeURIComponent(weightsParam)}`
         if (dateParam) url += `&date=${dateParam}`
         response = await axios.get(url, { signal })
         break
@@ -750,6 +776,7 @@ async function fetchRankings() {
         if (sortBy.value) {
           qpIdx.push(`sort_by=${encodeURIComponent(sortBy.value)}`)
         }
+        appendWeightedQuery(qpIdx)
         if (dateParam) {
           qpIdx.push(`date=${encodeURIComponent(dateParam)}`)
         }
@@ -778,6 +805,7 @@ async function fetchRankings() {
           const qpSel = []
           if (rankingStrategy.value) qpSel.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
           if (sortBy.value) qpSel.push(`sort_by=${encodeURIComponent(sortBy.value)}`)
+          appendWeightedQuery(qpSel)
           if (qpSel.length) url += `?${qpSel.join('&')}`
           url = appendRankingsPageQuery(url)
           dlog('posting with dates', payload.dates)
@@ -787,6 +815,7 @@ async function fetchRankings() {
           if (dateParam) qpSel.push(`date=${dateParam}`)
           if (rankingStrategy.value) qpSel.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
           if (sortBy.value) qpSel.push(`sort_by=${encodeURIComponent(sortBy.value)}`)
+          appendWeightedQuery(qpSel)
           if (qpSel.length) url += `?${qpSel.join('&')}`
           url = appendRankingsPageQuery(url)
           dlog('posting without dates url=', url)
@@ -815,6 +844,7 @@ async function fetchRankings() {
         if (dateParam) qp2.push(`date=${dateParam}`)
         if (rankingStrategy.value) qp2.push(`strategy=${encodeURIComponent(rankingStrategy.value)}`)
         if (sortBy.value) qp2.push(`sort_by=${encodeURIComponent(sortBy.value)}`)
+        appendWeightedQuery(qp2)
         if (qp2.length) url += `?${qp2.join('&')}`
         url = appendRankingsPageQuery(url)
         response = await axios.post(url, payload, { signal })
@@ -889,6 +919,7 @@ async function fetchRankings() {
       displayLimit: displayLimit.value,
       rankingStrategy: rankingStrategy.value,
       sortBy: sortBy.value,
+      rankingWeights: rankingWeights.value,
       dateParam,
       selectedDates: selectedDates.value,
       selectedStocks: selectedStocks.value,
@@ -1178,6 +1209,14 @@ function handleChildSortByChange(v) {
     return
   }
   onRankingSortChange()
+}
+
+function handleChildRankingWeightsChange(v) {
+  rankingWeights.value = normalizeRankingWeights(v)
+  if (sortBy.value === 'weighted') {
+    rankingPageOffset.value = 0
+    fetchRankings()
+  }
 }
 
 function handleChildStockInput(v) {
@@ -1793,6 +1832,8 @@ const displayRows = computed(() => {
     viewMode: viewMode.value,
     selectedDates: selectedDates.value,
     rankingStrategy: rankingStrategy.value,
+    sortBy: sortBy.value,
+    rankingWeights: rankingWeights.value,
     perStockStrategies: perStockStrategies.value,
     getCompositeScore
   })

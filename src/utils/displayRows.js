@@ -1,7 +1,24 @@
+import { weightedDimensionScore } from './scoreUtils.js'
+
 // Pure helper to compute display rows from rankings and selectedDates
 // Exports a single function: computeDisplayRows({rankings, viewMode, selectedDates, rankingStrategy, perStockStrategies, getCompositeScore})
 
-export function computeDisplayRows({ rankings = [], viewMode = 'ranking', selectedDates = [], rankingStrategy = 'balanced', perStockStrategies = {}, getCompositeScore }) {
+function displayWeightedScore(row, rankingWeights) {
+  const v = row?.weighted_score
+  if (v != null && !Number.isNaN(Number(v))) return Number(v).toFixed(2)
+  return weightedDimensionScore(row, rankingWeights).toFixed(2)
+}
+
+export function computeDisplayRows({
+  rankings = [],
+  viewMode = 'ranking',
+  selectedDates = [],
+  rankingStrategy = 'balanced',
+  sortBy = 'composite',
+  rankingWeights = {},
+  perStockStrategies = {},
+  getCompositeScore,
+}) {
   const rv = Array.isArray(rankings) ? rankings : []
   const sDates = Array.isArray(selectedDates) ? selectedDates.filter(d => !!d) : []
 
@@ -9,7 +26,9 @@ export function computeDisplayRows({ rankings = [], viewMode = 'ranking', select
     const strategyKey = rankingStrategy
     return rv.map(r => ({
       ...r,
-      display_composite_score: getCompositeScore(r, strategyKey),
+      display_composite_score: sortBy === 'weighted'
+        ? displayWeightedScore(r, rankingWeights)
+        : getCompositeScore(r, strategyKey),
       display_return_since_score_pct: r.return_since_score_pct ?? null,
       display_price_base_trade_date: r.price_base_trade_date ?? null,
       display_price_latest_trade_date: r.price_latest_trade_date ?? null,
@@ -26,7 +45,12 @@ export function computeDisplayRows({ rankings = [], viewMode = 'ranking', select
       const perDate = r.per_date_scores?.[d]
       const stockStrat = (perStockStrategies && perStockStrategies[r.symbol]) || rankingStrategy
       let score = ''
-      if (perDate) {
+      if (sortBy === 'weighted') {
+        const perWeighted = r.per_date_weighted_scores?.[d]
+        score = perWeighted != null
+          ? Number(perWeighted).toFixed(2)
+          : weightedDimensionScore(r.per_date_fields?.[d] || r, rankingWeights).toFixed(2)
+      } else if (perDate) {
         score = perDate?.[stockStrat] ?? ''
       } else if (r.score_date === d) {
         score = (typeof r.composite_score === 'object' ? r.composite_score?.[stockStrat] : r.composite_score)

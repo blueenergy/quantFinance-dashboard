@@ -14,7 +14,9 @@ const STRATEGIES = new Set([
 ])
 
 const DISPLAY_LIMITS = new Set([10, 30, 50, 100, 200])
-const SORT_BY_VALUES = new Set(['composite', 'cycle', 'growth', 'fundamental', 'value', 'technical', 'money_flow'])
+const SORT_BY_VALUES = new Set(['composite', 'weighted', 'cycle', 'growth', 'fundamental', 'value', 'technical', 'money_flow'])
+const WEIGHT_DIMENSIONS = new Set(['cycle', 'growth', 'fundamental', 'value', 'technical', 'money_flow'])
+const DEFAULT_RANKING_WEIGHTS = { growth: 60, cycle: 40 }
 
 /** Max symbols persisted to avoid blowing localStorage quota */
 export const STOCK_RANKING_PREFS_MAX_SYMBOLS = 200
@@ -62,6 +64,22 @@ function sanitizePerStockStrategies(raw) {
 }
 
 /**
+ * @param {unknown} raw
+ * @returns {Record<string, number>}
+ */
+function sanitizeRankingWeights(raw) {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_RANKING_WEIGHTS }
+  /** @type {Record<string, number>} */
+  const out = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (!WEIGHT_DIMENSIONS.has(key)) continue
+    const n = Number(value)
+    if (Number.isFinite(n) && n > 0) out[key] = n
+  }
+  return Object.keys(out).length > 0 ? out : { ...DEFAULT_RANKING_WEIGHTS }
+}
+
+/**
  * @returns {{
  *   viewMode: string,
  *   displayLimit: number,
@@ -70,7 +88,8 @@ function sanitizePerStockStrategies(raw) {
  *   selectedDate: string,
  *   selectedDates: string[],
  *   selectedStocks: string[],
- *   perStockStrategies: Record<string, string>
+ *   perStockStrategies: Record<string, string>,
+ *   rankingWeights: Record<string, number>
  * } | null}
  */
 export function loadStockRankingPrefs() {
@@ -113,6 +132,7 @@ export function loadStockRankingPrefs() {
     }
 
     const perStockStrategies = sanitizePerStockStrategies(data.perStockStrategies)
+    const rankingWeights = sanitizeRankingWeights(data.rankingWeights)
 
     if (!viewMode && !displayLimit && !rankingStrategy && !sortBy && !selectedDate && selectedDates.length === 0 && selectedStocks.length === 0) {
       return null
@@ -127,6 +147,7 @@ export function loadStockRankingPrefs() {
       selectedDates,
       selectedStocks,
       perStockStrategies,
+      rankingWeights,
     }
   } catch {
     return null
@@ -148,6 +169,7 @@ export function saveStockRankingPrefs(prefs) {
         ? prefs.selectedStocks.slice(0, STOCK_RANKING_PREFS_MAX_SYMBOLS)
         : [],
       perStockStrategies: prefs.perStockStrategies && typeof prefs.perStockStrategies === 'object' ? prefs.perStockStrategies : {},
+      rankingWeights: sanitizeRankingWeights(prefs.rankingWeights),
     }
     if (!VIEW_MODES.has(payload.viewMode)) payload.viewMode = 'ranking'
     if (!DISPLAY_LIMITS.has(payload.displayLimit)) payload.displayLimit = 30

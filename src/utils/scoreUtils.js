@@ -9,6 +9,66 @@ export function getCompositeScore(stock, strategyKey) {
   return cs
 }
 
+export const SCORE_DIMENSION_FIELDS = {
+  cycle: 'cycle_score',
+  growth: 'growth_score',
+  fundamental: 'fundamental_score',
+  value: 'value_score',
+  technical: 'technical_score',
+  money_flow: 'money_flow_score',
+}
+
+export const SCORE_DIMENSION_LABELS = {
+  cycle: '动量',
+  growth: '成长',
+  fundamental: '基本面',
+  value: '价值',
+  technical: '技术',
+  money_flow: '资金',
+}
+
+export const DEFAULT_RANKING_WEIGHTS = {
+  growth: 60,
+  cycle: 40,
+}
+
+export function normalizeRankingWeights(weights) {
+  const src = weights && typeof weights === 'object' ? weights : DEFAULT_RANKING_WEIGHTS
+  const out = {}
+  Object.keys(SCORE_DIMENSION_FIELDS).forEach((key) => {
+    const n = Number(src[key])
+    if (Number.isFinite(n) && n > 0) out[key] = n
+  })
+  if (Object.keys(out).length === 0) return { ...DEFAULT_RANKING_WEIGHTS }
+  return out
+}
+
+export function serializeRankingWeights(weights) {
+  return Object.entries(normalizeRankingWeights(weights))
+    .map(([key, value]) => `${key}:${Number(value)}`)
+    .join(',')
+}
+
+export function normalizedRankingWeightPercents(weights) {
+  const w = normalizeRankingWeights(weights)
+  const total = Object.values(w).reduce((sum, v) => sum + Number(v || 0), 0)
+  if (total <= 0) return {}
+  return Object.fromEntries(
+    Object.entries(w).map(([key, value]) => [key, (Number(value || 0) / total) * 100])
+  )
+}
+
+export function weightedDimensionScore(row, weights) {
+  if (!row) return 0
+  const w = normalizeRankingWeights(weights)
+  const total = Object.values(w).reduce((sum, v) => sum + Number(v || 0), 0)
+  if (total <= 0) return 0
+  return Object.entries(w).reduce((sum, [key, value]) => {
+    const field = SCORE_DIMENSION_FIELDS[key]
+    return sum + Number(row[field] || 0) * (Number(value || 0) / total)
+  }, 0)
+}
+
 export function formatDateDisplay(isoOrYyyyMmDd) {
   if (!isoOrYyyyMmDd) return ''
   const s = String(isoOrYyyyMmDd)

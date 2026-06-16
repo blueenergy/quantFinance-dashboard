@@ -69,7 +69,7 @@
           density="compact"
           variant="outlined"
         />
-        <div class="mt-xs text-muted">选“总分”时排名策略参与排序；选单项维度时按该维度分数排序。</div>
+        <div class="mt-xs text-muted">选“总分”时排名策略参与排序；选“自定义加权”时按下方权重即时计算。</div>
       </v-col>
       <v-col v-if="internalSortBy === 'composite'" cols="12" sm="6">
         <label style="margin-left: 0">排名策略：</label>
@@ -88,6 +88,37 @@
         />
         <div class="mt-xs text-muted composite-note">
           综合分仅作概览；选股以「组合研究」中已验证的因子组合为准。
+        </div>
+      </v-col>
+      <v-col v-if="internalSortBy === 'weighted'" cols="12">
+        <div class="weighted-sort-panel">
+          <div class="weighted-sort-title">
+            <span>自定义权重排序</span>
+            <v-btn size="x-small" variant="text" @click="showWeightedAdvanced = !showWeightedAdvanced">
+              {{ showWeightedAdvanced ? '收起其它维度' : '添加其它维度' }}
+            </v-btn>
+          </div>
+          <div class="weighted-sort-grid">
+            <div v-for="dim in visibleWeightDimensions" :key="dim" class="weighted-sort-item">
+              <label>{{ SCORE_DIMENSION_LABELS[dim] }}</label>
+              <v-text-field
+                :model-value="weightValue(dim)"
+                type="number"
+                min="0"
+                step="1"
+                density="compact"
+                variant="outlined"
+                hide-details
+                @update:modelValue="value => updateWeight(dim, value)"
+              />
+              <span class="weighted-sort-percent">
+                {{ normalizedWeightPercents[dim] != null ? normalizedWeightPercents[dim].toFixed(1) : '0.0' }}%
+              </span>
+            </div>
+          </div>
+          <div class="mt-xs text-muted">
+            权重会自动归一化；例如 60/40 与 0.6/0.4 等价。
+          </div>
         </div>
       </v-col>
     </v-row>
@@ -159,7 +190,7 @@ import { toRefs, computed, onMounted, ref } from 'vue'
 
 // define emits explicitly so we can call them from safe handlers
 const emit = defineEmits([
-  'change-view-mode', 'change-date', 'change-display-limit', 'change-ranking-strategy', 'change-sort-by',
+  'change-view-mode', 'change-date', 'change-display-limit', 'change-ranking-strategy', 'change-sort-by', 'change-ranking-weights',
   'stock-input', 'add-stock', 'clear-selected-stocks', 'select-suggestion', 'remove-stock',
   // distinct events: top date input requests a maybe-open hook, while the selected-mode button
   // explicitly requests opening available-dates for the currently selected symbol.
@@ -174,6 +205,7 @@ const props = defineProps({
   displayLimit: { type: [String, Number], default: 50 },
   rankingStrategy: { type: String, default: 'balanced' },
   sortBy: { type: String, default: 'composite' },
+  rankingWeights: { type: Object, default: () => ({ growth: 60, cycle: 40 }) },
   stockInput: { type: String, default: '' },
   stockSuggestions: { type: Array, default: () => [] },
   selectedStocks: { type: Array, default: () => [] },
@@ -191,7 +223,12 @@ const props = defineProps({
 })
 
 
-import { formatDateDisplay } from '../utils/scoreUtils.js'
+import {
+  SCORE_DIMENSION_LABELS,
+  normalizeRankingWeights,
+  normalizedRankingWeightPercents,
+  formatDateDisplay,
+} from '../utils/scoreUtils.js'
 
 // expose utilities to template
 const refs = toRefs(props)
@@ -202,6 +239,7 @@ const maxDate = refs.maxDate || { value: new Date().toISOString().slice(0,10) }
 const displayLimit = refs.displayLimit
 const rankingStrategy = refs.rankingStrategy
 const sortBy = refs.sortBy
+const rankingWeights = refs.rankingWeights
 const stockInput = refs.stockInput
 const stockSuggestions = refs.stockSuggestions
 const selectedStocks = refs.selectedStocks
@@ -238,6 +276,7 @@ const rankingStrategyOptions = [
 ]
 const sortByOptions = [
   { label: '总分', value: 'composite' },
+  { label: '自定义加权', value: 'weighted' },
   { label: '动量', value: 'cycle' },
   { label: '成长', value: 'growth' },
   { label: '基本面', value: 'fundamental' },
@@ -305,6 +344,31 @@ const internalSortBy = computed({
   get: () => sortBy.value,
   set: v => { emit('change-sort-by', v) }
 })
+const primaryWeightDimensions = ['growth', 'cycle']
+const advancedWeightDimensions = ['fundamental', 'value', 'technical', 'money_flow']
+const showWeightedAdvanced = ref(
+  Object.keys(normalizeRankingWeights(rankingWeights.value)).some(dim => advancedWeightDimensions.includes(dim))
+)
+const visibleWeightDimensions = computed(() => (
+  showWeightedAdvanced.value
+    ? [...primaryWeightDimensions, ...advancedWeightDimensions]
+    : primaryWeightDimensions
+))
+const currentWeights = computed(() => normalizeRankingWeights(rankingWeights.value))
+const normalizedWeightPercents = computed(() => normalizedRankingWeightPercents(currentWeights.value))
+function weightValue(dim) {
+  return currentWeights.value[dim] ?? 0
+}
+function updateWeight(dim, value) {
+  const next = { ...currentWeights.value }
+  const n = Number(value)
+  if (Number.isFinite(n) && n > 0) {
+    next[dim] = n
+  } else {
+    delete next[dim]
+  }
+  emit('change-ranking-weights', normalizeRankingWeights(next))
+}
 const internalStockInput = computed({
   get: () => stockInput.value,
   set: v => { emit('stock-input', v) }
@@ -385,6 +449,42 @@ onMounted(() => {
 
 .control-group:last-child {
   margin-bottom: 0;
+}
+
+.weighted-sort-panel {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.weighted-sort-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.weighted-sort-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.weighted-sort-item {
+  display: grid;
+  grid-template-columns: 56px minmax(72px, 1fr) 56px;
+  align-items: center;
+  gap: 8px;
+}
+
+.weighted-sort-percent {
+  color: #64748b;
+  font-size: 12px;
+  text-align: right;
 }
 
 .stock-input-area {
