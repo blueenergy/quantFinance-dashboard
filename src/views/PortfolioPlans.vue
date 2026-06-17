@@ -1674,25 +1674,28 @@ async function selectPlan(planId) {
   lastReselectSummary.value = ''
   reselectStatus.value = { state: 'idle', text: '' }
   reselectTaskMeta.value = { taskId: '', status: '' }
-  const res = await getPortfolioPlan(planId)
-  selectedDetail.value = res.data
-  if (selectedPlanHasLiveSignals.value) {
-    executions.value = []
-    await Promise.all([
-      loadEquity(),
-      loadRealtimeEquity(),
-      loadOperationLogs(),
-      loadLiveOps(),
-    ])
+  try {
+    const res = await getPortfolioPlan(planId)
+    selectedDetail.value = res.data
+  } catch (error) {
+    selectedDetail.value = null
+    const detailText = formatApiDetail(error.response?.data?.detail)
+    message.value = detailText || error.message || '加载 plan 详情失败'
     return
   }
-  await Promise.all([
-    loadEquity(),
-    loadRealtimeEquity(),
-    loadExecutions(),
-    loadOperationLogs(),
-    loadLiveOps(),
-  ])
+  const optionalLoads = selectedPlanHasLiveSignals.value
+    ? [loadEquity(), loadRealtimeEquity(), loadOperationLogs(), loadLiveOps()]
+    : [loadEquity(), loadRealtimeEquity(), loadExecutions(), loadOperationLogs(), loadLiveOps()]
+  if (selectedPlanHasLiveSignals.value) {
+    executions.value = []
+  }
+  const results = await Promise.allSettled(optionalLoads)
+  const failed = results.find((result) => result.status === 'rejected')
+  if (failed) {
+    const error = failed.reason || {}
+    const detailText = formatApiDetail(error.response?.data?.detail)
+    message.value = detailText || error.message || '部分附加数据加载失败，plan 详情已显示'
+  }
 }
 
 async function previewLivePublish() {

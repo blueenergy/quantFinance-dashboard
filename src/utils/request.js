@@ -10,6 +10,7 @@ const service = axios.create({
 service.interceptors.request.use(
   config => {
     // 在发送请求之前做些什么
+    config.metadata = { startTime: Date.now() }
     const token = localStorage.getItem('access_token')
     if (token) {
       config.headers['Authorization'] = 'Bearer ' + token
@@ -32,6 +33,20 @@ service.interceptors.response.use(
   },
   error => {
     // 对响应错误做点什么
+    const startedAt = error.config?.metadata?.startTime
+    const elapsedMs = startedAt ? Date.now() - startedAt : undefined
+    const method = (error.config?.method || 'get').toUpperCase()
+    const url = `${error.config?.baseURL || ''}${error.config?.url || ''}`
+    const diagnostic = {
+      method,
+      url,
+      params: error.config?.params,
+      status: error.response?.status,
+      code: error.code,
+      message: error.message,
+      elapsedMs,
+      timeout: error.config?.timeout,
+    }
     if (error.response && error.response.status === 401) {
       // token过期等处理：与 App.vue 缓存清理策略保持一致
       localStorage.removeItem('access_token')
@@ -53,7 +68,7 @@ service.interceptors.response.use(
     }
     // 轮询/后台请求可传 silentErrorLog: true，避免控制台被 ECONNABORTED 刷屏
     if (!error.config?.silentErrorLog) {
-      console.error('Response error:', error)
+      console.error('Response error:', diagnostic, error)
     }
     return Promise.reject(error)
   }
