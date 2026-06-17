@@ -166,11 +166,13 @@ jobs:
 
       - name: Pull image and deploy
         run: |
+          SHA_TAG="sha-${GITHUB_SHA::7}"
+          IMAGE="crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com/wukongquant/quant-dashboard:${SHA_TAG}"
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
             ${{ secrets.VOLC_USER }}@${{ secrets.VOLC_HOST }} \
             "docker login crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com \
                -u ${{ secrets.ALIYUN_USER }} -p ${{ secrets.ALIYUN_TOKEN }} && \
-             docker pull crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com/wukongquant/quant-dashboard:latest && \
+             docker pull ${IMAGE} && \
              ( docker network inspect quant-network >/dev/null 2>&1 || docker network create quant-network ) && \
              ( docker network connect quant-network quant-api 2>/dev/null || true ) && \
              ( docker network connect quant-network quant-mcp-read 2>/dev/null || true ) && \
@@ -192,5 +194,5 @@ jobs:
                -e WS_WORKER_HOST=115.190.172.95 \
                -e SSL_CERT=/etc/nginx/cert/wukongquant.top.pem \
                -e SSL_KEY=/etc/nginx/cert/wukongquant.top.key \
-               crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com/wukongquant/quant-dashboard:latest && \
+               ${IMAGE} && \
              docker image prune -f"
