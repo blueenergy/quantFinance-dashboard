@@ -171,6 +171,10 @@ jobs:
             "docker login crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com \
                -u ${{ secrets.ALIYUN_USER }} -p ${{ secrets.ALIYUN_TOKEN }} && \
              docker pull crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com/wukongquant/quant-dashboard:latest && \
+             ( docker network inspect quant-network >/dev/null 2>&1 || docker network create quant-network ) && \
+             ( docker network connect quant-network quant-api 2>/dev/null || true ) && \
+             ( docker network connect quant-network quant-mcp-read 2>/dev/null || true ) && \
+             ( docker network connect quant-network quant-mcp-actions 2>/dev/null || true ) && \
              docker stop quant-web 2>/dev/null || true && \
              docker rm   quant-web 2>/dev/null || true && \
              docker run -d \
@@ -181,8 +185,8 @@ jobs:
                -p 443:443 \
                -v /etc/nginx/cert:/etc/nginx/cert:ro \
                -e BACKEND_URL=http://quant-api:3001 \
-               -e MCP_URL=http://quant-mcp:3002 \
-               -e MCP_READ_URL=http://quant-mcp:3002 \
+               -e MCP_URL=http://quant-mcp-read:3002 \
+               -e MCP_READ_URL=http://quant-mcp-read:3002 \
                -e MCP_ACTIONS_URL=http://quant-mcp-actions:3003 \
                -e ASSISTANT_URL=http://115.190.172.95:8002 \
                -e WS_WORKER_HOST=115.190.172.95 \
