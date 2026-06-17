@@ -88,6 +88,10 @@ export function getPortfolioPlanEquity(planId, params = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/equity`, method: 'get', params })
 }
 
+export function getPortfolioPlanLineageEquity(planId, params = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/lineage-equity`, method: 'get', params })
+}
+
 export function getPortfolioPlanLiveExecutions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/live-executions`, method: 'get' })
 }

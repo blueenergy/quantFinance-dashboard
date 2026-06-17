@@ -374,14 +374,20 @@
           v-for="plan in plans"
           :key="plan.plan_id"
           class="plan-row"
-          :class="{ active: selectedPlanId === plan.plan_id }"
+          :class="planRowClass(plan)"
           @click="selectPlan(plan.plan_id)"
         >
           <span>
             <strong>{{ plan.base_date }}</strong>
             <small>{{ planDisplayTitle(plan) }} · {{ planParamSummary(plan) }}</small>
           </span>
-          <em>{{ plan.plan_type }} / {{ plan.status }}</em>
+          <em>
+            <span class="cadence-tag" :class="planCadenceBadge(plan).cls">{{ planCadenceBadge(plan).text }}</span>
+            <span v-if="planRelationBadge(plan)" class="relation-tag" :class="planRelationBadge(plan).cls">
+              {{ planRelationBadge(plan).text }}
+            </span>
+            {{ plan.status }}
+          </em>
         </button>
         <p v-if="!loading && !plans.length" class="muted">暂无计划。</p>
       </aside>
@@ -390,12 +396,20 @@
         <template v-if="selectedDetail">
           <div class="detail-header">
             <div>
-              <h3>{{ planDisplayTitle(selectedDetail.plan) }}</h3>
+              <h3>
+                {{ planDisplayTitle(selectedDetail.plan) }}
+                <span class="cadence-tag" :class="planCadenceBadge(selectedDetail.plan).cls">
+                  {{ planCadenceBadge(selectedDetail.plan).text }}
+                </span>
+              </h3>
               <p class="muted">
                 {{ selectedDetail.plan.base_date }} → {{ selectedDetail.plan.execute_date || '-' }}
-                · {{ selectedDetail.plan.plan_type }} · {{ selectedDetail.plan.status }}
+                · {{ selectedDetail.plan.status }}
                 · {{ planParamSummary(selectedDetail.plan) }}
                 · initial capital {{ money(effectiveInitialCapital(selectedDetail.plan)) }}
+                <span v-if="selectedDetail.plan.previous_rebalance_date">
+                  · 上次调仓 {{ selectedDetail.plan.previous_rebalance_date }}
+                </span>
               </p>
             </div>
             <div v-if="selectedDetail.plan.status === 'needs_review'" class="actions">
@@ -403,6 +417,40 @@
               <button class="danger" :disabled="actionLoading" @click="review('rejected')">驳回</button>
             </div>
           </div>
+
+          <p v-if="selectedPlanIsMonitorNoTrade" class="monitor-note">
+            观察日（未到调仓周期）：本计划仅展示组合漂移，不产生交易。下方“漂移”列为若调仓应执行的股数。
+            按 rebalance_days 周期到期后才会生成可执行的调仓计划（可通过 monitor_can_trade 参数放开观察日交易）。
+          </p>
+
+          <section v-if="planLineage(selectedDetail.plan).show" class="lineage-panel">
+            <div>
+              <span>当前 plan</span>
+              <strong :title="selectedDetail.plan.plan_id">{{ shortPlanId(selectedDetail.plan.plan_id) }}</strong>
+              <small>{{ selectedDetail.plan.base_date || '-' }} · {{ planCadenceBadge(selectedDetail.plan).text }}</small>
+            </div>
+            <div>
+              <span>组合血缘</span>
+              <strong :title="selectedDetail.plan.params_hash || '-'">{{ selectedDetail.plan.params_hash || '-' }}</strong>
+              <small>{{ planParamSummary(selectedDetail.plan) }}</small>
+            </div>
+            <div>
+              <span>继承自上次调仓</span>
+              <button
+                v-if="planLineage(selectedDetail.plan).previousPlanId"
+                type="button"
+                class="lineage-link"
+                :title="planLineage(selectedDetail.plan).previousPlanId"
+                @click="selectPlan(planLineage(selectedDetail.plan).previousPlanId)"
+              >
+                {{ shortPlanId(planLineage(selectedDetail.plan).previousPlanId) }}
+              </button>
+              <strong v-else>{{ planLineage(selectedDetail.plan).previousDate || '-' }}</strong>
+              <small>
+                {{ planLineage(selectedDetail.plan).previousDate ? `base_date ${planLineage(selectedDetail.plan).previousDate}` : '首次调仓，无上一期' }}
+              </small>
+            </div>
+          </section>
 
           <div class="metrics">
             <div><span>买入</span><strong>{{ selectedDetail.plan.summary?.buy_count ?? 0 }}</strong></div>
@@ -460,7 +508,7 @@
           <section v-if="showPaperExecutionStatus" class="execution-status">
             <h4>后台执行状态</h4>
             <p v-if="selectedDetail.plan.status === 'approved'" class="muted">
-              已审核，等待后台在开盘价就绪后自动执行。
+              已审核，等待后台在开盘价就绪后自动执行；“立即执行 Paper”也使用同一 execute_date 的开盘价。
             </p>
             <div class="status-grid">
               <div>
@@ -490,16 +538,25 @@
             <p v-if="executionStatus.missing_open_price_examples?.length" class="muted">
               缺失示例：{{ executionStatus.missing_open_price_examples.join(', ') }}
             </p>
+            <p v-if="selectedDetail.plan.status === 'approved' && executionStatus.open_price_ready === false" class="watermark-warning">
+              Paper 执行依赖 execute_date 的开盘价。当前开盘价未就绪，后台自动执行和“立即执行 Paper”都会等待/失败；
+              待行情同步后刷新本页再执行。
+            </p>
           </section>
 
           <section v-if="selectedDetail.plan.status === 'approved' && !selectedPlanHasLiveSignals" class="live-publish-panel">
             <div class="task-list-header">
               <div>
                 <h4>发布到实盘</h4>
-                <p class="muted">先 dry-run 生成 risk report，确认后才写入 executable live signals。</p>
+                <p v-if="canPublishLiveSignals" class="muted">先 dry-run 生成 risk report，确认后才写入 executable live signals。</p>
+                <p v-else class="muted">该 plan 已执行 Paper；为避免同一份计划同时走 paper 和实盘，不能再发布 live signals。</p>
               </div>
               <div class="task-list-actions">
-                <button :disabled="paperExecuteLoading || livePublishLoading || !canExecutePaperNow" @click="executePaperNow">
+                <button
+                  :disabled="paperExecuteLoading || livePublishLoading || !canExecutePaperNow"
+                  :title="paperExecuteReadyText"
+                  @click="executePaperNow"
+                >
                   立即执行 Paper
                 </button>
                 <select v-model="selectedLiveAccountId">
@@ -508,8 +565,8 @@
                     {{ account.label }}
                   </option>
                 </select>
-                <button :disabled="livePublishLoading || !selectedLiveAccountId" @click="previewLivePublish">实盘预检</button>
-                <button :disabled="livePublishLoading || !selectedLiveAccountId || livePublishBlockers.length" @click="publishLiveSignals">
+                <button :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals" @click="previewLivePublish">实盘预检</button>
+                <button :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals || livePublishBlockers.length" @click="publishLiveSignals">
                   确认发布
                 </button>
               </div>
@@ -629,6 +686,7 @@
                     <th class="col-ind">行业</th>
                     <th class="col-num">{{ selectedPlanHasLiveSignals ? '策略股数' : '当前股数' }}</th>
                     <th class="col-num">目标股数</th>
+                    <th v-if="selectedPlanIsMonitorNoTrade" class="col-num">漂移</th>
                     <th v-if="selectedPlanHasLiveSignals" class="col-num">账户股数</th>
                     <th v-if="selectedPlanHasLiveSignals" class="col-num">已成交</th>
                     <th v-if="selectedPlanHasLiveSignals" class="col-num">剩余</th>
@@ -643,9 +701,9 @@
                 <tbody>
                   <tr v-for="item in selectedDetail.items" :key="`${item.symbol}-${item.rank}`">
                     <td class="col-narrow">{{ item.rank ?? '-' }}</td>
-                    <td class="col-stock" :title="`${actionBadge(item.action).label} ${item.name || ''} ${item.symbol || ''}`">
+                    <td class="col-stock" :title="`${actionBadge(item).label} ${item.name || ''} ${item.symbol || ''}`">
                       <button type="button" class="stock-workbench-link" @click="openStockWorkbench(item.symbol)">
-                        <span class="action-tag" :class="actionBadge(item.action).cls">{{ actionBadge(item.action).text }}</span>
+                        <span class="action-tag" :class="actionBadge(item).cls">{{ actionBadge(item).text }}</span>
                         <span class="stock-workbench-link__name">{{ item.name || item.symbol || '-' }}</span>
                         <span v-if="item.symbol" class="stock-workbench-link__symbol">{{ item.symbol }}</span>
                       </button>
@@ -653,6 +711,9 @@
                     <td class="col-ind" :title="item.industry || ''">{{ item.industry || '-' }}</td>
                     <td class="col-num">{{ item.current_shares ?? 0 }}</td>
                     <td class="col-num">{{ item.target_shares ?? 0 }}</td>
+                    <td v-if="selectedPlanIsMonitorNoTrade" class="col-num drift-cell" :class="driftBadge(item).cls">
+                      {{ driftBadge(item).text }}
+                    </td>
                     <td v-if="selectedPlanHasLiveSignals" class="col-num">{{ item.account_current_shares ?? '-' }}</td>
                     <td v-if="selectedPlanHasLiveSignals" class="col-num">{{ item.live_filled_qty ?? 0 }}</td>
                     <td v-if="selectedPlanHasLiveSignals" class="col-num">{{ item.live_remaining_qty ?? Math.abs(item.delta_shares ?? 0) }}</td>
@@ -699,7 +760,7 @@
           </section>
 
           <section v-if="selectedPlanHasLiveSignals || showPaperSections">
-            <h4>{{ selectedPlanHasLiveSignals ? '实盘资金曲线' : 'Paper 净值' }}</h4>
+            <h4>{{ selectedPlanHasLiveSignals ? '实盘资金曲线' : '组合血缘 Paper 净值' }}</h4>
             <div v-if="realtimeEquity" class="realtime-equity">
               <div>
                 <span>{{ selectedPlanHasLiveSignals ? '实盘实时估算权益' : '实时估算权益' }}</span>
@@ -723,7 +784,7 @@
               </div>
             </div>
             <p v-if="!equityRows.length" class="muted">
-              {{ selectedPlanHasLiveSignals ? '暂无实盘资金曲线，盘后任务落库后显示。' : '暂无 paper 净值。' }}
+              {{ selectedPlanHasLiveSignals ? '暂无实盘资金曲线，盘后任务落库后显示。' : '暂无组合血缘 paper 净值。' }}
             </p>
             <template v-else>
               <div class="equity-summary">
@@ -770,6 +831,7 @@
                   <thead>
                     <tr>
                       <th>日期</th>
+                      <th v-if="!selectedPlanHasLiveSignals">来源 plan</th>
                       <th>权益</th>
                       <th>日变化</th>
                       <th>日变化率</th>
@@ -780,6 +842,9 @@
                   <tbody>
                     <tr v-for="point in equityRows.slice().reverse()" :key="point.date">
                       <td>{{ point.date }}</td>
+                      <td v-if="!selectedPlanHasLiveSignals" class="truncate" :title="point.plan_id || '-'">
+                        {{ shortPlanId(point.plan_id) }}
+                      </td>
                       <td>{{ money(point.equity) }}</td>
                       <td>{{ signedMoney(point.change) }}</td>
                       <td>{{ signedPct(point.changePct) }}</td>
@@ -843,11 +908,11 @@ import {
   generatePortfolioPlan,
   getPortfolioPlan,
   getPortfolioPlanOperationLogs,
-  getPortfolioPlanEquity,
   getPortfolioPlanExecutions,
   getPortfolioPlanLiveEquity,
   getPortfolioPlanLiveExecutions,
   getPortfolioPlanLiveRealtimeEquity,
+  getPortfolioPlanLineageEquity,
   getPortfolioPlanGenerationTask,
   getPortfolioPlanGenerationWatermark,
   listPortfolioParameterPresets,
@@ -926,6 +991,10 @@ const executionStatus = computed(() => selectedDetail.value?.execution_status ||
 const selectedPlanExecutionMode = computed(() => selectedDetail.value?.execution_mode || 'not_executed')
 const selectedPlanStatus = computed(() => selectedDetail.value?.plan?.status || '')
 const selectedPlanHasLiveSignals = computed(() => selectedPlanExecutionMode.value === 'live')
+// A monitor (non-rebalance) plan that opted out of intra-cycle trading: it only
+// shows drift and carries no executable delta. Legacy plans without the flag are
+// treated as executable.
+const selectedPlanIsMonitorNoTrade = computed(() => selectedDetail.value?.plan?.executable === false)
 const selectedPlanExcluded = computed(() => selectedDetail.value?.plan?.excluded_symbols || [])
 // Only an unpublished, pre-approval plan can be reselected in place.
 const canReselectItems = computed(() => ['needs_review', 'generated', 'draft'].includes(selectedDetail.value?.plan?.status))
@@ -945,7 +1014,25 @@ const canExecutePaperNow = computed(() => (
   selectedPlanStatus.value === 'approved'
   && !selectedPlanHasLiveSignals.value
   && !hasPaperExecution.value
+  && executionStatus.value?.open_price_ready !== false
 ))
+const canPublishLiveSignals = computed(() => (
+  selectedPlanStatus.value === 'approved'
+  && !selectedPlanHasLiveSignals.value
+  && !hasPaperExecution.value
+))
+
+const paperExecuteReadyText = computed(() => {
+  if (hasPaperExecution.value) return '该 plan 已执行过 Paper，不能重复执行'
+  if (selectedPlanHasLiveSignals.value) return '该 plan 已发布实盘信号，不能再执行 Paper'
+  if (selectedPlanStatus.value !== 'approved') return '需要先审核通过 plan'
+  if (executionStatus.value?.open_price_ready === false) {
+    const date = executionStatus.value.execute_date || executionStatus.value.effective_execute_date || '-'
+    const count = executionStatus.value.missing_open_price_count ?? 0
+    return `开盘价未就绪：execute_date=${date}，缺失 ${count} 个标的`
+  }
+  return '使用 execute_date 开盘价立即执行 Paper'
+})
 
 const latestExecutionText = computed(() => {
   const latest = executionStatus.value.latest_execution_result
@@ -1269,6 +1356,64 @@ function planParamSummary(plan) {
   return parts.join(' · ')
 }
 
+function shortPlanId(planId) {
+  const text = String(planId || '')
+  if (!text) return '-'
+  if (text.length <= 28) return text
+  return `${text.slice(0, 18)}…${text.slice(-8)}`
+}
+
+function previousPlanIdFor(plan) {
+  if (!plan) return ''
+  if (plan.previous_rebalance_plan_id) return plan.previous_rebalance_plan_id
+  const previousDate = plan.previous_rebalance_date
+  if (!previousDate || !plan.params_hash) return ''
+  const previous = plans.value.find((row) => (
+    row.base_date === previousDate
+    && row.params_hash === plan.params_hash
+    && row.strategy_template_id === plan.strategy_template_id
+    && (!plan.user_id || row.user_id === plan.user_id)
+    && row.plan_type === 'rebalance'
+  ))
+  return previous?.plan_id || ''
+}
+
+function planLineage(plan) {
+  if (!plan) return { show: false, previousDate: '', previousPlanId: '' }
+  const previousDate = plan.previous_rebalance_date || ''
+  const previousPlanId = previousPlanIdFor(plan)
+  return {
+    show: Boolean(plan.params_hash || previousDate || previousPlanId),
+    previousDate,
+    previousPlanId,
+  }
+}
+
+function isPreviousPlanOfSelected(plan) {
+  if (!plan || !selectedPlanId.value) return false
+  return plan.plan_id === previousPlanIdFor(selectedDetail.value?.plan)
+}
+
+function isNextPlanOfSelected(plan) {
+  if (!plan || !selectedPlanId.value) return false
+  return previousPlanIdFor(plan) === selectedPlanId.value
+}
+
+function planRelationBadge(plan) {
+  if (!selectedPlanId.value || !plan || plan.plan_id === selectedPlanId.value) return null
+  if (isPreviousPlanOfSelected(plan)) return { text: '上游', cls: 'relation-upstream' }
+  if (isNextPlanOfSelected(plan)) return { text: '下游', cls: 'relation-downstream' }
+  return null
+}
+
+function planRowClass(plan) {
+  return {
+    active: selectedPlanId.value === plan.plan_id,
+    upstream: isPreviousPlanOfSelected(plan),
+    downstream: isNextPlanOfSelected(plan),
+  }
+}
+
 function filterBySelectedAccount(rows) {
   if (!selectedLiveAccountId.value) return rows
   return rows.filter((row) => String(row.securities_account_id || '') === String(selectedLiveAccountId.value))
@@ -1551,7 +1696,7 @@ async function selectPlan(planId) {
 }
 
 async function previewLivePublish() {
-  if (!selectedPlanId.value || !selectedLiveAccountId.value) return
+  if (!selectedPlanId.value || !selectedLiveAccountId.value || !canPublishLiveSignals.value) return
   livePublishLoading.value = true
   message.value = ''
   try {
@@ -1568,7 +1713,7 @@ async function previewLivePublish() {
 }
 
 async function publishLiveSignals() {
-  if (!selectedPlanId.value || !selectedLiveAccountId.value) return
+  if (!selectedPlanId.value || !selectedLiveAccountId.value || !canPublishLiveSignals.value) return
   livePublishLoading.value = true
   message.value = ''
   try {
@@ -1625,8 +1770,8 @@ async function loadEquity() {
     equity.value = []
     return
   }
-  const res = await getPortfolioPlanEquity(selectedPlanId.value)
-  equity.value = res.data || []
+  const res = await getPortfolioPlanLineageEquity(selectedPlanId.value)
+  equity.value = res.data?.rows || []
 }
 
 async function loadRealtimeEquity() {
@@ -1690,7 +1835,19 @@ async function review(decision) {
   }
 }
 
-function actionBadge(action) {
+function isKeepItem(item) {
+  const currentShares = Number(item?.current_shares ?? 0)
+  const targetShares = Number(item?.target_shares ?? 0)
+  const deltaShares = Number(item?.delta_shares ?? 0)
+  return currentShares > 0 && targetShares > 0 && deltaShares === 0
+}
+
+function actionBadge(itemOrAction) {
+  const item = typeof itemOrAction === 'object' ? itemOrAction : null
+  const action = item?.action ?? itemOrAction
+  if (item && isKeepItem(item)) {
+    return { text: 'K', label: '保留不动', cls: 'tag-keep' }
+  }
   switch (action) {
     case 'buy':
       return { text: 'B', label: '买入', cls: 'tag-buy' }
@@ -1701,6 +1858,39 @@ function actionBadge(action) {
     default:
       return { text: '·', label: '跳过', cls: 'tag-skip' }
   }
+}
+
+function planCadenceBadge(plan) {
+  if (!plan) return { text: '-', cls: 'cadence-unknown' }
+  if (plan.plan_type === 'rebalance') {
+    if (plan.is_rebalance_day === false) {
+      return { text: '未到周期', cls: 'cadence-not-due' }
+    }
+    if (!plan.previous_rebalance_date) {
+      return ['needs_review', 'generated', 'draft'].includes(plan.status)
+        ? { text: '待审核建仓', cls: 'cadence-rebalance-pending' }
+        : { text: '首次建仓', cls: 'cadence-rebalance' }
+    }
+    if (['needs_review', 'generated', 'draft'].includes(plan.status)) {
+      return { text: '待审核调仓', cls: 'cadence-rebalance-pending' }
+    }
+    return { text: '调仓日', cls: 'cadence-rebalance' }
+  }
+  if (plan.plan_type === 'monitor') {
+    return plan.executable === false
+      ? { text: '观察·不交易', cls: 'cadence-monitor-readonly' }
+      : { text: '观察·可交易', cls: 'cadence-monitor-trade' }
+  }
+  return { text: plan.plan_type || '-', cls: 'cadence-unknown' }
+}
+
+function driftBadge(item) {
+  // On a no-trade monitor plan the would-be trade is preserved in
+  // drift_delta_shares; surface it so reviewers can see pending churn.
+  const drift = Number(item?.drift_delta_shares ?? 0)
+  if (!Number.isFinite(drift) || drift === 0) return { text: '持平', cls: 'drift-flat' }
+  if (drift > 0) return { text: `+${drift} 待买`, cls: 'drift-buy' }
+  return { text: `${drift} 待卖`, cls: 'drift-sell' }
 }
 
 const aiRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_summary || null)
@@ -2210,9 +2400,136 @@ button.danger {
   width: 14px;
 }
 
+.cadence-tag {
+  border-radius: 3px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  padding: 0 6px;
+  vertical-align: middle;
+}
+
+.cadence-tag.cadence-rebalance {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.cadence-tag.cadence-rebalance-pending {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.cadence-tag.cadence-not-due {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.cadence-tag.cadence-monitor-readonly {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.cadence-tag.cadence-monitor-trade {
+  background: #b45309;
+  color: #fff;
+}
+
+.cadence-tag.cadence-unknown {
+  background: #c7ccd6;
+  color: #111827;
+}
+
+.relation-tag {
+  border-radius: 3px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  margin-left: 4px;
+  padding: 0 6px;
+}
+
+.relation-tag.relation-upstream {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.relation-tag.relation-downstream {
+  background: #dcfce7;
+  color: #047857;
+}
+
+.monitor-note {
+  background: #f3f4f6;
+  border: 1px solid #9ca3af;
+  border-radius: 4px;
+  color: #374151;
+  font-size: 13px;
+  margin: 0 0 12px;
+  padding: 10px;
+}
+
+.lineage-panel {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin: 0 0 12px;
+}
+
+.lineage-panel div {
+  border: 1px solid #111827;
+  border-radius: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.lineage-panel span,
+.lineage-panel small {
+  color: #374151;
+  display: block;
+  font-size: 12px;
+}
+
+.lineage-panel strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lineage-link {
+  background: transparent;
+  border: 0;
+  color: #1d4ed8;
+  font-weight: 700;
+  padding: 0;
+  text-align: left;
+}
+
+.lineage-link:hover {
+  text-decoration: underline;
+}
+
+.drift-cell.drift-buy {
+  color: #d12b2b;
+}
+
+.drift-cell.drift-sell {
+  color: #1f9d55;
+}
+
+.drift-cell.drift-flat {
+  color: #6b7280;
+}
+
 /* A股配色：买入=红，卖出=绿 */
 .action-tag.tag-buy {
   background: #d12b2b;
+}
+
+.action-tag.tag-keep {
+  background: #b91c1c;
 }
 
 .action-tag.tag-sell {
@@ -2535,6 +2852,22 @@ button.danger {
 .plan-row.active {
   background: #f3f4f6;
   border-color: #111827;
+}
+
+.plan-row.upstream {
+  background: #eff6ff;
+  border-left: 4px solid #1d4ed8;
+}
+
+.plan-row.downstream {
+  background: #ecfdf5;
+  border-left: 4px solid #047857;
+}
+
+.plan-row.active.upstream,
+.plan-row.active.downstream {
+  background: #f3f4f6;
+  border-left-color: #111827;
 }
 
 .plan-row span,
