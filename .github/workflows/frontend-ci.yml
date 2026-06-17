@@ -176,12 +176,14 @@ jobs:
              docker run -d \
                --name quant-web \
                --restart unless-stopped \
-               --add-host=host.docker.internal:host-gateway \
+               --network quant-network \
                -p 80:80 \
                -p 443:443 \
                -v /etc/nginx/cert:/etc/nginx/cert:ro \
-               -e BACKEND_URL=http://host.docker.internal:3001 \
-               -e MCP_URL=http://host.docker.internal:3002 \
+               -e BACKEND_URL=http://quant-api:3001 \
+               -e MCP_URL=http://quant-mcp:3002 \
+               -e MCP_READ_URL=http://quant-mcp:3002 \
+               -e MCP_ACTIONS_URL=http://quant-mcp-actions:3003 \
                -e ASSISTANT_URL=http://115.190.172.95:8002 \
                -e WS_WORKER_HOST=115.190.172.95 \
                -e SSL_CERT=/etc/nginx/cert/wukongquant.top.pem \
