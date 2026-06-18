@@ -198,6 +198,17 @@
           <template #item.strategy="{ item }">
             {{ getStrategyName(item.strategy_name || item.strategy) || '-' }}
           </template>
+          <template #item.order_id="{ item }">
+            <div class="d-flex flex-column">
+              <span class="text-body-2 text-break">{{ item.order_id || '—' }}</span>
+              <span
+                v-if="item.broker_order_id || item.qmt_order_id"
+                class="text-caption text-medium-emphasis"
+              >
+                券商 {{ item.broker_order_id || item.qmt_order_id }}
+              </span>
+            </div>
+          </template>
           <template #item.signal_diag="{ item }">
             <span v-if="viewMode === 'signals'" class="text-caption text-medium-emphasis">{{ formatSubmittedDiagnostics(item) }}</span>
           </template>
@@ -272,8 +283,11 @@
             <v-card-title class="text-wrap">已报单（{{ submittedHelpItem.symbol }}）可以做什么</v-card-title>
             <v-card-text class="text-body-2">
               <p class="mb-2">
-                订单号：<code>{{ submittedHelpItem.order_id }}</code>，
-                方向：<strong>{{ (submittedHelpItem.action || submittedHelpItem.direction || '').toUpperCase() }}</strong>
+                订单号：<code>{{ submittedHelpItem.order_id }}</code>
+                <template v-if="submittedHelpItem.broker_order_id || submittedHelpItem.qmt_order_id">
+                  ；券商委托：<code>{{ submittedHelpItem.broker_order_id || submittedHelpItem.qmt_order_id }}</code>
+                </template>
+                ；方向：<strong>{{ (submittedHelpItem.action || submittedHelpItem.direction || '').toUpperCase() }}</strong>
               </p>
               <ul class="pl-4 mb-0">
                 <li class="mb-2">
@@ -389,7 +403,7 @@ const headers = [
   { title: '成交价', key: 'filled_price' },
   { title: '数量', key: 'quantity' },
   { title: '状态', key: 'status' },
-  { title: '订单号', key: 'order_id' }
+  { title: '订单号 / 券商', key: 'order_id' }
 ];
 
 const tableHeaders = computed(() => {
