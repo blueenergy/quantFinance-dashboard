@@ -232,14 +232,13 @@ const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 // Reactive data
 const trades = ref([]);
-const stats = ref(null);
 const strategies = ref([]); // Will be loaded from global strategy API
 const viewMode = ref('executions');
 const searchSymbol = ref('');
 const selectedStrategy = ref('');
 const statusFilter = ref('executed');
 const selectedDate = ref('');
-const dateRangeType = ref('all'); // 'all', 'single', 'range', 'recent7', 'recent30'
+const dateRangeType = ref('recent30'); // 'all', 'single', 'range', 'recent7', 'recent30'
 const startDate = ref('');
 const endDate = ref('');
 const currentPage = ref(1);
@@ -449,7 +448,7 @@ async function loadTrades() {
     
     // 使用新的融合 API
     const params = {
-      limit: 1000,
+      limit: 200,
       skip: 0,
     };
     
@@ -487,20 +486,6 @@ async function loadTrades() {
     trades.value = [];
   } finally {
     loading.value = false;
-  }
-}
-
-async function loadStats() {
-  try {
-    if (viewMode.value !== 'executions') {
-      stats.value = null;
-      return;
-    }
-    const response = await tradeApi.getTradeExecutionStats();
-    stats.value = response.stats || null;
-  } catch (error) {
-    console.error('Failed to load stats:', error);
-    stats.value = null;
   }
 }
 
@@ -588,7 +573,6 @@ function setViewMode(mode) {
     loadSummary();
   } else {
     loadTrades();
-    loadStats();
   }
 }
 
@@ -598,7 +582,6 @@ function refreshData() {
     loadSummary();
   } else {
     loadTrades();
-    loadStats();
   }
 }
 
@@ -627,7 +610,6 @@ function onSummaryRowClick(event, row) {
   statusFilter.value = 'executed';
   currentPage.value = 1;
   loadTrades();
-  loadStats();
 }
 
 // Watchers
@@ -637,14 +619,12 @@ watch([searchSymbol, selectedStrategy, statusFilter, dateRangeType, selectedDate
     loadSummary();
   } else {
     loadTrades();
-    loadStats();
   }
 });
 
 // Lifecycle
 onMounted(() => {
   loadTrades();
-  loadStats();
   loadStrategies();
   loadStrategyMetadata();
 });
