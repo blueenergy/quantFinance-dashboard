@@ -21,6 +21,17 @@
         <div v-if="activeTab === 'personal'" class="tab-panel">
           <h3>📝 个人资料</h3>
           <div class="form-group">
+            <label>User ID</label>
+            <input 
+              v-model="profile.user_id" 
+              type="text" 
+              class="form-control" 
+              :disabled="true"
+              placeholder="用户ID"
+            />
+          </div>
+
+          <div class="form-group">
             <label>用户名</label>
             <input 
               v-model="profile.username" 
@@ -560,6 +571,7 @@ export default {
     
     // 个人资料
     const profile = reactive({
+      user_id: '',
       username: '',
       email: '',
       full_name: '',
@@ -672,6 +684,7 @@ export default {
         const response = await axios.get('/api/user/profile')
         if (response.data && response.data.user) {
           const user = response.data.user
+          profile.user_id = user.id || user.user_id || ''
           profile.username = user.username
           profile.email = user.email
           profile.full_name = user.full_name
@@ -1587,6 +1600,18 @@ export default {
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+.email-input-group .form-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+.email-input-group .edit-btn,
+.email-input-group .save-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .edit-btn, .save-btn, .resend-btn, .test-btn {
