@@ -34,36 +34,42 @@
     </section>
 
     <section class="card generate-card">
-      <div>
-        <h3>生成交易计划</h3>
-        <p class="muted">从当前可用 strategy 生成新的 plan，生成后仍需人工审核。</p>
+      <div class="task-list-header">
+        <div>
+          <h3>生成交易计划</h3>
+          <p class="muted">从当前可用 strategy 生成新的 plan，生成后仍需人工审核。</p>
+        </div>
+        <button @click="generateFormExpanded = !generateFormExpanded">
+          {{ generateFormExpanded ? '折叠' : '展开' }}
+        </button>
       </div>
-      <label>
-        策略
-        <select v-model="generateForm.strategy_template_id" @change="onGenerateStrategyChange">
-          <option value="">请选择 strategy</option>
-          <option v-for="strategy in availableStrategies" :key="strategy.strategy_template_id" :value="strategy.strategy_template_id">
-            {{ strategyOptionLabel(strategy) }}
-          </option>
-        </select>
-      </label>
-      <label>
-        base_date
-        <input v-model="generateForm.base_date" type="date" @change="loadPlanGenerationWatermark" />
-      </label>
-      <label>
-        mode
-        <select v-model="generateForm.mode">
-          <option value="auto">auto</option>
-          <option value="monitor">monitor</option>
-          <option value="rebalance">rebalance</option>
-        </select>
-      </label>
-      <label class="inline-check">
-        <input v-model="generateForm.force" type="checkbox" />
-        force
-      </label>
-      <div v-if="selectedGenerateStrategy" class="strategy-param-card">
+      <div v-if="generateFormExpanded" class="generate-form-body">
+        <label>
+          策略
+          <select v-model="generateForm.strategy_template_id" @change="onGenerateStrategyChange">
+            <option value="">请选择 strategy</option>
+            <option v-for="strategy in availableStrategies" :key="strategy.strategy_template_id" :value="strategy.strategy_template_id">
+              {{ strategyOptionLabel(strategy) }}
+            </option>
+          </select>
+        </label>
+        <label>
+          base_date
+          <input v-model="generateForm.base_date" type="date" @change="loadPlanGenerationWatermark" />
+        </label>
+        <label>
+          mode
+          <select v-model="generateForm.mode">
+            <option value="auto">auto</option>
+            <option value="monitor">monitor</option>
+            <option value="rebalance">rebalance</option>
+          </select>
+        </label>
+        <label class="inline-check">
+          <input v-model="generateForm.force" type="checkbox" />
+          force
+        </label>
+        <div v-if="selectedGenerateStrategy" class="strategy-param-card">
         <div class="strategy-param-header">
           <div>
             <strong>本次 plan 参数</strong>
@@ -172,15 +178,16 @@
             <input v-model.number="generateForm.params.initial_capital" type="number" min="1" step="10000" />
           </label>
         </div>
+        </div>
+        <button :disabled="generateLoading || !generateForm.strategy_template_id || !generateForm.base_date" @click="generatePlan">
+          {{ generateLoading ? '提交中...' : '生成 plan' }}
+        </button>
+        <p v-if="currentGenerationTask" class="task-status">
+          任务 {{ currentGenerationTask.task_id }}：{{ currentGenerationTask.status }}
+          <span v-if="currentGenerationTask.plan_id"> / plan {{ currentGenerationTask.plan_id }}</span>
+          <span v-if="currentGenerationTask.error_message"> / {{ currentGenerationTask.error_message }}</span>
+        </p>
       </div>
-      <button :disabled="generateLoading || !generateForm.strategy_template_id || !generateForm.base_date" @click="generatePlan">
-        {{ generateLoading ? '提交中...' : '生成 plan' }}
-      </button>
-      <p v-if="currentGenerationTask" class="task-status">
-        任务 {{ currentGenerationTask.task_id }}：{{ currentGenerationTask.status }}
-        <span v-if="currentGenerationTask.plan_id"> / plan {{ currentGenerationTask.plan_id }}</span>
-        <span v-if="currentGenerationTask.error_message"> / {{ currentGenerationTask.error_message }}</span>
-      </p>
     </section>
 
     <p v-if="message" class="message">{{ message }}</p>
@@ -645,6 +652,83 @@
             </div>
           </section>
 
+          <section v-if="selectedDetail.plan.status === 'approved' && selectedPlanHasLiveSignals" class="live-publish-panel">
+            <div class="task-list-header">
+              <div>
+                <h4>实盘补缺口</h4>
+                <p class="muted">
+                  基于实盘账户持仓与可用现金，补足该计划未成交/被撤的差额（买单按预算+现金封顶，不重新选股）。
+                  先缺口预检，确认后写入 plan_topup 信号。
+                </p>
+              </div>
+              <div class="task-list-actions">
+                <select v-model="selectedLiveAccountId">
+                  <option value="">请选择账户</option>
+                  <option v-for="account in liveAccountOptions" :key="account.id" :value="account.id">
+                    {{ account.label }}
+                  </option>
+                </select>
+                <input v-model="remainderReason" class="reason-input" type="text" placeholder="补单原因（可选）" />
+                <button :disabled="remainderLoading || !selectedLiveAccountId" @click="previewRemainder">缺口预检</button>
+                <button
+                  :disabled="remainderLoading || !selectedLiveAccountId || !remainderActionableCount || remainderBlockers.length"
+                  @click="confirmRemainder"
+                >
+                  确认补单
+                </button>
+              </div>
+            </div>
+            <div v-if="remainderPreview" class="risk-report">
+              <p>
+                可补 {{ remainderActionableCount }} 项，阻断 {{ remainderPreview.risk_report?.blocked_count ?? 0 }} 条，
+                可用现金 {{ money(remainderPreview.available_cash) }}
+                <span v-if="remainderPreview.account_synced === false" class="watermark-warning">账户未同步持仓，无法补单</span>
+              </p>
+              <p v-if="remainderBlockers.length" class="watermark-warning">
+                {{ remainderBlockers.slice(0, 8).join(' / ') }}
+              </p>
+              <div v-if="remainderRows.length" class="table-wrap compact risk-report-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>股票</th>
+                      <th>方向</th>
+                      <th>目标</th>
+                      <th>账户持仓</th>
+                      <th>缺口</th>
+                      <th>补单量</th>
+                      <th>预估金额</th>
+                      <th>说明</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in remainderRows" :key="row.symbol" :class="{ blocked: !row.actionable }">
+                      <td>{{ row.name || row.symbol }}</td>
+                      <td>{{ row.action || '-' }}</td>
+                      <td>{{ row.target_shares ?? '-' }}</td>
+                      <td>{{ row.account_current_shares ?? '-' }}</td>
+                      <td>{{ row.gap_shares ?? 0 }}</td>
+                      <td>{{ row.topup_shares ?? 0 }}</td>
+                      <td>{{ money(row.estimated_amount) }}</td>
+                      <td class="risk-reasons">
+                        <span v-if="!row.reasons?.length">-</span>
+                        <span
+                          v-for="reason in row.reasons"
+                          v-else
+                          :key="`${row.symbol}-${reason}`"
+                          class="risk-chip"
+                          :title="reason"
+                        >
+                          {{ remainderReasonText(reason) }}
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
           <section>
             <div class="section-head">
               <h4>目标持仓与交易明细</h4>
@@ -926,6 +1010,7 @@ import {
   publishPortfolioPlanLiveSignals,
   rejectPortfolioPlan,
   rejectPortfolioPlanItem,
+  replanPortfolioPlanRemainder,
   rerunPortfolioPlanAiRisk,
   restorePortfolioPlanItem,
 } from '../api/portfolioPlans'
@@ -968,6 +1053,9 @@ const liveOpsExpanded = ref(false)
 const securitiesAccounts = ref([])
 const selectedLiveAccountId = ref('')
 const livePublishPreview = ref(null)
+const remainderPreview = ref(null)
+const remainderLoading = ref(false)
+const remainderReason = ref('')
 const message = ref('')
 const reviewComment = ref('')
 const lastReselectSummary = ref('')
@@ -1191,6 +1279,12 @@ const livePublishBlockers = computed(() => {
   return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
 })
 const livePublishRiskRows = computed(() => livePublishPreview.value?.risk_report?.items || [])
+const remainderRows = computed(() => remainderPreview.value?.remainder || [])
+const remainderActionableCount = computed(() => remainderPreview.value?.actionable_count || 0)
+const remainderBlockers = computed(() => {
+  const items = remainderPreview.value?.risk_report?.items || []
+  return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
+})
 
 const targetScoringRunText = computed(() => scoringRunText(planGenerationWatermark.value?.target_scoring_run))
 const latestCompletedScoringText = computed(() => scoringRunText(planGenerationWatermark.value?.latest_completed_scoring_run))
@@ -1434,6 +1528,64 @@ function blockerText(blocker) {
     suspended: '停牌',
   }
   return labels[blocker] || blocker || '-'
+}
+
+function remainderReasonText(reason) {
+  const labels = {
+    item_not_a_planned_trade: '非计划交易项',
+    already_at_target: '已达目标',
+    live_signal_active: '有在飞信号',
+    reference_price_unavailable: '无可用价格',
+    account_not_synced: '账户未同步',
+    budget_capped: '预算封顶',
+    cash_capped: '现金封顶',
+    available_position_below_gap: '可卖持仓不足',
+    estimated_price_missing: '缺计划价',
+  }
+  return labels[reason] || reason || '-'
+}
+
+async function previewRemainder() {
+  if (!selectedPlanId.value || !selectedLiveAccountId.value) return
+  remainderLoading.value = true
+  message.value = ''
+  try {
+    const res = await replanPortfolioPlanRemainder(selectedPlanId.value, {
+      securities_account_id: selectedLiveAccountId.value,
+      dry_run: true,
+      reason: remainderReason.value || '',
+    })
+    remainderPreview.value = res.data
+  } catch (error) {
+    message.value = error.response?.data?.detail?.message || error.response?.data?.detail || error.message || '补缺口预检失败'
+  } finally {
+    remainderLoading.value = false
+  }
+}
+
+async function confirmRemainder() {
+  if (!selectedPlanId.value || !selectedLiveAccountId.value) return
+  remainderLoading.value = true
+  message.value = ''
+  try {
+    const res = await replanPortfolioPlanRemainder(selectedPlanId.value, {
+      securities_account_id: selectedLiveAccountId.value,
+      dry_run: false,
+      reason: remainderReason.value || '',
+    })
+    remainderPreview.value = res.data
+    message.value = `已补发 ${res.data?.inserted_count ?? 0} 条 plan_topup 信号`
+    await loadLiveOps()
+    await loadPlans()
+  } catch (error) {
+    const detail = error.response?.data?.detail
+    remainderPreview.value = detail?.risk_report
+      ? { ...(remainderPreview.value || {}), risk_report: detail.risk_report, blocked: true }
+      : remainderPreview.value
+    message.value = detail?.message || detail || error.message || '补缺口失败'
+  } finally {
+    remainderLoading.value = false
+  }
 }
 
 async function refreshAll() {
@@ -1688,6 +1840,8 @@ async function selectPlan(planId) {
   selectedPlanId.value = planId
   reviewComment.value = ''
   livePublishPreview.value = null
+  remainderPreview.value = null
+  remainderReason.value = ''
   lastReselectSummary.value = ''
   reselectStatus.value = { state: 'idle', text: '' }
   reselectTaskMeta.value = { taskId: '', status: '' }
@@ -2716,6 +2870,14 @@ button.danger {
 .task-list-actions {
   display: flex;
   gap: 8px;
+}
+
+.reason-input {
+  min-width: 180px;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
 }
 
 .generation-task-table tbody tr {

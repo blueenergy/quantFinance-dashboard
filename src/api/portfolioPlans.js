@@ -36,6 +36,10 @@ export function publishPortfolioPlanLiveSignals(planId, data = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/publish-live-signals`, method: 'post', data })
 }
 
+export function replanPortfolioPlanRemainder(planId, data = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/replan-remainder`, method: 'post', data })
+}
+
 export function listLiveTradeSignals(params = {}) {
   return request({ url: '/trader/live-signals', method: 'get', params })
 }
