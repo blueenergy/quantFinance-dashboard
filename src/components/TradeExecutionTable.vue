@@ -462,6 +462,8 @@ async function loadTrades() {
       params.days = 7;
     } else if (dateRangeType.value === 'recent30') {
       params.days = 30;
+    } else if (dateRangeType.value === 'all') {
+      params.all_dates = true;
     } else if (dateRangeType.value === 'range') {
       if (startDate.value) params.start_date = startDate.value;
       if (endDate.value) params.end_date = endDate.value;
@@ -475,6 +477,8 @@ async function loadTrades() {
     if (trades.value.length === 0) {
       if (response.message) {
         errorMessage.value = response.message;
+      } else if (dateRangeType.value === 'recent30') {
+        errorMessage.value = '最近30天没有交易记录，可切换到“所有日期”查看历史记录。';
       } else {
         errorMessage.value = 'No trade activities found. Start trading to see data here.';
       }
@@ -499,6 +503,8 @@ async function loadSummary() {
       params.days = 7;
     } else if (dateRangeType.value === 'recent30') {
       params.days = 30;
+    } else if (dateRangeType.value === 'all') {
+      params.all_dates = true;
     } else if (dateRangeType.value === 'range') {
       if (startDate.value) params.start_date = startDate.value;
       if (endDate.value) params.end_date = endDate.value;
