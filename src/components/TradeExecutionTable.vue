@@ -199,10 +199,10 @@
             {{ getStrategyName(item.strategy_name || item.strategy) || '-' }}
           </template>
           <template #item.signal_diag="{ item }">
-            <span v-if="viewMode === 'signals'" class="text-caption text-medium-emphasis">{{ formatSubmittedBuyDiagnostics(item) }}</span>
+            <span v-if="viewMode === 'signals'" class="text-caption text-medium-emphasis">{{ formatSubmittedDiagnostics(item) }}</span>
           </template>
           <template #item.actions="{ item }">
-            <template v-if="viewMode === 'signals'">
+            <div v-if="viewMode === 'signals'" class="d-flex flex-column ga-1 align-start py-1">
               <v-btn
                 v-if="canShowReprice(item)"
                 size="small"
@@ -212,8 +212,14 @@
               >
                 重新定价
               </v-btn>
+              <template v-else-if="isSubmittedSignal(item)">
+                <v-btn size="x-small" variant="tonal" color="secondary" @click="openSubmittedHelp(item)">
+                  应怎么做
+                </v-btn>
+                <v-btn size="x-small" variant="text" @click="refreshData">刷新列表</v-btn>
+              </template>
               <span v-else class="text-caption text-disabled">—</span>
-            </template>
+            </div>
           </template>
         </v-data-table>
 
@@ -258,6 +264,37 @@
               <v-btn color="primary" :loading="repriceSubmitting" @click="submitRepriceConfirm">确认生成新信号</v-btn>
             </v-card-actions>
             </template>
+          </v-card>
+        </v-dialog>
+
+        <v-dialog v-model="submittedHelpOpen" max-width="560">
+          <v-card v-if="submittedHelpItem">
+            <v-card-title class="text-wrap">已报单（{{ submittedHelpItem.symbol }}）可以做什么</v-card-title>
+            <v-card-text class="text-body-2">
+              <p class="mb-2">
+                订单号：<code>{{ submittedHelpItem.order_id }}</code>，
+                方向：<strong>{{ (submittedHelpItem.action || submittedHelpItem.direction || '').toUpperCase() }}</strong>
+              </p>
+              <ul class="pl-4 mb-0">
+                <li class="mb-2">
+                  当前为「已报单」：说明已在券商侧挂单。左侧「挂单诊断」会显示限价、市场参考、挂单时长等（数据由本机
+                  <strong>quantTrader</strong> 轮询写入 Mongo，需进程在线且能连上同一数据库）。
+                </li>
+                <li v-if="isSubmittedBuy(submittedHelpItem)" class="mb-2">
+                  <strong>买入</strong>：若市价明显高于限价，买单往往难以成交。长时间未成交时，quantTrader
+                  会对买单做超时撤单；撤单完成后状态变为「已取消」，此时本页会出现「<strong>重新定价</strong>」按钮，可人工确认后生成新的买入信号。
+                </li>
+                <li v-else class="mb-2">
+                  <strong>卖出</strong>：若市价明显低于限价，卖单可能长时间挂在盘上；请结合诊断中的价格偏离判断。卖单超时撤单逻辑与买单类似，由 quantTrader 执行。
+                </li>
+                <li class="mb-2">可先点击「<strong>刷新列表</strong>」查看最新状态与诊断字段。</li>
+                <li>若长期无变化：检查 quantTrader 日志、券商连接，以及本页日期筛选是否过窄（可切换到「所有日期」）。</li>
+              </ul>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer />
+              <v-btn color="primary" variant="text" @click="submittedHelpOpen = false">知道了</v-btn>
+            </v-card-actions>
           </v-card>
         </v-dialog>
         </template>
@@ -322,6 +359,9 @@ const repriceSize = ref(null);
 const repriceReason = ref('');
 const repriceError = ref('');
 
+const submittedHelpOpen = ref(false);
+const submittedHelpItem = ref(null);
+
 // 状态筛选选项
 const statusFilterOptions = [
   { title: '全部', value: 'all' },
@@ -356,7 +396,7 @@ const tableHeaders = computed(() => {
   const base = [...headers];
   if (viewMode.value === 'signals') {
     base.push({ title: '挂单诊断', key: 'signal_diag', sortable: false });
-    base.push({ title: '操作', key: 'actions', sortable: false, width: '130px' });
+    base.push({ title: '操作', key: 'actions', sortable: false, width: '200px' });
   }
   return base;
 });
@@ -548,10 +588,21 @@ function canShowReprice(item) {
   return action === 'buy' && ['cancelled', 'canceled', 'partial_cancelled'].includes(raw);
 }
 
-function formatSubmittedBuyDiagnostics(item) {
+function isSubmittedSignal(item) {
+  const st = String(item.status || '').toUpperCase();
+  if (st === 'SUBMITTED') return true;
+  return rawSignalStatus(item) === 'submitted';
+}
+
+function isSubmittedBuy(item) {
+  const action = String(item.action || item.direction || '').toLowerCase();
+  return isSubmittedSignal(item) && action === 'buy';
+}
+
+function formatSubmittedDiagnostics(item) {
   const st = String(item.status || '').toUpperCase();
   const action = String(item.action || item.direction || '').toLowerCase();
-  if (st !== 'SUBMITTED' || action !== 'buy') return '';
+  if (st !== 'SUBMITTED' && rawSignalStatus(item) !== 'submitted') return '';
   const parts = [];
   const lim = item.effective_limit_price;
   const mkt = item.last_market_price;
@@ -559,8 +610,11 @@ function formatSubmittedBuyDiagnostics(item) {
   if (mkt != null && mkt !== '') {
     parts.push(`市价参考 ${Number(mkt).toFixed(3)}`);
     if (lim != null && lim !== '' && Number(mkt) > 0) {
-      const pct = ((Number(lim) - Number(mkt)) / Number(mkt) * 100).toFixed(2);
-      parts.push(`偏离 ${pct}%`);
+      const pct =
+        action === 'sell'
+          ? ((Number(mkt) - Number(lim)) / Number(mkt) * 100).toFixed(2)
+          : ((Number(lim) - Number(mkt)) / Number(mkt) * 100).toFixed(2);
+      parts.push(`${action === 'sell' ? '卖单' : '买单'}偏离 ${pct}%`);
     }
   }
   if (item.submitted_age_seconds != null && item.submitted_age_seconds !== '') {
@@ -571,6 +625,11 @@ function formatSubmittedBuyDiagnostics(item) {
   }
   if (item.broker_status_msg) parts.push(String(item.broker_status_msg));
   return parts.join(' · ') || '—';
+}
+
+function openSubmittedHelp(item) {
+  submittedHelpItem.value = item;
+  submittedHelpOpen.value = true;
 }
 
 async function openRepriceDialog(item) {
