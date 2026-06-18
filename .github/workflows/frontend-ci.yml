@@ -177,6 +177,7 @@ jobs:
              ( docker network connect quant-network quant-api 2>/dev/null || true ) && \
              ( docker network connect quant-network quant-mcp-read 2>/dev/null || true ) && \
              ( docker network connect quant-network quant-mcp-actions 2>/dev/null || true ) && \
+             ( docker ps -aq --filter name=quant-web | xargs -r docker rm -f ) && \
              docker stop quant-web 2>/dev/null || true && \
              docker rm   quant-web 2>/dev/null || true && \
              docker run -d \
