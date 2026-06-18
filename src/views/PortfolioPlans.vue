@@ -1437,23 +1437,35 @@ function blockerText(blocker) {
 }
 
 async function refreshAll() {
-  await Promise.all([
+  const initialResults = await Promise.allSettled([
     loadSecuritiesAccounts(),
     loadStrategies(),
   ])
+  reportFirstRejected(initialResults, '部分基础配置加载失败')
   if (!generateForm.value.strategy_template_id && availableStrategies.value.length) {
     generateForm.value.strategy_template_id = availableStrategies.value[0].strategy_template_id
   }
   syncGenerateParamsFromStrategy()
-  await Promise.all([
+  const planResults = await Promise.allSettled([
     loadParameterPresets(),
     loadWorkerStatus(),
     loadGenerationTasks(),
     loadPlans(),
   ])
+  reportFirstRejected(planResults, '部分组合计划数据加载失败')
   applyDefaultPreset()
-  await loadPlanGenerationWatermark()
-  loadLiveOps()
+  await Promise.allSettled([
+    loadPlanGenerationWatermark(),
+    loadLiveOps(),
+  ])
+}
+
+function reportFirstRejected(results, fallback) {
+  const failed = results.find((result) => result.status === 'rejected')
+  if (!failed) return
+  const error = failed.reason || {}
+  const detailText = formatApiDetail(error.response?.data?.detail)
+  message.value = detailText || error.message || fallback
 }
 
 async function loadSecuritiesAccounts() {
@@ -1469,8 +1481,13 @@ async function loadSecuritiesAccounts() {
 }
 
 async function loadStrategies() {
-  const res = await listPortfolioStrategies()
-  strategies.value = res.data || []
+  try {
+    const res = await listPortfolioStrategies()
+    strategies.value = res.data || []
+  } catch (error) {
+    strategies.value = []
+    throw error
+  }
 }
 
 async function loadParameterPresets() {
