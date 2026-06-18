@@ -34,7 +34,7 @@
 
       <section class="chart-section">
         <h3>净值曲线（血缘拼接）</h3>
-        <div v-if="!equityRows.length" class="muted">暂无净值数据。</div>
+        <div v-if="!equityRowsForChart.length" class="muted">暂无净值数据。</div>
         <div v-else class="equity-chart" aria-label="Lineage live equity">
           <svg viewBox="0 0 640 220" preserveAspectRatio="none">
             <polyline :points="equityChart.points" />
@@ -52,6 +52,9 @@
           </svg>
           <p v-if="equityChart.latestReturn != null" class="chart-meta">
             区间收益：<strong>{{ signedPct(equityChart.latestReturn) }}</strong>
+          </p>
+          <p v-if="equityRows.length === 0 && equityRowsForChart.length" class="muted chart-note">
+            当前暂无日更净值快照；这里用持仓市值 + 已实现盈亏生成一个当前估算点。
           </p>
         </div>
       </section>
@@ -76,8 +79,8 @@
       </section>
 
       <section>
-        <h3>组合持仓（按成交流水重算）</h3>
-        <div v-if="!positionRows.length" class="muted">暂无持仓或尚无成交。</div>
+        <h3>最新持仓</h3>
+        <div v-if="!latestHoldingRows.length" class="muted">暂无当前持仓。</div>
         <div v-else class="table-wrap">
           <table>
             <thead>
@@ -92,7 +95,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in positionRows" :key="row.symbol">
+              <tr v-for="row in latestHoldingRows" :key="row.symbol">
                 <td>{{ row.symbol }}</td>
                 <td>{{ row.shares }}</td>
                 <td>{{ num(row.avg_cost) }}</td>
@@ -107,30 +110,38 @@
       </section>
 
       <section>
-        <h3>完整成交流水</h3>
-        <div v-if="!executionRows.length" class="muted">暂无成交记录。</div>
+        <h3>实盘成交明细</h3>
+        <div v-if="!tradeDetailRows.length" class="muted">暂无成交记录。</div>
         <div v-else class="table-wrap compact">
           <table>
             <thead>
               <tr>
-                <th>时间</th>
-                <th>代码</th>
-                <th>方向</th>
-                <th>数量</th>
-                <th>价格</th>
-                <th>来源 plan</th>
                 <th>调仓日</th>
+                <th>代码</th>
+                <th>名称</th>
+                <th>买入日</th>
+                <th>买价</th>
+                <th>卖价</th>
+                <th>数量</th>
+                <th>买入额</th>
+                <th>持有收益</th>
+                <th>净盈亏</th>
+                <th>费用</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(row, idx) in executionRows" :key="`${row.order_id}-${idx}`">
-                <td>{{ row.display_time || row.timestamp || '-' }}</td>
+              <tr v-for="(row, idx) in tradeDetailRows" :key="`${row.order_id}-${idx}`">
+                <td>{{ row.rebalance_date || '-' }}</td>
                 <td>{{ row.symbol || '-' }}</td>
-                <td>{{ (row.side || row.action || '-').toString().toUpperCase() }}</td>
-                <td>{{ row.filled_size || row.quantity || row.size || '-' }}</td>
-                <td>{{ num(row.filled_price || row.price) }}</td>
-                <td class="truncate" :title="row.source_plan_id">{{ row.source_plan_id || row.plan_id || '-' }}</td>
-                <td>{{ row.source_plan_base_date || '-' }}</td>
+                <td>{{ row.name || '-' }}</td>
+                <td>{{ row.buy_date || '-' }}</td>
+                <td>{{ num(row.buy_price) }}</td>
+                <td>{{ num(row.sell_price) }}</td>
+                <td>{{ money(row.quantity) }}</td>
+                <td>{{ money(row.buy_amount) }}</td>
+                <td :class="signClass(row.holding_return)">{{ pct(row.holding_return) }}</td>
+                <td :class="signClass(row.net_pnl)">{{ signedMoney(row.net_pnl) }}</td>
+                <td>{{ money(row.fee) }}</td>
               </tr>
             </tbody>
           </table>
@@ -162,8 +173,34 @@ const positionRows = ref([])
 const positionSummary = ref(null)
 const executionRows = ref([])
 
+const latestHoldingRows = computed(() => (
+  positionRows.value
+    .filter((row) => Number(row.shares) > 0)
+    .sort((a, b) => Number(b.market_value || 0) - Number(a.market_value || 0))
+))
+
+const positionBySymbol = computed(() => {
+  const rows = {}
+  for (const row of positionRows.value) {
+    rows[row.symbol] = row
+    rows[baseSymbol(row.symbol)] = row
+  }
+  return rows
+})
+
+const equityRowsForChart = computed(() => {
+  if (equityRows.value.length) return equityRows.value
+  if (!positionSummary.value) return []
+  const currentEquity = Number(positionSummary.value.total_market_value || 0)
+    + Number(positionSummary.value.total_realized_pnl || 0)
+  if (!Number.isFinite(currentEquity) || currentEquity <= 0) return []
+  return [{ date: '当前估算', equity: currentEquity, estimated: true }]
+})
+
+const tradeDetailRows = computed(() => executionRows.value.map((row) => toTradeDetailRow(row)))
+
 const equityChart = computed(() => {
-  const rows = equityRows.value
+  const rows = equityRowsForChart.value
   if (!rows.length) return { points: '', labels: [], min: 0, max: 0, latestReturn: null }
   const values = rows.map((row) => Number(row.equity))
   const min = Math.min(...values)
@@ -214,6 +251,80 @@ function signedPct(value) {
   const number = Number(value)
   if (!Number.isFinite(number)) return '-'
   return `${number >= 0 ? '+' : ''}${(number * 100).toFixed(2)}%`
+}
+
+function pct(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? `${(number * 100).toFixed(2)}%` : '-'
+}
+
+function signClass(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number) || number === 0) return ''
+  return number > 0 ? 'positive' : 'negative'
+}
+
+function baseSymbol(symbol) {
+  return String(symbol || '').split('.', 1)[0]
+}
+
+function executionQty(row) {
+  return Number(row.filled_size || row.filled_qty || row.quantity || row.size || 0)
+}
+
+function executionPrice(row) {
+  return Number(row.filled_price || row.traded_price || row.avg_price || row.price || 0)
+}
+
+function executionFee(row) {
+  return Number(row.total_fee ?? row.commission ?? row.fee ?? 0)
+}
+
+function isBuy(row) {
+  const side = String(row.side || row.action || row.signal_action || '').toUpperCase()
+  return side === 'BUY' || side === 'B' || side === '买入'
+}
+
+function isSell(row) {
+  const side = String(row.side || row.action || row.signal_action || '').toUpperCase()
+  return side === 'SELL' || side === 'S' || side === '卖出'
+}
+
+function displayDate(row) {
+  const value = row.display_time || row.created_at_display || row.created_at || row.timestamp || ''
+  return String(value || '').slice(0, 10)
+}
+
+function toTradeDetailRow(row) {
+  const qty = executionQty(row)
+  const price = executionPrice(row)
+  const fee = executionFee(row)
+  const pos = positionBySymbol.value[row.symbol] || positionBySymbol.value[baseSymbol(row.symbol)] || {}
+  const lastPrice = Number(pos.last_price)
+  const buy = isBuy(row)
+  const sell = isSell(row)
+  const buyAmount = buy ? qty * price : 0
+  const holdingReturn = buy && price > 0 && Number.isFinite(lastPrice) && lastPrice > 0
+    ? lastPrice / price - 1
+    : null
+  const realized = Number(row.realized_pnl ?? row.pnl ?? row.net_pnl)
+  const netPnl = buy && Number.isFinite(holdingReturn)
+    ? (lastPrice - price) * qty - fee
+    : (sell && Number.isFinite(realized) ? realized : null)
+
+  return {
+    ...row,
+    rebalance_date: row.source_plan_base_date,
+    name: row.name || row.stock_name || '',
+    buy_date: buy ? displayDate(row) : '',
+    buy_price: buy ? price : null,
+    sell_price: sell ? price : null,
+    quantity: qty,
+    buy_amount: buyAmount,
+    holding_return: holdingReturn,
+    net_pnl: netPnl,
+    fee,
+  }
 }
 
 function formatApiDetail(detail) {
