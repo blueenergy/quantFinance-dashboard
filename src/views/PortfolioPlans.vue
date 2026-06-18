@@ -1043,6 +1043,7 @@ const currentGenerationTask = ref(null)
 // the regeneration task finishes (which symbol filled the freed slot).
 const pendingReselect = ref(null)
 const generationTasks = ref([])
+const generateFormExpanded = ref(false)
 const generationTasksExpanded = ref(false)
 const planGenerationWatermark = ref(null)
 const workerStatuses = ref([])
@@ -2727,20 +2728,26 @@ button.danger {
 }
 
 .generate-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.generate-form-body {
   align-items: end;
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(220px, 1fr) minmax(220px, 1.2fr) minmax(160px, 0.7fr) minmax(140px, 0.6fr) auto auto;
 }
 
-.generate-card label,
+.generate-form-body label,
 .toolbar label {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.generate-card .inline-check {
+.generate-form-body .inline-check {
   align-items: center;
   flex-direction: row;
   gap: 6px;
