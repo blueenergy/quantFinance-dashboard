@@ -32,6 +32,25 @@
         <strong>说明：</strong>{{ equityCaveat }}
       </section>
 
+      <section class="summary-cards" v-if="bookEquity">
+        <div class="card">
+          <div class="label">连续权益（一本账）</div>
+          <div class="value">{{ money(bookEquity.equity) }}</div>
+        </div>
+        <div class="card">
+          <div class="label">初始本金</div>
+          <div class="value">{{ money(bookEquity.initial_capital) }}</div>
+        </div>
+        <div class="card">
+          <div class="label">可用现金</div>
+          <div class="value">{{ money(bookEquity.cash) }}</div>
+        </div>
+        <div class="card">
+          <div class="label">累计盈亏</div>
+          <div class="value">{{ signedMoney(Number(bookEquity.realized_pnl || 0) + Number(bookEquity.unrealized_pnl || 0)) }}</div>
+        </div>
+      </section>
+
       <section class="chart-section">
         <h3>净值曲线（血缘拼接）</h3>
         <div v-if="!equityRowsForChart.length" class="muted">暂无净值数据。</div>
@@ -169,6 +188,7 @@ const messageIsError = ref(false)
 
 const equityRows = ref([])
 const equityCaveat = ref('')
+const bookEquity = ref(null)
 const positionRows = ref([])
 const positionSummary = ref(null)
 const executionRows = ref([])
@@ -373,6 +393,7 @@ async function refreshDetail() {
       equity: Number(row.equity),
     }))
     equityCaveat.value = eqRes.data?.caveat || ''
+    bookEquity.value = eqRes.data?.current_book_equity || null
     positionRows.value = posRes.data?.positions || []
     positionSummary.value = posRes.data?.summary || null
     executionRows.value = exRes.data?.executions || []
@@ -389,6 +410,7 @@ watch(selectedLatestPlanId, (id) => {
   else {
     equityRows.value = []
     equityCaveat.value = ''
+    bookEquity.value = null
     positionRows.value = []
     positionSummary.value = null
     executionRows.value = []

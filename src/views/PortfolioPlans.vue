@@ -387,6 +387,9 @@
           <span>
             <strong>{{ plan.base_date }}</strong>
             <small>{{ planDisplayTitle(plan) }} · {{ planParamSummary(plan) }}</small>
+            <small v-if="planBaselineEquity(plan) != null" class="plan-row-baseline">
+              基准 {{ capitalBasisLabel(plan) }} · {{ money(planBaselineEquity(plan)) }}
+            </small>
           </span>
           <em>
             <span class="cadence-tag" :class="planCadenceBadge(plan).cls">{{ planCadenceBadge(plan).text }}</span>
@@ -468,6 +471,37 @@
             <div><span>换手</span><strong>{{ pct(selectedDetail.plan.summary?.estimated_turnover) }}</strong></div>
             <div><span>权益</span><strong>{{ money(selectedDetail.plan.summary?.equity) }}</strong></div>
           </div>
+
+          <section class="capital-basis" v-if="selectedDetail.plan.summary">
+            <div class="task-list-header">
+              <div>
+                <h4>资金基准</h4>
+                <p class="muted">下一期调仓的目标仓位以此基准权益规划（实盘默认按账户成交滚动复利）。</p>
+              </div>
+            </div>
+            <div class="metrics">
+              <div><span>基准模式</span><strong>{{ capitalBasisLabel(selectedDetail.plan) }}</strong></div>
+              <div><span>基准来源</span><strong>{{ baselineSourceLabel(selectedDetail.plan) }}</strong></div>
+              <div>
+                <span>基准权益</span>
+                <strong>{{ money(selectedDetail.plan.summary?.baseline_equity ?? selectedDetail.plan.summary?.equity) }}</strong>
+              </div>
+              <div>
+                <span>可用现金</span>
+                <strong>{{ money(selectedDetail.plan.summary?.baseline_cash ?? selectedDetail.plan.summary?.cash) }}</strong>
+              </div>
+              <div v-if="selectedDetail.plan.summary?.baseline_securities_account_id">
+                <span>证券账户</span>
+                <strong :title="selectedDetail.plan.summary.baseline_securities_account_id">
+                  {{ shortPlanId(selectedDetail.plan.summary.baseline_securities_account_id) }}
+                </strong>
+              </div>
+              <div v-if="selectedDetail.plan.summary?.baseline_synced_at">
+                <span>账户同步</span>
+                <strong>{{ baselineSyncedLabel(selectedDetail.plan) }}</strong>
+              </div>
+            </div>
+          </section>
 
           <label class="review-comment" v-if="selectedDetail.plan.status === 'needs_review'">
             审核备注
@@ -1456,6 +1490,44 @@ function shortPlanId(planId) {
   if (!text) return '-'
   if (text.length <= 28) return text
   return `${text.slice(0, 18)}…${text.slice(-8)}`
+}
+
+const CAPITAL_BASIS_LABELS = {
+  account_equity: '实盘账户滚动权益',
+  rolling_paper: '纸面滚动权益',
+  fixed_notional: '固定名义本金',
+}
+
+const BASELINE_SOURCE_LABELS = {
+  live_lineage_reconstruction: '实盘成交重建',
+  paper_snapshot: '纸面快照继承',
+  initial_capital: '初始本金',
+  fixed_notional: '固定名义本金',
+}
+
+function capitalBasisLabel(plan) {
+  const basis = plan?.capital_basis || plan?.summary?.capital_basis
+  return CAPITAL_BASIS_LABELS[basis] || basis || '—'
+}
+
+function baselineSourceLabel(plan) {
+  const source = plan?.summary?.baseline_source
+  return BASELINE_SOURCE_LABELS[source] || source || '—'
+}
+
+function planBaselineEquity(plan) {
+  const value = plan?.summary?.baseline_equity ?? plan?.summary?.equity
+  return Number.isFinite(Number(value)) ? Number(value) : null
+}
+
+function baselineSyncedLabel(plan) {
+  const value = plan?.summary?.baseline_synced_at
+  if (value === null || value === undefined || value === '') return '—'
+  const date = typeof value === 'number'
+    ? new Date(value < 1e12 ? value * 1000 : value)
+    : new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 function previousPlanIdFor(plan) {
@@ -3071,6 +3143,13 @@ button.danger {
   font-style: normal;
 }
 
+.plan-row-baseline {
+  display: block;
+  margin-top: 2px;
+  color: #4b5563;
+  font-size: 11px;
+}
+
 .metrics {
   flex-wrap: wrap;
   margin: 14px 0;
@@ -3088,6 +3167,14 @@ button.danger {
   color: #111827;
   display: block;
   font-size: 12px;
+}
+
+.capital-basis {
+  margin: 14px 0;
+}
+
+.capital-basis .metrics {
+  margin: 8px 0 0;
 }
 
 .execution-status {
