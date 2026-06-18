@@ -117,6 +117,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'strategy-lab', name: '🧪 策略实验室' },
       { id: 'portfolio-research', name: '组合研究' },
       { id: 'portfolio-plans', name: '📋 组合交易计划' },
+      { id: 'portfolio-overview', name: '📊 组合总览(实盘)' },
       { id: 'strategies', name: '策略配置' },
       { id: 'strategy-workers', name: '🚀 实盘交易' },
       { id: 'trade-executions', name: '交易记录' },

@@ -23,6 +23,7 @@ const UserProfile = defineAsyncComponent(() => import('../components/UserProfile
 const BacktestManager = defineAsyncComponent(() => import('../components/BacktestManager.vue'))
 const StrategyLab = defineAsyncComponent(() => import('../views/StrategyLab.vue'))
 const PortfolioPlans = defineAsyncComponent(() => import('../views/PortfolioPlans.vue'))
+const PortfolioOverview = defineAsyncComponent(() => import('../views/PortfolioOverview.vue'))
 const PortfolioResearch = defineAsyncComponent(() => import('../views/PortfolioResearch.vue'))
 const StrategyStockPool = defineAsyncComponent(() => import('../components/StrategyStockPool.vue'))
 const LimitUpLadder = defineAsyncComponent(() => import('../views/LimitUpLadder.vue'))
@@ -191,6 +192,12 @@ export const tabViewDefinitions = [
     component: PortfolioPlans,
     fallbackClass: 'skeleton-table',
     fallbackText: '组合交易计划加载中...',
+  },
+  {
+    id: 'portfolio-overview',
+    component: PortfolioOverview,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '组合总览加载中...',
   },
   {
     id: 'portfolio-research',

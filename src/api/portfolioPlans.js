@@ -108,6 +108,22 @@ export function getPortfolioPlanLiveRealtimeEquity(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/live-realtime-equity`, method: 'get' })
 }
 
+export function listLivePortfolios() {
+  return request({ url: '/portfolio-plans/live-portfolios', method: 'get' })
+}
+
+export function getLineageLiveExecutions(planId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/lineage-live-executions`, method: 'get' })
+}
+
+export function getLineageLivePositions(planId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/lineage-live-positions`, method: 'get' })
+}
+
+export function getLineageLiveEquity(planId, params = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/lineage-live-equity`, method: 'get', params })
+}
+
 export function getPortfolioStrategyEquity(strategyId, params = {}) {
   return request({ url: `/portfolio-plans/strategies/${strategyId}/equity`, method: 'get', params })
 }
