@@ -161,10 +161,10 @@
           {{ errorMessage }}
         </v-alert>
 
+        <template v-if="viewMode !== 'summary'">
         <v-data-table
-          v-if="viewMode !== 'summary'"
           :items="filteredTrades"
-          :headers="headers"
+          :headers="tableHeaders"
           :loading="loading"
           class="elevation-1"
           :items-per-page="pageSize"
@@ -198,7 +198,69 @@
           <template #item.strategy="{ item }">
             {{ getStrategyName(item.strategy_name || item.strategy) || '-' }}
           </template>
+          <template #item.signal_diag="{ item }">
+            <span v-if="viewMode === 'signals'" class="text-caption text-medium-emphasis">{{ formatSubmittedBuyDiagnostics(item) }}</span>
+          </template>
+          <template #item.actions="{ item }">
+            <template v-if="viewMode === 'signals'">
+              <v-btn
+                v-if="canShowReprice(item)"
+                size="small"
+                variant="tonal"
+                color="primary"
+                @click="openRepriceDialog(item)"
+              >
+                重新定价
+              </v-btn>
+              <span v-else class="text-caption text-disabled">—</span>
+            </template>
+          </template>
         </v-data-table>
+
+        <v-dialog v-model="repriceDialog" max-width="560" persistent>
+          <v-card>
+            <v-card-text v-if="repriceLoading" class="text-center py-8">加载预览…</v-card-text>
+            <template v-else-if="repricePreview">
+            <v-card-title>重新定价买入 — {{ repricePreview.symbol }}</v-card-title>
+            <v-card-text>
+              <p class="text-body-2">原订单 {{ repriceOrderId }}，基准数量 {{ repricePreview.size }}</p>
+              <p class="text-caption">
+                市场参考价: {{ repricePreview.market_reference_price != null ? Number(repricePreview.market_reference_price).toFixed(3) : '—' }}
+                ({{ repricePreview.market_reference_source || '—' }})
+              </p>
+              <p class="text-caption">
+                建议限价: {{ repricePreview.suggested_effective_limit_price != null ? Number(repricePreview.suggested_effective_limit_price).toFixed(3) : '—' }}
+              </p>
+              <p v-if="repriceNotionalDisplay" class="text-caption">预计金额 ≈ {{ repriceNotionalDisplay }}</p>
+              <p v-if="repriceVsMarketPctDisplay != null" class="text-caption">相对市场参考偏离: {{ repriceVsMarketPctDisplay }}%</p>
+              <v-divider class="my-3" />
+              <v-text-field
+                v-model.number="repriceLimit"
+                label="限价 (必填)"
+                type="number"
+                step="0.01"
+                variant="outlined"
+                density="compact"
+              />
+              <v-text-field
+                v-model.number="repriceSize"
+                label="数量 (可选，留空沿用原单)"
+                type="number"
+                variant="outlined"
+                density="compact"
+              />
+              <v-text-field v-model="repriceReason" label="原因说明" variant="outlined" density="compact" />
+              <v-alert v-if="repriceError" type="error" density="compact" class="mt-2">{{ repriceError }}</v-alert>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer />
+              <v-btn variant="text" @click="closeRepriceDialog">取消</v-btn>
+              <v-btn color="primary" :loading="repriceSubmitting" @click="submitRepriceConfirm">确认生成新信号</v-btn>
+            </v-card-actions>
+            </template>
+          </v-card>
+        </v-dialog>
+        </template>
 
         <v-data-table
           v-else
@@ -250,6 +312,16 @@ const summaryRows = ref([]);
 const totalRealizedPnl = ref(0);
 const totalUnrealizedPnl = ref(0);
 
+const repriceDialog = ref(false);
+const repriceSubmitting = ref(false);
+const repriceLoading = ref(false);
+const repriceOrderId = ref('');
+const repricePreview = ref(null);
+const repriceLimit = ref(null);
+const repriceSize = ref(null);
+const repriceReason = ref('');
+const repriceError = ref('');
+
 // 状态筛选选项
 const statusFilterOptions = [
   { title: '全部', value: 'all' },
@@ -279,6 +351,31 @@ const headers = [
   { title: '状态', key: 'status' },
   { title: '订单号', key: 'order_id' }
 ];
+
+const tableHeaders = computed(() => {
+  const base = [...headers];
+  if (viewMode.value === 'signals') {
+    base.push({ title: '挂单诊断', key: 'signal_diag', sortable: false });
+    base.push({ title: '操作', key: 'actions', sortable: false, width: '130px' });
+  }
+  return base;
+});
+
+const repriceNotionalDisplay = computed(() => {
+  const px = Number(repriceLimit.value);
+  const sz = Number(repriceSize.value);
+  const baseSz = Number(repricePreview.value?.size);
+  const q = Number.isFinite(sz) && sz > 0 ? sz : baseSz;
+  if (!Number.isFinite(px) || px <= 0 || !Number.isFinite(q) || q <= 0) return null;
+  return (px * q).toFixed(2);
+});
+
+const repriceVsMarketPctDisplay = computed(() => {
+  const m = Number(repricePreview.value?.market_reference_price);
+  const px = Number(repriceLimit.value);
+  if (!Number.isFinite(m) || m <= 0 || !Number.isFinite(px)) return null;
+  return (((px - m) / m) * 100).toFixed(2);
+});
 
 const summaryHeaders = [
   { title: '股票代码', key: 'symbol' },
@@ -439,6 +536,101 @@ function formatDate(timestamp) {
   const timestampMs = timestamp > 1e10 ? timestamp : timestamp * 1000;
   const date = new Date(timestampMs);
   return date.toLocaleString('zh-CN');
+}
+
+function rawSignalStatus(item) {
+  return String(item.raw_signal_status || item.status || '').toLowerCase();
+}
+
+function canShowReprice(item) {
+  const raw = rawSignalStatus(item);
+  const action = String(item.action || item.direction || '').toLowerCase();
+  return action === 'buy' && ['cancelled', 'canceled', 'partial_cancelled'].includes(raw);
+}
+
+function formatSubmittedBuyDiagnostics(item) {
+  const st = String(item.status || '').toUpperCase();
+  const action = String(item.action || item.direction || '').toLowerCase();
+  if (st !== 'SUBMITTED' || action !== 'buy') return '';
+  const parts = [];
+  const lim = item.effective_limit_price;
+  const mkt = item.last_market_price;
+  if (lim != null && lim !== '') parts.push(`限价 ${Number(lim).toFixed(3)}`);
+  if (mkt != null && mkt !== '') {
+    parts.push(`市价参考 ${Number(mkt).toFixed(3)}`);
+    if (lim != null && lim !== '' && Number(mkt) > 0) {
+      const pct = ((Number(lim) - Number(mkt)) / Number(mkt) * 100).toFixed(2);
+      parts.push(`偏离 ${pct}%`);
+    }
+  }
+  if (item.submitted_age_seconds != null && item.submitted_age_seconds !== '') {
+    const s = Math.max(0, Number(item.submitted_age_seconds));
+    const mm = Math.floor(s / 60);
+    const ss = Math.floor(s % 60);
+    parts.push(`已挂单 ${mm}分${ss}秒`);
+  }
+  if (item.broker_status_msg) parts.push(String(item.broker_status_msg));
+  return parts.join(' · ') || '—';
+}
+
+async function openRepriceDialog(item) {
+  repriceError.value = '';
+  repriceReason.value = '';
+  repriceOrderId.value = item.order_id || '';
+  repriceDialog.value = true;
+  repricePreview.value = null;
+  repriceLimit.value = null;
+  repriceSize.value = null;
+  repriceLoading.value = true;
+  try {
+    const data = await tradeApi.previewTraderSignalReprice(repriceOrderId.value);
+    repricePreview.value = data;
+    repriceLimit.value =
+      data.suggested_effective_limit_price ?? data.market_reference_price ?? null;
+    repriceSize.value = data.size ?? null;
+  } catch (e) {
+    repriceError.value = e?.message || String(e);
+    repricePreview.value = {
+      success: false,
+      symbol: item.symbol,
+      size: item.quantity || item.size,
+    };
+  } finally {
+    repriceLoading.value = false;
+  }
+}
+
+function closeRepriceDialog() {
+  repriceDialog.value = false;
+  repricePreview.value = null;
+  repriceSubmitting.value = false;
+}
+
+async function submitRepriceConfirm() {
+  repriceError.value = '';
+  const lim = Number(repriceLimit.value);
+  if (!Number.isFinite(lim) || lim <= 0) {
+    repriceError.value = '请输入有效限价';
+    return;
+  }
+  const body = {
+    effective_limit_price: lim,
+    reason: repriceReason.value || '',
+  };
+  const sz = Number(repriceSize.value);
+  if (Number.isFinite(sz) && sz > 0) {
+    body.size = Math.floor(sz);
+  }
+  repriceSubmitting.value = true;
+  try {
+    await tradeApi.confirmTraderSignalReprice(repriceOrderId.value, body);
+    closeRepriceDialog();
+    await loadTrades();
+  } catch (e) {
+    repriceError.value = e?.message || String(e);
+  } finally {
+    repriceSubmitting.value = false;
+  }
 }
 
 async function loadTrades() {
@@ -602,7 +794,9 @@ function getStatusColor(status) {
     'PENDING': 'orange',
     'RETRY': 'amber',
     'SUBMITTED': 'blue',
-    'FAILED': 'red'
+    'FAILED': 'red',
+    'CANCELLED': 'grey',
+    'PARTIAL_CANCELLED': 'deep-orange',
   };
   return colorMap[statusUpper] || 'grey';
 }

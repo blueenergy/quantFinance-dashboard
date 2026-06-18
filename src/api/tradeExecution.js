@@ -73,6 +73,38 @@ export async function getAllTradeActivities(params = {}) {
   return res.json();
 }
 
+export async function previewTraderSignalReprice(orderId) {
+  const res = await fetch(
+    `${API_BASE}/trader/signals/${encodeURIComponent(orderId)}/reprice`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: "{}",
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `reprice preview failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function confirmTraderSignalReprice(orderId, body) {
+  const res = await fetch(
+    `${API_BASE}/trader/signals/${encodeURIComponent(orderId)}/reprice/confirm`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(body),
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `reprice confirm failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function getTradePnlSummary(params = {}) {
   const queryParams = new URLSearchParams();
   if (params.days) queryParams.append('days', params.days);
