@@ -105,6 +105,7 @@
             <thead>
               <tr>
                 <th>代码</th>
+                <th>名称</th>
                 <th>数量</th>
                 <th>均价</th>
                 <th>现价</th>
@@ -116,6 +117,7 @@
             <tbody>
               <tr v-for="row in latestHoldingRows" :key="row.symbol">
                 <td>{{ row.symbol }}</td>
+                <td>{{ row.name || '-' }}</td>
                 <td>{{ row.shares }}</td>
                 <td>{{ num(row.avg_cost) }}</td>
                 <td>{{ num(row.last_price) }}</td>
@@ -149,13 +151,16 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(row, idx) in tradeDetailRows" :key="`${row.order_id}-${idx}`">
+              <tr v-for="(row, idx) in tradeDetailRows" :key="`${row.trade_id || row.buy_order_id || row.symbol}-${idx}`" :class="{ 'open-trade': row.status === 'open' }">
                 <td>{{ row.rebalance_date || '-' }}</td>
                 <td>{{ row.symbol || '-' }}</td>
                 <td>{{ row.name || '-' }}</td>
                 <td>{{ row.buy_date || '-' }}</td>
                 <td>{{ num(row.buy_price) }}</td>
-                <td>{{ num(row.sell_price) }}</td>
+                <td>
+                  <span v-if="row.status === 'open'" class="badge-open">持有中</span>
+                  <span v-else>{{ num(row.sell_price) }}</span>
+                </td>
                 <td>{{ money(row.quantity) }}</td>
                 <td>{{ money(row.buy_amount) }}</td>
                 <td :class="signClass(row.holding_return)">{{ pct(row.holding_return) }}</td>
@@ -163,8 +168,21 @@
                 <td>{{ money(row.fee) }}</td>
               </tr>
             </tbody>
+            <tfoot>
+              <tr class="totals-row">
+                <td colspan="7">合计（{{ tradeTotals.count }} 笔 · 已平 {{ tradeTotals.closedCount }} / 持有 {{ tradeTotals.openCount }}）</td>
+                <td>{{ money(tradeTotals.buyAmount) }}</td>
+                <td></td>
+                <td :class="signClass(tradeTotals.netPnl)">{{ signedMoney(tradeTotals.netPnl) }}</td>
+                <td>{{ money(tradeTotals.fee) }}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
+        <p class="muted combo-note">
+          成交明细按 <strong>FIFO（先进先出）</strong> 将每笔卖出与对应买入批次配对，一行为一段往返；未平仓部分以“持有中”行按最新价估算浮动盈亏。
+          上方汇总卡片的「已实现盈亏」按<strong>加权平均成本法</strong>计算，与本表净盈亏合计在分批建仓/部分卖出时口径不同，全部平仓后两者一致。
+        </p>
       </section>
     </template>
   </div>
@@ -191,22 +209,13 @@ const equityCaveat = ref('')
 const bookEquity = ref(null)
 const positionRows = ref([])
 const positionSummary = ref(null)
-const executionRows = ref([])
+const tradeRows = ref([])
 
 const latestHoldingRows = computed(() => (
   positionRows.value
     .filter((row) => Number(row.shares) > 0)
     .sort((a, b) => Number(b.market_value || 0) - Number(a.market_value || 0))
 ))
-
-const positionBySymbol = computed(() => {
-  const rows = {}
-  for (const row of positionRows.value) {
-    rows[row.symbol] = row
-    rows[baseSymbol(row.symbol)] = row
-  }
-  return rows
-})
 
 const equityRowsForChart = computed(() => {
   if (equityRows.value.length) return equityRows.value
@@ -217,7 +226,27 @@ const equityRowsForChart = computed(() => {
   return [{ date: '当前估算', equity: currentEquity, estimated: true }]
 })
 
-const tradeDetailRows = computed(() => executionRows.value.map((row) => toTradeDetailRow(row)))
+const tradeDetailRows = computed(() => tradeRows.value)
+
+const tradeTotals = computed(() => {
+  const rows = tradeDetailRows.value
+  let netPnl = 0
+  let fee = 0
+  let buyAmount = 0
+  let closedCount = 0
+  let openCount = 0
+  for (const row of rows) {
+    const pnl = Number(row.net_pnl)
+    if (Number.isFinite(pnl)) netPnl += pnl
+    const f = Number(row.fee)
+    if (Number.isFinite(f)) fee += f
+    const amt = Number(row.buy_amount)
+    if (Number.isFinite(amt)) buyAmount += amt
+    if (row.status === 'open') openCount += 1
+    else closedCount += 1
+  }
+  return { count: rows.length, closedCount, openCount, netPnl, fee, buyAmount }
+})
 
 const equityChart = computed(() => {
   const rows = equityRowsForChart.value
@@ -251,16 +280,19 @@ const equityChart = computed(() => {
 })
 
 function money(value) {
+  if (value === null || value === undefined || value === '') return '-'
   const number = Number(value)
   return Number.isFinite(number) ? number.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) : '-'
 }
 
 function num(value) {
+  if (value === null || value === undefined || value === '') return '-'
   const number = Number(value)
   return Number.isFinite(number) ? number.toFixed(4) : '-'
 }
 
 function signedMoney(value) {
+  if (value === null || value === undefined || value === '') return '-'
   const number = Number(value)
   if (!Number.isFinite(number)) return '-'
   const formatted = Math.abs(number).toLocaleString('zh-CN', { maximumFractionDigits: 0 })
@@ -268,12 +300,14 @@ function signedMoney(value) {
 }
 
 function signedPct(value) {
+  if (value === null || value === undefined || value === '') return '-'
   const number = Number(value)
   if (!Number.isFinite(number)) return '-'
   return `${number >= 0 ? '+' : ''}${(number * 100).toFixed(2)}%`
 }
 
 function pct(value) {
+  if (value === null || value === undefined || value === '') return '-'
   const number = Number(value)
   return Number.isFinite(number) ? `${(number * 100).toFixed(2)}%` : '-'
 }
@@ -282,69 +316,6 @@ function signClass(value) {
   const number = Number(value)
   if (!Number.isFinite(number) || number === 0) return ''
   return number > 0 ? 'positive' : 'negative'
-}
-
-function baseSymbol(symbol) {
-  return String(symbol || '').split('.', 1)[0]
-}
-
-function executionQty(row) {
-  return Number(row.filled_size || row.filled_qty || row.quantity || row.size || 0)
-}
-
-function executionPrice(row) {
-  return Number(row.filled_price || row.traded_price || row.avg_price || row.price || 0)
-}
-
-function executionFee(row) {
-  return Number(row.total_fee ?? row.commission ?? row.fee ?? 0)
-}
-
-function isBuy(row) {
-  const side = String(row.side || row.action || row.signal_action || '').toUpperCase()
-  return side === 'BUY' || side === 'B' || side === '买入'
-}
-
-function isSell(row) {
-  const side = String(row.side || row.action || row.signal_action || '').toUpperCase()
-  return side === 'SELL' || side === 'S' || side === '卖出'
-}
-
-function displayDate(row) {
-  const value = row.display_time || row.created_at_display || row.created_at || row.timestamp || ''
-  return String(value || '').slice(0, 10)
-}
-
-function toTradeDetailRow(row) {
-  const qty = executionQty(row)
-  const price = executionPrice(row)
-  const fee = executionFee(row)
-  const pos = positionBySymbol.value[row.symbol] || positionBySymbol.value[baseSymbol(row.symbol)] || {}
-  const lastPrice = Number(pos.last_price)
-  const buy = isBuy(row)
-  const sell = isSell(row)
-  const buyAmount = buy ? qty * price : 0
-  const holdingReturn = buy && price > 0 && Number.isFinite(lastPrice) && lastPrice > 0
-    ? lastPrice / price - 1
-    : null
-  const realized = Number(row.realized_pnl ?? row.pnl ?? row.net_pnl)
-  const netPnl = buy && Number.isFinite(holdingReturn)
-    ? (lastPrice - price) * qty - fee
-    : (sell && Number.isFinite(realized) ? realized : null)
-
-  return {
-    ...row,
-    rebalance_date: row.source_plan_base_date,
-    name: row.name || row.stock_name || '',
-    buy_date: buy ? displayDate(row) : '',
-    buy_price: buy ? price : null,
-    sell_price: sell ? price : null,
-    quantity: qty,
-    buy_amount: buyAmount,
-    holding_return: holdingReturn,
-    net_pnl: netPnl,
-    fee,
-  }
 }
 
 function formatApiDetail(detail) {
@@ -396,7 +367,7 @@ async function refreshDetail() {
     bookEquity.value = eqRes.data?.current_book_equity || null
     positionRows.value = posRes.data?.positions || []
     positionSummary.value = posRes.data?.summary || null
-    executionRows.value = exRes.data?.executions || []
+    tradeRows.value = exRes.data?.trades || []
   } catch (error) {
     message.value = formatApiDetail(error.response?.data?.detail) || error.message || '加载详情失败'
     messageIsError.value = true
@@ -413,7 +384,7 @@ watch(selectedLatestPlanId, (id) => {
     bookEquity.value = null
     positionRows.value = []
     positionSummary.value = null
-    executionRows.value = []
+    tradeRows.value = []
   }
 })
 
@@ -628,6 +599,30 @@ th {
 
 tbody tr:hover td {
   background: #f9fafb;
+}
+
+.open-trade td {
+  background: #f8fafc;
+}
+
+.badge-open {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  color: #1d4ed8;
+  font-size: 12px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.totals-row td {
+  background: #f3f4f6;
+  border-top: 2px solid #d1d5db;
+  font-weight: 700;
+}
+
+.combo-note {
+  margin-top: 8px;
 }
 
 .truncate {
