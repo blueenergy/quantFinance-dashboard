@@ -142,6 +142,7 @@
                 <th>名称</th>
                 <th>买入日</th>
                 <th>买价</th>
+                <th>卖出日</th>
                 <th>卖价</th>
                 <th>数量</th>
                 <th>买入额</th>
@@ -157,6 +158,7 @@
                 <td>{{ row.name || '-' }}</td>
                 <td>{{ row.buy_date || '-' }}</td>
                 <td>{{ num(row.buy_price) }}</td>
+                <td>{{ row.sell_date || '-' }}</td>
                 <td>
                   <span v-if="row.status === 'open'" class="badge-open">持有中</span>
                   <span v-else>{{ num(row.sell_price) }}</span>
@@ -170,7 +172,7 @@
             </tbody>
             <tfoot>
               <tr class="totals-row">
-                <td colspan="7">合计（{{ tradeTotals.count }} 笔 · 已平 {{ tradeTotals.closedCount }} / 持有 {{ tradeTotals.openCount }}）</td>
+                <td colspan="8">合计（{{ tradeTotals.count }} 笔 · 已平 {{ tradeTotals.closedCount }} / 持有 {{ tradeTotals.openCount }}）</td>
                 <td>{{ money(tradeTotals.buyAmount) }}</td>
                 <td></td>
                 <td :class="signClass(tradeTotals.netPnl)">{{ signedMoney(tradeTotals.netPnl) }}</td>
