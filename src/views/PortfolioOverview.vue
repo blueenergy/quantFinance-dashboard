@@ -52,7 +52,7 @@
       </section>
 
       <section class="chart-section">
-        <h3>净值曲线（血缘拼接）</h3>
+        <h3>净值曲线（账户整体权益 · 日频）</h3>
         <div v-if="!equityRowsForChart.length" class="muted">暂无净值数据。</div>
         <div v-else class="equity-chart" aria-label="Lineage live equity">
           <svg viewBox="0 0 640 220" preserveAspectRatio="none">
@@ -73,7 +73,7 @@
             区间收益：<strong>{{ signedPct(equityChart.latestReturn) }}</strong>
           </p>
           <p v-if="equityRows.length === 0 && equityRowsForChart.length" class="muted chart-note">
-            当前暂无日更净值快照；这里用持仓市值 + 已实现盈亏生成一个当前估算点。
+            当前暂无账户日权益快照；这里用一本账当前权益生成一个估算点。
           </p>
         </div>
       </section>
@@ -223,9 +223,7 @@ const latestHoldingRows = computed(() => (
 
 const equityRowsForChart = computed(() => {
   if (equityRows.value.length) return equityRows.value
-  if (!positionSummary.value) return []
-  const currentEquity = Number(positionSummary.value.total_market_value || 0)
-    + Number(positionSummary.value.total_realized_pnl || 0)
+  const currentEquity = Number(bookEquity.value?.equity)
   if (!Number.isFinite(currentEquity) || currentEquity <= 0) return []
   return [{ date: '当前估算', equity: currentEquity, estimated: true }]
 })
