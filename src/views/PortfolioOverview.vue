@@ -112,6 +112,7 @@
                 <th>市值</th>
                 <th>已实现</th>
                 <th>浮动</th>
+                <th>浮动%</th>
               </tr>
             </thead>
             <tbody>
@@ -124,6 +125,7 @@
                 <td>{{ money(row.market_value) }}</td>
                 <td>{{ signedMoney(row.realized_pnl) }}</td>
                 <td>{{ signedMoney(row.unrealized_pnl) }}</td>
+                <td :class="signClass(row.unrealized_pnl_pct)">{{ signedPct(row.unrealized_pnl_pct) }}</td>
               </tr>
             </tbody>
           </table>
