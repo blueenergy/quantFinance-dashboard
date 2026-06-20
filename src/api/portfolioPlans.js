@@ -76,6 +76,10 @@ export function rejectPortfolioPlanItem(planId, symbol) {
   return request({ url: `/portfolio-plans/plans/${planId}/items/${encodeURIComponent(symbol)}/reject`, method: 'post' })
 }
 
+export function bulkRejectPortfolioPlanItems(planId, symbols = []) {
+  return request({ url: `/portfolio-plans/plans/${planId}/items/bulk-reject`, method: 'post', data: { symbols } })
+}
+
 export function restorePortfolioPlanItem(planId, symbol) {
   return request({ url: `/portfolio-plans/plans/${planId}/items/${encodeURIComponent(symbol)}/restore`, method: 'post' })
 }

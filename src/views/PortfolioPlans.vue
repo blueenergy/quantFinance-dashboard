@@ -772,6 +772,24 @@
                   / <b class="risk-medium">{{ aiRiskSummary.medium || 0 }}中</b>
                   / <b class="risk-low">{{ aiRiskSummary.low || 0 }}低</b>
                 </span>
+                <button
+                  v-if="canReselectItems"
+                  class="link-btn"
+                  :disabled="actionLoading || reselectBusy"
+                  title="勾选当前目标中的 AI 高风险标的"
+                  @click="selectHighRiskReselectItems"
+                >
+                  勾选高风险
+                </button>
+                <button
+                  v-if="canReselectItems"
+                  class="link-btn danger"
+                  :disabled="actionLoading || reselectBusy || !selectedReselectCount"
+                  title="一次性排除勾选标的并重算候选池补位"
+                  @click="bulkReselectItems"
+                >
+                  批量换股 {{ selectedReselectCount ? `(${selectedReselectCount})` : '' }}
+                </button>
                 <button class="link-btn" :disabled="aiRiskRunning" @click="runAiRisk">
                   <span v-if="aiRiskRunning" class="spinner" />
                   {{ aiRiskRunning ? 'AI 风控运行中…' : '运行 AI 风控' }}
@@ -799,6 +817,7 @@
               <table class="plan-items-table">
                 <thead>
                   <tr>
+                    <th v-if="canReselectItems" class="col-select">选</th>
                     <th class="col-narrow">Rank</th>
                     <th class="col-stock">标的</th>
                     <th class="col-ind">行业</th>
@@ -818,6 +837,14 @@
                 </thead>
                 <tbody>
                   <tr v-for="item in selectedDetail.items" :key="`${item.symbol}-${item.rank}`">
+                    <td v-if="canReselectItems" class="col-select">
+                      <input
+                        type="checkbox"
+                        :checked="isReselectSelected(item.symbol)"
+                        :disabled="!canSelectReselectItem(item) || actionLoading || reselectBusy"
+                        @change="toggleReselectSelection(item.symbol, $event.target.checked)"
+                      />
+                    </td>
                     <td class="col-narrow">{{ item.rank ?? '-' }}</td>
                     <td class="col-stock" :title="`${actionBadge(item).label} ${item.name || ''} ${item.symbol || ''}`">
                       <button type="button" class="stock-workbench-link" @click="openStockWorkbench(item.symbol)">
@@ -1022,6 +1049,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   approvePortfolioPlan,
+  bulkRejectPortfolioPlanItems,
   executePortfolioPlanPaper,
   generatePortfolioPlan,
   getPortfolioPlan,
@@ -1096,6 +1124,7 @@ const reviewComment = ref('')
 const lastReselectSummary = ref('')
 const reselectStatus = ref({ state: 'idle', text: '' })
 const reselectTaskMeta = ref({ taskId: '', status: '' })
+const selectedReselectSymbols = ref(new Set())
 let realtimeTimer = null
 let generationTaskTimer = null
 let aiRiskTimer = null
@@ -1122,6 +1151,7 @@ const selectedPlanExcluded = computed(() => selectedDetail.value?.plan?.excluded
 // Only an unpublished, pre-approval plan can be reselected in place.
 const canReselectItems = computed(() => ['needs_review', 'generated', 'draft'].includes(selectedDetail.value?.plan?.status))
 const reselectBusy = computed(() => reselectStatus.value.state === 'running')
+const selectedReselectCount = computed(() => selectedReselectSymbols.value.size)
 const paperExecutionCount = computed(() => Number(executionStatus.value?.execution_count || 0))
 const hasPaperExecution = computed(() => Boolean(selectedDetail.value?.plan?.paper_executed_at) || paperExecutionCount.value > 0)
 // Plan-detail page uses plan-level data only. Keep paper panels hidden while the
@@ -1915,6 +1945,7 @@ async function selectPlan(planId) {
   livePublishPreview.value = null
   remainderPreview.value = null
   remainderReason.value = ''
+  selectedReselectSymbols.value = new Set()
   lastReselectSummary.value = ''
   reselectStatus.value = { state: 'idle', text: '' }
   reselectTaskMeta.value = { taskId: '', status: '' }
@@ -2158,6 +2189,38 @@ function aiRiskBadge(item) {
   }
 }
 
+function canSelectReselectItem(item) {
+  return Boolean(item?.symbol && item.rank != null && !selectedPlanExcluded.value.includes(item.symbol))
+}
+
+function isReselectSelected(symbol) {
+  return selectedReselectSymbols.value.has(symbol)
+}
+
+function toggleReselectSelection(symbol, checked) {
+  if (!symbol) return
+  const next = new Set(selectedReselectSymbols.value)
+  if (checked) {
+    next.add(symbol)
+  } else {
+    next.delete(symbol)
+  }
+  selectedReselectSymbols.value = next
+}
+
+function selectHighRiskReselectItems() {
+  const symbols = (selectedDetail.value?.items || [])
+    .filter((item) => canSelectReselectItem(item) && item?.ai_risk?.severity === 'high')
+    .map((item) => item.symbol)
+  if (!symbols.length) {
+    message.value = '当前没有可批量换股的 AI 高风险标的'
+    return
+  }
+  // Merge into the existing selection instead of replacing it, so manual picks
+  // are preserved.
+  selectedReselectSymbols.value = new Set([...selectedReselectSymbols.value, ...symbols])
+}
+
 async function runAiRisk() {
   if (!selectedPlanId.value || aiRiskRunning.value) return
   aiRiskRunning.value = true
@@ -2215,7 +2278,15 @@ function describeReselectResult(pending) {
   }
   const before = new Set(pending.beforeTargets || [])
   const afterTargets = items.filter((item) => item.rank != null).map((item) => item.symbol)
-  const added = afterTargets.filter((sym) => !before.has(sym) && sym !== pending.symbol)
+  const rejected = new Set(pending.symbols || (pending.symbol ? [pending.symbol] : []))
+  const added = afterTargets.filter((sym) => !before.has(sym) && !rejected.has(sym))
+  if (pending.type === 'bulkReject') {
+    const rejectedText = [...rejected].join('、')
+    if (added.length) {
+      return `已批量排除 ${rejectedText}，补位换为 ${added.map(nameOf).join('、')}`
+    }
+    return `已批量排除 ${rejectedText}，候选池无可补位标的（目标持仓数减少）`
+  }
   if (pending.type === 'restore') {
     return afterTargets.includes(pending.symbol)
       ? `已恢复 ${nameOf(pending.symbol)}，重新纳入目标`
@@ -2281,6 +2352,45 @@ async function reselectItem(symbol, restore = false) {
     const detailText = formatApiDetail(error.response?.data?.detail)
     const errText = detailText || error.message || '重选失败'
     reselectStatus.value = { state: 'error', text: `重选失败：${errText}` }
+    reselectTaskMeta.value = { taskId: '', status: 'request_failed' }
+    message.value = errText
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function bulkReselectItems() {
+  if (!selectedPlanId.value || reselectBusy.value || !selectedReselectCount.value) return
+  const symbols = [...selectedReselectSymbols.value]
+  actionLoading.value = true
+  try {
+    const beforeTargets = (selectedDetail.value?.items || [])
+      .filter((item) => item.rank != null)
+      .map((item) => item.symbol)
+    const res = await bulkRejectPortfolioPlanItems(selectedPlanId.value, symbols)
+    const task = res.data?.task
+    if (task?.task_id) {
+      lastReselectSummary.value = ''
+      pendingReselect.value = { type: 'bulkReject', symbols, beforeTargets }
+      selectedReselectSymbols.value = new Set()
+      reselectTaskMeta.value = { taskId: task.task_id, status: 'pending' }
+      currentGenerationTask.value = task
+      reselectStatus.value = {
+        state: 'running',
+        text: `正在批量重选 ${symbols.length} 只标的，任务 ${task.task_id} 执行中…`,
+      }
+      message.value = `已排除 ${symbols.join('、')}，正在批量重选补位…`
+      await loadOperationLogs()
+      await loadGenerationTasks()
+      startGenerationTaskPolling(task.task_id)
+    } else {
+      reselectStatus.value = { state: 'error', text: '批量重选任务创建失败：未返回 task_id' }
+      reselectTaskMeta.value = { taskId: '', status: 'create_failed' }
+    }
+  } catch (error) {
+    const detailText = formatApiDetail(error.response?.data?.detail)
+    const errText = detailText || error.message || '批量重选失败'
+    reselectStatus.value = { state: 'error', text: `批量重选失败：${errText}` }
     reselectTaskMeta.value = { taskId: '', status: 'request_failed' }
     message.value = errText
   } finally {
@@ -2512,6 +2622,11 @@ button.danger {
 
 .plan-items-table .col-narrow {
   width: 44px;
+}
+
+.plan-items-table .col-select {
+  text-align: center;
+  width: 32px;
 }
 
 .plan-items-table .col-stock {
