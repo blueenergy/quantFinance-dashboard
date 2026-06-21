@@ -189,10 +189,20 @@
             <article class="workbench-card">
               <div class="card-title-row">
                 <h3>行情估值</h3>
-                <span class="muted">
-                  {{ quoteSectionDate || '暂无日期' }}
-                  <template v-if="sectionLoading.quote"> · 刷新中…</template>
-                </span>
+                <div class="analysis-actions">
+                  <span class="muted">
+                    {{ quoteSectionDate || '暂无日期' }}
+                    <template v-if="sectionLoading.quote"> · 刷新中…</template>
+                  </span>
+                  <button
+                    type="button"
+                    class="text-link-button"
+                    :disabled="sectionLoading.quote"
+                    @click="refreshQuoteSection"
+                  >
+                    刷新行情
+                  </button>
+                </div>
               </div>
               <div class="financial-metrics">
                 <div v-for="metric in quoteMetrics" :key="metric.label">
@@ -753,6 +763,28 @@
                 <button type="button" class="text-link-button" @click="openValuationHelp('ddm')">原理说明</button>
               </div>
             </div>
+            <div
+              v-if="valuationDdmDividendQuality.warnings?.length"
+              class="valuation-quality-warnings muted-block"
+            >
+              <p v-for="(w, idx) in valuationDdmDividendQuality.warnings" :key="`dqw-${idx}`" class="mb-1">
+                {{ w }}
+              </p>
+            </div>
+            <div
+              v-if="valuationDdmDividendQuality.signals && Object.keys(valuationDdmDividendQuality.signals).length"
+              class="valuation-quality-signals muted-block mt-2"
+            >
+              <span v-if="valuationDdmDividendQuality.median_payout_ratio_3y != null">
+                近年中位分红率（占净利） {{ fmtPctFromRatio(valuationDdmDividendQuality.median_payout_ratio_3y) }}
+              </span>
+              <span v-if="valuationDdmDividendQuality.median_ocf_coverage_3y != null" class="ml-2">
+                经营现金流覆盖（中位） {{ fmtNumber(valuationDdmDividendQuality.median_ocf_coverage_3y, 2) }}×
+              </span>
+              <span v-if="valuationDdmDividendQuality.cagr_confidence" class="ml-2">
+                分红 CAGR 置信度：{{ valuationDdmDividendQuality.cagr_confidence === 'normal' ? '正常' : '偏低（样本年数不足）' }}
+              </span>
+            </div>
             <div v-if="valuationDdmScenarios.length" class="quote-table-wrap">
               <table class="quote-table">
                 <thead>
@@ -761,6 +793,7 @@
                     <th>现金分红</th>
                     <th>股权成本</th>
                     <th>永续增长</th>
+                    <th class="valuation-ddm-g-source-col">g 来源</th>
                     <th>DDM 股权价值</th>
                     <th>相对当前市值</th>
                   </tr>
@@ -771,11 +804,15 @@
                     <td>{{ fmtAmount(scenario.cash_dividend_wan) }}</td>
                     <td>{{ fmtPctFromRatio(scenario.ke) }}</td>
                     <td>{{ fmtPctFromRatio(scenario.growth) }}</td>
+                    <td class="valuation-ddm-g-source">{{ ddmGrowthSourceLabel(scenario.growth_source, scenario.name) }}</td>
                     <td>{{ fmtAmount(scenario.equity_value_wan) }}</td>
                     <td>{{ fmtNumber(scenario.upside_pct, 2, '%') }}</td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div v-if="valuationDdmKeBreakdownSummary" class="muted-block mt-2 valuation-ke-breakdown">
+              {{ valuationDdmKeBreakdownSummary }}
             </div>
             <div v-else class="muted-block">{{ valuationDdm.reason || '暂无可计算年度分红总额的实施分红记录。' }}</div>
             <div v-if="valuationDdmAnnualRows.length" class="quote-table-wrap mt-3">
@@ -812,6 +849,12 @@
                 <button type="button" class="text-link-button" @click="openValuationHelp('dcf')">原理说明</button>
               </div>
             </div>
+            <div v-if="valuationDcfNetDebtNote" class="muted-block valuation-dcf-netdebt-note">
+              {{ valuationDcfNetDebtNote }}
+            </div>
+            <div v-if="valuationDcfPerShareNote" class="muted-block valuation-dcf-per-share-note mt-2">
+              {{ valuationDcfPerShareNote }}
+            </div>
             <div v-if="valuationDcfScenarios.length" class="quote-table-wrap">
               <table class="quote-table">
                 <thead>
@@ -820,6 +863,7 @@
                     <th>WACC</th>
                     <th>永续增长</th>
                     <th>初始增长</th>
+                    <th>企业价值 EV</th>
                     <th>每股价值</th>
                     <th>安全边际</th>
                     <th>股权价值</th>
@@ -831,6 +875,7 @@
                     <td>{{ fmtPctFromRatio(scenario.wacc) }}</td>
                     <td>{{ fmtPctFromRatio(scenario.terminal_growth) }}</td>
                     <td>{{ fmtPctFromRatio(scenario.initial_growth) }}</td>
+                    <td>{{ fmtAmount(scenario.enterprise_value_wan) }}</td>
                     <td>{{ fmtNumber(scenario.fair_value_per_share) }}</td>
                     <td>{{ fmtNumber(scenario.safety_margin_pct, 2, '%') }}</td>
                     <td>{{ fmtAmount(scenario.equity_value_wan) }}</td>
@@ -1379,12 +1424,12 @@ const analysisModeOptions = [
 const VALUATION_HELP = {
   ddm: {
     title: 'DDM / 分红折现模型说明',
-    summary: '当前 DDM 使用已实施现金分红作为基础，适合分红稳定、盈利和现金流覆盖较好的成熟公司。',
-    formula: '股权价值 = 下一期现金分红 / (股权成本 - 永续增长率)',
+    summary: 'DDM 以已实施现金分红为起点，股权成本 ke 采用无风险利率 + 股权风险溢价 + 风险调整（buildup，非 CAPM），永续增长率 g 优先用 ROE×(1−分红率) 等可持续增长口径，并与中性档 WACC 对齐下限。',
+    formula: '股权价值 = 下一期现金分红 / (股权成本 − 永续增长率)；ke ≥ WACC，且 g < ke、g 不超过约 3%。',
     interpretation: [
-      '中性情景低于当前市值，说明市场价格已经包含较高分红持续性或增长预期。',
-      '乐观情景高于当前市值，通常意味着只有在分红维持高位并持续增长时才有明显上行空间。',
-      '保守、中性、乐观三档主要改变年度现金分红、股权成本和永续增长率。',
+      '界面「g 来源」列说明中性档永续增长来自财报 ROE 与分红率推演还是配置回退。',
+      '「股权成本构成」展示无风险利率、ERP 与风险调整，便于理解 ke 并非单一魔法数。',
+      '分红质量信号（现金流覆盖、分红率持续性等）会抬高或压低风险调整，进而影响三档 ke。',
     ],
     limits: [
       '戈登 DDM 对股权成本和永续增长率非常敏感，两个参数差一点，估值会变化很大。',
@@ -1394,16 +1439,16 @@ const VALUATION_HELP = {
   },
   dcf: {
     title: 'DCF / 自由现金流折现说明',
-    summary: '当前 DCF 使用 FCFF 作为现金流基础，并用 WACC 折现，估算企业经营现金流创造的股权价值参考区间。',
-    formula: '企业价值 = 预测期 FCFF 折现值 + 永续期终值折现值；终值 = 末期 FCFF × (1 + g) / (WACC - g)',
+    summary: 'DCF 先将 FCFF 用 WACC 折现得到企业价值（EV），再扣除净债务与少数股东权益得到股权价值；金融（银行/保险/证券）不作净债务扣减，仅将 EV 作为同口径参考。',
+    formula: '企业价值 EV = 预测期 FCFF 折现 + 永续期终值折现；股权价值 = EV − 净债务 − 少数股东权益；终值 = 末期 FCFF × (1 + g) / (WACC − g)',
     interpretation: [
+      '表格中的「企业价值」为 EV，「股权价值」为扣减净债务与少数股东权益后的结果（金融行业除外）。',
       '保守、中性、乐观三档分别调整折现率、初始增长率和永续增长率，用来观察估值对假设的敏感性。',
       '若 DCF 明显高于市值，但 DDM 不支持，通常说明现金流估值乐观，需要检查资本开支、分红政策和现金流可分配性。',
-      '安全边际为正表示模型估值高于当前价格，但它不是买入建议，只是该组假设下的估值差。',
     ],
     limits: [
       'DCF 对长期增长率和折现率高度敏感，尤其是永续期终值占比较高时。',
-      '当前版本未精细调整净债务、少数股东权益和非经营资产，因此更适合做区间参考。',
+      '净债务采用资产负债表有息负债减货币资金，未调整非经营资产等项目。',
       '如果 FCFF 来自异常年份或周期高点，模型可能高估公司长期可持续现金流。',
     ],
   },
@@ -1488,6 +1533,40 @@ const valuationBaseScenario = computed(() => valuationDcfScenarios.value.find((r
 const valuationDdm = computed(() => valuationData.value.ddm || {})
 const valuationDdmScenarios = computed(() => Array.isArray(valuationDdm.value.scenarios) ? valuationDdm.value.scenarios : [])
 const valuationDdmAnnualRows = computed(() => Array.isArray(valuationDdm.value.annual_dividends) ? valuationDdm.value.annual_dividends : [])
+const valuationDdmDividendQuality = computed(() => valuationDdm.value.dividend_quality || {})
+const valuationDdmBaseScenario = computed(() => valuationDdmScenarios.value.find((row) => row.name === 'base') || {})
+const valuationDdmKeBreakdownSummary = computed(() => {
+  const kb = valuationDdmBaseScenario.value.ke_breakdown
+  if (!kb || typeof kb !== 'object') return ''
+  const rf = Number(kb.risk_free)
+  const erp = Number(kb.equity_risk_premium)
+  const ra = Number(kb.risk_adjustment)
+  const fk = Number(kb.final_ke)
+  if (![rf, erp, ra, fk].every((x) => Number.isFinite(x))) return ''
+  return `中性档股权成本构成：无风险 ${(rf * 100).toFixed(2)}% + ERP ${(erp * 100).toFixed(2)}% + 风险调整 ${(ra * 100).toFixed(2)}% → ke ${(fk * 100).toFixed(2)}%（不低于中性档 WACC）。`
+})
+const valuationDcfNetDebtNote = computed(() => {
+  const adj = valuationDcf.value.net_debt_adjustment
+  if (!adj || valuationDcf.value.status !== 'ok') return ''
+  if (adj.skipped_financial_sector) {
+    return adj.reason || '金融行业：未扣净债务，表内「股权价值」等同于企业价值 EV，仅作同口径参考。'
+  }
+  if (adj.status === 'missing') {
+    return adj.reason || '缺少资产负债表，净债务与少数股东权益按 0 处理。'
+  }
+  const nd = adj.net_debt_wan
+  const mi = adj.minority_interest_wan
+  const parts = []
+  if (nd != null && Number.isFinite(Number(nd))) parts.push(`净债务约 ${fmtAmount(nd)}`)
+  if (mi != null && Number.isFinite(Number(mi))) parts.push(`少数股东权益约 ${fmtAmount(mi)}`)
+  if (!parts.length) return ''
+  return `各情景股权价值 = 企业价值 EV − ${parts.join(' − ')}。`
+})
+const valuationDcfPerShareNote = computed(() => {
+  const ps = valuationDcf.value.per_share
+  if (!ps || ps.status !== 'missing_inputs' || !ps.reason) return ''
+  return ps.reason
+})
 const valuationRelative = computed(() => valuationData.value.relative_valuation || {})
 const valuationSuitability = computed(() => valuationData.value.model_suitability || {})
 const valuationSuitabilityReasons = computed(() => Array.isArray(valuationSuitability.value.reasons) ? valuationSuitability.value.reasons : [])
@@ -2252,9 +2331,7 @@ async function loadWorkbenchSection(section, options = {}) {
   } catch (e) {
     console.warn(`load stock workbench section ${section} failed`, e)
   } finally {
-    if (isCurrentWorkbenchSymbol(symbol)) {
-      sectionLoading.value = { ...sectionLoading.value, [section]: false }
-    }
+    sectionLoading.value = { ...sectionLoading.value, [section]: false }
   }
 }
 
@@ -2262,6 +2339,32 @@ function refreshValuationSection() {
   loadWorkbenchSection('valuation', { force: true }).catch((e) => {
     console.warn('refresh valuation section failed', e)
   })
+}
+
+async function refreshQuoteSection() {
+  const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
+  if (!symbol || !payload.value) return
+  payload.value = {
+    ...payload.value,
+    weekly_quotes: [],
+    monthly_quotes: [],
+    money_flow_history_by_tf: {
+      ...(payload.value.money_flow_history_by_tf || {}),
+      '1w': [],
+      '1m': [],
+    },
+  }
+  try {
+    await loadWorkbenchSection('quote', { force: true })
+    if (quoteKlineTf.value !== '1d') {
+      await Promise.all([
+        ensureQuoteKline(quoteKlineTf.value),
+        ensureQuoteMoneyFlow(quoteKlineTf.value),
+      ])
+    }
+  } catch (e) {
+    console.warn('refresh quote section failed', e)
+  }
 }
 
 function openValuationHelp(topic) {
@@ -2782,6 +2885,7 @@ function isCurrentWorkbenchSymbol(symbol) {
 }
 
 function fmtNumber(value, digits = 2, suffix = '') {
+  if (value === null || value === undefined) return '-'
   const n = Number(value)
   if (!Number.isFinite(n)) return '-'
   return `${n.toFixed(digits)}${suffix}`
@@ -2803,6 +2907,19 @@ function fmtPctFromRatio(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '-'
   return `${(n * 100).toFixed(2)}%`
+}
+
+function ddmGrowthSourceLabel(src, scenarioName) {
+  const name = String(scenarioName || '')
+  if (name === 'conservative') return '保守档：永续增长固定为 0'
+  if (name === 'optimistic') return '乐观档：在中性 g 基础上小幅上探（受上限与 ke 约束）'
+  const key = String(src || '')
+  const map = {
+    sustainable_growth_roe_times_one_minus_payout: 'ROE×(1−分红率)',
+    sustainable_growth_roe_with_default_50pct_retention: 'ROE×留存率（默认 50%）',
+    fallback_config_ddm_growth: '配置回退',
+  }
+  return map[key] || (key ? key : '-')
 }
 
 function valuationScenarioLabel(value) {
@@ -3582,6 +3699,18 @@ pre {
 .quote-table th {
   color: #94a3b8;
   font-weight: 600;
+}
+.quote-table th.valuation-ddm-g-source-col,
+.quote-table td.valuation-ddm-g-source {
+  color: #e8eef7;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 220px;
+  text-align: left;
+  white-space: normal;
+}
+.quote-table th.valuation-ddm-g-source-col {
+  color: #cbd5e1;
 }
 .partial-kline-tag {
   background: rgba(96, 165, 250, .14);
