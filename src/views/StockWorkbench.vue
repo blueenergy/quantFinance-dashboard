@@ -125,6 +125,7 @@
         <v-tab value="nine-turn">神奇九转</v-tab>
         <v-tab value="scores">量化评分</v-tab>
         <v-tab value="financial">财务业绩</v-tab>
+        <v-tab value="valuation">估值模型</v-tab>
         <v-tab value="shareholders">股东筹码</v-tab>
         <v-tab value="analysis">深度分析</v-tab>
       </v-tabs>
@@ -690,6 +691,110 @@
           </section>
         </v-window-item>
 
+        <v-window-item value="valuation">
+          <section class="panel-grid">
+            <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>估值结论</h3>
+                <span class="muted">
+                  {{ valuationStatus.as_of || '暂无日期' }}
+                  <template v-if="sectionLoading.valuation"> · 刷新中…</template>
+                </span>
+              </div>
+              <div v-if="valuationDataStatusFound" class="financial-metrics">
+                <div v-for="metric in valuationConclusionMetrics" :key="metric.label">
+                  <span>{{ metric.label }}</span>
+                  <strong>{{ metric.value }}</strong>
+                </div>
+              </div>
+              <div v-else class="muted-block">暂无足够估值数据，等待 daily_basic 与财务指标补齐。</div>
+            </article>
+
+            <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>模型适用性</h3>
+                <span class="muted">{{ valuationSuitability.recommended_model || '待判断' }}</span>
+              </div>
+              <div class="financial-metrics">
+                <div>
+                  <span>推荐模型</span>
+                  <strong>{{ valuationModelLabel }}</strong>
+                </div>
+                <div>
+                  <span>置信度</span>
+                  <strong>{{ fmtNumber(valuationSuitability.confidence * 100, 0, '%') }}</strong>
+                </div>
+                <div>
+                  <span>价值评分</span>
+                  <strong>{{ fmtNumber(valuationValueScore) }}</strong>
+                </div>
+              </div>
+              <ul v-if="valuationSuitabilityReasons.length" class="analysis-points-list">
+                <li v-for="reason in valuationSuitabilityReasons" :key="reason">{{ reason }}</li>
+              </ul>
+            </article>
+          </section>
+
+          <section class="workbench-card">
+            <div class="card-title-row">
+              <h3>DCF 三情景</h3>
+              <span class="muted">{{ valuationDcf.method || valuationDcf.reason || 'FCFF + WACC' }}</span>
+            </div>
+            <div v-if="valuationDcfScenarios.length" class="quote-table-wrap">
+              <table class="quote-table">
+                <thead>
+                  <tr>
+                    <th>情景</th>
+                    <th>WACC</th>
+                    <th>永续增长</th>
+                    <th>初始增长</th>
+                    <th>每股价值</th>
+                    <th>安全边际</th>
+                    <th>股权价值</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="scenario in valuationDcfScenarios" :key="scenario.name">
+                    <td>{{ valuationScenarioLabel(scenario.name) }}</td>
+                    <td>{{ fmtPctFromRatio(scenario.wacc) }}</td>
+                    <td>{{ fmtPctFromRatio(scenario.terminal_growth) }}</td>
+                    <td>{{ fmtPctFromRatio(scenario.initial_growth) }}</td>
+                    <td>{{ fmtNumber(scenario.fair_value_per_share) }}</td>
+                    <td>{{ fmtNumber(scenario.safety_margin_pct, 2, '%') }}</td>
+                    <td>{{ fmtAmount(scenario.equity_value_wan) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="muted-block">{{ valuationDcf.reason || '暂无足够现金流样本生成 DCF。' }}</div>
+          </section>
+
+          <section class="panel-grid">
+            <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>相对估值</h3>
+                <span class="muted">当前倍数 vs 自身历史分位</span>
+              </div>
+              <div class="financial-metrics">
+                <div v-for="metric in valuationMultipleMetrics" :key="metric.label">
+                  <span>{{ metric.label }}</span>
+                  <strong>{{ metric.value }}</strong>
+                </div>
+              </div>
+            </article>
+
+            <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>假设调参</h3>
+                <span class="muted">阶段二</span>
+              </div>
+              <div class="muted-block">
+                第一版使用后端固定保守/中性/乐观三情景。折现率、增长率、预测期等手动调参入口已预留，后续接带参 API。
+              </div>
+            </article>
+          </section>
+        </v-window-item>
+
         <v-window-item value="shareholders">
           <section class="workbench-card">
             <div class="card-title-row">
@@ -1111,6 +1216,7 @@ import {
   getStockWorkbenchScores,
   getStockWorkbenchShareholders,
   getStockWorkbenchTrading,
+  getStockWorkbenchValuation,
 } from '../api/stock'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
 import GrowthChart from '../components/GrowthChart.vue'
@@ -1143,12 +1249,13 @@ const balanceRows = ref([])
 const cashflowRows = ref([])
 const earnings = ref({})
 const tradingContext = ref({})
+const valuationData = ref({})
 const financialMode = ref('quarterly')
 const quoteKlineTf = ref('1d')
 const quoteKlineLoading = ref({ '1d': false, '1w': false, '1m': false })
 const moneyFlowLoading = ref({ '1d': false, '1w': false, '1m': false })
-const sectionLoading = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
-const sectionLoaded = ref({ quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false })
+const sectionLoading = ref({ quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false })
+const sectionLoaded = ref({ quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false })
 const shareholderData = ref({})
 const holderNumberTableExpanded = ref(false)
 const shareholderTradesExpanded = ref(false)
@@ -1235,6 +1342,39 @@ const shIntlChanges = computed(() => {
   }))
 })
 const shHksc = computed(() => shTop10Change.value.hksc || {})
+const valuationStatus = computed(() => dataStatus.value?.sections?.valuation || valuationData.value.data_status || {})
+const valuationDataStatusFound = computed(() => Boolean(valuationStatus.value.found || valuationData.value?.data_status?.found))
+const valuationMarket = computed(() => valuationData.value.market_multiples || {})
+const valuationCurrentMultiples = computed(() => valuationMarket.value.current || {})
+const valuationPercentiles = computed(() => valuationMarket.value.percentiles || {})
+const valuationDcf = computed(() => valuationData.value.dcf || {})
+const valuationDcfScenarios = computed(() => Array.isArray(valuationDcf.value.scenarios) ? valuationDcf.value.scenarios : [])
+const valuationBaseScenario = computed(() => valuationDcfScenarios.value.find((row) => row.name === 'base') || valuationDcfScenarios.value[0] || {})
+const valuationRelative = computed(() => valuationData.value.relative_valuation || {})
+const valuationSuitability = computed(() => valuationData.value.model_suitability || {})
+const valuationSuitabilityReasons = computed(() => Array.isArray(valuationSuitability.value.reasons) ? valuationSuitability.value.reasons : [])
+const valuationValueScore = computed(() => valuationData.value.value_score_link?.value_score)
+const valuationModelLabel = computed(() => ({
+  dcf: 'DCF 现金流折现',
+  relative_valuation: '相对估值',
+  pb_roe_or_ddm: 'PB-ROE / DDM',
+})[valuationSuitability.value.recommended_model] || valuationSuitability.value.recommended_model || '-')
+const valuationConclusionMetrics = computed(() => [
+  { label: '当前价格', value: fmtNumber(latestPrice.value) },
+  { label: '中性每股价值', value: fmtNumber(valuationBaseScenario.value.fair_value_per_share) },
+  { label: '安全边际', value: fmtNumber(valuationBaseScenario.value.safety_margin_pct, 2, '%') },
+  { label: '相对估值', value: valuationRelativeLabel(valuationRelative.value.verdict) },
+  { label: 'PE TTM', value: fmtNumber(valuationCurrentMultiples.value.pe_ttm) },
+  { label: 'PB', value: fmtNumber(valuationCurrentMultiples.value.pb) },
+])
+const valuationMultipleMetrics = computed(() => [
+  { label: 'PE TTM', value: valuationMultipleWithPercentile('pe_ttm') },
+  { label: 'PB', value: valuationMultipleWithPercentile('pb') },
+  { label: 'PS TTM', value: valuationMultipleWithPercentile('ps_ttm') },
+  { label: '股息率 TTM', value: valuationMultipleWithPercentile('dv_ttm', '%') },
+  { label: 'PEG', value: fmtNumber(valuationRelative.value.peg) },
+  { label: '历史样本', value: valuationMarket.value.history_sample_count ? `${valuationMarket.value.history_sample_count} 条` : '-' },
+])
 
 const quoteKlineTfOptions = [
   { value: '1d', label: '日 K', title: '日线 K 线', shortLabel: '日线' },
@@ -1352,6 +1492,7 @@ const sectionStatusItems = computed(() => {
     { key: 'nine_turn', label: '神奇九转', panel: 'nine-turn' },
     { key: 'scores', label: '量化评分', panel: 'scores' },
     { key: 'financials', label: '财务业绩', panel: 'financial' },
+    { key: 'valuation', label: '估值模型', panel: 'valuation' },
     { key: 'shareholders', label: '股东筹码', panel: 'shareholders' },
     { key: 'ai', label: 'AI 分析', panel: 'analysis' },
     { key: 'trading', label: '交易状态', panel: 'analysis' },
@@ -1363,6 +1504,7 @@ const sectionStatusItems = computed(() => {
       nine_turn: Boolean(nineTurnSignals.value.length),
       scores: dataStatus.value.score_found,
       financials: Boolean(incomeRows.value.length || indicatorRows.value.length),
+      valuation: Boolean(valuationData.value?.data_status?.found),
       shareholders: Boolean(shHolderNumbers.value.length || shHkHold.value.length),
       ai: dataStatus.value.deep_analysis_found,
       trading: Boolean(watchlistContext.value.in_watchlist || tradingPositions.value.length || recentTradeSignals.value.length),
@@ -1674,6 +1816,8 @@ watch(activePanel, async (panel) => {
     await loadWorkbenchSection('scores')
   } else if (panel === 'financial') {
     await loadWorkbenchSection('financials')
+  } else if (panel === 'valuation') {
+    await loadWorkbenchSection('valuation')
   } else if (panel === 'shareholders') {
     await loadWorkbenchSection('shareholders')
   } else if (panel === 'analysis') {
@@ -1715,8 +1859,8 @@ async function loadSymbol(symbol) {
     clearAnalysisPolling()
     analysisSubmitStatus.value = ''
     analysisSubmitError.value = ''
-    sectionLoaded.value = { quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
-    sectionLoading.value = { quote: false, nine_turn: false, scores: false, financials: false, ai: false, trading: false, shareholders: false }
+    sectionLoaded.value = { quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false }
+    sectionLoading.value = { quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false }
     quoteKlineLoading.value = { '1d': false, '1w': false, '1m': false }
     moneyFlowLoading.value = { '1d': false, '1w': false, '1m': false }
     holderNumberTableExpanded.value = false
@@ -1745,6 +1889,7 @@ async function loadSymbol(symbol) {
       nine_turn: false,
       scores: Boolean(workbench?.score),
       financials: false,
+      valuation: false,
       ai: Boolean(workbench?.deep_analysis),
       trading: false,
       shareholders: false,
@@ -1755,6 +1900,7 @@ async function loadSymbol(symbol) {
     cashflowRows.value = []
     earnings.value = {}
     tradingContext.value = {}
+    valuationData.value = {}
     shareholderData.value = {}
     disposeShareholderCharts()
     queueInitialSectionLoads({ deferQuote: true })
@@ -1813,6 +1959,8 @@ function queueInitialSectionLoads(options = {}) {
     tasks.push(loadWorkbenchSection('nine_turn', { force: true }))
   } else if (activePanel.value === 'financial') {
     tasks.push(loadWorkbenchSection('financials', { force: true }))
+  } else if (activePanel.value === 'valuation') {
+    tasks.push(loadWorkbenchSection('valuation', { force: true }))
   } else if (activePanel.value === 'shareholders') {
     tasks.push(loadWorkbenchSection('shareholders', { force: true }))
   } else if (activePanel.value === 'analysis') {
@@ -1933,6 +2081,13 @@ async function loadWorkbenchSection(section, options = {}) {
       cashflowRows.value = Array.isArray(data?.cashflow) ? data.cashflow : []
       earnings.value = data?.earnings || {}
       mergeWorkbenchSection('financials', data, {})
+    } else if (section === 'valuation') {
+      const data = await getStockWorkbenchValuation(symbol)
+      if (!isCurrentWorkbenchSymbol(symbol)) return
+      valuationData.value = data || {}
+      mergeWorkbenchSection('valuation', data, {
+        valuation: data || {},
+      })
     } else if (section === 'ai') {
       const data = await getStockWorkbenchAi(symbol)
       if (!isCurrentWorkbenchSymbol(symbol)) return
@@ -2066,6 +2221,9 @@ function mergeWorkbenchSection(section, data, updates) {
   } else if (section === 'financials') {
     nextStatus.financials_found = Boolean(status.found)
     nextStatus.financials_date = status.as_of || nextStatus.financials_date
+  } else if (section === 'valuation') {
+    nextStatus.valuation_found = Boolean(status.found)
+    nextStatus.valuation_date = status.as_of || nextStatus.valuation_date
   } else if (section === 'ai') {
     nextStatus.deep_analysis_found = Boolean(updates.deep_analysis)
     nextStatus.analysis_created_at = status.as_of || nextStatus.analysis_created_at
@@ -2490,6 +2648,36 @@ function fmtPctPlain(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '-'
   return `${n.toFixed(1)}%`
+}
+
+function fmtPctFromRatio(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  return `${(n * 100).toFixed(2)}%`
+}
+
+function valuationScenarioLabel(value) {
+  return {
+    conservative: '保守',
+    base: '中性',
+    optimistic: '乐观',
+  }[value] || value || '-'
+}
+
+function valuationRelativeLabel(value) {
+  return {
+    below_own_history: '低于自身历史',
+    near_own_history_midrange: '接近历史中枢',
+    above_own_history: '高于自身历史',
+    insufficient_data: '样本不足',
+  }[value] || value || '-'
+}
+
+function valuationMultipleWithPercentile(field, suffix = '') {
+  const value = fmtNumber(valuationCurrentMultiples.value?.[field], 2, suffix)
+  const pct = valuationPercentiles.value?.[field]
+  if (pct == null) return value
+  return `${value} / P${Number(pct).toFixed(0)}`
 }
 
 function fmtAmount(value) {
@@ -3112,6 +3300,12 @@ h1, h2, h3 {
   color: #cbd5e1;
   margin: 12px 0 0;
   padding-left: 18px;
+}
+.analysis-points-list {
+  color: #cbd5e1;
+  margin: 12px 0 0;
+  padding-left: 18px;
+  line-height: 1.7;
 }
 .status-grid,
 .financial-metrics {

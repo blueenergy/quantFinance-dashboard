@@ -175,6 +175,23 @@ export async function getStockWorkbenchFinancials(symbol) {
 }
 
 /**
+ * 获取股票工作台估值模型分区
+ * @param {string} symbol - 股票代码
+ */
+export async function getStockWorkbenchValuation(symbol) {
+    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/valuation`;
+
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: authHeaders()
+    });
+
+    if (!res.ok) throw new Error(`Failed to get stock workbench valuation: ${res.status}`);
+    const result = await res.json();
+    return result.data;
+}
+
+/**
  * 获取股票工作台 AI 分析分区
  * @param {string} symbol - 股票代码
  */
