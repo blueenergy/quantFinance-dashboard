@@ -696,10 +696,20 @@
             <article class="workbench-card">
               <div class="card-title-row">
                 <h3>估值结论</h3>
-                <span class="muted">
-                  {{ valuationStatus.as_of || '暂无日期' }}
-                  <template v-if="sectionLoading.valuation"> · 刷新中…</template>
-                </span>
+                <div class="analysis-actions">
+                  <span class="muted">
+                    {{ valuationStatus.as_of || '暂无日期' }}
+                    <template v-if="sectionLoading.valuation"> · 刷新中…</template>
+                  </span>
+                  <button
+                    type="button"
+                    class="text-link-button"
+                    :disabled="sectionLoading.valuation"
+                    @click="refreshValuationSection"
+                  >
+                    刷新估值
+                  </button>
+                </div>
               </div>
               <div v-if="valuationDataStatusFound" class="financial-metrics">
                 <div v-for="metric in valuationConclusionMetrics" :key="metric.label">
@@ -737,8 +747,70 @@
 
           <section class="workbench-card">
             <div class="card-title-row">
+              <h3>DDM / 分红验证</h3>
+              <div class="analysis-actions">
+                <span class="muted">{{ valuationDdm.method || valuationDdm.reason || '等待分红数据' }}</span>
+                <button type="button" class="text-link-button" @click="openValuationHelp('ddm')">原理说明</button>
+              </div>
+            </div>
+            <div v-if="valuationDdmScenarios.length" class="quote-table-wrap">
+              <table class="quote-table">
+                <thead>
+                  <tr>
+                    <th>情景</th>
+                    <th>现金分红</th>
+                    <th>股权成本</th>
+                    <th>永续增长</th>
+                    <th>DDM 股权价值</th>
+                    <th>相对当前市值</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="scenario in valuationDdmScenarios" :key="scenario.name">
+                    <td>{{ valuationScenarioLabel(scenario.name) }}</td>
+                    <td>{{ fmtAmount(scenario.cash_dividend_wan) }}</td>
+                    <td>{{ fmtPctFromRatio(scenario.ke) }}</td>
+                    <td>{{ fmtPctFromRatio(scenario.growth) }}</td>
+                    <td>{{ fmtAmount(scenario.equity_value_wan) }}</td>
+                    <td>{{ fmtNumber(scenario.upside_pct, 2, '%') }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="muted-block">{{ valuationDdm.reason || '暂无可计算年度分红总额的实施分红记录。' }}</div>
+            <div v-if="valuationDdmAnnualRows.length" class="quote-table-wrap mt-3">
+              <table class="quote-table">
+                <thead>
+                  <tr>
+                    <th>年度</th>
+                    <th>现金分红</th>
+                    <th>每股税前分红合计</th>
+                    <th>分红率</th>
+                    <th>经营现金流覆盖</th>
+                    <th>事件数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in valuationDdmAnnualRows" :key="row.year">
+                    <td>{{ row.year }}</td>
+                    <td>{{ fmtAmount(row.total_cash_dividend_wan) }}</td>
+                    <td>{{ fmtNumber(row.cash_div_tax_sum) }}</td>
+                    <td>{{ fmtPctFromRatio(row.payout_ratio) }}</td>
+                    <td>{{ fmtNumber(row.ocf_coverage) }}</td>
+                    <td>{{ row.events || '-' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="workbench-card">
+            <div class="card-title-row">
               <h3>DCF 三情景</h3>
-              <span class="muted">{{ valuationDcf.method || valuationDcf.reason || 'FCFF + WACC' }}</span>
+              <div class="analysis-actions">
+                <span class="muted">{{ valuationDcf.method || valuationDcf.reason || 'FCFF + WACC' }}</span>
+                <button type="button" class="text-link-button" @click="openValuationHelp('dcf')">原理说明</button>
+              </div>
             </div>
             <div v-if="valuationDcfScenarios.length" class="quote-table-wrap">
               <table class="quote-table">
@@ -1198,6 +1270,33 @@
     <v-overlay :model-value="loading && !payload" class="align-center justify-center" persistent>
       <v-progress-circular indeterminate size="48" />
     </v-overlay>
+
+    <v-dialog v-model="valuationHelpOpen" max-width="720" scrollable>
+      <v-card class="valuation-help-card">
+        <v-card-title class="text-wrap">
+          {{ valuationHelpContent.title }}
+        </v-card-title>
+        <v-card-text>
+          <div class="valuation-help-content">
+            <p class="muted">{{ valuationHelpContent.summary }}</p>
+            <h4>核心公式</h4>
+            <p><code>{{ valuationHelpContent.formula }}</code></p>
+            <h4>如何理解当前结果</h4>
+            <ul>
+              <li v-for="item in valuationHelpContent.interpretation" :key="item">{{ item }}</li>
+            </ul>
+            <h4>主要局限</h4>
+            <ul>
+              <li v-for="item in valuationHelpContent.limits" :key="item">{{ item }}</li>
+            </ul>
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="valuationHelpOpen = false">关闭</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -1260,6 +1359,8 @@ const shareholderData = ref({})
 const holderNumberTableExpanded = ref(false)
 const shareholderTradesExpanded = ref(false)
 const shareFloatExpanded = ref(false)
+const valuationHelpOpen = ref(false)
+const valuationHelpTopic = ref('ddm')
 const radarRef = ref(null)
 const holderNumberChartRef = ref(null)
 const hkHoldChartRef = ref(null)
@@ -1275,11 +1376,45 @@ const analysisModeOptions = [
   { title: '经典', value: 'classic' },
 ]
 
+const VALUATION_HELP = {
+  ddm: {
+    title: 'DDM / 分红折现模型说明',
+    summary: '当前 DDM 使用已实施现金分红作为基础，适合分红稳定、盈利和现金流覆盖较好的成熟公司。',
+    formula: '股权价值 = 下一期现金分红 / (股权成本 - 永续增长率)',
+    interpretation: [
+      '中性情景低于当前市值，说明市场价格已经包含较高分红持续性或增长预期。',
+      '乐观情景高于当前市值，通常意味着只有在分红维持高位并持续增长时才有明显上行空间。',
+      '保守、中性、乐观三档主要改变年度现金分红、股权成本和永续增长率。',
+    ],
+    limits: [
+      '戈登 DDM 对股权成本和永续增长率非常敏感，两个参数差一点，估值会变化很大。',
+      '模型假设分红长期稳定增长，不适合分红不规律、强周期或高速扩张但低分红的公司。',
+      '当前口径基于实施分红记录，不等同于未来董事会一定会延续相同分红政策。',
+    ],
+  },
+  dcf: {
+    title: 'DCF / 自由现金流折现说明',
+    summary: '当前 DCF 使用 FCFF 作为现金流基础，并用 WACC 折现，估算企业经营现金流创造的股权价值参考区间。',
+    formula: '企业价值 = 预测期 FCFF 折现值 + 永续期终值折现值；终值 = 末期 FCFF × (1 + g) / (WACC - g)',
+    interpretation: [
+      '保守、中性、乐观三档分别调整折现率、初始增长率和永续增长率，用来观察估值对假设的敏感性。',
+      '若 DCF 明显高于市值，但 DDM 不支持，通常说明现金流估值乐观，需要检查资本开支、分红政策和现金流可分配性。',
+      '安全边际为正表示模型估值高于当前价格，但它不是买入建议，只是该组假设下的估值差。',
+    ],
+    limits: [
+      'DCF 对长期增长率和折现率高度敏感，尤其是永续期终值占比较高时。',
+      '当前版本未精细调整净债务、少数股东权益和非经营资产，因此更适合做区间参考。',
+      '如果 FCFF 来自异常年份或周期高点，模型可能高估公司长期可持续现金流。',
+    ],
+  },
+}
+
 const score = computed(() => payload.value?.score || {})
 const stock = computed(() => payload.value?.stock || {})
 const quote = computed(() => payload.value?.quote || {})
 const deepAnalysis = computed(() => payload.value?.deep_analysis || null)
 const dataStatus = computed(() => payload.value?.data_status || {})
+const valuationHelpContent = computed(() => VALUATION_HELP[valuationHelpTopic.value] || VALUATION_HELP.ddm)
 const analysisHistory = computed(() => Array.isArray(payload.value?.analysis_history) ? payload.value.analysis_history : [])
 const evaluationSummary = computed(() => payload.value?.evaluation_summary || {})
 const evaluationRows = computed(() => Array.isArray(evaluationSummary.value.latest_evaluations) ? evaluationSummary.value.latest_evaluations : [])
@@ -1350,6 +1485,9 @@ const valuationPercentiles = computed(() => valuationMarket.value.percentiles ||
 const valuationDcf = computed(() => valuationData.value.dcf || {})
 const valuationDcfScenarios = computed(() => Array.isArray(valuationDcf.value.scenarios) ? valuationDcf.value.scenarios : [])
 const valuationBaseScenario = computed(() => valuationDcfScenarios.value.find((row) => row.name === 'base') || valuationDcfScenarios.value[0] || {})
+const valuationDdm = computed(() => valuationData.value.ddm || {})
+const valuationDdmScenarios = computed(() => Array.isArray(valuationDdm.value.scenarios) ? valuationDdm.value.scenarios : [])
+const valuationDdmAnnualRows = computed(() => Array.isArray(valuationDdm.value.annual_dividends) ? valuationDdm.value.annual_dividends : [])
 const valuationRelative = computed(() => valuationData.value.relative_valuation || {})
 const valuationSuitability = computed(() => valuationData.value.model_suitability || {})
 const valuationSuitabilityReasons = computed(() => Array.isArray(valuationSuitability.value.reasons) ? valuationSuitability.value.reasons : [])
@@ -2118,6 +2256,17 @@ async function loadWorkbenchSection(section, options = {}) {
       sectionLoading.value = { ...sectionLoading.value, [section]: false }
     }
   }
+}
+
+function refreshValuationSection() {
+  loadWorkbenchSection('valuation', { force: true }).catch((e) => {
+    console.warn('refresh valuation section failed', e)
+  })
+}
+
+function openValuationHelp(topic) {
+  valuationHelpTopic.value = topic === 'dcf' ? 'dcf' : 'ddm'
+  valuationHelpOpen.value = true
 }
 
 async function ensureQuoteKline(tf = quoteKlineTf.value) {
@@ -3064,6 +3213,35 @@ h1, h2, h3 {
   gap: 12px;
   justify-content: space-between;
   margin-bottom: 14px;
+}
+.valuation-help-card {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+.valuation-help-content {
+  color: #cbd5e1;
+  line-height: 1.7;
+}
+.valuation-help-content h4 {
+  color: #f8fafc;
+  font-size: 14px;
+  margin: 16px 0 6px;
+}
+.valuation-help-content code {
+  background: rgba(15, 23, 42, .86);
+  border: 1px solid rgba(148, 163, 184, .2);
+  border-radius: 8px;
+  color: #bfdbfe;
+  display: block;
+  padding: 10px 12px;
+  white-space: normal;
+}
+.valuation-help-content ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.valuation-help-content li + li {
+  margin-top: 6px;
 }
 .quote-kline-actions {
   align-items: center;
