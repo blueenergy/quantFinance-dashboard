@@ -727,7 +727,7 @@
                   <strong>{{ metric.value }}</strong>
                 </div>
               </div>
-              <div v-else class="muted-block">暂无足够估值数据，等待 daily_basic 与财务指标补齐。</div>
+              <div v-else class="muted-block">暂无足够估值数据，等待 financial_daily_basic 与财务指标补齐。</div>
             </article>
 
             <article class="workbench-card">
@@ -854,6 +854,12 @@
             </div>
             <div v-if="valuationDcfPerShareNote" class="muted-block valuation-dcf-per-share-note mt-2">
               {{ valuationDcfPerShareNote }}
+            </div>
+            <div v-if="valuationDcfSharesBasisNote" class="muted-block mt-2">
+              {{ valuationDcfSharesBasisNote }}
+            </div>
+            <div v-if="valuationDcfFairValueGapNote" class="muted-block mt-2">
+              {{ valuationDcfFairValueGapNote }}
             </div>
             <div v-if="valuationDcfScenarios.length" class="quote-table-wrap">
               <table class="quote-table">
@@ -1566,6 +1572,30 @@ const valuationDcfPerShareNote = computed(() => {
   const ps = valuationDcf.value.per_share
   if (!ps || ps.status !== 'missing_inputs' || !ps.reason) return ''
   return ps.reason
+})
+/** 后端成功推算 implied 万股时展示数据来源，便于与行情侧核对 */
+const valuationDcfSharesBasisNote = computed(() => {
+  const ps = valuationDcf.value.per_share
+  if (!ps || ps.status !== 'ok' || !ps.shares_basis) return ''
+  const sw = ps.shares_implied_wan
+  const tail =
+    sw != null && Number.isFinite(Number(sw))
+      ? ` 推算股本约 ${Number(sw).toFixed(2)} 万股（市值÷价）。`
+      : ''
+  return `股本推算依据：${ps.shares_basis}。${tail}`
+})
+const valuationDcfFairValueGapNote = computed(() => {
+  const ps = valuationDcf.value.per_share
+  if (!ps || ps.status !== 'ok' || valuationDcf.value.status !== 'ok') return ''
+  const base = valuationDcfScenarios.value.find((row) => row.name === 'base') || {}
+  const ev = base.enterprise_value_wan
+  const fv = base.fair_value_per_share
+  if (fv != null && Number.isFinite(Number(fv))) return ''
+  if (ev == null && (base.wacc != null && base.terminal_growth != null) && base.wacc <= base.terminal_growth) {
+    return '中性档 WACC 不高于永续增长，永续价值未闭合，企业价值与每股价值无法给出数值（非数据缺失）。'
+  }
+  if (ev == null) return '中性档企业价值未算出（例如折现参数导致永续项无效），每股价值显示为「-」。'
+  return ''
 })
 const valuationRelative = computed(() => valuationData.value.relative_valuation || {})
 const valuationSuitability = computed(() => valuationData.value.model_suitability || {})
