@@ -727,7 +727,11 @@
                   <strong>{{ metric.value }}</strong>
                 </div>
               </div>
-              <div v-else class="muted-block">暂无足够估值数据，等待 financial_daily_basic 与财务指标补齐。</div>
+              <div v-if="valuationConfidence.reasons?.length" class="muted-block mt-2">
+                数据可信度：{{ valuationConfidenceLabel }}（{{ fmtNumber(valuationConfidence.score, 0) }} 分）。
+                {{ valuationConfidence.reasons[0] }}
+              </div>
+              <div v-if="!valuationDataStatusFound" class="muted-block">暂无足够估值数据，等待 financial_daily_basic 与财务指标补齐。</div>
             </article>
 
             <article class="workbench-card">
@@ -748,6 +752,24 @@
                   <span>价值评分</span>
                   <strong>{{ fmtNumber(valuationValueScore) }}</strong>
                 </div>
+              </div>
+              <div v-if="valuationApplicabilityItems.length" class="quote-table-wrap mt-2">
+                <table class="quote-table">
+                  <thead>
+                    <tr>
+                      <th>模型</th>
+                      <th>适用性</th>
+                      <th>主要原因</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in valuationApplicabilityItems" :key="item.key">
+                      <td>{{ item.label }}</td>
+                      <td>{{ item.statusLabel }}</td>
+                      <td>{{ item.reason }}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
               <ul v-if="valuationSuitabilityReasons.length" class="analysis-points-list">
                 <li v-for="reason in valuationSuitabilityReasons" :key="reason">{{ reason }}</li>
@@ -849,6 +871,9 @@
                 <button type="button" class="text-link-button" @click="openValuationHelp('dcf')">原理说明</button>
               </div>
             </div>
+            <div v-if="valuationIsFinancial" class="muted-block valuation-dcf-financial-note">
+              银行/保险/证券：FCFF DCF 口径不适用，每股价值与安全边际不可作为目标价，请改看 PB-ROE / DDM 与股息率。
+            </div>
             <div v-if="valuationDcfNetDebtNote" class="muted-block valuation-dcf-netdebt-note">
               {{ valuationDcfNetDebtNote }}
             </div>
@@ -882,14 +907,39 @@
                     <td>{{ fmtPctFromRatio(scenario.terminal_growth) }}</td>
                     <td>{{ fmtPctFromRatio(scenario.initial_growth) }}</td>
                     <td>{{ fmtAmount(scenario.enterprise_value_wan) }}</td>
-                    <td>{{ fmtNumber(scenario.fair_value_per_share) }}</td>
-                    <td>{{ fmtNumber(scenario.safety_margin_pct, 2, '%') }}</td>
+                    <td :class="{ 'valuation-na-cell': valuationIsFinancial }">{{ valuationIsFinancial ? '不适用' : fmtNumber(scenario.fair_value_per_share) }}</td>
+                    <td :class="{ 'valuation-na-cell': valuationIsFinancial }">{{ valuationIsFinancial ? '不适用' : fmtNumber(scenario.safety_margin_pct, 2, '%') }}</td>
                     <td>{{ fmtAmount(scenario.equity_value_wan) }}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <div v-else class="muted-block">{{ valuationDcf.reason || '暂无足够现金流样本生成 DCF。' }}</div>
+            <div
+              v-if="valuationDcfScenarios.length && valuationDcfSensitivityVariables.length"
+              class="quote-table-wrap mt-3"
+            >
+              <table class="quote-table">
+                <thead>
+                  <tr>
+                    <th>敏感项</th>
+                    <th>档位</th>
+                    <th>每股价值</th>
+                    <th>股权价值</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template v-for="variable in valuationDcfSensitivityVariables" :key="variable.key">
+                    <tr v-for="row in variable.cases" :key="`${variable.key}-${row.label}`">
+                      <td>{{ variable.label }}</td>
+                      <td>{{ row.label }}</td>
+                      <td :class="{ 'valuation-na-cell': valuationIsFinancial }">{{ valuationIsFinancial ? '不适用' : fmtNumber(row.fair_value_per_share) }}</td>
+                      <td>{{ fmtAmount(row.equity_value_wan) }}</td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+            <div v-if="!valuationDcfScenarios.length" class="muted-block">{{ valuationDcf.reason || '暂无足够现金流样本生成 DCF。' }}</div>
           </section>
 
           <section class="panel-grid">
@@ -1535,6 +1585,8 @@ const valuationCurrentMultiples = computed(() => valuationMarket.value.current |
 const valuationPercentiles = computed(() => valuationMarket.value.percentiles || {})
 const valuationDcf = computed(() => valuationData.value.dcf || {})
 const valuationDcfScenarios = computed(() => Array.isArray(valuationDcf.value.scenarios) ? valuationDcf.value.scenarios : [])
+const valuationDcfSensitivity = computed(() => valuationDcf.value.sensitivity || {})
+const valuationDcfSensitivityVariables = computed(() => Array.isArray(valuationDcfSensitivity.value.variables) ? valuationDcfSensitivity.value.variables : [])
 const valuationBaseScenario = computed(() => valuationDcfScenarios.value.find((row) => row.name === 'base') || valuationDcfScenarios.value[0] || {})
 const valuationDdm = computed(() => valuationData.value.ddm || {})
 const valuationDdmScenarios = computed(() => Array.isArray(valuationDdm.value.scenarios) ? valuationDdm.value.scenarios : [])
@@ -1600,16 +1652,56 @@ const valuationDcfFairValueGapNote = computed(() => {
 const valuationRelative = computed(() => valuationData.value.relative_valuation || {})
 const valuationSuitability = computed(() => valuationData.value.model_suitability || {})
 const valuationSuitabilityReasons = computed(() => Array.isArray(valuationSuitability.value.reasons) ? valuationSuitability.value.reasons : [])
+const valuationApplicability = computed(() => valuationSuitability.value.model_applicability || {})
+const valuationIsFinancial = computed(() => {
+  const tags = valuationSuitability.value.signals?.industry_tags
+  return Array.isArray(tags) && tags.includes('financial')
+})
+const valuationConfidence = computed(() => valuationData.value.valuation_confidence || {})
+const valuationConfidenceLabel = computed(() => ({
+  high: '高',
+  medium: '中',
+  low: '低',
+})[valuationConfidence.value.level] || '待判断')
 const valuationValueScore = computed(() => valuationData.value.value_score_link?.value_score)
 const valuationModelLabel = computed(() => ({
   dcf: 'DCF 现金流折现',
   relative_valuation: '相对估值',
   pb_roe_or_ddm: 'PB-ROE / DDM',
+  ddm: 'DDM 分红折现',
+  tech_ps: '科技 PS 框架',
 })[valuationSuitability.value.recommended_model] || valuationSuitability.value.recommended_model || '-')
+const valuationApplicabilityItems = computed(() => {
+  const modelLabels = {
+    dcf: 'DCF 现金流折现',
+    relative_valuation: '相对估值',
+    ddm: 'DDM 分红折现',
+    tech_ps: '科技 PS 框架',
+  }
+  const statusLabels = {
+    primary: '主模型',
+    secondary: '辅助',
+    not_recommended: '不推荐',
+    not_applicable: '不适用',
+  }
+  return ['dcf', 'relative_valuation', 'ddm', 'tech_ps']
+    .map((key) => {
+      const item = valuationApplicability.value?.[key] || {}
+      const reasons = Array.isArray(item.reasons) ? item.reasons : []
+      return {
+        key,
+        label: modelLabels[key] || key,
+        statusLabel: statusLabels[item.status] || item.status || '-',
+        reason: reasons[0] || '-',
+      }
+    })
+    .filter((item) => item.statusLabel !== '-')
+})
 const valuationConclusionMetrics = computed(() => [
   { label: '当前价格', value: fmtNumber(latestPrice.value) },
-  { label: '中性每股价值', value: fmtNumber(valuationBaseScenario.value.fair_value_per_share) },
-  { label: '安全边际', value: fmtNumber(valuationBaseScenario.value.safety_margin_pct, 2, '%') },
+  { label: '中性每股价值', value: valuationIsFinancial.value ? '不适用' : fmtNumber(valuationBaseScenario.value.fair_value_per_share) },
+  { label: '安全边际', value: valuationIsFinancial.value ? '不适用' : fmtNumber(valuationBaseScenario.value.safety_margin_pct, 2, '%') },
+  { label: '数据可信度', value: valuationConfidence.value.score != null ? `${valuationConfidenceLabel.value} / ${fmtNumber(valuationConfidence.value.score, 0)}` : '-' },
   { label: '相对估值', value: valuationRelativeLabel(valuationRelative.value.verdict) },
   { label: 'PE TTM', value: fmtNumber(valuationCurrentMultiples.value.pe_ttm) },
   { label: 'PB', value: fmtNumber(valuationCurrentMultiples.value.pb) },
@@ -3741,6 +3833,10 @@ pre {
 }
 .quote-table th.valuation-ddm-g-source-col {
   color: #cbd5e1;
+}
+.quote-table td.valuation-na-cell {
+  color: #94a3b8;
+  font-style: italic;
 }
 .partial-kline-tag {
   background: rgba(96, 165, 250, .14);
