@@ -343,13 +343,12 @@
               提交手动调仓
             </button>
             <button
-              v-if="isLivePortfolio"
               type="button"
               class="danger"
               :disabled="!latestHoldingRows.length || liquidateSubmitting"
               @click="openLiquidateModal"
             >
-              实盘一键清仓
+              {{ isLivePortfolio ? '实盘一键清仓' : '纸面一键清仓' }}
             </button>
           </div>
         </div>
@@ -420,7 +419,9 @@
           <p v-if="isLivePortfolio" class="muted">
             实盘组合：将按实盘持仓即时下发买/卖委托（交易器盘中约 1 秒轮询执行），并落一条 origin=manual 计划留痕。
           </p>
-          <p v-else class="muted">将生成 rebalance 计划（origin=manual），走既有审核与执行流程。</p>
+          <p v-else class="muted">
+            纸面组合：将按当前纸面持仓即时按<strong>实时价</strong>成交买/卖，并写入纸面快照/净值；同时落一条 origin=manual 计划留痕。
+          </p>
           <p v-if="holdingsRiskBySymbolHigh.length" class="muted">高风险标的已默认清仓，可在上方表格调整目标股数。</p>
           <ul class="manual-preview">
             <li v-for="row in manualChangeRows" :key="row.symbol">
@@ -445,10 +446,13 @@
 
       <div v-if="showLiquidateModal" class="modal-backdrop" @click.self="showLiquidateModal = false">
         <div class="modal-card">
-          <h3>确认实盘清仓</h3>
-          <p class="muted">
+          <h3>{{ isLivePortfolio ? '确认实盘清仓' : '确认纸面清仓' }}</h3>
+          <p v-if="isLivePortfolio" class="muted">
             将按实盘持仓即时下发<strong>卖出</strong>信号，交易器盘中（约 1 秒轮询）提交券商执行；
             同时落一条 origin=manual 的清仓计划留痕。跌停等市场原因卖不出由市场决定，不会拦截。
+          </p>
+          <p v-else class="muted">
+            将按当前纸面持仓即时按<strong>实时价</strong>成交清仓，并写入纸面快照/净值；同时落一条 origin=manual 计划留痕。
           </p>
           <ul class="manual-preview">
             <li v-for="sym in liquidateTargets" :key="sym">
@@ -468,7 +472,7 @@
               :disabled="liquidateSubmitting || !liquidateTargets.length"
               @click="submitLiveLiquidate"
             >
-              {{ liquidateSubmitting ? '下发中…' : '确认清仓并下单' }}
+              {{ liquidateSubmitting ? '提交中…' : (isLivePortfolio ? '确认清仓并下单' : '确认清仓') }}
             </button>
           </div>
         </div>
@@ -542,13 +546,13 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import {
-  createManualRebalancePlan,
   getLineageLiveEquity,
   getLineageLiveExecutions,
   getLineageLivePositions,
   getLineagePaperExecutions,
   getLineagePaperPositions,
   liveRebalancePortfolio,
+  paperRebalancePortfolio,
   enqueuePortfolioHoldingsRisk,
   getPortfolioPlan,
   getPortfolioPlanGenerationTask,
@@ -854,46 +858,10 @@ async function loadHoldingsRisk(force = false) {
 async function submitManualRebalance() {
   const planId = selectedLatestPlanId.value
   if (!planId || !manualChangeRows.value.length) return
-  // Live portfolios go through the synchronous live-rebalance path (immediate
-  // signals); paper portfolios keep the worker/paper-snapshot task path.
-  if (isLivePortfolio.value) {
-    await submitLiveRebalance(buildTargetsFromRows(manualChangeRows.value))
-    return
-  }
-  manualSubmitting.value = true
-  message.value = ''
-  messageIsError.value = false
-  try {
-    const targets = {}
-    for (const row of manualChangeRows.value) {
-      targets[row.symbol] = Number(row.target)
-    }
-    const res = await createManualRebalancePlan({
-      anchor_plan_id: planId,
-      targets,
-      exclude_after: excludeAfter.value,
-    })
-    showManualModal.value = false
-    excludeAfter.value = false
-    const task = await pollGenerationTask(res.data?.task_id)
-    const result = task.result || {}
-    const newPlanId = result.plan_id || task.plan_id
-    const blockedReason = result.executable === false ? result.non_executable_reason : ''
-    if (blockedReason) {
-      message.value = `手动调仓计划已生成${newPlanId ? `：${newPlanId}` : ''}，但存在阻断项（${blockedReason}），暂不可执行。请调整股数后重试。`
-      messageIsError.value = true
-    } else {
-      message.value = newPlanId
-        ? `手动调仓计划已生成：${newPlanId}。请到「组合交易计划」审核并执行。`
-        : '手动调仓计划已生成，请到「组合交易计划」审核并执行。'
-    }
-    await Promise.all([loadPortfolios(), refreshDetail()])
-  } catch (error) {
-    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '手动调仓提交失败'
-    messageIsError.value = true
-  } finally {
-    manualSubmitting.value = false
-  }
+  // Both live and paper go through synchronous rebalance endpoints (immediate
+  // execution); only the venue differs.
+  await submitRebalance(buildTargetsFromRows(manualChangeRows.value), { excludeAfter: excludeAfter.value })
+  excludeAfter.value = false
 }
 
 function buildTargetsFromRows(rows) {
@@ -902,8 +870,50 @@ function buildTargetsFromRows(rows) {
   return targets
 }
 
+// Unified synchronous rebalance submit (reduce / clear / add). Routes to the
+// live (broker signals) or paper (paper-book fill) endpoint based on the
+// portfolio venue. Used by both the manual-rebalance flow and the one-click
+// clear shortcut.
+async function submitRebalance(targets, { excludeAfter = false } = {}) {
+  if (isLivePortfolio.value) {
+    await submitLiveRebalance(targets, { excludeAfter })
+  } else {
+    await submitPaperRebalance(targets, { excludeAfter })
+  }
+}
+
+async function submitPaperRebalance(targets, { excludeAfter = false } = {}) {
+  const planId = selectedLatestPlanId.value
+  if (!planId || !Object.keys(targets || {}).length) return
+  manualSubmitting.value = true
+  liquidateSubmitting.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await paperRebalancePortfolio(planId, {
+      targets,
+      exclude_after: excludeAfter,
+      dry_run: false,
+    })
+    const data = res.data || {}
+    showManualModal.value = false
+    showLiquidateModal.value = false
+    const count = data.changed_symbols?.length || 0
+    const label = data.manual_action === 'liquidate' ? '纸面清仓' : '纸面调仓'
+    message.value = `已完成${label}：${count} 只标的按实时价即时成交（${data.status === 'partially_executed' ? '部分成交' : '全部成交'}）。`
+    if (data.status === 'partially_executed') messageIsError.value = true
+    await Promise.all([loadPortfolios(), refreshDetail()])
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '纸面调仓提交失败'
+    messageIsError.value = true
+  } finally {
+    manualSubmitting.value = false
+    liquidateSubmitting.value = false
+  }
+}
+
 // Shared synchronous live-rebalance submit (reduce / clear / add). Used by both
-// the live manual-rebalance flow and the one-click liquidation shortcut.
+// the live manual-rebalance flow and the one-click clear shortcut.
 async function submitLiveRebalance(targets, { excludeAfter = false } = {}) {
   const planId = selectedLatestPlanId.value
   const accountId = selectedPortfolio.value?.securities_account_id
@@ -962,7 +972,7 @@ async function submitLiveLiquidate() {
   if (!liquidateTargets.value.length) return
   const targets = {}
   for (const symbol of liquidateTargets.value) targets[symbol] = 0
-  await submitLiveRebalance(targets, { excludeAfter: liquidateExcludeAfter.value })
+  await submitRebalance(targets, { excludeAfter: liquidateExcludeAfter.value })
 }
 
 async function resumeLineageAction() {

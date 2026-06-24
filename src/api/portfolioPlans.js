@@ -156,6 +156,13 @@ export function liveRebalancePortfolio(planId, data = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/live-rebalance`, method: 'post', data })
 }
 
+// Intraday PAPER discretionary rebalance (reduce / clear / add). Synchronously
+// fills against the paper book at the realtime price and writes the new paper
+// snapshot/equity plus a manual plan. Pass { targets, exclude_after?, dry_run? }.
+export function paperRebalancePortfolio(planId, data = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/paper-rebalance`, method: 'post', data })
+}
+
 export function getLineageLiveExecutions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/lineage-live-executions`, method: 'get' })
 }
