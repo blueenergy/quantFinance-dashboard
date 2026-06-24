@@ -63,6 +63,11 @@
             <strong>{{ selectedPortfolio.paper_snapshot_date || '无快照' }}</strong>
             <small>持仓 {{ selectedPortfolio.paper_holding_count ?? 0 }} 只 · 权益 {{ money(selectedPortfolio.paper_equity) }}</small>
           </div>
+          <div v-if="selectedPortfolio.paper_execution_mode">
+            <span class="label">纸面执行</span>
+            <strong>{{ paperExecutionModeLabel(selectedPortfolio.paper_execution_mode) }}</strong>
+            <small v-if="selectedPortfolio.paper_execution_mode === 'auto_shadow'">调仓日自动批准，次日开盘价执行</small>
+          </div>
         </div>
       </section>
 
@@ -398,6 +403,12 @@ function portfolioOptionLabel(portfolio) {
 function fundingModeLabel(mode) {
   if (mode === 'live') return '实盘'
   if (mode === 'paper') return '纸面'
+  return mode || '-'
+}
+
+function paperExecutionModeLabel(mode) {
+  if (mode === 'auto_shadow') return '自动跟跑'
+  if (mode === 'manual_review') return '人工审核'
   return mode || '-'
 }
 
