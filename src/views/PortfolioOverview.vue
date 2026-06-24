@@ -1,25 +1,28 @@
 <template>
   <div class="portfolio-overview">
     <header class="overview-header">
-      <h2>组合总览（实盘 · 跨调仓）</h2>
+      <h2>组合总览（实盘 + 纸面）</h2>
       <p class="muted">
-        按策略参数血缘（params_hash）合并多期 plan 的 live 成交与持仓盈亏；净值曲线由各 plan 的日更
-        <code>portfolio_live_equity</code> 按日期拼接（见下方说明）。
+        按策略参数血缘（params_hash）合并多期 plan；实盘展示 live 成交与持仓，纸面展示 paper 净值与观察周期。
       </p>
     </header>
 
     <section class="toolbar">
       <label class="field">
         <span>选择组合</span>
-        <select v-model="selectedLatestPlanId" :disabled="loadingList || !portfolios.length">
+        <select v-model="selectedPortfolioKey" :disabled="loadingList || !portfolios.length">
           <option value="">请选择</option>
-          <option v-for="p in portfolios" :key="`${p.strategy_template_id}-${p.params_hash}`" :value="p.latest_plan_id">
-            {{ p.strategy_name || p.strategy_template_id }} · {{ p.last_base_date || '-' }}
-            （{{ p.plan_count }} 期 plan{{ p.securities_account_id ? ` · 账户 ${p.securities_account_id.slice(-6)}` : '' }}）
+          <option
+            v-for="p in portfolios"
+            :key="portfolioKey(p)"
+            :value="portfolioKey(p)"
+          >
+            [{{ fundingModeLabel(p.funding_mode) }}] {{ p.strategy_name || p.strategy_template_id }} · {{ p.last_base_date || '-' }}
+            （{{ p.plan_count }} 期{{ p.securities_account_id ? ` · 账户 ${p.securities_account_id.slice(-6)}` : '' }}）
           </option>
         </select>
       </label>
-      <button type="button" :disabled="!selectedLatestPlanId || loadingDetail" @click="refreshDetail">
+      <button type="button" :disabled="!selectedPortfolioKey || loadingDetail" @click="refreshDetail">
         <span v-if="loadingDetail" class="spinner" />
         {{ loadingDetail ? '加载中…' : '刷新' }}
       </button>
@@ -27,7 +30,75 @@
 
     <p v-if="message" class="message" :class="{ error: messageIsError }">{{ message }}</p>
 
-    <template v-if="selectedLatestPlanId">
+    <template v-if="selectedPortfolioKey && selectedPortfolio">
+      <section v-if="timelineData" class="cycle-card" :class="{ 'needs-action': timelineData.action_required }">
+        <div class="cycle-card-header">
+          <div>
+            <h3>当前周期状态</h3>
+            <p class="cycle-state">{{ timelineData.today_state }}</p>
+          </div>
+          <span class="funding-badge" :class="`mode-${selectedPortfolio.funding_mode}`">
+            {{ fundingModeLabel(selectedPortfolio.funding_mode) }}
+          </span>
+        </div>
+        <div class="cycle-metrics">
+          <div>
+            <span class="label">调仓进度</span>
+            <strong>
+              {{ timelineData.current_cycle?.elapsed_trading_days ?? 0 }}
+              / {{ timelineData.current_cycle?.rebalance_days ?? '-' }} 交易日
+            </strong>
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: `${cycleProgressPct}%` }" />
+            </div>
+          </div>
+          <div>
+            <span class="label">预计下次调仓</span>
+            <strong>{{ timelineData.current_cycle?.next_rebalance_estimate || '-' }}</strong>
+          </div>
+          <div>
+            <span class="label">理论漂移换手</span>
+            <strong>{{ pct(timelineData.latest_drift_summary?.estimated_turnover) }}</strong>
+            <small>
+              买 {{ timelineData.latest_drift_summary?.buy_count ?? 0 }}
+              / 卖 {{ timelineData.latest_drift_summary?.sell_count ?? 0 }}
+            </small>
+          </div>
+          <div>
+            <span class="label">需处理</span>
+            <strong>{{ timelineData.action_required ? '是' : '否' }}</strong>
+          </div>
+        </div>
+        <p v-if="timelineData.latest_drift_summary?.non_executable_reason === 'monitor_no_trade'" class="monitor-hint">
+          未到调仓周期，本日不交易；上方漂移为若今日调仓的理论变化。
+        </p>
+      </section>
+
+      <section v-if="foldedTimeline.length" class="timeline-section">
+        <h3>观察 / 调仓时间线</h3>
+        <ul class="timeline-list">
+          <li
+            v-for="(entry, idx) in foldedTimeline"
+            :key="entry.type === 'monitor_fold' ? `fold-${entry.end}-${idx}` : entry.node.plan_id"
+            :class="timelineEntryClass(entry)"
+          >
+            <template v-if="entry.type === 'monitor_fold'">
+              <strong>{{ entry.end }} ~ {{ entry.start }}</strong>
+              <span>观察 {{ entry.count }} 次</span>
+              <span v-if="entry.maxDrift > 0">最大漂移换手 {{ pct(entry.maxDrift) }}</span>
+            </template>
+            <template v-else>
+              <strong>{{ entry.node.date }}</strong>
+              <span class="node-type">{{ entry.node.node_type === 'rebalance' ? '调仓' : '观察' }}</span>
+              <span>{{ entry.node.today_state }}</span>
+              <span v-if="entry.node.drift_brief?.estimated_turnover != null">
+                漂移 {{ pct(entry.node.drift_brief.estimated_turnover) }}
+              </span>
+            </template>
+          </li>
+        </ul>
+      </section>
+
       <section v-if="equityCaveat" class="caveat-box">
         <strong>说明：</strong>{{ equityCaveat }}
       </section>
@@ -133,8 +204,9 @@
       </section>
 
       <section>
-        <h3>实盘成交明细</h3>
-        <div v-if="!tradeDetailRows.length" class="muted">暂无成交记录。</div>
+        <h3>{{ isLivePortfolio ? '实盘成交明细' : '纸面成交明细' }}</h3>
+        <div v-if="!isLivePortfolio" class="muted">纸面 FIFO 成交明细将在后续版本补齐；当前请使用计划页查看单次 paper 执行记录。</div>
+        <div v-else-if="!tradeDetailRows.length" class="muted">暂无成交记录。</div>
         <div v-else class="table-wrap compact">
           <table>
             <thead>
@@ -183,7 +255,7 @@
             </tfoot>
           </table>
         </div>
-        <p class="muted combo-note">
+        <p v-if="isLivePortfolio" class="muted combo-note">
           成交明细按 <strong>FIFO（先进先出）</strong> 将每笔卖出与对应买入批次配对，一行为一段往返；未平仓部分以“持有中”行按最新价估算浮动盈亏。
           上方汇总卡片的「已实现盈亏」按<strong>加权平均成本法</strong>计算，与本表净盈亏合计在分批建仓/部分卖出时口径不同，全部平仓后两者一致。
         </p>
@@ -198,11 +270,14 @@ import {
   getLineageLiveEquity,
   getLineageLiveExecutions,
   getLineageLivePositions,
-  listLivePortfolios,
+  getPortfolioPlan,
+  getPortfolioPlanLineageEquity,
+  getPortfolioPlanLineageTimeline,
+  listPortfolios,
 } from '../api/portfolioPlans'
 
 const portfolios = ref([])
-const selectedLatestPlanId = ref('')
+const selectedPortfolioKey = ref('')
 const loadingList = ref(false)
 const loadingDetail = ref(false)
 const message = ref('')
@@ -214,6 +289,73 @@ const bookEquity = ref(null)
 const positionRows = ref([])
 const positionSummary = ref(null)
 const tradeRows = ref([])
+const timelineData = ref(null)
+
+const selectedPortfolio = computed(() => (
+  portfolios.value.find((row) => portfolioKey(row) === selectedPortfolioKey.value) || null
+))
+
+const selectedLatestPlanId = computed(() => selectedPortfolio.value?.latest_plan_id || '')
+
+const isLivePortfolio = computed(() => selectedPortfolio.value?.funding_mode === 'live')
+
+const cycleProgressPct = computed(() => {
+  const cycle = timelineData.value?.current_cycle
+  if (!cycle?.rebalance_days) return 0
+  const elapsed = Number(cycle.elapsed_trading_days || 0)
+  return Math.min(100, Math.round((elapsed / cycle.rebalance_days) * 100))
+})
+
+const foldedTimeline = computed(() => {
+  const nodes = timelineData.value?.timeline || []
+  const folded = []
+  let monitorRun = null
+  for (const node of nodes) {
+    const isPassiveMonitor = node.node_type === 'monitor' && !node.action_required
+    if (isPassiveMonitor) {
+      const drift = Number(node.drift_brief?.estimated_turnover || 0)
+      if (!monitorRun) {
+        monitorRun = {
+          type: 'monitor_fold',
+          start: node.date,
+          end: node.date,
+          count: 1,
+          maxDrift: drift,
+        }
+      } else {
+        monitorRun.end = node.date
+        monitorRun.count += 1
+        monitorRun.maxDrift = Math.max(monitorRun.maxDrift, drift)
+      }
+      continue
+    }
+    if (monitorRun) {
+      folded.push(monitorRun)
+      monitorRun = null
+    }
+    folded.push({ type: 'node', node })
+  }
+  if (monitorRun) folded.push(monitorRun)
+  return folded
+})
+
+function portfolioKey(portfolio) {
+  return `${portfolio.strategy_template_id}:${portfolio.params_hash}`
+}
+
+function fundingModeLabel(mode) {
+  if (mode === 'live') return '实盘'
+  if (mode === 'paper') return '纸面'
+  return mode || '-'
+}
+
+function timelineEntryClass(entry) {
+  if (entry.type === 'monitor_fold') return 'timeline-item timeline-fold'
+  const node = entry.node
+  if (node.action_required) return 'timeline-item timeline-strong'
+  if (node.node_type === 'rebalance') return 'timeline-item timeline-strong'
+  return 'timeline-item'
+}
 
 const latestHoldingRows = computed(() => (
   positionRows.value
@@ -335,11 +477,17 @@ async function loadPortfolios() {
   loadingList.value = true
   message.value = ''
   messageIsError.value = false
+  const previousKey = selectedPortfolioKey.value
   try {
-    const res = await listLivePortfolios()
+    const res = await listPortfolios()
     portfolios.value = res.data?.portfolios || []
     if (!portfolios.value.length) {
-      message.value = '当前没有已发布实盘的组合血缘（或暂无 params_hash）。'
+      selectedPortfolioKey.value = ''
+      message.value = '当前没有已执行的实盘或纸面组合血缘。'
+      return
+    }
+    if (previousKey && portfolios.value.some((row) => portfolioKey(row) === previousKey)) {
+      selectedPortfolioKey.value = previousKey
     }
   } catch (error) {
     message.value = formatApiDetail(error.response?.data?.detail) || error.message || '加载组合列表失败'
@@ -356,20 +504,67 @@ async function refreshDetail() {
   message.value = ''
   messageIsError.value = false
   try {
-    const [eqRes, posRes, exRes] = await Promise.all([
-      getLineageLiveEquity(planId),
-      getLineageLivePositions(planId),
-      getLineageLiveExecutions(planId),
-    ])
-    equityRows.value = (eqRes.data?.rows || []).map((row) => ({
-      ...row,
-      equity: Number(row.equity),
-    }))
-    equityCaveat.value = eqRes.data?.caveat || ''
-    bookEquity.value = eqRes.data?.current_book_equity || null
-    positionRows.value = posRes.data?.positions || []
-    positionSummary.value = posRes.data?.summary || null
-    tradeRows.value = exRes.data?.trades || []
+    const timelineRes = await getPortfolioPlanLineageTimeline(planId, { limit: 120 })
+    timelineData.value = timelineRes.data || null
+
+    if (isLivePortfolio.value) {
+      const [eqRes, posRes, exRes] = await Promise.all([
+        getLineageLiveEquity(planId),
+        getLineageLivePositions(planId),
+        getLineageLiveExecutions(planId),
+      ])
+      equityRows.value = (eqRes.data?.rows || []).map((row) => ({
+        ...row,
+        equity: Number(row.equity),
+      }))
+      equityCaveat.value = eqRes.data?.caveat || ''
+      bookEquity.value = eqRes.data?.current_book_equity || null
+      positionRows.value = posRes.data?.positions || []
+      positionSummary.value = posRes.data?.summary || null
+      tradeRows.value = exRes.data?.trades || []
+    } else {
+      const [eqRes, planRes] = await Promise.all([
+        getPortfolioPlanLineageEquity(planId),
+        getPortfolioPlan(planId),
+      ])
+      const rows = eqRes.data?.rows || []
+      equityRows.value = rows.map((row) => ({
+        ...row,
+        equity: Number(row.equity),
+      }))
+      equityCaveat.value = '纸面净值由各 plan 日更 portfolio_paper_equity / 持仓快照按日期拼接。'
+      const latestRow = rows[rows.length - 1]
+      bookEquity.value = latestRow
+        ? {
+            equity: Number(latestRow.equity || 0),
+            initial_capital: Number(planRes.data?.plan?.summary?.baseline_equity || planRes.data?.plan?.summary?.equity || 0),
+            cash: Number(latestRow.cash || 0),
+            realized_pnl: 0,
+            unrealized_pnl: 0,
+          }
+        : null
+      const items = planRes.data?.items || []
+      positionRows.value = items
+        .filter((item) => Number(item.current_shares) > 0)
+        .map((item) => ({
+          symbol: item.symbol,
+          name: item.name,
+          shares: item.current_shares,
+          avg_cost: item.estimated_price,
+          last_price: item.estimated_price,
+          market_value: Number(item.current_shares || 0) * Number(item.estimated_price || 0),
+          realized_pnl: 0,
+          unrealized_pnl: 0,
+          unrealized_pnl_pct: 0,
+        }))
+      positionSummary.value = {
+        total_market_value: positionRows.value.reduce((sum, row) => sum + Number(row.market_value || 0), 0),
+        total_realized_pnl: 0,
+        total_unrealized_pnl: 0,
+        holding_count: positionRows.value.length,
+      }
+      tradeRows.value = []
+    }
   } catch (error) {
     message.value = formatApiDetail(error.response?.data?.detail) || error.message || '加载详情失败'
     messageIsError.value = true
@@ -378,9 +573,10 @@ async function refreshDetail() {
   }
 }
 
-watch(selectedLatestPlanId, (id) => {
-  if (id) refreshDetail()
+watch(selectedPortfolioKey, (key) => {
+  if (key) refreshDetail()
   else {
+    timelineData.value = null
     equityRows.value = []
     equityCaveat.value = ''
     bookEquity.value = null
@@ -498,6 +694,145 @@ button:disabled {
 
 .caveat-box strong {
   color: #1c1917;
+}
+
+.cycle-card {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+}
+
+.cycle-card.needs-action {
+  background: #fffbeb;
+  border-color: #d97706;
+}
+
+.cycle-card-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.cycle-card-header h3 {
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+
+.cycle-state {
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.funding-badge {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+}
+
+.funding-badge.mode-live {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.funding-badge.mode-paper {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.cycle-metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+.cycle-metrics .label {
+  color: #64748b;
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.cycle-metrics strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.cycle-metrics small {
+  color: #64748b;
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.progress-bar {
+  background: #e2e8f0;
+  border-radius: 999px;
+  height: 6px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  background: #2563eb;
+  height: 100%;
+}
+
+.monitor-hint {
+  color: #475569;
+  font-size: 13px;
+  margin: 12px 0 0;
+}
+
+.timeline-section {
+  margin-bottom: 16px;
+}
+
+.timeline-list {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timeline-item {
+  border-bottom: 1px solid #e5e7eb;
+  color: #64748b;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.timeline-item:last-child {
+  border-bottom: none;
+}
+
+.timeline-item strong {
+  color: #0f172a;
+}
+
+.timeline-fold {
+  background: #f8fafc;
+}
+
+.timeline-strong {
+  background: #fff;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.timeline-strong .node-type {
+  color: #1d4ed8;
+  font-weight: 600;
 }
 
 .chart-section h3,

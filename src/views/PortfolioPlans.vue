@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">Portfolio Plans</p>
         <h2>组合交易计划</h2>
-        <p class="subtitle">查看指数增强策略的交易计划、人工审核状态和 paper trading 净值。</p>
+        <p class="subtitle">审核与运维工作台：默认聚焦需处理的调仓计划；每日观察计划可在总览页查看周期脉络。</p>
       </div>
       <button :disabled="loading" @click="refreshAll">刷新</button>
     </header>
@@ -31,9 +31,29 @@
           <option value="partially_executed">partially_executed</option>
         </select>
       </label>
+      <label class="inline-check">
+        <input v-model="showOnlyActionRequired" type="checkbox" />
+        只看需要处理
+      </label>
+      <label class="inline-check">
+        <input v-model="hideMonitorPlans" type="checkbox" />
+        隐藏观察日计划
+      </label>
     </section>
 
-    <section class="card generate-card">
+    <section class="card ops-workbench-card">
+      <div class="task-list-header">
+        <div>
+          <h3>运维工具</h3>
+          <p class="muted">数据水位、Worker 状态等内部功能，默认折叠。</p>
+        </div>
+        <button type="button" @click="opsWorkbenchExpanded = !opsWorkbenchExpanded">
+          {{ opsWorkbenchExpanded ? '折叠' : '展开' }}
+        </button>
+      </div>
+    </section>
+
+    <section v-if="opsWorkbenchExpanded" class="card generate-card">
       <div class="task-list-header">
         <div>
           <h3>生成交易计划</h3>
@@ -192,7 +212,7 @@
 
     <p v-if="message" class="message">{{ message }}</p>
 
-    <section class="card watermark-card">
+    <section v-if="opsWorkbenchExpanded" class="card watermark-card">
       <div class="task-list-header">
         <div>
           <h3>Plan 生成数据水位</h3>
@@ -237,7 +257,7 @@
       </template>
     </section>
 
-    <section class="card worker-status-card">
+    <section v-if="opsWorkbenchExpanded" class="card worker-status-card">
       <div class="task-list-header">
         <div>
           <h3>Plan 生成 Worker</h3>
@@ -378,7 +398,7 @@
         <h3>计划列表</h3>
         <p v-if="loading" class="muted">正在加载...</p>
         <button
-          v-for="plan in plans"
+          v-for="plan in displayPlans"
           :key="plan.plan_id"
           class="plan-row"
           :class="planRowClass(plan)"
@@ -399,7 +419,9 @@
             {{ plan.status }}
           </em>
         </button>
-        <p v-if="!loading && !plans.length" class="muted">暂无计划。</p>
+        <p v-if="!loading && !displayPlans.length" class="muted">
+          {{ showOnlyActionRequired ? '暂无需要处理的计划。' : '暂无计划。' }}
+        </p>
       </aside>
 
       <main class="card detail">
@@ -1081,8 +1103,32 @@ import { getSecuritiesAccounts } from '../api/trader'
 const strategies = ref([])
 const parameterPresets = ref([])
 const plans = ref([])
+const ACTION_REQUIRED_STATUSES = new Set(['needs_review', 'approved', 'partially_executed'])
+
+const displayPlans = computed(() => (
+  plans.value.filter((plan) => {
+    if (
+      hideMonitorPlans.value
+      && plan.plan_type === 'monitor'
+      && plan.executable === false
+      && plan.non_executable_reason === 'monitor_no_trade'
+    ) {
+      return false
+    }
+    if (showOnlyActionRequired.value) {
+      const needsAction = ACTION_REQUIRED_STATUSES.has(plan.status)
+        || (plan.executable && ['needs_review', 'approved'].includes(plan.status))
+      if (!needsAction) return false
+    }
+    return true
+  })
+))
+
 const selectedStrategyId = ref('')
 const statusFilter = ref('')
+const showOnlyActionRequired = ref(true)
+const hideMonitorPlans = ref(true)
+const opsWorkbenchExpanded = ref(false)
 const selectedPlanId = ref('')
 const selectedDetail = ref(null)
 const equity = ref([])
