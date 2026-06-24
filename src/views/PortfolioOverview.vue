@@ -116,6 +116,7 @@
 
       <section v-if="foldedTimeline.length" class="timeline-section">
         <h3>观察 / 调仓时间线</h3>
+        <p class="timeline-hint muted">调仓节点可展开查看买卖明细；观察日折叠段仅显示漂移摘要。</p>
         <ul class="timeline-list">
           <li
             v-for="(entry, idx) in foldedTimeline"
@@ -128,12 +129,65 @@
               <span v-if="entry.maxDrift > 0">最大漂移换手 {{ pct(entry.maxDrift) }}</span>
             </template>
             <template v-else>
-              <strong>{{ entry.node.date }}</strong>
-              <span class="node-type">{{ entry.node.node_type === 'rebalance' ? '调仓' : '观察' }}</span>
-              <span>{{ entry.node.today_state }}</span>
-              <span v-if="entry.node.drift_brief?.estimated_turnover != null">
-                漂移 {{ pct(entry.node.drift_brief.estimated_turnover) }}
-              </span>
+              <div class="timeline-node-head">
+                <button
+                  v-if="timelineTradeItems(entry.node).length"
+                  type="button"
+                  class="timeline-expand"
+                  :aria-expanded="expandedTimelinePlanId === entry.node.plan_id"
+                  @click="toggleTimelineDetail(entry.node.plan_id)"
+                >
+                  {{ expandedTimelinePlanId === entry.node.plan_id ? '▾' : '▸' }}
+                </button>
+                <strong>{{ entry.node.date }}</strong>
+                <span class="node-type">{{ entry.node.node_type === 'rebalance' ? '调仓' : '观察' }}</span>
+                <span>{{ entry.node.today_state }}</span>
+                <span v-if="entry.node.drift_brief?.buy_count">
+                  买 {{ entry.node.drift_brief.buy_count }}
+                </span>
+                <span v-if="entry.node.drift_brief?.sell_count">
+                  卖 {{ entry.node.drift_brief.sell_count }}
+                </span>
+                <span v-if="entry.node.drift_brief?.estimated_turnover != null">
+                  换手 {{ pct(entry.node.drift_brief.estimated_turnover) }}
+                </span>
+              </div>
+              <div
+                v-if="expandedTimelinePlanId === entry.node.plan_id && timelineTradeItems(entry.node).length"
+                class="timeline-trade-detail"
+              >
+                <p v-if="entry.node.drift_brief?.mode === 'drift'" class="timeline-detail-note">
+                  观察日未执行，以下为若今日调仓的理论买卖。
+                </p>
+                <div class="table-wrap compact">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>方向</th>
+                        <th>代码</th>
+                        <th>名称</th>
+                        <th>变动股数</th>
+                        <th>持仓 → 目标</th>
+                        <th>估算金额</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="row in timelineTradeItems(entry.node)" :key="`${entry.node.plan_id}-${row.symbol}`">
+                        <td>
+                          <span class="action-tag" :class="row.action === 'buy' ? 'tag-buy' : 'tag-sell'">
+                            {{ row.action === 'buy' ? '买' : '卖' }}
+                          </span>
+                        </td>
+                        <td>{{ row.symbol }}</td>
+                        <td>{{ row.name || '-' }}</td>
+                        <td>{{ formatShareDelta(row.delta_shares) }}</td>
+                        <td>{{ row.current_shares }} → {{ row.target_shares }}</td>
+                        <td>{{ money(row.estimated_amount) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </template>
           </li>
         </ul>
@@ -217,6 +271,7 @@
               <tr>
                 <th>代码</th>
                 <th>名称</th>
+                <th>买入日</th>
                 <th>数量</th>
                 <th>均价</th>
                 <th>现价</th>
@@ -230,6 +285,7 @@
               <tr v-for="row in latestHoldingRows" :key="row.symbol">
                 <td>{{ row.symbol }}</td>
                 <td>{{ row.name || '-' }}</td>
+                <td>{{ row.buy_date || '-' }}</td>
                 <td>{{ row.shares }}</td>
                 <td>{{ num(row.avg_cost) }}</td>
                 <td>{{ num(row.last_price) }}</td>
@@ -245,8 +301,7 @@
 
       <section>
         <h3>{{ isLivePortfolio ? '实盘成交明细' : '纸面成交明细' }}</h3>
-        <div v-if="!isLivePortfolio" class="muted">纸面 FIFO 成交明细将在后续版本补齐；当前请使用计划页查看单次 paper 执行记录。</div>
-        <div v-else-if="!tradeDetailRows.length" class="muted">暂无成交记录。</div>
+        <div v-if="!tradeDetailRows.length" class="muted">暂无成交记录。</div>
         <div v-else class="table-wrap compact">
           <table>
             <thead>
@@ -295,9 +350,14 @@
             </tfoot>
           </table>
         </div>
-        <p v-if="isLivePortfolio" class="muted combo-note">
+        <p v-if="tradeDetailRows.length" class="muted combo-note">
           成交明细按 <strong>FIFO（先进先出）</strong> 将每笔卖出与对应买入批次配对，一行为一段往返；未平仓部分以“持有中”行按最新价估算浮动盈亏。
-          上方汇总卡片的「已实现盈亏」按<strong>加权平均成本法</strong>计算，与本表净盈亏合计在分批建仓/部分卖出时口径不同，全部平仓后两者一致。
+          <template v-if="isLivePortfolio">
+            上方汇总卡片的「已实现盈亏」按<strong>加权平均成本法</strong>计算，与本表净盈亏合计在分批建仓/部分卖出时口径不同，全部平仓后两者一致。
+          </template>
+          <template v-else>
+            纸面成交来自各调仓日开盘价模拟执行（portfolio_paper_executions），不含佣金。
+          </template>
         </p>
       </section>
     </template>
@@ -310,6 +370,7 @@ import {
   getLineageLiveEquity,
   getLineageLiveExecutions,
   getLineageLivePositions,
+  getLineagePaperExecutions,
   getLineagePaperPositions,
   getPortfolioPlan,
   getPortfolioPlanLineageEquity,
@@ -331,6 +392,7 @@ const positionRows = ref([])
 const positionSummary = ref(null)
 const tradeRows = ref([])
 const timelineData = ref(null)
+const expandedTimelinePlanId = ref(null)
 
 const selectedPortfolio = computed(() => (
   portfolios.value.find((row) => portfolioKey(row) === selectedPortfolioKey.value) || null
@@ -420,9 +482,44 @@ function timelineEntryClass(entry) {
   return 'timeline-item'
 }
 
+function timelineTradeItems(node) {
+  return node?.drift_brief?.items || []
+}
+
+function toggleTimelineDetail(planId) {
+  expandedTimelinePlanId.value = expandedTimelinePlanId.value === planId ? null : planId
+}
+
+function formatShareDelta(value) {
+  const n = Number(value || 0)
+  if (!Number.isFinite(n) || n === 0) return '0'
+  return n > 0 ? `+${n}` : String(n)
+}
+
+const openBuyDateBySymbol = computed(() => {
+  const map = {}
+  for (const t of tradeRows.value) {
+    if (t.status !== 'open' || !t.buy_date) continue
+    const keys = [t.symbol, String(t.symbol || '').split('.')[0]]
+    for (const key of keys) {
+      if (!key) continue
+      if (!map[key] || t.buy_date < map[key]) map[key] = t.buy_date
+    }
+  }
+  return map
+})
+
 const latestHoldingRows = computed(() => (
   positionRows.value
     .filter((row) => Number(row.shares) > 0)
+    .map((row) => ({
+      ...row,
+      buy_date:
+        openBuyDateBySymbol.value[row.symbol] ||
+        openBuyDateBySymbol.value[String(row.symbol || '').split('.')[0]] ||
+        row.buy_date ||
+        '',
+    }))
     .sort((a, b) => Number(b.market_value || 0) - Number(a.market_value || 0))
 ))
 
@@ -495,7 +592,7 @@ function money(value) {
 function num(value) {
   if (value === null || value === undefined || value === '') return '-'
   const number = Number(value)
-  return Number.isFinite(number) ? number.toFixed(4) : '-'
+  return Number.isFinite(number) ? number.toFixed(2) : '-'
 }
 
 function signedMoney(value) {
@@ -586,10 +683,11 @@ async function refreshDetail() {
       positionSummary.value = posRes.data?.summary || null
       tradeRows.value = exRes.data?.trades || []
     } else {
-      const [eqRes, posRes, planRes] = await Promise.all([
+      const [eqRes, posRes, planRes, exRes] = await Promise.all([
         getPortfolioPlanLineageEquity(planId),
         getLineagePaperPositions(planId),
         getPortfolioPlan(planId),
+        getLineagePaperExecutions(planId),
       ])
       const rows = eqRes.data?.rows || []
       equityRows.value = rows.map((row) => ({
@@ -620,7 +718,7 @@ async function refreshDetail() {
             total_unrealized_pnl: 0,
             holding_count: positionRows.value.length,
           }
-      tradeRows.value = []
+      tradeRows.value = exRes.data?.trades || []
     }
   } catch (error) {
     message.value = formatApiDetail(error.response?.data?.detail) || error.message || '加载详情失败'
@@ -631,6 +729,7 @@ async function refreshDetail() {
 }
 
 watch(selectedPortfolioKey, (key) => {
+  expandedTimelinePlanId.value = null
   if (key) refreshDetail()
   else {
     timelineData.value = null
@@ -902,11 +1001,61 @@ button:disabled {
 .timeline-item {
   border-bottom: 1px solid #e5e7eb;
   color: #64748b;
+  display: block;
+  font-size: 13px;
+  padding: 10px 12px;
+}
+
+.timeline-node-head {
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
-  font-size: 13px;
   gap: 10px;
-  padding: 10px 12px;
+}
+
+.timeline-expand {
+  background: transparent;
+  border: none;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.timeline-hint {
+  font-size: 12px;
+  margin: -4px 0 8px;
+}
+
+.timeline-trade-detail {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.timeline-detail-note {
+  color: #92400e;
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+
+.action-tag {
+  border-radius: 3px;
+  color: #fff;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.action-tag.tag-buy {
+  background: #dc2626;
+}
+
+.action-tag.tag-sell {
+  background: #16a34a;
 }
 
 .timeline-item:last-child {

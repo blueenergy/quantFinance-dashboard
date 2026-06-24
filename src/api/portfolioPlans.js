@@ -104,6 +104,10 @@ export function getLineagePaperPositions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/lineage-paper-positions`, method: 'get' })
 }
 
+export function getLineagePaperExecutions(planId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/lineage-paper-executions`, method: 'get' })
+}
+
 export function getPortfolioPlanLiveExecutions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/live-executions`, method: 'get' })
 }
