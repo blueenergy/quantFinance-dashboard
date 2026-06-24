@@ -17,8 +17,7 @@
             :key="portfolioKey(p)"
             :value="portfolioKey(p)"
           >
-            [{{ fundingModeLabel(p.funding_mode) }}] {{ p.strategy_name || p.strategy_template_id }} · {{ p.last_base_date || '-' }}
-            （{{ p.plan_count }} 期{{ p.securities_account_id ? ` · 账户 ${p.securities_account_id.slice(-6)}` : '' }}）
+            [{{ fundingModeLabel(p.funding_mode) }}] {{ portfolioOptionLabel(p) }}
           </option>
         </select>
       </label>
@@ -31,6 +30,42 @@
     <p v-if="message" class="message" :class="{ error: messageIsError }">{{ message }}</p>
 
     <template v-if="selectedPortfolioKey && selectedPortfolio">
+      <section class="portfolio-identity-card">
+        <h3>组合标识</h3>
+        <div class="identity-grid">
+          <div>
+            <span class="label">策略</span>
+            <strong>{{ selectedPortfolio.strategy_name || selectedPortfolio.strategy_template_id }}</strong>
+            <small>{{ selectedPortfolio.strategy_template_id }}</small>
+          </div>
+          <div>
+            <span class="label">参数摘要</span>
+            <strong>{{ selectedPortfolio.param_summary || '-' }}</strong>
+            <small>
+              universe {{ selectedPortfolio.universe_index || '-' }}
+              · Top{{ selectedPortfolio.top_n ?? '-' }}
+              · {{ selectedPortfolio.rebalance_days ?? '-' }} 日调仓
+              · {{ selectedPortfolio.construction_mode || '-' }}
+            </small>
+          </div>
+          <div>
+            <span class="label">params_hash</span>
+            <strong :title="selectedPortfolio.params_hash">{{ selectedPortfolio.params_hash_short || '-' }}</strong>
+            <small>完整：{{ selectedPortfolio.params_hash || '-' }}</small>
+          </div>
+          <div>
+            <span class="label">维护区间</span>
+            <strong>{{ selectedPortfolio.first_base_date || '-' }} → {{ selectedPortfolio.last_base_date || '-' }}</strong>
+            <small>{{ selectedPortfolio.plan_count }} 期 plan · 最新 {{ selectedPortfolio.latest_plan_type || '-' }} / {{ selectedPortfolio.latest_plan_status || '-' }}</small>
+          </div>
+          <div v-if="selectedPortfolio.funding_mode === 'paper'">
+            <span class="label">纸面快照</span>
+            <strong>{{ selectedPortfolio.paper_snapshot_date || '无快照' }}</strong>
+            <small>持仓 {{ selectedPortfolio.paper_holding_count ?? 0 }} 只 · 权益 {{ money(selectedPortfolio.paper_equity) }}</small>
+          </div>
+        </div>
+      </section>
+
       <section v-if="timelineData" class="cycle-card" :class="{ 'needs-action': timelineData.action_required }">
         <div class="cycle-card-header">
           <div>
@@ -270,6 +305,7 @@ import {
   getLineageLiveEquity,
   getLineageLiveExecutions,
   getLineageLivePositions,
+  getLineagePaperPositions,
   getPortfolioPlan,
   getPortfolioPlanLineageEquity,
   getPortfolioPlanLineageTimeline,
@@ -341,6 +377,22 @@ const foldedTimeline = computed(() => {
 
 function portfolioKey(portfolio) {
   return `${portfolio.strategy_template_id}:${portfolio.params_hash}`
+}
+
+function portfolioOptionLabel(portfolio) {
+  const name = portfolio.strategy_name || portfolio.strategy_template_id || '组合'
+  const params = portfolio.param_summary || '参数未记录'
+  const range = portfolio.first_base_date && portfolio.last_base_date
+    ? `${portfolio.first_base_date}→${portfolio.last_base_date}`
+    : (portfolio.last_base_date || '-')
+  const hash = portfolio.params_hash_short || (portfolio.params_hash ? portfolio.params_hash.slice(0, 8) : '--------')
+  const holdings = portfolio.funding_mode === 'paper'
+    ? ` · 持仓${portfolio.paper_holding_count ?? 0}`
+    : ''
+  const account = portfolio.securities_account_id
+    ? ` · 账户${portfolio.securities_account_id.slice(-6)}`
+    : ''
+  return `${name} · ${params} · ${range}（${portfolio.plan_count}期${holdings}${account} · #${hash}）`
 }
 
 function fundingModeLabel(mode) {
@@ -523,8 +575,9 @@ async function refreshDetail() {
       positionSummary.value = posRes.data?.summary || null
       tradeRows.value = exRes.data?.trades || []
     } else {
-      const [eqRes, planRes] = await Promise.all([
+      const [eqRes, posRes, planRes] = await Promise.all([
         getPortfolioPlanLineageEquity(planId),
+        getLineagePaperPositions(planId),
         getPortfolioPlan(planId),
       ])
       const rows = eqRes.data?.rows || []
@@ -532,37 +585,30 @@ async function refreshDetail() {
         ...row,
         equity: Number(row.equity),
       }))
-      equityCaveat.value = '纸面净值由各 plan 日更 portfolio_paper_equity / 持仓快照按日期拼接。'
+      const snapshotDate = posRes.data?.as_of_date
+      equityCaveat.value = snapshotDate
+        ? `纸面净值由各 plan 日更 portfolio_paper_equity 拼接；最新持仓快照 ${snapshotDate}（plan ${posRes.data?.source_plan_id || '-'}）。`
+        : '纸面净值由各 plan 日更 portfolio_paper_equity 拼接；当前血缘暂无 paper 持仓快照。'
       const latestRow = rows[rows.length - 1]
-      bookEquity.value = latestRow
+      const summary = posRes.data?.summary || {}
+      bookEquity.value = latestRow || summary.equity
         ? {
-            equity: Number(latestRow.equity || 0),
-            initial_capital: Number(planRes.data?.plan?.summary?.baseline_equity || planRes.data?.plan?.summary?.equity || 0),
-            cash: Number(latestRow.cash || 0),
+            equity: Number(summary.equity || latestRow?.equity || 0),
+            initial_capital: Number(planRes.data?.plan?.summary?.baseline_equity || planRes.data?.plan?.summary?.equity || selectedPortfolio.value?.initial_capital || 0),
+            cash: Number(summary.cash || latestRow?.cash || 0),
             realized_pnl: 0,
-            unrealized_pnl: 0,
+            unrealized_pnl: Number(summary.total_unrealized_pnl || 0),
           }
         : null
-      const items = planRes.data?.items || []
-      positionRows.value = items
-        .filter((item) => Number(item.current_shares) > 0)
-        .map((item) => ({
-          symbol: item.symbol,
-          name: item.name,
-          shares: item.current_shares,
-          avg_cost: item.estimated_price,
-          last_price: item.estimated_price,
-          market_value: Number(item.current_shares || 0) * Number(item.estimated_price || 0),
-          realized_pnl: 0,
-          unrealized_pnl: 0,
-          unrealized_pnl_pct: 0,
-        }))
-      positionSummary.value = {
-        total_market_value: positionRows.value.reduce((sum, row) => sum + Number(row.market_value || 0), 0),
-        total_realized_pnl: 0,
-        total_unrealized_pnl: 0,
-        holding_count: positionRows.value.length,
-      }
+      positionRows.value = posRes.data?.positions || []
+      positionSummary.value = summary.holding_count != null
+        ? summary
+        : {
+            total_market_value: positionRows.value.reduce((sum, row) => sum + Number(row.market_value || 0), 0),
+            total_realized_pnl: 0,
+            total_unrealized_pnl: 0,
+            holding_count: positionRows.value.length,
+          }
       tradeRows.value = []
     }
   } catch (error) {
@@ -694,6 +740,46 @@ button:disabled {
 
 .caveat-box strong {
   color: #1c1917;
+}
+
+.portfolio-identity-card {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+}
+
+.portfolio-identity-card h3 {
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+
+.identity-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.identity-grid .label {
+  color: #64748b;
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.identity-grid strong {
+  color: #0f172a;
+  display: block;
+  font-size: 14px;
+}
+
+.identity-grid small {
+  color: #64748b;
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+  word-break: break-all;
 }
 
 .cycle-card {
