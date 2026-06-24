@@ -219,23 +219,84 @@
       <section class="chart-section">
         <h3>净值曲线（账户整体权益 · 日频）</h3>
         <div v-if="!equityRowsForChart.length" class="muted">暂无净值数据。</div>
-        <div v-else class="equity-chart" aria-label="Lineage live equity">
-          <svg viewBox="0 0 640 220" preserveAspectRatio="none">
-            <polyline :points="equityChart.points" />
-            <text x="36" y="22">{{ money(equityChart.max) }}</text>
-            <text x="36" y="186">{{ money(equityChart.min) }}</text>
+        <div v-else class="equity-chart" aria-label="Lineage equity curve" @mouseleave="onChartLeave">
+          <svg
+            class="equity-svg"
+            :viewBox="`0 0 ${equityChart.width} ${equityChart.height}`"
+            @mousemove="onChartMove"
+          >
+            <defs>
+              <linearGradient :id="equityGradId" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" :stop-color="equityChart.up ? 'rgba(220,38,38,0.30)' : 'rgba(22,163,74,0.30)'" />
+                <stop offset="100%" stop-color="rgba(0,0,0,0)" />
+              </linearGradient>
+            </defs>
+            <g class="grid">
+              <line
+                v-for="tick in equityChart.yTicks"
+                :key="`grid-${tick.y}`"
+                :x1="equityChart.plotLeft"
+                :x2="equityChart.plotRight"
+                :y1="tick.y"
+                :y2="tick.y"
+              />
+              <text
+                v-for="tick in equityChart.yTicks"
+                :key="`yl-${tick.y}`"
+                class="axis-label"
+                :x="equityChart.plotLeft - 8"
+                :y="tick.y + 4"
+                text-anchor="end"
+              >{{ tick.label }}</text>
+            </g>
+            <g v-if="equityChart.baselineY != null">
+              <line
+                class="baseline"
+                :x1="equityChart.plotLeft"
+                :x2="equityChart.plotRight"
+                :y1="equityChart.baselineY"
+                :y2="equityChart.baselineY"
+              />
+              <text class="baseline-label" :x="equityChart.plotRight" :y="equityChart.baselineY - 6" text-anchor="end">
+                成本线 {{ moneyShort(equityChart.baseline) }}
+              </text>
+            </g>
+            <path v-if="equityChart.areaPath" class="area" :d="equityChart.areaPath" :fill="`url(#${equityGradId})`" />
+            <polyline class="line" :class="equityChart.up ? 'up' : 'down'" :points="equityChart.linePoints" />
             <text
-              v-for="label in equityChart.labels"
-              :key="label.text"
-              :x="label.x"
-              :y="label.y"
-              :text-anchor="label.anchor"
-            >
-              {{ label.text }}
-            </text>
+              v-for="tick in equityChart.xTicks"
+              :key="`xl-${tick.x}`"
+              class="axis-label"
+              :x="tick.x"
+              :y="equityChart.height - 8"
+              :text-anchor="tick.anchor"
+            >{{ tick.text }}</text>
+            <g v-if="hoverPoint">
+              <line
+                class="crosshair"
+                :x1="hoverPoint.x"
+                :x2="hoverPoint.x"
+                :y1="equityChart.plotTop"
+                :y2="equityChart.plotBottom"
+              />
+              <circle class="dot" :cx="hoverPoint.x" :cy="hoverPoint.y" r="4.5" />
+            </g>
           </svg>
+          <div v-if="hoverPoint" class="equity-tip" :style="hoverPoint.tipStyle">
+            <div class="tip-date">{{ hoverPoint.date }}</div>
+            <div class="tip-row"><span>账户总额</span><strong>{{ money(hoverPoint.equity) }}</strong></div>
+            <div class="tip-row">
+              <span>当日盈亏</span>
+              <strong :class="signClass(hoverPoint.dayPnl)">{{ signedMoney(hoverPoint.dayPnl) }} · {{ signedPct(hoverPoint.dayPct) }}</strong>
+            </div>
+            <div class="tip-row">
+              <span>累计盈亏</span>
+              <strong :class="signClass(hoverPoint.cumPnl)">{{ signedMoney(hoverPoint.cumPnl) }} · {{ signedPct(hoverPoint.cumPct) }}</strong>
+            </div>
+          </div>
           <p v-if="equityChart.latestReturn != null" class="chart-meta">
-            区间收益：<strong>{{ signedPct(equityChart.latestReturn) }}</strong>
+            区间收益：<strong :class="signClass(equityChart.latestReturn)">{{ signedPct(equityChart.latestReturn) }}</strong>
+            <span class="chart-meta-hint">· 悬浮查看每日净值与盈亏</span>
           </p>
           <p v-if="equityRows.length === 0 && equityRowsForChart.length" class="muted chart-note">
             当前暂无账户日权益快照；这里用一本账当前权益生成一个估算点。
@@ -552,36 +613,132 @@ const tradeTotals = computed(() => {
   return { count: rows.length, closedCount, openCount, netPnl, fee, buyAmount }
 })
 
+const hoverIndex = ref(null)
+const equityGradId = `equityFill-${Math.random().toString(36).slice(2, 8)}`
+
+function moneyShort(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  const abs = Math.abs(n)
+  if (abs >= 1e8) return `${(n / 1e8).toFixed(2)}亿`
+  if (abs >= 1e4) return `${(n / 1e4).toFixed(1)}万`
+  return n.toFixed(0)
+}
+
+function shortDate(value) {
+  const text = String(value || '')
+  if (/^\d{8}$/.test(text)) return `${text.slice(4, 6)}-${text.slice(6, 8)}`
+  return text
+}
+
 const equityChart = computed(() => {
   const rows = equityRowsForChart.value
-  if (!rows.length) return { points: '', labels: [], min: 0, max: 0, latestReturn: null }
-  const values = rows.map((row) => Number(row.equity))
-  const min = Math.min(...values)
-  const max = Math.max(...values)
+  const width = 720
+  const height = 260
+  const plotLeft = 58
+  const plotRight = width - 18
+  const plotTop = 18
+  const plotBottom = height - 28
+  const empty = {
+    width, height, plotLeft, plotRight, plotTop, plotBottom,
+    linePoints: '', areaPath: '', coords: [], yTicks: [], xTicks: [],
+    min: 0, max: 0, baseline: null, baselineY: null, up: true, latestReturn: null,
+  }
+  if (!rows.length) return empty
+
+  const values = rows.map((row) => Number(row.equity)).filter((v) => Number.isFinite(v))
+  if (!values.length) return empty
+  const baselineRaw = Number(bookEquity.value?.initial_capital)
+  const baseline = Number.isFinite(baselineRaw) && baselineRaw > 0 ? baselineRaw : values[0]
+
+  let min = Math.min(...values, baseline)
+  let max = Math.max(...values, baseline)
+  if (max === min) { max += 1; min -= 1 }
+  const headroom = (max - min) * 0.08
+  min -= headroom
+  max += headroom
   const span = max - min || 1
-  const width = 640
-  const height = 220
-  const pad = 28
-  const points = rows
-    .map((row, index) => {
-      const x = rows.length === 1 ? width / 2 : pad + (index * (width - pad * 2)) / (rows.length - 1)
-      const y = height - pad - ((row.equity - min) * (height - pad * 2)) / span
-      return `${x.toFixed(1)},${y.toFixed(1)}`
-    })
-    .join(' ')
-  const first = rows[0].equity
-  const latest = rows[rows.length - 1].equity
+
+  const xAt = (index) =>
+    rows.length === 1 ? (plotLeft + plotRight) / 2 : plotLeft + (index * (plotRight - plotLeft)) / (rows.length - 1)
+  const yAt = (equity) => plotBottom - ((equity - min) * (plotBottom - plotTop)) / span
+
+  const coords = rows.map((row, index) => {
+    const equity = Number(row.equity)
+    const prev = index > 0 ? Number(rows[index - 1].equity) : equity
+    const dayPnl = index > 0 ? equity - prev : 0
+    const dayPct = index > 0 && prev ? equity / prev - 1 : 0
+    return {
+      x: xAt(index),
+      y: yAt(equity),
+      date: row.date,
+      equity,
+      dayPnl,
+      dayPct,
+      cumPnl: equity - baseline,
+      cumPct: baseline ? equity / baseline - 1 : 0,
+    }
+  })
+
+  const linePoints = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ')
+  const areaPath = coords.length > 1
+    ? `M ${coords[0].x.toFixed(1)},${plotBottom} ` +
+      coords.map((c) => `L ${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ') +
+      ` L ${coords[coords.length - 1].x.toFixed(1)},${plotBottom} Z`
+    : ''
+
+  const tickCount = 4
+  const yTicks = Array.from({ length: tickCount + 1 }, (_, i) => {
+    const value = min + (span * i) / tickCount
+    return { value, y: yAt(value), label: moneyShort(value) }
+  })
+
+  const labelCount = Math.min(rows.length, 5)
+  const xTicks = Array.from({ length: labelCount }, (_, i) => {
+    const index = labelCount === 1 ? 0 : Math.round((i * (rows.length - 1)) / (labelCount - 1))
+    const c = coords[index]
+    const anchor = i === 0 ? 'start' : i === labelCount - 1 ? 'end' : 'middle'
+    return { x: c.x, text: shortDate(c.date), anchor }
+  })
+
+  const first = values[0]
+  const latest = values[values.length - 1]
   return {
-    points,
-    min,
-    max,
+    width, height, plotLeft, plotRight, plotTop, plotBottom,
+    linePoints, areaPath, coords, yTicks, xTicks,
+    min, max,
+    baseline,
+    baselineY: yAt(baseline),
+    up: latest >= baseline,
     latestReturn: first ? latest / first - 1 : null,
-    labels: [
-      { text: rows[0].date, x: pad, y: height - 6, anchor: 'start' },
-      { text: rows[rows.length - 1].date, x: width - pad, y: height - 6, anchor: 'end' },
-    ],
   }
 })
+
+const hoverPoint = computed(() => {
+  const chart = equityChart.value
+  const i = hoverIndex.value
+  if (i == null || !chart.coords[i]) return null
+  const c = chart.coords[i]
+  const leftPct = Math.max(14, Math.min(86, (c.x / chart.width) * 100))
+  return { ...c, tipStyle: { left: `${leftPct}%` } }
+})
+
+function onChartMove(event) {
+  const chart = equityChart.value
+  const n = chart.coords.length
+  if (!n) { hoverIndex.value = null; return }
+  const rect = event.currentTarget.getBoundingClientRect()
+  if (!rect.width) return
+  const frac = (event.clientX - rect.left) / rect.width
+  const left = chart.plotLeft / chart.width
+  const right = chart.plotRight / chart.width
+  const t = Math.max(0, Math.min(1, (frac - left) / (right - left || 1)))
+  hoverIndex.value = Math.round(t * (n - 1))
+}
+
+function onChartLeave() {
+  hoverIndex.value = null
+}
 
 function money(value) {
   if (value === null || value === undefined || value === '') return '-'
@@ -703,7 +860,13 @@ async function refreshDetail() {
       bookEquity.value = latestRow || summary.equity
         ? {
             equity: Number(summary.equity || latestRow?.equity || 0),
-            initial_capital: Number(planRes.data?.plan?.summary?.baseline_equity || planRes.data?.plan?.summary?.equity || selectedPortfolio.value?.initial_capital || 0),
+            initial_capital: Number(
+              eqRes.data?.initial_capital ||
+              planRes.data?.plan?.params_snapshot?.initial_capital ||
+              selectedPortfolio.value?.initial_capital ||
+              rows[0]?.equity ||
+              0,
+            ),
             cash: Number(summary.cash || latestRow?.cash || 0),
             realized_pnl: 0,
             unrealized_pnl: Number(summary.total_unrealized_pnl || 0),
@@ -1094,22 +1257,107 @@ section h3 {
   border: 1px solid #d1d5db;
   border-radius: 8px;
   padding: 10px;
+  position: relative;
 }
 
-.equity-chart svg {
-  height: 220px;
+.equity-chart .equity-svg {
   width: 100%;
+  height: auto;
+  display: block;
+  cursor: crosshair;
 }
 
-.equity-chart polyline {
+.equity-chart polyline.line {
   fill: none;
-  stroke: #1d4ed8;
-  stroke-width: 2.5;
+  stroke-width: 2.25;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
 
-.equity-chart text {
-  fill: #374151;
+.equity-chart polyline.line.up {
+  stroke: #dc2626;
+}
+
+.equity-chart polyline.line.down {
+  stroke: #16a34a;
+}
+
+.equity-chart .grid line {
+  stroke: #eef2f7;
+  stroke-width: 1;
+}
+
+.equity-chart .axis-label {
+  fill: #94a3b8;
+  font-size: 11px;
+}
+
+.equity-chart .baseline {
+  stroke: #94a3b8;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.equity-chart .baseline-label {
+  fill: #94a3b8;
+  font-size: 11px;
+}
+
+.equity-chart .crosshair {
+  stroke: #94a3b8;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.equity-chart .dot {
+  fill: #fff;
+  stroke: #1d4ed8;
+  stroke-width: 2;
+}
+
+.equity-tip {
+  position: absolute;
+  top: 14px;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  border-radius: 8px;
+  padding: 8px 10px;
   font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.25);
+  z-index: 2;
+}
+
+.equity-tip .tip-date {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #e2e8f0;
+}
+
+.equity-tip .tip-row {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.equity-tip .tip-row span {
+  color: #94a3b8;
+}
+
+.equity-tip .tip-row strong {
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.equity-tip .tip-row strong.positive {
+  color: #f87171;
+}
+
+.equity-tip .tip-row strong.negative {
+  color: #4ade80;
 }
 
 .chart-meta {
@@ -1120,6 +1368,28 @@ section h3 {
 
 .chart-meta strong {
   color: #111827;
+}
+
+.chart-meta strong.positive {
+  color: #dc2626;
+}
+
+.chart-meta strong.negative {
+  color: #16a34a;
+}
+
+.chart-meta-hint {
+  color: #94a3b8;
+  margin-left: 6px;
+}
+
+/* A-share convention: profit red, loss green. */
+.positive {
+  color: #dc2626;
+}
+
+.negative {
+  color: #16a34a;
 }
 
 .summary-cards {

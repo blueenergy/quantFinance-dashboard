@@ -442,6 +442,14 @@
                 <span v-if="selectedDetail.plan.previous_rebalance_date">
                   · 上次调仓 {{ selectedDetail.plan.previous_rebalance_date }}
                 </span>
+                <span v-if="selectedDetail.plan.rebalance_days">
+                  · 周期 {{ selectedDetail.plan.rebalance_days }} 个交易日
+                </span>
+                <span v-if="selectedDetail.plan.next_rebalance_date">
+                  · 下次调仓 {{ selectedDetail.plan.next_rebalance_date }}<template
+                    v-if="selectedDetail.plan.plan_type === 'monitor' && selectedDetail.plan.elapsed_trading_days_since_rebalance != null"
+                  >（已过 {{ selectedDetail.plan.elapsed_trading_days_since_rebalance }} 个交易日）</template>
+                </span>
               </p>
             </div>
             <div v-if="selectedDetail.plan.status === 'needs_review'" class="actions">
@@ -452,7 +460,13 @@
 
           <p v-if="selectedPlanIsMonitorNoTrade" class="monitor-note">
             观察日（未到调仓周期）：本计划仅展示组合漂移，不产生交易。下方“漂移”列为若调仓应执行的股数。
-            按 rebalance_days 周期到期后才会生成可执行的调仓计划（可通过 monitor_can_trade 参数放开观察日交易）。
+            调仓周期按 <strong>交易日</strong> 计（自动跳过周末与节假日）：每 {{ selectedDetail.plan.rebalance_days || 'N' }} 个交易日调仓一次。
+            <template v-if="selectedDetail.plan.next_rebalance_date">
+              预计下次调仓日：<strong>{{ selectedDetail.plan.next_rebalance_date }}</strong>（可通过 monitor_can_trade 参数放开观察日交易）。
+            </template>
+            <template v-else>
+              到期后才会生成可执行的调仓计划（可通过 monitor_can_trade 参数放开观察日交易）。
+            </template>
           </p>
 
           <section v-if="planLineage(selectedDetail.plan).show" class="lineage-panel">
