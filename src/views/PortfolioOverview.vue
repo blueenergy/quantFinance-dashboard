@@ -342,6 +342,15 @@
             <button type="button" :disabled="!manualChangeRows.length" @click="openManualModal">
               提交手动调仓
             </button>
+            <button
+              v-if="isLivePortfolio"
+              type="button"
+              class="danger"
+              :disabled="!latestHoldingRows.length || liquidateSubmitting"
+              @click="openLiquidateModal"
+            >
+              实盘一键清仓
+            </button>
           </div>
         </div>
         <p v-if="holdingsRisk?.reviewed_count" class="muted holdings-risk-summary">
@@ -408,7 +417,10 @@
       <div v-if="showManualModal" class="modal-backdrop" @click.self="showManualModal = false">
         <div class="modal-card">
           <h3>确认手动调仓</h3>
-          <p class="muted">将生成 rebalance 计划（origin=manual），走既有审核与执行流程。</p>
+          <p v-if="isLivePortfolio" class="muted">
+            实盘组合：将按实盘持仓即时下发买/卖委托（交易器盘中约 1 秒轮询执行），并落一条 origin=manual 计划留痕。
+          </p>
+          <p v-else class="muted">将生成 rebalance 计划（origin=manual），走既有审核与执行流程。</p>
           <p v-if="holdingsRiskBySymbolHigh.length" class="muted">高风险标的已默认清仓，可在上方表格调整目标股数。</p>
           <ul class="manual-preview">
             <li v-for="row in manualChangeRows" :key="row.symbol">
@@ -425,7 +437,38 @@
           <div class="modal-actions">
             <button type="button" @click="showManualModal = false">取消</button>
             <button type="button" :disabled="manualSubmitting" @click="submitManualRebalance">
-              {{ manualSubmitting ? '提交中…' : '确认生成计划' }}
+              {{ manualSubmitting ? '提交中…' : (isLivePortfolio ? '确认并下单' : '确认生成计划') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="showLiquidateModal" class="modal-backdrop" @click.self="showLiquidateModal = false">
+        <div class="modal-card">
+          <h3>确认实盘清仓</h3>
+          <p class="muted">
+            将按实盘持仓即时下发<strong>卖出</strong>信号，交易器盘中（约 1 秒轮询）提交券商执行；
+            同时落一条 origin=manual 的清仓计划留痕。跌停等市场原因卖不出由市场决定，不会拦截。
+          </p>
+          <ul class="manual-preview">
+            <li v-for="sym in liquidateTargets" :key="sym">
+              {{ sym }} {{ holdingNameBySymbol[sym] || '' }}：{{ holdingSharesBySymbol[sym] || 0 }} → 0
+            </li>
+          </ul>
+          <p v-if="!liquidateTargets.length" class="warning-text">没有可清仓的持仓。</p>
+          <label class="checkbox-row">
+            <input v-model="liquidateExcludeAfter" type="checkbox">
+            将清仓标的加入排除名单（下次策略调仓不再买回）
+          </label>
+          <div class="modal-actions">
+            <button type="button" @click="showLiquidateModal = false">取消</button>
+            <button
+              type="button"
+              class="danger"
+              :disabled="liquidateSubmitting || !liquidateTargets.length"
+              @click="submitLiveLiquidate"
+            >
+              {{ liquidateSubmitting ? '下发中…' : '确认清仓并下单' }}
             </button>
           </div>
         </div>
@@ -505,6 +548,7 @@ import {
   getLineageLivePositions,
   getLineagePaperExecutions,
   getLineagePaperPositions,
+  liveRebalancePortfolio,
   enqueuePortfolioHoldingsRisk,
   getPortfolioPlan,
   getPortfolioPlanGenerationTask,
@@ -535,6 +579,10 @@ const excludeAfter = ref(false)
 const showManualModal = ref(false)
 const manualSubmitting = ref(false)
 const riskLoading = ref(false)
+const showLiquidateModal = ref(false)
+const liquidateSubmitting = ref(false)
+const liquidateExcludeAfter = ref(true)
+const liquidateTargets = ref([])
 
 const selectedPortfolio = computed(() => (
   portfolios.value.find((row) => portfolioKey(row) === selectedPortfolioKey.value) || null
@@ -677,6 +725,18 @@ const holdingsRiskBySymbolHigh = computed(() => (
   (holdingsRisk.value?.holdings || []).filter((row) => row?.ai_risk?.severity === 'high')
 ))
 
+const holdingNameBySymbol = computed(() => {
+  const map = {}
+  for (const row of latestHoldingRows.value) map[row.symbol] = row.name || ''
+  return map
+})
+
+const holdingSharesBySymbol = computed(() => {
+  const map = {}
+  for (const row of latestHoldingRows.value) map[row.symbol] = Number(row.shares || 0)
+  return map
+})
+
 // Default target for an untouched holding: high-risk positions default to a
 // suggested full liquidation (0) so the "risk found -> liquidate" flow is one
 // click; everything else defaults to "keep current". An explicit user edit in
@@ -794,6 +854,12 @@ async function loadHoldingsRisk(force = false) {
 async function submitManualRebalance() {
   const planId = selectedLatestPlanId.value
   if (!planId || !manualChangeRows.value.length) return
+  // Live portfolios go through the synchronous live-rebalance path (immediate
+  // signals); paper portfolios keep the worker/paper-snapshot task path.
+  if (isLivePortfolio.value) {
+    await submitLiveRebalance(buildTargetsFromRows(manualChangeRows.value))
+    return
+  }
   manualSubmitting.value = true
   message.value = ''
   messageIsError.value = false
@@ -828,6 +894,75 @@ async function submitManualRebalance() {
   } finally {
     manualSubmitting.value = false
   }
+}
+
+function buildTargetsFromRows(rows) {
+  const targets = {}
+  for (const row of rows) targets[row.symbol] = Number(row.target)
+  return targets
+}
+
+// Shared synchronous live-rebalance submit (reduce / clear / add). Used by both
+// the live manual-rebalance flow and the one-click liquidation shortcut.
+async function submitLiveRebalance(targets, { excludeAfter = false } = {}) {
+  const planId = selectedLatestPlanId.value
+  const accountId = selectedPortfolio.value?.securities_account_id
+  if (!planId || !Object.keys(targets || {}).length) return
+  if (!accountId) {
+    message.value = '该组合未绑定券商账户，无法实盘下单。'
+    messageIsError.value = true
+    showManualModal.value = false
+    showLiquidateModal.value = false
+    return
+  }
+  manualSubmitting.value = true
+  liquidateSubmitting.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await liveRebalancePortfolio(planId, {
+      securities_account_id: accountId,
+      targets,
+      exclude_after: excludeAfter,
+      dry_run: false,
+    })
+    const data = res.data || {}
+    showManualModal.value = false
+    showLiquidateModal.value = false
+    const count = data.changed_symbols?.length || 0
+    const inserted = data.inserted_count ?? (data.new_signals?.length || 0)
+    const label = data.manual_action === 'liquidate' ? '实盘清仓' : '实盘调仓'
+    message.value = `已提交${label}：${count} 只标的、${inserted} 笔委托已下发，交易器盘中执行。`
+    await Promise.all([loadPortfolios(), refreshDetail()])
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '实盘下单提交失败'
+    messageIsError.value = true
+  } finally {
+    manualSubmitting.value = false
+    liquidateSubmitting.value = false
+  }
+}
+
+// Symbols flagged for full clear: any held position whose effective target is 0
+// (high-risk holdings auto-default to 0, see defaultTarget). Reuses the same
+// selection model as manual rebalance so "风控发现 -> 一键清仓" is one flow.
+function openLiquidateModal() {
+  const zeroed = latestHoldingRows.value
+    .filter((row) => Number(row.shares || 0) > 0 && effectiveTarget(row.symbol) === 0)
+    .map((row) => row.symbol)
+  const fallbackAll = latestHoldingRows.value
+    .filter((row) => Number(row.shares || 0) > 0)
+    .map((row) => row.symbol)
+  liquidateTargets.value = zeroed.length ? zeroed : fallbackAll
+  liquidateExcludeAfter.value = true
+  showLiquidateModal.value = true
+}
+
+async function submitLiveLiquidate() {
+  if (!liquidateTargets.value.length) return
+  const targets = {}
+  for (const symbol of liquidateTargets.value) targets[symbol] = 0
+  await submitLiveRebalance(targets, { excludeAfter: liquidateExcludeAfter.value })
 }
 
 async function resumeLineageAction() {
@@ -1159,6 +1294,8 @@ watch(selectedPortfolioKey, (key) => {
   expandedTimelinePlanId.value = null
   holdingsRisk.value = null
   manualTargets.value = {}
+  showLiquidateModal.value = false
+  liquidateTargets.value = []
   if (key) refreshDetail()
   else {
     timelineData.value = null
@@ -1776,6 +1913,17 @@ tbody tr:hover td {
 button {
   cursor: pointer;
   font-weight: 500;
+}
+
+button.danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+button.danger:disabled {
+  background: #fca5a5;
+  border-color: #fca5a5;
 }
 
 .holdings-section {

@@ -148,6 +148,14 @@ export function resumePortfolioLineage(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/resume-lineage`, method: 'post' })
 }
 
+// Intraday LIVE discretionary rebalance (reduce / clear / add). Synchronously
+// creates a manual plan and publishes buy/sell signals; the trader executes
+// within the session. Liquidation is just every held symbol mapped to 0.
+// Pass { securities_account_id, targets, exclude_after?, dry_run? }.
+export function liveRebalancePortfolio(planId, data = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/live-rebalance`, method: 'post', data })
+}
+
 export function getLineageLiveExecutions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/lineage-live-executions`, method: 'get' })
 }
