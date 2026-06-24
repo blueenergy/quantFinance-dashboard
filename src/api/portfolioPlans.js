@@ -156,6 +156,15 @@ export function liveRebalancePortfolio(planId, data = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/live-rebalance`, method: 'post', data })
 }
 
+// Record broker-side manual fills (e.g. miniQMT direct operation) into the live
+// lineage ledger. Supports partial reduce / add and full liquidation. Pass
+// { securities_account_id, fills, pause_lineage?, exclude_after?, reason?,
+// external_batch_id? }, where each fill is { symbol, action, filled_size,
+// filled_price, ... }.
+export function recordExternalManualRecord(planId, data = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/external-manual-record`, method: 'post', data })
+}
+
 // Intraday PAPER discretionary rebalance (reduce / clear / add). Synchronously
 // fills against the paper book at the realtime price and writes the new paper
 // snapshot/equity plus a manual plan. Pass { targets, exclude_after?, dry_run? }.

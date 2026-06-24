@@ -350,6 +350,14 @@
             >
               {{ isLivePortfolio ? '实盘一键清仓' : '纸面一键清仓' }}
             </button>
+            <button
+              v-if="isLivePortfolio"
+              type="button"
+              :disabled="externalManualSubmitting"
+              @click="openExternalManualModal"
+            >
+              {{ externalManualSubmitting ? '补录中…' : '补录 miniQMT 手工操作' }}
+            </button>
           </div>
         </div>
         <p v-if="holdingsRisk?.reviewed_count" class="muted holdings-risk-summary">
@@ -478,6 +486,97 @@
         </div>
       </div>
 
+      <div v-if="showExternalManualModal" class="modal-backdrop" @click.self="showExternalManualModal = false">
+        <div class="modal-card wide">
+          <h3>补录 miniQMT 手工操作</h3>
+          <p class="muted">
+            用于你已经在 miniQMT 直接买/卖的情况。这里不会再下单，只会把成交补进组合实盘账本留痕；
+            支持部分减仓/加仓或全部清仓。只需填方向、数量和成交价，费用默认 0，成交时间/批次号/说明由系统自动填充。
+          </p>
+          <div class="table-wrap compact external-fill-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>方向</th>
+                  <th>代码</th>
+                  <th>名称</th>
+                  <th>数量</th>
+                  <th>成交价</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, idx) in externalManualRows" :key="row.key">
+                  <td>
+                    <select
+                      :value="row.action"
+                      @change="updateExternalManualRow(idx, 'action', $event.target.value)"
+                    >
+                      <option value="sell">卖出</option>
+                      <option value="buy">买入</option>
+                    </select>
+                  </td>
+                  <td>
+                    <span v-if="!row.editableSymbol">{{ row.symbol }}</span>
+                    <input
+                      v-else
+                      :value="row.symbol"
+                      type="text"
+                      placeholder="如 600000.SH"
+                      @input="updateExternalManualRow(idx, 'symbol', $event.target.value)"
+                    >
+                  </td>
+                  <td>{{ row.name || '-' }}</td>
+                  <td>
+                    <input
+                      :value="row.filled_size"
+                      type="number"
+                      min="1"
+                      step="100"
+                      @input="updateExternalManualRow(idx, 'filled_size', $event.target.value)"
+                    >
+                  </td>
+                  <td>
+                    <input
+                      :value="row.filled_price"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      @input="updateExternalManualRow(idx, 'filled_price', $event.target.value)"
+                    >
+                  </td>
+                  <td>
+                    <button type="button" class="link-btn" @click="removeExternalManualRow(idx)">移除</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <button type="button" class="add-row-btn" @click="addExternalManualRow">+ 添加一笔</button>
+          <p class="muted">
+            结果持仓 = 当前持仓 + 手工买入 − 手工卖出。若全部清空，将按下方选项暂停自动调仓。
+          </p>
+          <label class="checkbox-row">
+            <input v-model="externalManualExcludeAfter" type="checkbox">
+            将清空（卖到 0）的标的加入排除名单
+          </label>
+          <label class="checkbox-row">
+            <input v-model="externalManualPauseLineage" type="checkbox">
+            若清空全部持仓，则暂停该组合自动调仓
+          </label>
+          <div class="modal-actions">
+            <button type="button" @click="showExternalManualModal = false">取消</button>
+            <button
+              type="button"
+              :disabled="externalManualSubmitting || !externalManualReady"
+              @click="submitExternalManual"
+            >
+              {{ externalManualSubmitting ? '补录中…' : '确认补录' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <section>
         <h3>{{ isLivePortfolio ? '实盘成交明细' : '纸面成交明细' }}</h3>
         <div v-if="!tradeDetailRows.length" class="muted">暂无成交记录。</div>
@@ -559,6 +658,7 @@ import {
   getPortfolioPlanLineageEquity,
   getPortfolioPlanLineageTimeline,
   listPortfolios,
+  recordExternalManualRecord,
   resumePortfolioLineage,
 } from '../api/portfolioPlans'
 
@@ -587,6 +687,14 @@ const showLiquidateModal = ref(false)
 const liquidateSubmitting = ref(false)
 const liquidateExcludeAfter = ref(true)
 const liquidateTargets = ref([])
+const showExternalManualModal = ref(false)
+const externalManualSubmitting = ref(false)
+const externalManualRows = ref([])
+const externalManualExcludeAfter = ref(true)
+const externalManualPauseLineage = ref(true)
+const externalManualReason = ref('miniQMT manual operation')
+const externalManualBatchId = ref('')
+let externalManualRowSeq = 0
 
 const selectedPortfolio = computed(() => (
   portfolios.value.find((row) => portfolioKey(row) === selectedPortfolioKey.value) || null
@@ -777,6 +885,16 @@ const willPauseAfterManual = computed(() => {
   if (!latestHoldingRows.value.length) return false
   return latestHoldingRows.value.every((row) => effectiveTarget(row.symbol) === 0)
 })
+
+const externalManualReady = computed(() => (
+  isLivePortfolio.value
+    && externalManualRows.value.length > 0
+    && externalManualRows.value.every((row) => (
+      String(row.symbol || '').trim().length > 0
+      && Number(row.filled_size) > 0
+      && Number(row.filled_price) > 0
+    ))
+))
 
 // Targets are derived from holdings + risk defaults, so a portfolio switch only
 // needs to clear any prior manual overrides.
@@ -973,6 +1091,120 @@ async function submitLiveLiquidate() {
   const targets = {}
   for (const symbol of liquidateTargets.value) targets[symbol] = 0
   await submitRebalance(targets, { excludeAfter: liquidateExcludeAfter.value })
+}
+
+function compactDateTimeForBatch(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    '-',
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds()),
+  ].join('')
+}
+
+function openExternalManualModal() {
+  if (!isLivePortfolio.value) return
+  const now = new Date()
+  externalManualRowSeq = 0
+  // Pre-fill current holdings as sell rows (the common "I cleared/reduced in
+  // miniQMT" case); rows can be edited, removed, or new buy rows added.
+  externalManualRows.value = latestHoldingRows.value.map((row) => ({
+    key: `row-${externalManualRowSeq += 1}`,
+    symbol: row.symbol,
+    name: row.name || '',
+    action: 'sell',
+    filled_size: Number(row.shares || 0),
+    filled_price: Number(row.last_price || row.avg_cost || 0),
+    editableSymbol: false,
+  }))
+  externalManualExcludeAfter.value = true
+  externalManualPauseLineage.value = true
+  externalManualReason.value = 'miniQMT manual operation'
+  externalManualBatchId.value = `miniqmt-manual-${compactDateTimeForBatch(now)}`
+  showExternalManualModal.value = true
+}
+
+function addExternalManualRow() {
+  externalManualRows.value = [
+    ...externalManualRows.value,
+    {
+      key: `row-${externalManualRowSeq += 1}`,
+      symbol: '',
+      name: '',
+      action: 'buy',
+      filled_size: 100,
+      filled_price: 0,
+      editableSymbol: true,
+    },
+  ]
+}
+
+function removeExternalManualRow(index) {
+  externalManualRows.value = externalManualRows.value.filter((_, idx) => idx !== index)
+}
+
+function updateExternalManualRow(index, field, value) {
+  const rows = externalManualRows.value.map((row) => ({ ...row }))
+  if (!rows[index]) return
+  if (['filled_size', 'filled_price'].includes(field)) {
+    rows[index][field] = value === '' ? '' : Number(value)
+  } else if (field === 'symbol') {
+    rows[index][field] = String(value || '').trim().toUpperCase()
+  } else {
+    rows[index][field] = value
+  }
+  externalManualRows.value = rows
+}
+
+function externalFillPayload(row) {
+  return {
+    symbol: String(row.symbol || '').trim(),
+    action: row.action === 'buy' ? 'buy' : 'sell',
+    filled_size: Number(row.filled_size),
+    filled_price: Number(row.filled_price),
+    commission: 0,
+    name: row.name || '',
+  }
+}
+
+async function submitExternalManual() {
+  const planId = selectedLatestPlanId.value
+  const accountId = selectedPortfolio.value?.securities_account_id
+  if (!planId || !accountId || !externalManualReady.value) return
+  externalManualSubmitting.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await recordExternalManualRecord(planId, {
+      securities_account_id: accountId,
+      external_batch_id: externalManualBatchId.value || undefined,
+      reason: externalManualReason.value || 'miniQMT manual operation',
+      pause_lineage: externalManualPauseLineage.value,
+      exclude_after: externalManualExcludeAfter.value,
+      fills: externalManualRows.value.map(externalFillPayload),
+    })
+    const data = res.data || {}
+    showExternalManualModal.value = false
+    if (data.already_recorded) {
+      message.value = `该批次已补录过：${data.external_batch_id || externalManualBatchId.value}`
+    } else {
+      const count = data.inserted_execution_count || externalManualRows.value.length
+      message.value = data.is_liquidation
+        ? `已补录 miniQMT 手工操作：${count} 笔，组合账本已校准为空仓。`
+        : `已补录 miniQMT 手工操作：${count} 笔，组合实盘账本已更新。`
+    }
+    messageIsError.value = false
+    await Promise.all([loadPortfolios(), refreshDetail()])
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '补录手工操作失败'
+    messageIsError.value = true
+  } finally {
+    externalManualSubmitting.value = false
+  }
 }
 
 async function resumeLineageAction() {
@@ -1306,6 +1538,8 @@ watch(selectedPortfolioKey, (key) => {
   manualTargets.value = {}
   showLiquidateModal.value = false
   liquidateTargets.value = []
+  showExternalManualModal.value = false
+  externalManualRows.value = []
   if (key) refreshDetail()
   else {
     timelineData.value = null
@@ -2013,6 +2247,47 @@ button.danger:disabled {
   max-width: 520px;
   padding: 20px;
   width: calc(100% - 32px);
+}
+
+.modal-card.wide {
+  max-width: 920px;
+}
+
+.external-fill-table input,
+.external-fill-table select {
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: #111827;
+  max-width: 180px;
+  padding: 7px 8px;
+  width: 100%;
+}
+
+.add-row-btn {
+  background: none;
+  border: 1px dashed #94a3b8;
+  border-radius: 4px;
+  color: #2563eb;
+  cursor: pointer;
+  margin-top: 8px;
+  padding: 6px 10px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: #c2410c;
+  cursor: pointer;
+  padding: 0;
+}
+
+.external-fill-table {
+  margin-top: 10px;
+}
+
+.external-fill-table td {
+  vertical-align: middle;
 }
 
 .manual-preview {
