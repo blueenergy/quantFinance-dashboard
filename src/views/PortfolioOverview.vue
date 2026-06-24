@@ -68,6 +68,15 @@
             <strong>{{ paperExecutionModeLabel(selectedPortfolio.paper_execution_mode) }}</strong>
             <small v-if="selectedPortfolio.paper_execution_mode === 'auto_shadow'">调仓日自动批准，次日开盘价执行</small>
           </div>
+          <div v-if="selectedPortfolio.paused">
+            <span class="label">自动调仓</span>
+            <strong class="negative">已暂停</strong>
+            <small>手动清仓后暂停；可恢复自动调仓</small>
+          </div>
+        </div>
+        <div v-if="selectedPortfolio.paused" class="paused-banner">
+          <span>该组合已暂停自动调仓（上次手动清仓或主动暂停）。</span>
+          <button type="button" :disabled="manualSubmitting" @click="resumeLineageAction">恢复自动调仓</button>
         </div>
       </section>
 
@@ -323,42 +332,104 @@
         </div>
       </section>
 
-      <section>
-        <h3>最新持仓</h3>
+      <section class="holdings-section">
+        <div class="holdings-header">
+          <h3>最新持仓</h3>
+          <div class="holdings-actions">
+            <button type="button" :disabled="!selectedLatestPlanId || riskLoading" @click="loadHoldingsRisk(true)">
+              {{ riskLoading ? '体检中…' : '风控体检' }}
+            </button>
+            <button type="button" :disabled="!manualChangeRows.length" @click="openManualModal">
+              提交手动调仓
+            </button>
+          </div>
+        </div>
+        <p v-if="holdingsRisk?.reviewed_count" class="muted holdings-risk-summary">
+          持仓风控：高 {{ holdingsRisk.high }} · 中 {{ holdingsRisk.medium }} · 低 {{ holdingsRisk.low }}
+          <span v-if="holdingsRisk.checked_at"> · 更新 {{ formatRiskTime(holdingsRisk.checked_at) }}</span>
+        </p>
         <div v-if="!latestHoldingRows.length" class="muted">暂无当前持仓。</div>
         <div v-else class="table-wrap">
           <table>
             <thead>
               <tr>
+                <th>风控</th>
                 <th>代码</th>
                 <th>名称</th>
                 <th>买入日</th>
-                <th>数量</th>
+                <th>当前</th>
+                <th>目标</th>
+                <th>变动</th>
                 <th>均价</th>
                 <th>现价</th>
                 <th>市值</th>
-                <th>已实现</th>
                 <th>浮动</th>
-                <th>浮动%</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in latestHoldingRows" :key="row.symbol">
+              <tr v-for="row in latestHoldingRows" :key="row.symbol" :class="riskRowClass(row.symbol)">
+                <td>
+                  <span v-if="holdingsRiskBySymbol[row.symbol]" class="risk-badge" :class="`risk-${holdingsRiskBySymbol[row.symbol].severity}`">
+                    {{ riskSeverityLabel(holdingsRiskBySymbol[row.symbol].severity) }}
+                  </span>
+                  <span v-else class="muted">-</span>
+                </td>
                 <td>{{ row.symbol }}</td>
                 <td>{{ row.name || '-' }}</td>
                 <td>{{ row.buy_date || '-' }}</td>
                 <td>{{ row.shares }}</td>
+                <td>
+                  <input
+                    :value="effectiveTarget(row.symbol)"
+                    type="number"
+                    min="0"
+                    step="100"
+                    class="target-input"
+                    @input="setManualTarget(row.symbol, $event.target.value)"
+                  >
+                </td>
+                <td :class="signClass(manualDelta(row))">{{ formatShareDelta(manualDelta(row)) }}</td>
                 <td>{{ num(row.avg_cost) }}</td>
                 <td>{{ num(row.last_price) }}</td>
                 <td>{{ money(row.market_value) }}</td>
-                <td>{{ signedMoney(row.realized_pnl) }}</td>
-                <td>{{ signedMoney(row.unrealized_pnl) }}</td>
-                <td :class="signClass(row.unrealized_pnl_pct)">{{ signedPct(row.unrealized_pnl_pct) }}</td>
+                <td :class="signClass(row.unrealized_pnl)">{{ signedMoney(row.unrealized_pnl) }}</td>
               </tr>
             </tbody>
           </table>
+          <p v-if="holdingsRiskBySymbolHigh.length" class="muted">
+            高风险提示：
+            <span v-for="item in holdingsRiskBySymbolHigh" :key="item.symbol">
+              {{ item.symbol }}（{{ item.ai_risk?.reasons?.join('、') || '风险' }}）
+            </span>
+          </p>
         </div>
       </section>
+
+      <div v-if="showManualModal" class="modal-backdrop" @click.self="showManualModal = false">
+        <div class="modal-card">
+          <h3>确认手动调仓</h3>
+          <p class="muted">将生成 rebalance 计划（origin=manual），走既有审核与执行流程。</p>
+          <p v-if="holdingsRiskBySymbolHigh.length" class="muted">高风险标的已默认清仓，可在上方表格调整目标股数。</p>
+          <ul class="manual-preview">
+            <li v-for="row in manualChangeRows" :key="row.symbol">
+              {{ row.symbol }} {{ row.name || '' }}：
+              {{ row.shares }} → {{ row.target }}
+              （{{ formatShareDelta(row.delta) }}）
+            </li>
+          </ul>
+          <p v-if="willPauseAfterManual" class="warning-text">全部卖空后将暂停该组合自动调仓。</p>
+          <label class="checkbox-row">
+            <input v-model="excludeAfter" type="checkbox">
+            将卖出的标的加入排除名单（下次策略调仓不再买回）
+          </label>
+          <div class="modal-actions">
+            <button type="button" @click="showManualModal = false">取消</button>
+            <button type="button" :disabled="manualSubmitting" @click="submitManualRebalance">
+              {{ manualSubmitting ? '提交中…' : '确认生成计划' }}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <section>
         <h3>{{ isLivePortfolio ? '实盘成交明细' : '纸面成交明细' }}</h3>
@@ -428,15 +499,19 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import {
+  createManualRebalancePlan,
   getLineageLiveEquity,
   getLineageLiveExecutions,
   getLineageLivePositions,
   getLineagePaperExecutions,
   getLineagePaperPositions,
+  enqueuePortfolioHoldingsRisk,
   getPortfolioPlan,
+  getPortfolioPlanGenerationTask,
   getPortfolioPlanLineageEquity,
   getPortfolioPlanLineageTimeline,
   listPortfolios,
+  resumePortfolioLineage,
 } from '../api/portfolioPlans'
 
 const portfolios = ref([])
@@ -454,6 +529,12 @@ const positionSummary = ref(null)
 const tradeRows = ref([])
 const timelineData = ref(null)
 const expandedTimelinePlanId = ref(null)
+const holdingsRisk = ref(null)
+const manualTargets = ref({})
+const excludeAfter = ref(false)
+const showManualModal = ref(false)
+const manualSubmitting = ref(false)
+const riskLoading = ref(false)
 
 const selectedPortfolio = computed(() => (
   portfolios.value.find((row) => portfolioKey(row) === selectedPortfolioKey.value) || null
@@ -583,6 +664,188 @@ const latestHoldingRows = computed(() => (
     }))
     .sort((a, b) => Number(b.market_value || 0) - Number(a.market_value || 0))
 ))
+
+const holdingsRiskBySymbol = computed(() => {
+  const map = {}
+  for (const row of holdingsRisk.value?.holdings || []) {
+    if (row?.symbol) map[row.symbol] = row.ai_risk || {}
+  }
+  return map
+})
+
+const holdingsRiskBySymbolHigh = computed(() => (
+  (holdingsRisk.value?.holdings || []).filter((row) => row?.ai_risk?.severity === 'high')
+))
+
+// Default target for an untouched holding: high-risk positions default to a
+// suggested full liquidation (0) so the "risk found -> liquidate" flow is one
+// click; everything else defaults to "keep current". An explicit user edit in
+// manualTargets always wins.
+function defaultTarget(symbol) {
+  const current = Number(latestHoldingRows.value.find((h) => h.symbol === symbol)?.shares || 0)
+  if (holdingsRiskBySymbol.value[symbol]?.severity === 'high') return 0
+  return current
+}
+
+function effectiveTarget(symbol) {
+  const override = manualTargets.value[symbol]
+  if (override == null || override === '') return defaultTarget(symbol)
+  return Number(override)
+}
+
+function setManualTarget(symbol, value) {
+  const next = { ...manualTargets.value }
+  next[symbol] = value === '' || value == null ? null : Number(value)
+  manualTargets.value = next
+}
+
+const manualChangeRows = computed(() => (
+  latestHoldingRows.value
+    .map((row) => {
+      const current = Number(row.shares || 0)
+      const target = effectiveTarget(row.symbol)
+      return { ...row, target, delta: target - current }
+    })
+    .filter((row) => row.delta !== 0)
+))
+
+const willPauseAfterManual = computed(() => {
+  if (!latestHoldingRows.value.length) return false
+  return latestHoldingRows.value.every((row) => effectiveTarget(row.symbol) === 0)
+})
+
+// Targets are derived from holdings + risk defaults, so a portfolio switch only
+// needs to clear any prior manual overrides.
+function syncManualTargets() {
+  manualTargets.value = {}
+}
+
+function manualDelta(row) {
+  return effectiveTarget(row.symbol) - Number(row.shares || 0)
+}
+
+function riskSeverityLabel(severity) {
+  if (severity === 'high') return '高'
+  if (severity === 'medium') return '中'
+  if (severity === 'low') return '低'
+  return '无'
+}
+
+function riskRowClass(symbol) {
+  const severity = holdingsRiskBySymbol.value[symbol]?.severity
+  return severity === 'high' ? 'risk-row-high' : ''
+}
+
+function formatRiskTime(value) {
+  if (!value) return ''
+  const text = String(value)
+  return text.length >= 19 ? text.slice(0, 19).replace('T', ' ') : text
+}
+
+function openManualModal() {
+  if (!manualChangeRows.value.length) return
+  showManualModal.value = true
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// The heavy work (manual plan generation, holdings risk review) runs in the
+// plan-generation worker. The API returns a task_id; poll it until terminal.
+async function pollGenerationTask(taskId, { attempts = 30, intervalMs = 2000 } = {}) {
+  for (let i = 0; i < attempts; i += 1) {
+    const res = await getPortfolioPlanGenerationTask(taskId)
+    const task = res.data || {}
+    if (task.status === 'completed') return task
+    if (task.status === 'failed') {
+      throw new Error(task.error_message || '任务执行失败')
+    }
+    await sleep(intervalMs)
+  }
+  throw new Error('任务处理超时，请稍后到「组合交易计划」查看结果')
+}
+
+async function loadHoldingsRisk(force = false) {
+  const planId = selectedLatestPlanId.value
+  if (!planId) return
+  if (!force && holdingsRisk.value) return
+  riskLoading.value = true
+  try {
+    const res = await enqueuePortfolioHoldingsRisk(planId)
+    const meta = res.data || {}
+    const task = await pollGenerationTask(meta.task_id)
+    // Merge worker result (holdings + risk) with the immediately-known control
+    // flags (paused / excluded) returned by the enqueue call.
+    holdingsRisk.value = {
+      ...(task.result || {}),
+      paused: meta.paused,
+      excluded_symbols: meta.excluded_symbols || [],
+      anchor_plan_id: meta.anchor_plan_id,
+    }
+    // High-risk holdings are picked up automatically via defaultTarget() ->
+    // effectiveTarget().
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '持仓风控加载失败'
+    messageIsError.value = true
+  } finally {
+    riskLoading.value = false
+  }
+}
+
+async function submitManualRebalance() {
+  const planId = selectedLatestPlanId.value
+  if (!planId || !manualChangeRows.value.length) return
+  manualSubmitting.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const targets = {}
+    for (const row of manualChangeRows.value) {
+      targets[row.symbol] = Number(row.target)
+    }
+    const res = await createManualRebalancePlan({
+      anchor_plan_id: planId,
+      targets,
+      exclude_after: excludeAfter.value,
+    })
+    showManualModal.value = false
+    excludeAfter.value = false
+    const task = await pollGenerationTask(res.data?.task_id)
+    const result = task.result || {}
+    const newPlanId = result.plan_id || task.plan_id
+    const blockedReason = result.executable === false ? result.non_executable_reason : ''
+    if (blockedReason) {
+      message.value = `手动调仓计划已生成${newPlanId ? `：${newPlanId}` : ''}，但存在阻断项（${blockedReason}），暂不可执行。请调整股数后重试。`
+      messageIsError.value = true
+    } else {
+      message.value = newPlanId
+        ? `手动调仓计划已生成：${newPlanId}。请到「组合交易计划」审核并执行。`
+        : '手动调仓计划已生成，请到「组合交易计划」审核并执行。'
+    }
+    await Promise.all([loadPortfolios(), refreshDetail()])
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '手动调仓提交失败'
+    messageIsError.value = true
+  } finally {
+    manualSubmitting.value = false
+  }
+}
+
+async function resumeLineageAction() {
+  const planId = selectedLatestPlanId.value
+  if (!planId) return
+  manualSubmitting.value = true
+  try {
+    await resumePortfolioLineage(planId)
+    message.value = '已恢复该组合的自动调仓。'
+    messageIsError.value = false
+    await loadPortfolios()
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '恢复失败'
+    messageIsError.value = true
+  } finally {
+    manualSubmitting.value = false
+  }
+}
 
 const equityRowsForChart = computed(() => {
   if (equityRows.value.length) return equityRows.value
@@ -883,6 +1146,7 @@ async function refreshDetail() {
           }
       tradeRows.value = exRes.data?.trades || []
     }
+    syncManualTargets()
   } catch (error) {
     message.value = formatApiDetail(error.response?.data?.detail) || error.message || '加载详情失败'
     messageIsError.value = true
@@ -893,6 +1157,8 @@ async function refreshDetail() {
 
 watch(selectedPortfolioKey, (key) => {
   expandedTimelinePlanId.value = null
+  holdingsRisk.value = null
+  manualTargets.value = {}
   if (key) refreshDetail()
   else {
     timelineData.value = null
@@ -904,6 +1170,10 @@ watch(selectedPortfolioKey, (key) => {
     tradeRows.value = []
   }
 })
+
+watch(latestHoldingRows, () => {
+  syncManualTargets()
+}, { immediate: true })
 
 onMounted(() => {
   loadPortfolios()
@@ -1506,5 +1776,108 @@ tbody tr:hover td {
 button {
   cursor: pointer;
   font-weight: 500;
+}
+
+.holdings-section {
+  margin-top: 8px;
+}
+
+.holdings-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.holdings-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.paused-banner {
+  align-items: center;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 10px 12px;
+}
+
+.target-input {
+  max-width: 88px;
+  width: 88px;
+}
+
+.risk-badge {
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+}
+
+.risk-badge.risk-high {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.risk-badge.risk-medium {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.risk-badge.risk-low {
+  background: #fef9c3;
+  color: #a16207;
+}
+
+.risk-row-high {
+  background: #fff7f7;
+}
+
+.modal-backdrop {
+  align-items: center;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 50;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  max-width: 520px;
+  padding: 20px;
+  width: calc(100% - 32px);
+}
+
+.manual-preview {
+  margin: 12px 0;
+  padding-left: 18px;
+}
+
+.checkbox-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.warning-text {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>

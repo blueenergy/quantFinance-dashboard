@@ -132,6 +132,22 @@ export function getPortfolioPlanLineageTimeline(planId, params = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/lineage-timeline`, method: 'get', params })
 }
 
+// Enqueues a manual-rebalance generation task; poll the returned task_id via
+// getPortfolioPlanGenerationTask until status === 'completed'.
+export function createManualRebalancePlan(data) {
+  return request({ url: '/portfolio-plans/plans/manual-rebalance', method: 'post', data })
+}
+
+// Enqueues a holdings-level AI risk review task; poll the returned task_id via
+// getPortfolioPlanGenerationTask, whose result holds the review payload.
+export function enqueuePortfolioHoldingsRisk(planId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/holdings-risk`, method: 'post' })
+}
+
+export function resumePortfolioLineage(planId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/resume-lineage`, method: 'post' })
+}
+
 export function getLineageLiveExecutions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/lineage-live-executions`, method: 'get' })
 }

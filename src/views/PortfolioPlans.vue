@@ -2200,6 +2200,12 @@ function actionBadge(itemOrAction) {
 
 function planCadenceBadge(plan) {
   if (!plan) return { text: '-', cls: 'cadence-unknown' }
+  if (plan.origin === 'manual' && plan.plan_type === 'rebalance') {
+    if (['needs_review', 'generated', 'draft'].includes(plan.status)) {
+      return { text: '手动调仓·待审', cls: 'cadence-manual-pending' }
+    }
+    return { text: '手动调仓', cls: 'cadence-manual' }
+  }
   if (plan.plan_type === 'rebalance') {
     if (plan.is_rebalance_day === false) {
       return { text: '未到周期', cls: 'cadence-not-due' }
@@ -2840,6 +2846,16 @@ button.danger {
 .cadence-tag.cadence-rebalance-pending {
   background: #dbeafe;
   color: #1d4ed8;
+}
+
+.cadence-tag.cadence-manual {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.cadence-tag.cadence-manual-pending {
+  background: #fed7aa;
+  color: #9a3412;
 }
 
 .cadence-tag.cadence-not-due {
