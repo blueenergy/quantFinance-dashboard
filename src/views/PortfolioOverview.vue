@@ -164,11 +164,16 @@
           <button
             type="button"
             class="secondary"
-            :disabled="forceRebalanceSubmitting || !selectedLatestPlanId"
+            :disabled="forceRebalanceSubmitting || !selectedLatestPlanId || Boolean(forceRebalanceBlockReason)"
+            :title="forceRebalanceBlockReason || ''"
             @click="submitForceRebalance"
           >
             {{ forceRebalanceSubmitting ? '提交中…' : '立即调仓 / 强制建仓' }}
           </button>
+          <span v-if="forceRebalanceBlockReason" class="warning-text">{{ forceRebalanceBlockReason }}</span>
+          <span v-else class="muted">
+            重新生成一份强制调仓计划；不会执行当前已有 plan。
+          </span>
         </div>
       </section>
 
@@ -235,6 +240,71 @@
               确认补单
             </button>
           </template>
+        </div>
+
+        <div v-if="pendingPlanRows.length" class="pending-plan-items">
+          <div class="pending-plan-header">
+            <div>
+              <h4>待发布/待执行计划标的</h4>
+              <p class="muted">
+                当前 approved plan 的目标列表；发布/执行前请确认买卖方向和目标股数。
+              </p>
+            </div>
+            <div class="pending-plan-summary">
+              <span class="tag-buy">买 {{ pendingPlanSummary.buy }}</span>
+              <span class="tag-sell">卖 {{ pendingPlanSummary.sell }}</span>
+              <span class="tag-hold">持有 {{ pendingPlanSummary.hold }}</span>
+            </div>
+          </div>
+          <div class="table-wrap compact risk-report-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>方向</th>
+                  <th>标的</th>
+                  <th>行业</th>
+                  <th>加权分</th>
+                  <th>当前</th>
+                  <th>目标</th>
+                  <th>变化</th>
+                  <th>预估价</th>
+                  <th>预估金额</th>
+                  <th>AI风控</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in pendingPlanRows" :key="row.symbol">
+                  <td>
+                    <span class="action-tag" :class="planItemActionClass(row.action)">
+                      {{ planItemActionLabel(row.action) }}
+                    </span>
+                  </td>
+                  <td>
+                    <strong>{{ row.name || row.symbol }}</strong>
+                    <small class="muted symbol-line">{{ row.symbol }}</small>
+                  </td>
+                  <td>{{ row.industry || '-' }}</td>
+                  <td>{{ num(row.score_value) }}</td>
+                  <td>{{ row.current_shares ?? 0 }}</td>
+                  <td>{{ row.target_shares ?? 0 }}</td>
+                  <td :class="signClass(row.delta_shares)">{{ formatShareDelta(row.delta_shares) }}</td>
+                  <td>{{ num(row.estimated_price) }}</td>
+                  <td>{{ money(row.estimated_amount) }}</td>
+                  <td>
+                    <span
+                      v-if="row.ai_risk"
+                      class="risk-badge"
+                      :class="`risk-${row.ai_risk.severity || 'none'}`"
+                      :title="(row.ai_risk.reasons || []).join('、')"
+                    >
+                      {{ riskSeverityLabel(row.ai_risk.severity) }}
+                    </span>
+                    <span v-else class="muted">-</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div v-if="livePublishPreview" class="risk-report">
@@ -1154,8 +1224,19 @@ const executionStatus = computed(() => latestPlanDetail.value?.execution_status 
 const selectedPlanStatus = computed(() => latestPlan.value?.status || '')
 const selectedPlanExecutionMode = computed(() => latestPlanDetail.value?.execution_mode || 'not_executed')
 const selectedPlanHasLiveSignals = computed(() => selectedPlanExecutionMode.value === 'live')
+const latestPlanItems = computed(() => latestPlanDetail.value?.items || [])
 const paperExecutionCount = computed(() => Number(executionStatus.value?.execution_count || 0))
 const hasPaperExecution = computed(() => Boolean(latestPlan.value?.paper_executed_at) || paperExecutionCount.value > 0)
+const hasApprovedPlanAwaitingAction = computed(() => (
+  selectedPlanStatus.value === 'approved'
+  && !selectedPlanHasLiveSignals.value
+  && !hasPaperExecution.value
+))
+const forceRebalanceBlockReason = computed(() => (
+  hasApprovedPlanAwaitingAction.value
+    ? '当前已有已批准计划，请先发布/执行或拒绝后再重新生成'
+    : ''
+))
 const canExecutePaperNow = computed(() => (
   isPaperPortfolio.value
   && selectedPlanStatus.value === 'approved'
@@ -1207,6 +1288,31 @@ const remainderBlockers = computed(() => {
   const items = remainderPreview.value?.risk_report?.items || []
   return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
 })
+const pendingPlanRows = computed(() => {
+  if (!hasApprovedPlanAwaitingAction.value) return []
+  return latestPlanItems.value
+    .map((item) => normalizePlanItemRow(item))
+    .filter((item) => item.action !== 'skip')
+    .sort((a, b) => {
+      const order = { buy: 0, sell: 1, hold: 2, skip: 3 }
+      const aScore = Number(a.score_value)
+      const bScore = Number(b.score_value)
+      const aHasScore = Number.isFinite(aScore)
+      const bHasScore = Number.isFinite(bScore)
+      if (aHasScore && bHasScore && bScore !== aScore) return bScore - aScore
+      if (aHasScore !== bHasScore) return aHasScore ? -1 : 1
+      return (order[a.action] ?? 9) - (order[b.action] ?? 9) || String(a.symbol).localeCompare(String(b.symbol))
+    })
+})
+const pendingPlanSummary = computed(() => pendingPlanRows.value.reduce(
+  (acc, row) => {
+    if (row.action === 'buy') acc.buy += 1
+    else if (row.action === 'sell') acc.sell += 1
+    else if (row.action === 'hold') acc.hold += 1
+    return acc
+  },
+  { buy: 0, sell: 0, hold: 0 },
+))
 
 const cycleProgressPct = computed(() => {
   const cycle = timelineData.value?.current_cycle
@@ -1274,6 +1380,13 @@ function executionVenueLabel(venue) {
   return venue || '-'
 }
 
+function shortPlanId(planId) {
+  const text = String(planId || '')
+  if (!text) return '-'
+  if (text.length <= 28) return text
+  return `${text.slice(0, 18)}…${text.slice(-8)}`
+}
+
 function paperExecutionModeLabel(mode) {
   if (mode === 'auto_shadow') return '自动跟跑'
   if (mode === 'manual_review') return '人工审核'
@@ -1332,6 +1445,44 @@ function timelineTradeItems(node) {
 
 function toggleTimelineDetail(planId) {
   expandedTimelinePlanId.value = expandedTimelinePlanId.value === planId ? null : planId
+}
+
+function normalizePlanItemRow(item) {
+  const current = Number(item?.current_shares ?? 0)
+  const target = Number(item?.target_shares ?? 0)
+  const rawDelta = item?.delta_shares ?? (target - current)
+  const delta = Number(rawDelta || 0)
+  let action = item?.action || ''
+  if (!action) {
+    if (delta > 0) action = 'buy'
+    else if (delta < 0) action = 'sell'
+    else if (target > 0) action = 'hold'
+    else action = 'skip'
+  }
+  if (action === 'hold' && current > 0 && target > 0 && delta !== 0) {
+    action = delta > 0 ? 'buy' : 'sell'
+  }
+  return {
+    ...item,
+    action,
+    current_shares: current,
+    target_shares: target,
+    delta_shares: delta,
+  }
+}
+
+function planItemActionLabel(action) {
+  if (action === 'buy') return '买'
+  if (action === 'sell') return '卖'
+  if (action === 'hold') return '持'
+  return '跳过'
+}
+
+function planItemActionClass(action) {
+  if (action === 'buy') return 'tag-buy'
+  if (action === 'sell') return 'tag-sell'
+  if (action === 'hold') return 'tag-hold'
+  return 'tag-skip'
 }
 
 function formatShareDelta(value) {
@@ -1805,6 +1956,11 @@ async function executePaperNow() {
 async function submitForceRebalance() {
   const planId = selectedLatestPlanId.value
   if (!planId) return
+  if (forceRebalanceBlockReason.value) {
+    message.value = forceRebalanceBlockReason.value
+    messageIsError.value = true
+    return
+  }
   forceRebalanceSubmitting.value = true
   message.value = ''
   messageIsError.value = false
@@ -2794,6 +2950,58 @@ button:disabled {
   min-width: 220px;
 }
 
+.pending-plan-items {
+  background: #f8fafc;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.pending-plan-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.pending-plan-header h4 {
+  font-size: 14px;
+  margin: 0 0 4px;
+}
+
+.pending-plan-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pending-plan-summary span {
+  border-radius: 999px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.pending-plan-summary .tag-buy {
+  background: #dc2626;
+}
+
+.pending-plan-summary .tag-sell {
+  background: #16a34a;
+}
+
+.pending-plan-summary .tag-hold {
+  background: #64748b;
+}
+
+.symbol-line {
+  display: block;
+}
+
 .risk-report {
   background: #f8fafc;
   border: 1px solid #d1d5db;
@@ -2885,6 +3093,15 @@ button:disabled {
 
 .action-tag.tag-sell {
   background: #16a34a;
+}
+
+.action-tag.tag-hold {
+  background: #64748b;
+}
+
+.action-tag.tag-skip {
+  background: #cbd5e1;
+  color: #334155;
 }
 
 .timeline-item:last-child {
