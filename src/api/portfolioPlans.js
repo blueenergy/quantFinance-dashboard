@@ -184,6 +184,20 @@ export function getLineageLiveEquity(planId, params = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/lineage-live-equity`, method: 'get', params })
 }
 
+export function getPortfolioPlanBench(planId, params = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/bench`, method: 'get', params })
+}
+
+export function forceRebalanceLineage(planId, data = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/force-rebalance`, method: 'post', data })
+}
+
+// Diff the system ledger holdings against the broker's synced positions
+// (trader_positions). Live-only; returns { applicable, in_sync, diffs, ... }.
+export function reconcilePortfolioHoldings(planId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/holdings-reconcile`, method: 'get' })
+}
+
 export function getPortfolioStrategyEquity(strategyId, params = {}) {
   return request({ url: `/portfolio-plans/strategies/${strategyId}/equity`, method: 'get', params })
 }

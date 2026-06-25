@@ -80,6 +80,39 @@
         </div>
       </section>
 
+      <section v-if="holdingsOutOfSync" class="reconcile-banner">
+        <div class="reconcile-head">
+          <strong>⚠ 系统账本与券商实时持仓不一致</strong>
+          <button type="button" :disabled="!isLivePortfolio" @click="openExternalManualModal">补录 miniQMT 手工操作</button>
+        </div>
+        <p class="muted">
+          可能是 miniQMT 端手工买卖后系统尚未记录。补录后账本即可与券商对齐。
+          <span v-if="reconcileData?.account_synced_at"> · 券商同步于 {{ formatSyncedAt(reconcileData.account_synced_at) }}</span>
+        </p>
+        <div class="table-wrap">
+          <table class="lineup-table">
+            <thead>
+              <tr>
+                <th>代码</th>
+                <th>名称</th>
+                <th>账本股数</th>
+                <th>券商股数</th>
+                <th>差异</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in reconcileData.diffs" :key="row.symbol">
+                <td>{{ row.symbol }}</td>
+                <td>{{ row.name || '-' }}</td>
+                <td>{{ row.ledger_shares }}</td>
+                <td>{{ row.account_shares }}</td>
+                <td :class="row.diff > 0 ? 'pos' : 'neg'">{{ formatShareDelta(row.diff) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section v-if="timelineData" class="cycle-card" :class="{ 'needs-action': timelineData.action_required }">
         <div class="cycle-card-header">
           <div>
@@ -121,6 +154,103 @@
         <p v-if="timelineData.latest_drift_summary?.non_executable_reason === 'monitor_no_trade'" class="monitor-hint">
           未到调仓周期，本日不交易；上方漂移为若今日调仓的理论变化。
         </p>
+        <div v-if="timelineData.action_required || selectedLatestPlanId" class="cycle-actions">
+          <p v-if="pendingActionPlan" class="action-banner">
+            待审批计划：<strong>{{ pendingActionPlan.date }}</strong> · {{ pendingActionPlan.today_state }}
+            <button type="button" :disabled="approveSubmitting" @click="approvePendingPlan">
+              {{ approveSubmitting ? '审批中…' : '一键审批' }}
+            </button>
+          </p>
+          <button
+            type="button"
+            class="secondary"
+            :disabled="forceRebalanceSubmitting || !selectedLatestPlanId"
+            @click="submitForceRebalance"
+          >
+            {{ forceRebalanceSubmitting ? '提交中…' : '立即调仓 / 强制建仓' }}
+          </button>
+        </div>
+      </section>
+
+      <section v-if="benchData" class="lineup-card">
+        <div class="lineup-header">
+          <div>
+            <h3>今日阵容 / 推荐</h3>
+            <p class="muted lineup-hint">
+              首发 = 当前真实持仓；替补席 = 算法最新评分候选。可从替补席单点换人（预览确认后立即下单）。
+              评分快照 {{ benchData.score_date || '-' }} · 替补席约 {{ benchData.bench_multiplier }}×Top{{ benchData.top_n }}。
+            </p>
+          </div>
+          <button type="button" class="link-btn" @click="lineupExpanded = !lineupExpanded">
+            {{ lineupExpanded ? '收起' : '展开' }}
+          </button>
+        </div>
+        <div v-if="lineupExpanded">
+          <div v-if="benchLoading" class="muted">加载阵容中…</div>
+          <template v-else>
+            <h4>首发阵容（当前持仓）</h4>
+            <div v-if="!benchData.starters?.length" class="muted">暂无持仓（空账户可先点「立即调仓 / 强制建仓」）。</div>
+            <div v-else class="table-wrap">
+              <table class="lineup-table">
+                <thead>
+                  <tr>
+                    <th>排名</th>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>分数</th>
+                    <th>持仓股数</th>
+                    <th>参考价</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in benchData.starters" :key="row.symbol">
+                    <td>{{ row.rank ?? '-' }}</td>
+                    <td>{{ row.symbol }}</td>
+                    <td>
+                      {{ row.name || '-' }}
+                      <span v-if="row.in_universe === false" class="off-universe-tag">池外</span>
+                    </td>
+                    <td>{{ num(row.score_value) }}</td>
+                    <td>{{ row.current_shares }}</td>
+                    <td>{{ num(row.estimated_price) }}</td>
+                    <td>
+                      <button type="button" class="link-btn" @click="openSwapModal(row)">换人</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <details class="bench-details" :open="benchExpanded">
+              <summary @click.prevent="benchExpanded = !benchExpanded">替补席（{{ benchData.bench?.length || 0 }}）</summary>
+              <div v-if="benchData.bench?.length" class="table-wrap">
+                <table class="lineup-table">
+                  <thead>
+                    <tr>
+                      <th>排名</th>
+                      <th>代码</th>
+                      <th>名称</th>
+                      <th>行业</th>
+                      <th>分数</th>
+                      <th>最新收盘</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in benchData.bench" :key="row.symbol">
+                      <td>{{ row.rank }}</td>
+                      <td>{{ row.symbol }}</td>
+                      <td>{{ row.name || '-' }}</td>
+                      <td>{{ row.industry || '-' }}</td>
+                      <td>{{ num(row.score_value) }}</td>
+                      <td>{{ num(row.latest_close) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p v-else class="muted">暂无替补候选。</p>
+            </details>
+          </template>
+        </div>
       </section>
 
       <section v-if="foldedTimeline.length" class="timeline-section">
@@ -380,6 +510,7 @@
                 <th>现价</th>
                 <th>市值</th>
                 <th>浮动</th>
+                <th>快思考</th>
               </tr>
             </thead>
             <tbody>
@@ -409,6 +540,10 @@
                 <td>{{ num(row.last_price) }}</td>
                 <td>{{ money(row.market_value) }}</td>
                 <td :class="signClass(row.unrealized_pnl)">{{ signedMoney(row.unrealized_pnl) }}</td>
+                <td class="fast-actions">
+                  <button type="button" class="link-btn" @click="openQuickReduceModal(row, halfTargetShares(row))">减半</button>
+                  <button type="button" class="link-btn danger-text" @click="openQuickReduceModal(row, 0)">清仓</button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -420,6 +555,75 @@
           </p>
         </div>
       </section>
+
+      <div v-if="showSwapModal" class="modal-backdrop" @click.self="showSwapModal = false">
+        <div class="modal-card modal-wide">
+          <h3>替补换人</h3>
+          <p class="muted">
+            换下 <strong>{{ swapStarter?.symbol }}</strong>（{{ swapStarter?.name || '-' }}），从替补席选择上场球员。
+            仅本次生效，预览确认后立即下单。
+          </p>
+          <div v-if="benchData?.bench?.length" class="table-wrap">
+            <table class="lineup-table">
+              <thead>
+                <tr>
+                  <th>排名</th>
+                  <th>代码</th>
+                  <th>名称</th>
+                  <th>分数</th>
+                  <th>最新收盘</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in benchData.bench" :key="row.symbol">
+                  <td>{{ row.rank }}</td>
+                  <td>{{ row.symbol }}</td>
+                  <td>{{ row.name || '-' }}</td>
+                  <td>{{ num(row.score_value) }}</td>
+                  <td>{{ num(row.latest_close) }}</td>
+                  <td>
+                    <button type="button" class="link-btn" :disabled="fastActionSubmitting" @click="previewSwap(row)">
+                      选为替补上场
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-else class="muted">替补席为空，无法换人。</p>
+          <p v-if="swapError" class="modal-error">{{ swapError }}</p>
+          <div class="modal-actions">
+            <button type="button" @click="showSwapModal = false">取消</button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="showFastActionModal" class="modal-backdrop" @click.self="showFastActionModal = false">
+        <div class="modal-card">
+          <h3>{{ fastActionPreview.title }}</h3>
+          <p class="muted">{{ fastActionPreview.description }}</p>
+          <ul v-if="fastActionPreview.items?.length" class="manual-preview">
+            <li v-for="item in fastActionPreview.items" :key="item.symbol">
+              {{ item.symbol }} {{ item.name || '' }}：
+              {{ item.current_shares }} → {{ item.target_shares }}
+              （{{ formatShareDelta(item.delta_shares) }}）
+              <span v-if="item.blockers?.length" class="warning-text"> · {{ item.blockers.join('、') }}</span>
+            </li>
+          </ul>
+          <p v-if="fastActionPreview.blocked" class="warning-text">风控拦截，无法提交。</p>
+          <div class="modal-actions">
+            <button type="button" @click="showFastActionModal = false">取消</button>
+            <button
+              type="button"
+              :disabled="fastActionSubmitting || fastActionPreview.blocked || !fastActionPreview.items?.length"
+              @click="confirmFastAction"
+            >
+              {{ fastActionSubmitting ? '提交中…' : (isLivePortfolio ? '确认并下单' : '确认执行') }}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div v-if="showManualModal" class="modal-backdrop" @click.self="showManualModal = false">
         <div class="modal-card">
@@ -645,11 +849,15 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import {
+  approvePortfolioPlan,
+  forceRebalanceLineage,
   getLineageLiveEquity,
   getLineageLiveExecutions,
   getLineageLivePositions,
   getLineagePaperExecutions,
   getLineagePaperPositions,
+  getPortfolioPlanBench,
+  reconcilePortfolioHoldings,
   liveRebalancePortfolio,
   paperRebalancePortfolio,
   enqueuePortfolioHoldingsRisk,
@@ -696,11 +904,34 @@ const externalManualReason = ref('miniQMT manual operation')
 const externalManualBatchId = ref('')
 let externalManualRowSeq = 0
 
+const benchData = ref(null)
+const benchLoading = ref(false)
+const lineupExpanded = ref(false)
+const reconcileData = ref(null)
+const benchExpanded = ref(false)
+const showSwapModal = ref(false)
+const swapStarter = ref(null)
+const swapError = ref('')
+const showFastActionModal = ref(false)
+const fastActionSubmitting = ref(false)
+const fastActionPreview = ref({ title: '', description: '', targets: {}, items: [], blocked: false })
+const approveSubmitting = ref(false)
+const forceRebalanceSubmitting = ref(false)
+
 const selectedPortfolio = computed(() => (
   portfolios.value.find((row) => portfolioKey(row) === selectedPortfolioKey.value) || null
 ))
 
 const selectedLatestPlanId = computed(() => selectedPortfolio.value?.latest_plan_id || '')
+
+const benchPlanId = computed(() => (
+  timelineData.value?.latest_drift_summary?.plan_id || selectedLatestPlanId.value
+))
+
+const pendingActionPlan = computed(() => {
+  const nodes = timelineData.value?.timeline || []
+  return nodes.find((node) => node.action_required && node.status === 'needs_review') || null
+})
 
 const isLivePortfolio = computed(() => selectedPortfolio.value?.funding_mode === 'live')
 
@@ -802,6 +1033,12 @@ function formatShareDelta(value) {
   const n = Number(value || 0)
   if (!Number.isFinite(n) || n === 0) return '0'
   return n > 0 ? `+${n}` : String(n)
+}
+
+function formatSyncedAt(value) {
+  const seconds = Number(value)
+  if (!Number.isFinite(seconds) || seconds <= 0) return ''
+  return new Date(seconds * 1000).toLocaleString()
 }
 
 const openBuyDateBySymbol = computed(() => {
@@ -994,32 +1231,232 @@ function buildTargetsFromRows(rows) {
   return targets
 }
 
+function roundToLot(shares, lotSize = 100) {
+  const lot = Math.max(1, Number(lotSize) || 100)
+  const raw = Math.max(0, Math.floor(Number(shares) || 0))
+  if (raw === 0) return 0
+  return Math.floor(raw / lot) * lot
+}
+
+function estimateSwapBenchShares(starter, benchPlayer) {
+  const lot = Number(benchData.value?.lot_size || 100)
+  const aPrice = Number(starter?.estimated_price || 0)
+  const bPrice = Number(benchPlayer?.latest_close || 0)
+  const aShares = Number(starter?.target_shares || starter?.current_shares || 0)
+  if (!aPrice || !bPrice || !aShares) return 0
+  const amount = aShares * aPrice
+  return roundToLot(amount / bPrice, lot)
+}
+
+function halfTargetShares(row) {
+  const lot = Number(benchData.value?.lot_size || 100)
+  const current = Number(row?.shares || 0)
+  return roundToLot(current / 2, lot)
+}
+
+function openSwapModal(starter) {
+  swapStarter.value = starter
+  swapError.value = ''
+  showSwapModal.value = true
+}
+
+function openQuickReduceModal(row, targetShares) {
+  const targets = { [row.symbol]: Math.max(0, Number(targetShares) || 0) }
+  previewFastAction({
+    title: targetShares === 0 ? '确认快思考清仓' : '确认快思考减仓',
+    description: `${row.symbol} ${row.name || ''}：${row.shares} → ${targets[row.symbol]}（预览确认后立即下单）`,
+    targets,
+  })
+}
+
+async function previewSwap(benchPlayer) {
+  const starter = swapStarter.value
+  if (!starter || !benchPlayer) return
+  swapError.value = ''
+  const aPrice = Number(starter?.estimated_price || 0)
+  const bPrice = Number(benchPlayer?.latest_close || 0)
+  const aShares = Number(starter?.target_shares || starter?.current_shares || 0)
+  if (!aPrice || !aShares) {
+    swapError.value = `无法估算：首发 ${starter.symbol} 缺少目标股数或参考价。`
+    return
+  }
+  if (!bPrice) {
+    swapError.value = `无法估算：替补 ${benchPlayer.symbol} 暂无参考价（行情未同步）。`
+    return
+  }
+  const benchShares = estimateSwapBenchShares(starter, benchPlayer)
+  if (!benchShares) {
+    swapError.value = `按 ${starter.symbol} 仓位金额估算 ${benchPlayer.symbol} 不足 1 手，无法换人。`
+    return
+  }
+  const targets = {
+    [starter.symbol]: 0,
+    [benchPlayer.symbol]: benchShares,
+  }
+  const ok = await previewFastAction({
+    title: '确认替补换人',
+    description: `换下 ${starter.symbol}，换上 ${benchPlayer.symbol}（约 ${benchShares} 股）；仅本次生效。`,
+    targets,
+  })
+  if (ok) showSwapModal.value = false
+  else swapError.value = message.value || '预览失败，请重试。'
+}
+
+function normalizeFastPreviewItems(data) {
+  return (data?.items || []).map((item) => ({
+    symbol: item.symbol,
+    name: item.name || '',
+    current_shares: Number(item.current_shares || 0),
+    target_shares: Number(item.target_shares || 0),
+    delta_shares: Number(item.delta_shares || 0),
+    blockers: item.blockers || [],
+  }))
+}
+
+async function previewFastAction({ title, description, targets }) {
+  fastActionSubmitting.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const data = await submitRebalance(targets, { excludeAfter: false, dryRun: true })
+    fastActionPreview.value = {
+      title,
+      description,
+      targets,
+      items: normalizeFastPreviewItems(data),
+      blocked: Boolean(data?.blocked),
+    }
+    showFastActionModal.value = true
+    return true
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '预览失败'
+    messageIsError.value = true
+    return false
+  } finally {
+    fastActionSubmitting.value = false
+  }
+}
+
+async function confirmFastAction() {
+  const targets = fastActionPreview.value.targets || {}
+  if (!Object.keys(targets).length) return
+  fastActionSubmitting.value = true
+  try {
+    await submitRebalance(targets, { excludeAfter: false, dryRun: false })
+    showFastActionModal.value = false
+    fastActionPreview.value = { title: '', description: '', targets: {}, items: [], blocked: false }
+  } finally {
+    fastActionSubmitting.value = false
+  }
+}
+
+async function approvePendingPlan() {
+  const planId = pendingActionPlan.value?.plan_id
+  if (!planId) return
+  approveSubmitting.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    await approvePortfolioPlan(planId, { comment: 'approved from portfolio overview' })
+    message.value = `计划 ${planId} 已审批通过。`
+    await Promise.all([loadPortfolios(), refreshDetail()])
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '审批失败'
+    messageIsError.value = true
+  } finally {
+    approveSubmitting.value = false
+  }
+}
+
+async function submitForceRebalance() {
+  const planId = selectedLatestPlanId.value
+  if (!planId) return
+  forceRebalanceSubmitting.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await forceRebalanceLineage(planId, {})
+    const task = await pollGenerationTask(res.data?.task_id)
+    const newPlanId = task.plan_id || task.result?.plan_id
+    message.value = newPlanId
+      ? `已提交立即调仓，新计划 ${newPlanId} 待审批。`
+      : '已提交立即调仓任务，请稍后刷新查看新计划。'
+    await Promise.all([loadPortfolios(), refreshDetail()])
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '立即调仓提交失败'
+    messageIsError.value = true
+  } finally {
+    forceRebalanceSubmitting.value = false
+  }
+}
+
+async function loadBench() {
+  const planId = benchPlanId.value
+  if (!planId) {
+    benchData.value = null
+    return
+  }
+  benchLoading.value = true
+  try {
+    const res = await getPortfolioPlanBench(planId, { bench_multiplier: 1.5 })
+    benchData.value = res.data || null
+  } catch (error) {
+    benchData.value = null
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '加载阵容失败'
+    messageIsError.value = true
+  } finally {
+    benchLoading.value = false
+  }
+}
+
+// Live-only: warn when the system ledger disagrees with the broker's synced
+// positions (e.g. a manual miniQMT trade not yet recorded). Best-effort; a
+// failure here must not block the rest of the overview.
+async function loadReconcile() {
+  reconcileData.value = null
+  if (!isLivePortfolio.value) return
+  const planId = selectedLatestPlanId.value
+  if (!planId) return
+  try {
+    const res = await reconcilePortfolioHoldings(planId)
+    reconcileData.value = res.data || null
+  } catch (error) {
+    reconcileData.value = null
+  }
+}
+
+const holdingsOutOfSync = computed(() => (
+  Boolean(reconcileData.value?.applicable) && reconcileData.value?.in_sync === false
+))
+
 // Unified synchronous rebalance submit (reduce / clear / add). Routes to the
 // live (broker signals) or paper (paper-book fill) endpoint based on the
 // portfolio venue. Used by both the manual-rebalance flow and the one-click
 // clear shortcut.
-async function submitRebalance(targets, { excludeAfter = false } = {}) {
+async function submitRebalance(targets, { excludeAfter = false, dryRun = false } = {}) {
   if (isLivePortfolio.value) {
-    await submitLiveRebalance(targets, { excludeAfter })
-  } else {
-    await submitPaperRebalance(targets, { excludeAfter })
+    return submitLiveRebalance(targets, { excludeAfter, dryRun })
   }
+  return submitPaperRebalance(targets, { excludeAfter, dryRun })
 }
 
-async function submitPaperRebalance(targets, { excludeAfter = false } = {}) {
+async function submitPaperRebalance(targets, { excludeAfter = false, dryRun = false } = {}) {
   const planId = selectedLatestPlanId.value
-  if (!planId || !Object.keys(targets || {}).length) return
-  manualSubmitting.value = true
-  liquidateSubmitting.value = true
+  if (!planId || !Object.keys(targets || {}).length) return null
+  if (!dryRun) {
+    manualSubmitting.value = true
+    liquidateSubmitting.value = true
+  }
   message.value = ''
   messageIsError.value = false
   try {
     const res = await paperRebalancePortfolio(planId, {
       targets,
       exclude_after: excludeAfter,
-      dry_run: false,
+      dry_run: dryRun,
     })
     const data = res.data || {}
+    if (dryRun) return data
     showManualModal.value = false
     showLiquidateModal.value = false
     const count = data.changed_symbols?.length || 0
@@ -1027,30 +1464,36 @@ async function submitPaperRebalance(targets, { excludeAfter = false } = {}) {
     message.value = `已完成${label}：${count} 只标的按实时价即时成交（${data.status === 'partially_executed' ? '部分成交' : '全部成交'}）。`
     if (data.status === 'partially_executed') messageIsError.value = true
     await Promise.all([loadPortfolios(), refreshDetail()])
+    return data
   } catch (error) {
     message.value = formatApiDetail(error.response?.data?.detail) || error.message || '纸面调仓提交失败'
     messageIsError.value = true
+    throw error
   } finally {
-    manualSubmitting.value = false
-    liquidateSubmitting.value = false
+    if (!dryRun) {
+      manualSubmitting.value = false
+      liquidateSubmitting.value = false
+    }
   }
 }
 
 // Shared synchronous live-rebalance submit (reduce / clear / add). Used by both
 // the live manual-rebalance flow and the one-click clear shortcut.
-async function submitLiveRebalance(targets, { excludeAfter = false } = {}) {
+async function submitLiveRebalance(targets, { excludeAfter = false, dryRun = false } = {}) {
   const planId = selectedLatestPlanId.value
   const accountId = selectedPortfolio.value?.securities_account_id
-  if (!planId || !Object.keys(targets || {}).length) return
+  if (!planId || !Object.keys(targets || {}).length) return null
   if (!accountId) {
     message.value = '该组合未绑定券商账户，无法实盘下单。'
     messageIsError.value = true
     showManualModal.value = false
     showLiquidateModal.value = false
-    return
+    return null
   }
-  manualSubmitting.value = true
-  liquidateSubmitting.value = true
+  if (!dryRun) {
+    manualSubmitting.value = true
+    liquidateSubmitting.value = true
+  }
   message.value = ''
   messageIsError.value = false
   try {
@@ -1058,9 +1501,10 @@ async function submitLiveRebalance(targets, { excludeAfter = false } = {}) {
       securities_account_id: accountId,
       targets,
       exclude_after: excludeAfter,
-      dry_run: false,
+      dry_run: dryRun,
     })
     const data = res.data || {}
+    if (dryRun) return data
     showManualModal.value = false
     showLiquidateModal.value = false
     const count = data.changed_symbols?.length || 0
@@ -1068,12 +1512,16 @@ async function submitLiveRebalance(targets, { excludeAfter = false } = {}) {
     const label = data.manual_action === 'liquidate' ? '实盘清仓' : '实盘调仓'
     message.value = `已提交${label}：${count} 只标的、${inserted} 笔委托已下发，交易器盘中执行。`
     await Promise.all([loadPortfolios(), refreshDetail()])
+    return data
   } catch (error) {
     message.value = formatApiDetail(error.response?.data?.detail) || error.message || '实盘下单提交失败'
     messageIsError.value = true
+    throw error
   } finally {
-    manualSubmitting.value = false
-    liquidateSubmitting.value = false
+    if (!dryRun) {
+      manualSubmitting.value = false
+      liquidateSubmitting.value = false
+    }
   }
 }
 
@@ -1530,6 +1978,8 @@ async function refreshDetail() {
       tradeRows.value = exRes.data?.trades || []
     }
     syncManualTargets()
+    await loadBench()
+    await loadReconcile()
   } catch (error) {
     message.value = formatApiDetail(error.response?.data?.detail) || error.message || '加载详情失败'
     messageIsError.value = true
@@ -1546,6 +1996,11 @@ watch(selectedPortfolioKey, (key) => {
   liquidateTargets.value = []
   showExternalManualModal.value = false
   externalManualRows.value = []
+  showSwapModal.value = false
+  showFastActionModal.value = false
+  benchData.value = null
+  reconcileData.value = null
+  lineupExpanded.value = false
   if (key) refreshDetail()
   else {
     timelineData.value = null
@@ -2313,10 +2768,123 @@ button.danger:disabled {
   font-weight: 600;
 }
 
+.modal-error {
+  margin: 8px 0 0;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.off-universe-tag {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.reconcile-banner {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid #fca5a5;
+  border-radius: 10px;
+  background: #fef2f2;
+}
+
+.reconcile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.reconcile-head strong {
+  color: #b91c1c;
+}
+
+.reconcile-banner .pos {
+  color: #047857;
+  font-weight: 600;
+}
+
+.reconcile-banner .neg {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
 .modal-actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+.cycle-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.action-banner {
+  align-items: center;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.lineup-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.lineup-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.lineup-hint {
+  margin: 6px 0 0;
+}
+
+.lineup-table {
+  width: 100%;
+}
+
+.bench-details {
+  margin-top: 14px;
+}
+
+.bench-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.modal-wide {
+  max-width: 760px;
+}
+
+.fast-actions {
+  white-space: nowrap;
+}
+
+.danger-text {
+  color: #c2410c;
+}
+
+button.secondary {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
 }
 </style>
