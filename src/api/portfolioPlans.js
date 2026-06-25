@@ -144,6 +144,13 @@ export function enqueuePortfolioHoldingsRisk(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/holdings-risk`, method: 'post' })
 }
 
+// Enqueues an AI risk review for the lineage's bench candidates; poll the
+// returned task_id via getPortfolioPlanGenerationTask, whose result holds
+// { symbols: [{ symbol, ai_risk }], high, medium, low, none }.
+export function enqueuePortfolioBenchRisk(planId, params = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/bench-risk`, method: 'post', params })
+}
+
 export function resumePortfolioLineage(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/resume-lineage`, method: 'post' })
 }

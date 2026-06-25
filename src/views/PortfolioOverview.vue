@@ -223,6 +223,22 @@
             </div>
             <details class="bench-details" :open="benchExpanded">
               <summary @click.prevent="benchExpanded = !benchExpanded">替补席（{{ benchData.bench?.length || 0 }}）</summary>
+              <div class="bench-risk-bar">
+                <span v-if="benchRisk" class="bench-risk-summary">
+                  AI风控：<b class="risk-high">{{ benchRisk.high || 0 }}高</b>
+                  / <b class="risk-medium">{{ benchRisk.medium || 0 }}中</b>
+                  / <b class="risk-low">{{ benchRisk.low || 0 }}低</b>
+                </span>
+                <span v-else class="muted">替补席也可先体检——高风险候选上场前会二次确认。</span>
+                <button
+                  type="button"
+                  class="link-btn"
+                  :disabled="benchRiskLoading || !benchData.bench?.length"
+                  @click="loadBenchRisk"
+                >
+                  {{ benchRiskLoading ? 'AI 风控运行中…' : '运行 AI 风控' }}
+                </button>
+              </div>
               <div v-if="benchData.bench?.length" class="table-wrap">
                 <table class="lineup-table">
                   <thead>
@@ -233,6 +249,7 @@
                       <th>行业</th>
                       <th>分数</th>
                       <th>最新收盘</th>
+                      <th>AI风控</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -243,6 +260,17 @@
                       <td>{{ row.industry || '-' }}</td>
                       <td>{{ num(row.score_value) }}</td>
                       <td>{{ num(row.latest_close) }}</td>
+                      <td>
+                        <span
+                          v-if="benchRiskBySymbol[row.symbol]"
+                          class="risk-badge"
+                          :class="`risk-${benchRiskBySymbol[row.symbol].severity}`"
+                          :title="(benchRiskBySymbol[row.symbol].reasons || []).join('、')"
+                        >
+                          {{ riskSeverityLabel(benchRiskBySymbol[row.symbol].severity) }}
+                        </span>
+                        <span v-else class="muted">-</span>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -563,6 +591,22 @@
             换下 <strong>{{ swapStarter?.symbol }}</strong>（{{ swapStarter?.name || '-' }}），从替补席选择上场球员。
             仅本次生效，预览确认后立即下单。
           </p>
+          <div class="bench-risk-bar">
+            <span v-if="benchRisk" class="bench-risk-summary">
+              AI风控：<b class="risk-high">{{ benchRisk.high || 0 }}高</b>
+              / <b class="risk-medium">{{ benchRisk.medium || 0 }}中</b>
+              / <b class="risk-low">{{ benchRisk.low || 0 }}低</b>
+            </span>
+            <span v-else class="muted">未体检；高风险候选上场前会二次确认。</span>
+            <button
+              type="button"
+              class="link-btn"
+              :disabled="benchRiskLoading || !benchData?.bench?.length"
+              @click="loadBenchRisk"
+            >
+              {{ benchRiskLoading ? 'AI 风控运行中…' : '运行 AI 风控' }}
+            </button>
+          </div>
           <div v-if="benchData?.bench?.length" class="table-wrap">
             <table class="lineup-table">
               <thead>
@@ -572,6 +616,7 @@
                   <th>名称</th>
                   <th>分数</th>
                   <th>最新收盘</th>
+                  <th>AI风控</th>
                   <th></th>
                 </tr>
               </thead>
@@ -582,6 +627,17 @@
                   <td>{{ row.name || '-' }}</td>
                   <td>{{ num(row.score_value) }}</td>
                   <td>{{ num(row.latest_close) }}</td>
+                  <td>
+                    <span
+                      v-if="benchRiskBySymbol[row.symbol]"
+                      class="risk-badge"
+                      :class="`risk-${benchRiskBySymbol[row.symbol].severity}`"
+                      :title="(benchRiskBySymbol[row.symbol].reasons || []).join('、')"
+                    >
+                      {{ riskSeverityLabel(benchRiskBySymbol[row.symbol].severity) }}
+                    </span>
+                    <span v-else class="muted">-</span>
+                  </td>
                   <td>
                     <button type="button" class="link-btn" :disabled="fastActionSubmitting" @click="previewSwap(row)">
                       选为替补上场
@@ -861,6 +917,7 @@ import {
   liveRebalancePortfolio,
   paperRebalancePortfolio,
   enqueuePortfolioHoldingsRisk,
+  enqueuePortfolioBenchRisk,
   getPortfolioPlan,
   getPortfolioPlanGenerationTask,
   getPortfolioPlanLineageEquity,
@@ -906,6 +963,8 @@ let externalManualRowSeq = 0
 
 const benchData = ref(null)
 const benchLoading = ref(false)
+const benchRisk = ref(null)
+const benchRiskLoading = ref(false)
 const lineupExpanded = ref(false)
 const reconcileData = ref(null)
 const benchExpanded = ref(false)
@@ -1079,6 +1138,14 @@ const holdingsRiskBySymbol = computed(() => {
 const holdingsRiskBySymbolHigh = computed(() => (
   (holdingsRisk.value?.holdings || []).filter((row) => row?.ai_risk?.severity === 'high')
 ))
+
+const benchRiskBySymbol = computed(() => {
+  const map = {}
+  for (const row of benchRisk.value?.symbols || []) {
+    if (row?.symbol) map[row.symbol] = row.ai_risk || {}
+  }
+  return map
+})
 
 const holdingNameBySymbol = computed(() => {
   const map = {}
@@ -1273,6 +1340,16 @@ async function previewSwap(benchPlayer) {
   const starter = swapStarter.value
   if (!starter || !benchPlayer) return
   swapError.value = ''
+  // If AI risk flagged this substitute as high, make the coach confirm before
+  // putting it on the field. Advisory only — they can still proceed.
+  const benchRiskInfo = benchRiskBySymbol.value[benchPlayer.symbol]
+  if (benchRiskInfo?.severity === 'high') {
+    const reasons = (benchRiskInfo.reasons || []).join('、') || '高风险信号'
+    const proceed = window.confirm(
+      `AI 风控提示：替补 ${benchPlayer.symbol}（${benchPlayer.name || '-'}）为高风险——${reasons}。仍要换上吗？`
+    )
+    if (!proceed) return
+  }
   const aPrice = Number(starter?.estimated_price || 0)
   const bPrice = Number(benchPlayer?.latest_close || 0)
   const aShares = Number(starter?.target_shares || starter?.current_shares || 0)
@@ -1397,6 +1474,8 @@ async function loadBench() {
     return
   }
   benchLoading.value = true
+  // A new lineup invalidates any prior bench risk snapshot (different pool).
+  benchRisk.value = null
   try {
     const res = await getPortfolioPlanBench(planId, { bench_multiplier: 1.5 })
     benchData.value = res.data || null
@@ -1406,6 +1485,27 @@ async function loadBench() {
     messageIsError.value = true
   } finally {
     benchLoading.value = false
+  }
+}
+
+// Run the AI risk pass over the bench candidates (mirror of holdings 风控体检).
+// Advisory only: surfaces per-symbol severity so the coach can vet a substitute
+// before swapping it onto the field.
+async function loadBenchRisk() {
+  const planId = benchPlanId.value
+  if (!planId) return
+  benchRiskLoading.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await enqueuePortfolioBenchRisk(planId, { bench_multiplier: 1.5 })
+    const task = await pollGenerationTask(res.data?.task_id)
+    benchRisk.value = task.result || {}
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '替补风控加载失败'
+    messageIsError.value = true
+  } finally {
+    benchRiskLoading.value = false
   }
 }
 
@@ -2687,8 +2787,38 @@ button.danger:disabled {
   color: #a16207;
 }
 
+.risk-badge.risk-none {
+  background: #ecfdf5;
+  color: #047857;
+}
+
 .risk-row-high {
   background: #fff7f7;
+}
+
+.bench-risk-bar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  margin: 8px 0;
+}
+
+.bench-risk-summary {
+  font-size: 12px;
+}
+
+.bench-risk-summary .risk-high {
+  color: #dc2626;
+}
+
+.bench-risk-summary .risk-medium {
+  color: #c2410c;
+}
+
+.bench-risk-summary .risk-low {
+  color: #a16207;
 }
 
 .modal-backdrop {
