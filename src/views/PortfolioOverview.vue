@@ -17,7 +17,7 @@
             :key="portfolioKey(p)"
             :value="portfolioKey(p)"
           >
-            [{{ fundingModeLabel(p.funding_mode) }}] {{ portfolioOptionLabel(p) }}
+            [{{ executionVenueLabel(p.execution_venue) }}] {{ portfolioOptionLabel(p) }}
           </option>
         </select>
       </label>
@@ -58,7 +58,7 @@
             <strong>{{ selectedPortfolio.first_base_date || '-' }} → {{ selectedPortfolio.last_base_date || '-' }}</strong>
             <small>{{ selectedPortfolio.plan_count }} 期 plan · 最新 {{ selectedPortfolio.latest_plan_type || '-' }} / {{ selectedPortfolio.latest_plan_status || '-' }}</small>
           </div>
-          <div v-if="selectedPortfolio.funding_mode === 'paper'">
+          <div v-if="selectedPortfolio.execution_venue === 'paper'">
             <span class="label">纸面快照</span>
             <strong>{{ selectedPortfolio.paper_snapshot_date || '无快照' }}</strong>
             <small>持仓 {{ selectedPortfolio.paper_holding_count ?? 0 }} 只 · 权益 {{ money(selectedPortfolio.paper_equity) }}</small>
@@ -119,8 +119,8 @@
             <h3>当前周期状态</h3>
             <p class="cycle-state">{{ timelineData.today_state }}</p>
           </div>
-          <span class="funding-badge" :class="`mode-${selectedPortfolio.funding_mode}`">
-            {{ fundingModeLabel(selectedPortfolio.funding_mode) }}
+          <span class="funding-badge" :class="`mode-${selectedPortfolio.execution_venue}`">
+            {{ executionVenueLabel(selectedPortfolio.execution_venue) }}
           </span>
         </div>
         <div class="cycle-metrics">
@@ -933,7 +933,7 @@ const pendingActionPlan = computed(() => {
   return nodes.find((node) => node.action_required && node.status === 'needs_review') || null
 })
 
-const isLivePortfolio = computed(() => selectedPortfolio.value?.funding_mode === 'live')
+const isLivePortfolio = computed(() => selectedPortfolio.value?.execution_venue === 'live')
 
 const cycleProgressPct = computed(() => {
   const cycle = timelineData.value?.current_cycle
@@ -986,7 +986,7 @@ function portfolioOptionLabel(portfolio) {
     ? `${portfolio.first_base_date}→${portfolio.last_base_date}`
     : (portfolio.last_base_date || '-')
   const hash = portfolio.params_hash_short || (portfolio.params_hash ? portfolio.params_hash.slice(0, 8) : '--------')
-  const holdings = portfolio.funding_mode === 'paper'
+  const holdings = portfolio.execution_venue === 'paper'
     ? ` · 持仓${portfolio.paper_holding_count ?? 0}`
     : ''
   const account = portfolio.securities_account_id
@@ -995,10 +995,10 @@ function portfolioOptionLabel(portfolio) {
   return `${name} · ${params} · ${range}（${portfolio.plan_count}期${holdings}${account} · #${hash}）`
 }
 
-function fundingModeLabel(mode) {
-  if (mode === 'live') return '实盘'
-  if (mode === 'paper') return '纸面'
-  return mode || '-'
+function executionVenueLabel(venue) {
+  if (venue === 'live') return '实盘'
+  if (venue === 'paper') return '纸面'
+  return venue || '-'
 }
 
 function paperExecutionModeLabel(mode) {
