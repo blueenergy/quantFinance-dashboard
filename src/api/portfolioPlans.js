@@ -72,6 +72,10 @@ export function rejectPortfolioPlan(planId, data = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/reject`, method: 'post', data })
 }
 
+export function cancelPortfolioPlan(planId, data = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/cancel`, method: 'post', data })
+}
+
 export function rejectPortfolioPlanItem(planId, symbol) {
   return request({ url: `/portfolio-plans/plans/${planId}/items/${encodeURIComponent(symbol)}/reject`, method: 'post' })
 }

@@ -242,6 +242,19 @@
           </template>
         </div>
 
+        <div class="plan-ops-actions cancel-plan-row">
+          <button
+            type="button"
+            class="danger"
+            :disabled="cancelPlanLoading || !canCancelCurrentPlan"
+            :title="cancelPlanReadyText"
+            @click="cancelCurrentPlan"
+          >
+            {{ cancelPlanLoading ? '作废中…' : '作废当前计划' }}
+          </button>
+          <span class="muted">{{ cancelPlanReadyText }}</span>
+        </div>
+
         <div v-if="pendingPlanRows.length" class="pending-plan-items">
           <div class="pending-plan-header">
             <div>
@@ -1117,6 +1130,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import {
   approvePortfolioPlan,
+  cancelPortfolioPlan,
   executePortfolioPlanPaper,
   forceRebalanceLineage,
   getLineageLiveEquity,
@@ -1197,6 +1211,7 @@ const selectedLiveAccountId = ref('')
 const livePublishPreview = ref(null)
 const livePublishLoading = ref(false)
 const paperExecuteLoading = ref(false)
+const cancelPlanLoading = ref(false)
 const remainderPreview = ref(null)
 const remainderLoading = ref(false)
 const remainderReason = ref('')
@@ -1250,6 +1265,10 @@ const canPublishLiveSignals = computed(() => (
   && !selectedPlanHasLiveSignals.value
   && !hasPaperExecution.value
 ))
+const canCancelCurrentPlan = computed(() => (
+  selectedPlanStatus.value === 'approved'
+  && !hasPaperExecution.value
+))
 const showPlanOpsPanel = computed(() => (
   Boolean(selectedLatestPlanId.value)
   && selectedPlanStatus.value === 'approved'
@@ -1272,6 +1291,12 @@ const paperExecuteReadyText = computed(() => {
     return `开盘价未就绪：execute_date=${date}，缺失 ${count} 个标的`
   }
   return '使用 execute_date 开盘价立即执行 Paper'
+})
+const cancelPlanReadyText = computed(() => {
+  if (hasPaperExecution.value) return '该 plan 已执行 Paper，不能作废'
+  if (selectedPlanStatus.value !== 'approved') return '只有 approved plan 可以作废'
+  if (selectedPlanHasLiveSignals.value) return '作废会把未成交 live signals 标记为 cancelled；若已有成交，后端会拒绝'
+  return '误点确认发布/审批后可作废；作废后状态变为 cancelled'
 })
 const liveAccountOptions = computed(() => securitiesAccounts.value.map((account) => ({
   id: account.id || account._id,
@@ -1640,7 +1665,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // The heavy work (manual plan generation, holdings risk review) runs in the
 // plan-generation worker. The API returns a task_id; poll it until terminal.
-async function pollGenerationTask(taskId, { attempts = 30, intervalMs = 2000 } = {}) {
+async function pollGenerationTask(taskId, { attempts = 90, intervalMs = 2000 } = {}) {
   for (let i = 0; i < attempts; i += 1) {
     const res = await getPortfolioPlanGenerationTask(taskId)
     const task = res.data || {}
@@ -1953,6 +1978,29 @@ async function executePaperNow() {
   }
 }
 
+async function cancelCurrentPlan() {
+  const planId = selectedLatestPlanId.value
+  if (!planId || !canCancelCurrentPlan.value) return
+  const ok = window.confirm(
+    '确定作废当前计划吗？如果已发布 live signals 且尚未成交，会一起标记为 cancelled；如果已有成交，后端会拒绝作废。'
+  )
+  if (!ok) return
+  cancelPlanLoading.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await cancelPortfolioPlan(planId, { comment: 'cancelled from portfolio overview' })
+    const count = res.data?.cancelled_signal_count ?? 0
+    message.value = `计划 ${planId} 已作废，取消 ${count} 条未成交 live signals。`
+    await Promise.all([loadPortfolios(), refreshDetail()])
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '作废计划失败'
+    messageIsError.value = true
+  } finally {
+    cancelPlanLoading.value = false
+  }
+}
+
 async function submitForceRebalance() {
   const planId = selectedLatestPlanId.value
   if (!planId) return
@@ -1964,17 +2012,29 @@ async function submitForceRebalance() {
   forceRebalanceSubmitting.value = true
   message.value = ''
   messageIsError.value = false
+  let taskId = ''
   try {
     const res = await forceRebalanceLineage(planId, {})
-    const task = await pollGenerationTask(res.data?.task_id)
+    taskId = res.data?.task_id || ''
+    message.value = '已提交立即调仓任务，正在等待 worker 生成计划…'
+    const task = await pollGenerationTask(taskId)
     const newPlanId = task.plan_id || task.result?.plan_id
     message.value = newPlanId
       ? `已提交立即调仓，新计划 ${newPlanId} 待审批。`
       : '已提交立即调仓任务，请稍后刷新查看新计划。'
     await Promise.all([loadPortfolios(), refreshDetail()])
   } catch (error) {
-    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '立即调仓提交失败'
-    messageIsError.value = true
+    const detail = formatApiDetail(error.response?.data?.detail) || error.message || '立即调仓提交失败'
+    if (detail.includes('任务处理超时')) {
+      message.value = taskId
+        ? `任务 ${taskId} 已提交，worker 仍在后台生成计划；请稍后刷新组合总览或到「组合交易计划」查看结果。`
+        : '立即调仓任务已提交，worker 仍在后台生成计划；请稍后刷新查看结果。'
+      messageIsError.value = false
+      await Promise.all([loadPortfolios(), refreshDetail()])
+    } else {
+      message.value = detail
+      messageIsError.value = true
+    }
   } finally {
     forceRebalanceSubmitting.value = false
   }
