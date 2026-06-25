@@ -149,7 +149,7 @@
                   {{ expandedTimelinePlanId === entry.node.plan_id ? '▾' : '▸' }}
                 </button>
                 <strong>{{ entry.node.date }}</strong>
-                <span class="node-type">{{ entry.node.node_type === 'rebalance' ? '调仓' : '观察' }}</span>
+                <span class="node-type">{{ nodeTypeLabel(entry.node.node_type) }}</span>
                 <span>{{ entry.node.today_state }}</span>
                 <span v-if="entry.node.drift_brief?.buy_count">
                   买 {{ entry.node.drift_brief.buy_count }}
@@ -554,15 +554,15 @@
           </div>
           <button type="button" class="add-row-btn" @click="addExternalManualRow">+ 添加一笔</button>
           <p class="muted">
-            结果持仓 = 当前持仓 + 手工买入 − 手工卖出。若全部清空，将按下方选项暂停自动调仓。
+            结果持仓 = 当前持仓 + 手工买入 − 手工卖出。默认只更新账本，不影响后续策略调仓建议。
           </p>
           <label class="checkbox-row">
             <input v-model="externalManualExcludeAfter" type="checkbox">
-            将清空（卖到 0）的标的加入排除名单
+            将清空（卖到 0）的标的加入排除名单（通常不需要）
           </label>
           <label class="checkbox-row">
             <input v-model="externalManualPauseLineage" type="checkbox">
-            若清空全部持仓，则暂停该组合自动调仓
+            若清空全部持仓，则暂停该组合自动调仓（通常不需要）
           </label>
           <div class="modal-actions">
             <button type="button" @click="showExternalManualModal = false">取消</button>
@@ -774,6 +774,12 @@ function paperExecutionModeLabel(mode) {
   if (mode === 'auto_shadow') return '自动跟跑'
   if (mode === 'manual_review') return '人工审核'
   return mode || '-'
+}
+
+function nodeTypeLabel(nodeType) {
+  if (nodeType === 'rebalance') return '调仓'
+  if (nodeType === 'manual') return '补录'
+  return '观察'
 }
 
 function timelineEntryClass(entry) {
@@ -1121,8 +1127,8 @@ function openExternalManualModal() {
     filled_price: Number(row.last_price || row.avg_cost || 0),
     editableSymbol: false,
   }))
-  externalManualExcludeAfter.value = true
-  externalManualPauseLineage.value = true
+  externalManualExcludeAfter.value = false
+  externalManualPauseLineage.value = false
   externalManualReason.value = 'miniQMT manual operation'
   externalManualBatchId.value = `miniqmt-manual-${compactDateTimeForBatch(now)}`
   showExternalManualModal.value = true

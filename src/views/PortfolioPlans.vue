@@ -2200,6 +2200,11 @@ function actionBadge(itemOrAction) {
 
 function planCadenceBadge(plan) {
   if (!plan) return { text: '-', cls: 'cadence-unknown' }
+  if (plan.origin === 'manual' && plan.manual_action === 'external_manual') {
+    return plan.is_liquidation
+      ? { text: '手工补录·清仓', cls: 'cadence-manual' }
+      : { text: '手工补录', cls: 'cadence-manual' }
+  }
   if (plan.origin === 'manual' && plan.plan_type === 'rebalance') {
     if (['needs_review', 'generated', 'draft'].includes(plan.status)) {
       return { text: '手动调仓·待审', cls: 'cadence-manual-pending' }
