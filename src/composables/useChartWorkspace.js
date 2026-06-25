@@ -93,7 +93,7 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
     try {
       const end = new Date()
       const start = new Date()
-      start.setDate(end.getDate() - 120)
+      start.setDate(end.getDate() - 360)
 
       if (signalDates.value.length > 0) {
         const sDate = signalDates.value[0]

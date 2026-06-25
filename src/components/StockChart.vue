@@ -212,16 +212,41 @@ function renderDaily() {
   
   const times = data.map(r => normalizeDate(r.trade_date))
   const option = getBaseOption(`${props.symbol} ${kType.value}`, times)
+  const closes = data.map(r => Number.isFinite(Number(r.close)) ? Number(r.close) : null)
+  const ma55 = movingAverage(closes, 55)
+  const ma233 = movingAverage(closes, 233)
   
-  option.series = [{
-    name: 'K线', type: 'candlestick', data: data.map(r => [r.open, r.close, r.low, r.high]),
-    itemStyle: { 
-      color: theme.value === 'dark' ? '#ef5350' : '#eb4444', 
-      color0: theme.value === 'dark' ? '#26a69a' : '#22ab94', 
-      borderColor: theme.value === 'dark' ? '#ef5350' : '#eb4444', 
-      borderColor0: theme.value === 'dark' ? '#26a69a' : '#22ab94' 
+  option.series = [
+    {
+      name: 'K线', type: 'candlestick', data: data.map(r => [r.open, r.close, r.low, r.high]),
+      itemStyle: {
+        color: theme.value === 'dark' ? '#ef5350' : '#eb4444',
+        color0: theme.value === 'dark' ? '#26a69a' : '#22ab94',
+        borderColor: theme.value === 'dark' ? '#ef5350' : '#eb4444',
+        borderColor0: theme.value === 'dark' ? '#26a69a' : '#22ab94'
+      }
+    },
+    {
+      name: 'MA55',
+      type: 'line',
+      data: ma55,
+      showSymbol: false,
+      connectNulls: false,
+      lineStyle: { width: 1.2, color: '#facc15' },
+      emphasis: { focus: 'series' },
+      z: 3
+    },
+    {
+      name: 'MA233',
+      type: 'line',
+      data: ma233,
+      showSymbol: false,
+      connectNulls: false,
+      lineStyle: { width: 1.2, color: '#a855f7' },
+      emphasis: { focus: 'series' },
+      z: 2
     }
-  }]
+  ]
 
   // 3. Restore or calculate new dataZoom state
   const newDataLength = data.length;
@@ -263,13 +288,36 @@ function renderDaily() {
   chartInstance.setOption(option, true)
 }
 
+function movingAverage(values, windowSize) {
+  let sum = 0
+  let count = 0
+  const result = []
+  for (let i = 0; i < values.length; i += 1) {
+    const value = values[i]
+    if (value != null) {
+      sum += value
+      count += 1
+    }
+    if (i >= windowSize) {
+      const dropped = values[i - windowSize]
+      if (dropped != null) {
+        sum -= dropped
+        count -= 1
+      }
+    }
+    result.push(i >= windowSize - 1 && count === windowSize ? Number((sum / windowSize).toFixed(4)) : null)
+  }
+  return result
+}
+
 function getBaseOption(title, xData) {
   const isDark = theme.value === 'dark'
   return {
     backgroundColor: 'transparent',
     title: { text: title, left: 'center', textStyle: { color: isDark ? '#adbac7' : '#444d56', fontSize: 14 } },
+    legend: { top: 22, textStyle: { color: isDark ? '#adbac7' : '#444d56', fontSize: 11 } },
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-    grid: { left: '50', right: '20', top: '40', bottom: '20' },
+    grid: { left: '50', right: '20', top: '50', bottom: '20' },
     xAxis: { 
       type: 'category', 
       data: xData, 
