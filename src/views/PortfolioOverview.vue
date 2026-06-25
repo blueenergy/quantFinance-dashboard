@@ -1184,6 +1184,7 @@ const paperExecuteReadyText = computed(() => {
   if (hasPaperExecution.value) return '该 plan 已执行过 Paper，不能重复执行'
   if (selectedPlanHasLiveSignals.value) return '该 plan 已发布实盘信号，不能再执行 Paper'
   if (selectedPlanStatus.value !== 'approved') return '需要先审核通过 plan'
+  if (executionStatus.value?.missing_execute_date) return '缺少 execute_date，请等待自动执行或先补齐下一交易日 execute_date'
   if (executionStatus.value?.open_price_ready === false) {
     const date = executionStatus.value.execute_date || executionStatus.value.effective_execute_date || '-'
     const count = executionStatus.value.missing_open_price_count ?? 0
