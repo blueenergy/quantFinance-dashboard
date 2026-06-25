@@ -172,6 +172,147 @@
         </div>
       </section>
 
+      <section v-if="showPlanOpsPanel" class="plan-ops-card">
+        <div class="plan-ops-header">
+          <div>
+            <h3>计划执行操作</h3>
+            <p class="muted">
+              当前组合最新 plan：<code>{{ shortPlanId(selectedLatestPlanId) }}</code>
+              · {{ selectedPlanStatus || '-' }}
+              · {{ selectedPlanExecutionModeLabel }}
+            </p>
+          </div>
+          <span class="funding-badge" :class="`mode-${selectedPortfolio.execution_venue}`">
+            {{ executionVenueLabel(selectedPortfolio.execution_venue) }}
+          </span>
+        </div>
+
+        <div v-if="isPaperPortfolio" class="plan-ops-actions">
+          <button
+            type="button"
+            :disabled="paperExecuteLoading || !canExecutePaperNow"
+            :title="paperExecuteReadyText"
+            @click="executePaperNow"
+          >
+            {{ paperExecuteLoading ? '执行中…' : '立即执行 Paper' }}
+          </button>
+          <span class="muted">{{ paperExecuteReadyText }}</span>
+        </div>
+
+        <div v-else class="plan-ops-actions">
+          <select v-model="selectedLiveAccountId">
+            <option value="">请选择账户</option>
+            <option v-for="account in liveAccountOptions" :key="account.id" :value="account.id">
+              {{ account.label }}
+            </option>
+          </select>
+          <template v-if="!selectedPlanHasLiveSignals">
+            <button
+              type="button"
+              :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals"
+              @click="previewLivePublish"
+            >
+              {{ livePublishLoading ? '预检中…' : '实盘预检' }}
+            </button>
+            <button
+              type="button"
+              :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals || livePublishBlockers.length"
+              @click="publishLiveSignals"
+            >
+              确认发布
+            </button>
+          </template>
+          <template v-else>
+            <input v-model="remainderReason" class="reason-input" type="text" placeholder="补单原因（可选）">
+            <button type="button" :disabled="remainderLoading || !selectedLiveAccountId" @click="previewRemainder">
+              {{ remainderLoading ? '预检中…' : '缺口预检' }}
+            </button>
+            <button
+              type="button"
+              :disabled="remainderLoading || !selectedLiveAccountId || !remainderActionableCount || remainderBlockers.length"
+              @click="confirmRemainder"
+            >
+              确认补单
+            </button>
+          </template>
+        </div>
+
+        <div v-if="livePublishPreview" class="risk-report">
+          <p>
+            待写入 {{ livePublishPreview.new_signals?.length ?? 0 }} 条，已有 {{ livePublishPreview.existing_count ?? 0 }} 条，
+            阻断 {{ livePublishPreview.risk_report?.blocked_count ?? 0 }} 条
+          </p>
+          <p v-if="livePublishBlockers.length" class="warning-text">
+            {{ livePublishBlockers.slice(0, 8).join(' / ') }}
+          </p>
+          <div v-if="livePublishRiskRows.length" class="table-wrap compact risk-report-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>状态</th>
+                  <th>股票</th>
+                  <th>方向</th>
+                  <th>数量</th>
+                  <th>价格</th>
+                  <th>预估金额</th>
+                  <th>预检结果</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in livePublishRiskRows" :key="item.order_id || `${item.symbol}-${item.action}-${item.size}`" :class="{ blocked: item.blockers?.length }">
+                  <td>{{ item.blockers?.length ? '阻断' : '通过' }}</td>
+                  <td>{{ item.symbol || '-' }}</td>
+                  <td>{{ item.action || '-' }}</td>
+                  <td>{{ item.size ?? '-' }}</td>
+                  <td>{{ num(item.price) }}</td>
+                  <td>{{ money(item.estimated_amount) }}</td>
+                  <td>{{ (item.blockers || []).map(blockerText).join(' / ') || '可发布' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div v-if="remainderPreview" class="risk-report">
+          <p>
+            可补 {{ remainderActionableCount }} 项，阻断 {{ remainderPreview.risk_report?.blocked_count ?? 0 }} 条，
+            可用现金 {{ money(remainderPreview.available_cash) }}
+            <span v-if="remainderPreview.account_synced === false" class="warning-text">账户未同步持仓，无法补单</span>
+          </p>
+          <p v-if="remainderBlockers.length" class="warning-text">
+            {{ remainderBlockers.slice(0, 8).join(' / ') }}
+          </p>
+          <div v-if="remainderRows.length" class="table-wrap compact risk-report-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>股票</th>
+                  <th>方向</th>
+                  <th>目标</th>
+                  <th>账户持仓</th>
+                  <th>缺口</th>
+                  <th>补单量</th>
+                  <th>预估金额</th>
+                  <th>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in remainderRows" :key="row.symbol" :class="{ blocked: !row.actionable }">
+                  <td>{{ row.name || row.symbol }}</td>
+                  <td>{{ row.action || '-' }}</td>
+                  <td>{{ row.target_shares ?? '-' }}</td>
+                  <td>{{ row.account_current_shares ?? '-' }}</td>
+                  <td>{{ row.gap_shares ?? 0 }}</td>
+                  <td>{{ row.topup_shares ?? 0 }}</td>
+                  <td>{{ money(row.estimated_amount) }}</td>
+                  <td>{{ (row.reasons || []).map(remainderReasonText).join(' / ') || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section v-if="benchData" class="lineup-card">
         <div class="lineup-header">
           <div>
@@ -906,6 +1047,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import {
   approvePortfolioPlan,
+  executePortfolioPlanPaper,
   forceRebalanceLineage,
   getLineageLiveEquity,
   getLineageLiveExecutions,
@@ -923,9 +1065,12 @@ import {
   getPortfolioPlanLineageEquity,
   getPortfolioPlanLineageTimeline,
   listPortfolios,
+  publishPortfolioPlanLiveSignals,
   recordExternalManualRecord,
+  replanPortfolioPlanRemainder,
   resumePortfolioLineage,
 } from '../api/portfolioPlans'
+import { getSecuritiesAccounts } from '../api/trader'
 
 const portfolios = ref([])
 const selectedPortfolioKey = ref('')
@@ -941,6 +1086,7 @@ const positionRows = ref([])
 const positionSummary = ref(null)
 const tradeRows = ref([])
 const timelineData = ref(null)
+const latestPlanDetail = ref(null)
 const expandedTimelinePlanId = ref(null)
 const holdingsRisk = ref(null)
 const manualTargets = ref({})
@@ -976,6 +1122,14 @@ const fastActionSubmitting = ref(false)
 const fastActionPreview = ref({ title: '', description: '', targets: {}, items: [], blocked: false })
 const approveSubmitting = ref(false)
 const forceRebalanceSubmitting = ref(false)
+const securitiesAccounts = ref([])
+const selectedLiveAccountId = ref('')
+const livePublishPreview = ref(null)
+const livePublishLoading = ref(false)
+const paperExecuteLoading = ref(false)
+const remainderPreview = ref(null)
+const remainderLoading = ref(false)
+const remainderReason = ref('')
 
 const selectedPortfolio = computed(() => (
   portfolios.value.find((row) => portfolioKey(row) === selectedPortfolioKey.value) || null
@@ -993,6 +1147,65 @@ const pendingActionPlan = computed(() => {
 })
 
 const isLivePortfolio = computed(() => selectedPortfolio.value?.execution_venue === 'live')
+const isPaperPortfolio = computed(() => selectedPortfolio.value?.execution_venue === 'paper')
+
+const latestPlan = computed(() => latestPlanDetail.value?.plan || null)
+const executionStatus = computed(() => latestPlanDetail.value?.execution_status || {})
+const selectedPlanStatus = computed(() => latestPlan.value?.status || '')
+const selectedPlanExecutionMode = computed(() => latestPlanDetail.value?.execution_mode || 'not_executed')
+const selectedPlanHasLiveSignals = computed(() => selectedPlanExecutionMode.value === 'live')
+const paperExecutionCount = computed(() => Number(executionStatus.value?.execution_count || 0))
+const hasPaperExecution = computed(() => Boolean(latestPlan.value?.paper_executed_at) || paperExecutionCount.value > 0)
+const canExecutePaperNow = computed(() => (
+  isPaperPortfolio.value
+  && selectedPlanStatus.value === 'approved'
+  && !selectedPlanHasLiveSignals.value
+  && !hasPaperExecution.value
+  && executionStatus.value?.open_price_ready !== false
+))
+const canPublishLiveSignals = computed(() => (
+  isLivePortfolio.value
+  && selectedPlanStatus.value === 'approved'
+  && !selectedPlanHasLiveSignals.value
+  && !hasPaperExecution.value
+))
+const showPlanOpsPanel = computed(() => (
+  Boolean(selectedLatestPlanId.value)
+  && selectedPlanStatus.value === 'approved'
+  && (isPaperPortfolio.value || isLivePortfolio.value)
+))
+const selectedPlanExecutionModeLabel = computed(() => {
+  if (selectedPlanExecutionMode.value === 'live') return '已发布实盘'
+  if (selectedPlanExecutionMode.value === 'paper') return '已执行 Paper'
+  return '未执行'
+})
+const paperExecuteReadyText = computed(() => {
+  if (!isPaperPortfolio.value) return '仅纸面组合支持 Paper 执行'
+  if (hasPaperExecution.value) return '该 plan 已执行过 Paper，不能重复执行'
+  if (selectedPlanHasLiveSignals.value) return '该 plan 已发布实盘信号，不能再执行 Paper'
+  if (selectedPlanStatus.value !== 'approved') return '需要先审核通过 plan'
+  if (executionStatus.value?.open_price_ready === false) {
+    const date = executionStatus.value.execute_date || executionStatus.value.effective_execute_date || '-'
+    const count = executionStatus.value.missing_open_price_count ?? 0
+    return `开盘价未就绪：execute_date=${date}，缺失 ${count} 个标的`
+  }
+  return '使用 execute_date 开盘价立即执行 Paper'
+})
+const liveAccountOptions = computed(() => securitiesAccounts.value.map((account) => ({
+  id: account.id || account._id,
+  label: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}`,
+})))
+const livePublishBlockers = computed(() => {
+  const items = livePublishPreview.value?.risk_report?.items || []
+  return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
+})
+const livePublishRiskRows = computed(() => livePublishPreview.value?.risk_report?.items || [])
+const remainderRows = computed(() => remainderPreview.value?.remainder || [])
+const remainderActionableCount = computed(() => remainderPreview.value?.actionable_count || 0)
+const remainderBlockers = computed(() => {
+  const items = remainderPreview.value?.risk_report?.items || []
+  return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
+})
 
 const cycleProgressPct = computed(() => {
   const cycle = timelineData.value?.current_cycle
@@ -1064,6 +1277,38 @@ function paperExecutionModeLabel(mode) {
   if (mode === 'auto_shadow') return '自动跟跑'
   if (mode === 'manual_review') return '人工审核'
   return mode || '-'
+}
+
+function blockerText(blocker) {
+  const labels = {
+    account_binding_missing: '账户绑定不完整',
+    insufficient_available_position: '可卖持仓不足',
+    insufficient_cash: '可用资金不足',
+    limit_up: '已涨停',
+    live_trading_disabled: '账户未开启实盘',
+    max_daily_amount_exceeded: '超过单日交易金额上限',
+    max_order_amount_exceeded: '超过单笔金额上限',
+    max_position_pct_exceeded: '超过单票仓位上限',
+    missing_price: '缺少有效价格',
+    st_stock: 'ST 股票',
+    suspended: '停牌',
+  }
+  return labels[blocker] || blocker || '-'
+}
+
+function remainderReasonText(reason) {
+  const labels = {
+    item_not_a_planned_trade: '非计划交易项',
+    already_at_target: '已达目标',
+    live_signal_active: '有在飞信号',
+    reference_price_unavailable: '无可用价格',
+    account_not_synced: '账户未同步',
+    budget_capped: '预算封顶',
+    cash_capped: '现金封顶',
+    available_position_below_gap: '可卖持仓不足',
+    estimated_price_missing: '缺计划价',
+  }
+  return labels[reason] || reason || '-'
 }
 
 function nodeTypeLabel(nodeType) {
@@ -1442,6 +1687,117 @@ async function approvePendingPlan() {
     messageIsError.value = true
   } finally {
     approveSubmitting.value = false
+  }
+}
+
+async function previewLivePublish() {
+  const planId = selectedLatestPlanId.value
+  if (!planId || !selectedLiveAccountId.value || !canPublishLiveSignals.value) return
+  livePublishLoading.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await publishPortfolioPlanLiveSignals(planId, {
+      securities_account_id: selectedLiveAccountId.value,
+      dry_run: true,
+    })
+    livePublishPreview.value = res.data || {}
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '实盘发布预检失败'
+    messageIsError.value = true
+  } finally {
+    livePublishLoading.value = false
+  }
+}
+
+async function publishLiveSignals() {
+  const planId = selectedLatestPlanId.value
+  if (!planId || !selectedLiveAccountId.value || !canPublishLiveSignals.value) return
+  livePublishLoading.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await publishPortfolioPlanLiveSignals(planId, {
+      securities_account_id: selectedLiveAccountId.value,
+      dry_run: false,
+    })
+    livePublishPreview.value = res.data || {}
+    message.value = `已发布 ${res.data?.inserted_count ?? 0} 条 live signals，已有 ${res.data?.existing_count ?? 0} 条。`
+    await Promise.all([loadPortfolios(), refreshDetail()])
+  } catch (error) {
+    const detail = error.response?.data?.detail
+    livePublishPreview.value = detail?.risk_report ? { risk_report: detail.risk_report, blocked: true } : livePublishPreview.value
+    message.value = formatApiDetail(detail) || error.message || '实盘发布失败'
+    messageIsError.value = true
+  } finally {
+    livePublishLoading.value = false
+  }
+}
+
+async function previewRemainder() {
+  const planId = selectedLatestPlanId.value
+  if (!planId || !selectedLiveAccountId.value) return
+  remainderLoading.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await replanPortfolioPlanRemainder(planId, {
+      securities_account_id: selectedLiveAccountId.value,
+      dry_run: true,
+      reason: remainderReason.value || '',
+    })
+    remainderPreview.value = res.data || {}
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '补缺口预检失败'
+    messageIsError.value = true
+  } finally {
+    remainderLoading.value = false
+  }
+}
+
+async function confirmRemainder() {
+  const planId = selectedLatestPlanId.value
+  if (!planId || !selectedLiveAccountId.value) return
+  remainderLoading.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await replanPortfolioPlanRemainder(planId, {
+      securities_account_id: selectedLiveAccountId.value,
+      dry_run: false,
+      reason: remainderReason.value || '',
+    })
+    remainderPreview.value = res.data || {}
+    message.value = `已补发 ${res.data?.inserted_count ?? 0} 条 plan_topup 信号。`
+    await Promise.all([loadPortfolios(), refreshDetail()])
+  } catch (error) {
+    const detail = error.response?.data?.detail
+    remainderPreview.value = detail?.risk_report
+      ? { ...(remainderPreview.value || {}), risk_report: detail.risk_report, blocked: true }
+      : remainderPreview.value
+    message.value = formatApiDetail(detail) || error.message || '补缺口失败'
+    messageIsError.value = true
+  } finally {
+    remainderLoading.value = false
+  }
+}
+
+async function executePaperNow() {
+  const planId = selectedLatestPlanId.value
+  if (!planId || !canExecutePaperNow.value) return
+  paperExecuteLoading.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await executePortfolioPlanPaper(planId, { force: false })
+    const status = res.data?.status || 'executed_paper'
+    message.value = `Paper 执行已触发：${status}。`
+    await Promise.all([loadPortfolios(), refreshDetail()])
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '执行 Paper 失败'
+    messageIsError.value = true
+  } finally {
+    paperExecuteLoading.value = false
   }
 }
 
@@ -2008,6 +2364,29 @@ async function loadPortfolios() {
   }
 }
 
+async function loadSecuritiesAccounts() {
+  try {
+    const accounts = await getSecuritiesAccounts()
+    securitiesAccounts.value = Array.isArray(accounts)
+      ? accounts
+      : (Array.isArray(accounts?.data) ? accounts.data : [])
+    syncSelectedLiveAccount()
+  } catch (error) {
+    securitiesAccounts.value = []
+  }
+}
+
+function syncSelectedLiveAccount() {
+  const portfolioAccount = selectedPortfolio.value?.securities_account_id
+  if (portfolioAccount) {
+    selectedLiveAccountId.value = portfolioAccount
+    return
+  }
+  if (!selectedLiveAccountId.value && securitiesAccounts.value.length) {
+    selectedLiveAccountId.value = securitiesAccounts.value[0].id || securitiesAccounts.value[0]._id || ''
+  }
+}
+
 async function refreshDetail() {
   const planId = selectedLatestPlanId.value
   if (!planId) return
@@ -2015,8 +2394,16 @@ async function refreshDetail() {
   message.value = ''
   messageIsError.value = false
   try {
-    const timelineRes = await getPortfolioPlanLineageTimeline(planId, { limit: 120 })
+    const [timelineRes, latestPlanRes] = await Promise.all([
+      getPortfolioPlanLineageTimeline(planId, { limit: 120 }),
+      getPortfolioPlan(planId),
+    ])
     timelineData.value = timelineRes.data || null
+    latestPlanDetail.value = latestPlanRes.data || null
+    livePublishPreview.value = null
+    remainderPreview.value = null
+    remainderReason.value = ''
+    syncSelectedLiveAccount()
 
     if (isLivePortfolio.value) {
       const [eqRes, posRes, exRes] = await Promise.all([
@@ -2034,10 +2421,9 @@ async function refreshDetail() {
       positionSummary.value = posRes.data?.summary || null
       tradeRows.value = exRes.data?.trades || []
     } else {
-      const [eqRes, posRes, planRes, exRes] = await Promise.all([
+      const [eqRes, posRes, exRes] = await Promise.all([
         getPortfolioPlanLineageEquity(planId),
         getLineagePaperPositions(planId),
-        getPortfolioPlan(planId),
         getLineagePaperExecutions(planId),
       ])
       const rows = eqRes.data?.rows || []
@@ -2056,7 +2442,7 @@ async function refreshDetail() {
             equity: Number(summary.equity || latestRow?.equity || 0),
             initial_capital: Number(
               eqRes.data?.initial_capital ||
-              planRes.data?.plan?.params_snapshot?.initial_capital ||
+              latestPlanDetail.value?.plan?.params_snapshot?.initial_capital ||
               selectedPortfolio.value?.initial_capital ||
               rows[0]?.equity ||
               0,
@@ -2100,6 +2486,10 @@ watch(selectedPortfolioKey, (key) => {
   showFastActionModal.value = false
   benchData.value = null
   reconcileData.value = null
+  latestPlanDetail.value = null
+  livePublishPreview.value = null
+  remainderPreview.value = null
+  remainderReason.value = ''
   lineupExpanded.value = false
   if (key) refreshDetail()
   else {
@@ -2118,6 +2508,7 @@ watch(latestHoldingRows, () => {
 }, { immediate: true })
 
 onMounted(() => {
+  loadSecuritiesAccounts()
   loadPortfolios()
 })
 </script>
@@ -2359,6 +2750,68 @@ button:disabled {
   color: #475569;
   font-size: 13px;
   margin: 12px 0 0;
+}
+
+.plan-ops-card {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+}
+
+.plan-ops-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.plan-ops-header h3 {
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+
+.plan-ops-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.plan-ops-actions select,
+.plan-ops-actions input {
+  border: 1px solid #111827;
+  border-radius: 4px;
+  color: #111827;
+  min-height: 36px;
+  padding: 8px 10px;
+}
+
+.reason-input {
+  min-width: 220px;
+}
+
+.risk-report {
+  background: #f8fafc;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.risk-report p {
+  margin: 0 0 8px;
+}
+
+.warning-text {
+  color: #b45309;
+  font-size: 13px;
+}
+
+.risk-report-table tr.blocked {
+  background: #fef2f2;
 }
 
 .timeline-section {
