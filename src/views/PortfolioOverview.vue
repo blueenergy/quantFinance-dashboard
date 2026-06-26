@@ -555,6 +555,9 @@
                 <span v-if="entry.node.drift_brief?.estimated_turnover != null">
                   换手 {{ pct(entry.node.drift_brief.estimated_turnover) }}
                 </span>
+                <span v-if="timelineTradePlanId(entry.node)" class="timeline-plan-id">
+                  交易计划ID <code>{{ timelineTradePlanId(entry.node) }}</code>
+                </span>
               </div>
               <div
                 v-if="expandedTimelinePlanId === entry.node.plan_id && timelineTradeItems(entry.node).length"
@@ -1611,6 +1614,12 @@ function timelineEntryClass(entry) {
 
 function timelineTradeItems(node) {
   return node?.drift_brief?.items || []
+}
+
+function timelineTradePlanId(node) {
+  if (!node) return ''
+  const isTradePlan = node.record_kind === 'trade_plan' || node.node_type === 'rebalance'
+  return isTradePlan ? (node.plan_id || '') : ''
 }
 
 function toggleTimelineDetail(planId) {
@@ -3357,6 +3366,19 @@ button:disabled {
   font-size: 14px;
   line-height: 1;
   padding: 0 2px;
+}
+
+.timeline-plan-id {
+  color: #475569;
+  word-break: break-all;
+}
+
+.timeline-plan-id code {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  color: #0f172a;
+  padding: 1px 4px;
 }
 
 .timeline-hint {
