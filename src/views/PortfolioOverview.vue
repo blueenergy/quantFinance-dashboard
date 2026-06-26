@@ -162,7 +162,7 @@
           <button
             type="button"
             class="secondary"
-            :disabled="forceRebalanceSubmitting || !selectedLatestPlanId || Boolean(forceRebalanceBlockReason)"
+            :disabled="forceRebalanceSubmitting || !selectedOperationPlanId || Boolean(forceRebalanceBlockReason)"
             :title="forceRebalanceBlockReason || ''"
             @click="submitForceRebalance"
           >
@@ -180,17 +180,17 @@
           <div>
             <h3>待审批计划复核</h3>
             <p class="muted">
-              最新 plan：<code>{{ shortPlanId(selectedLatestPlanId) }}</code> · 待审批 ·
+              最新 plan：<code>{{ shortPlanId(selectedOperationPlanId) }}</code> · 待审批 ·
               请先核对下方买/卖/持有方向与 AI 风控，再决定批准或拒绝。
             </p>
             <p class="plan-id-row">
               <span class="label">完整 plan_id</span>
-              <code>{{ selectedLatestPlanId || '-' }}</code>
+              <code>{{ selectedOperationPlanId || '-' }}</code>
               <button
                 type="button"
                 class="link-button"
-                :disabled="!selectedLatestPlanId"
-                @click="copyPlanId(selectedLatestPlanId)"
+                :disabled="!selectedOperationPlanId"
+                @click="copyPlanId(selectedOperationPlanId)"
               >
                 复制
               </button>
@@ -292,18 +292,18 @@
           <div>
             <h3>计划执行操作</h3>
             <p class="muted">
-              当前组合最新 plan：<code>{{ shortPlanId(selectedLatestPlanId) }}</code>
+              当前操作 plan：<code>{{ shortPlanId(selectedOperationPlanId) }}</code>
               · {{ selectedPlanStatus || '-' }}
               · {{ selectedPlanExecutionModeLabel }}
             </p>
             <p class="plan-id-row">
               <span class="label">完整 plan_id</span>
-              <code>{{ selectedLatestPlanId || '-' }}</code>
+              <code>{{ selectedOperationPlanId || '-' }}</code>
               <button
                 type="button"
                 class="link-button"
-                :disabled="!selectedLatestPlanId"
-                @click="copyPlanId(selectedLatestPlanId)"
+                :disabled="!selectedOperationPlanId"
+                @click="copyPlanId(selectedOperationPlanId)"
               >
                 复制
               </button>
@@ -333,7 +333,7 @@
               {{ account.label }}
             </option>
           </select>
-          <template v-if="!selectedPlanHasLiveSignals">
+          <template v-if="!selectedPlanHasPublishedLiveSignals">
             <button
               type="button"
               :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals"
@@ -1311,9 +1311,10 @@ const selectedPortfolio = computed(() => (
 ))
 
 const selectedLatestPlanId = computed(() => selectedPortfolio.value?.latest_plan_id || '')
+const selectedOperationPlanId = computed(() => timelineData.value?.operation_plan?.plan_id || selectedLatestPlanId.value)
 
 const benchPlanId = computed(() => (
-  timelineData.value?.latest_drift_summary?.plan_id || selectedLatestPlanId.value
+  timelineData.value?.latest_drift_summary?.plan_id || selectedOperationPlanId.value
 ))
 
 const pendingActionPlan = computed(() => {
@@ -1330,6 +1331,10 @@ const selectedPlanStatus = computed(() => latestPlan.value?.status || '')
 const selectedPlanExecutionMode = computed(() => latestPlanDetail.value?.execution_mode || 'not_executed')
 const liveExecutionContext = computed(() => latestPlanDetail.value?.live_execution_context || {})
 const selectedPlanHasLiveSignals = computed(() => selectedPlanExecutionMode.value === 'live')
+const selectedPlanHasPublishedLiveSignals = computed(() => (
+  Boolean(latestPlan.value?.live_signals_published_at)
+  || Number(latestPlan.value?.live_signal_count || 0) > 0
+))
 const selectedPlanLiveSignalCount = computed(() => Number(liveExecutionContext.value?.signal_count || 0))
 const selectedPlanActiveLiveSignalCount = computed(() => Number(liveExecutionContext.value?.active_signal_count || 0))
 const latestPlanItems = computed(() => latestPlanDetail.value?.items || [])
@@ -1355,7 +1360,7 @@ const canExecutePaperNow = computed(() => (
 const canPublishLiveSignals = computed(() => (
   isLivePortfolio.value
   && selectedPlanStatus.value === 'approved'
-  && !selectedPlanHasLiveSignals.value
+  && !selectedPlanHasPublishedLiveSignals.value
   && !hasPaperExecution.value
 ))
 const canCancelCurrentPlan = computed(() => (
@@ -1363,7 +1368,7 @@ const canCancelCurrentPlan = computed(() => (
   && !hasPaperExecution.value
 ))
 const showPlanOpsPanel = computed(() => (
-  Boolean(selectedLatestPlanId.value)
+  Boolean(selectedOperationPlanId.value)
   && selectedPlanStatus.value === 'approved'
   && (isPaperPortfolio.value || isLivePortfolio.value)
 ))
@@ -1371,6 +1376,9 @@ const selectedPlanExecutionModeLabel = computed(() => {
   if (selectedPlanExecutionMode.value === 'live') {
     if (selectedPlanActiveLiveSignalCount.value > 0) {
       return `实盘信号在途 ${selectedPlanActiveLiveSignalCount.value}/${selectedPlanLiveSignalCount.value}`
+    }
+    if (!selectedPlanHasPublishedLiveSignals.value) {
+      return `有历史实盘信号（未标记发布，${selectedPlanLiveSignalCount.value} 条）`
     }
     return `有历史实盘信号（无在途，${selectedPlanLiveSignalCount.value} 条）`
   }
@@ -1446,7 +1454,7 @@ const needsReviewPlan = computed(() => selectedPlanStatus.value === 'needs_revie
 // Single source of truth for which plan the review card acts on. Prefer the
 // timeline's action-required node, but fall back to the currently selected
 // latest plan so approve/reject always target the plan the user is looking at.
-const reviewPlanId = computed(() => pendingActionPlan.value?.plan_id || selectedLatestPlanId.value || '')
+const reviewPlanId = computed(() => pendingActionPlan.value?.plan_id || selectedOperationPlanId.value || '')
 const planReviewRiskSummary = computed(() => planTargetRows.value.reduce(
   (acc, row) => {
     const severity = row.ai_risk?.severity
@@ -2030,7 +2038,7 @@ async function rejectPendingPlan() {
 }
 
 async function rerunReviewAiRisk() {
-  const planId = selectedLatestPlanId.value
+  const planId = selectedOperationPlanId.value
   if (!planId) return
   reviewAiRiskLoading.value = true
   message.value = ''
@@ -2050,7 +2058,7 @@ async function rerunReviewAiRisk() {
 }
 
 async function previewLivePublish() {
-  const planId = selectedLatestPlanId.value
+  const planId = selectedOperationPlanId.value
   if (!planId || !selectedLiveAccountId.value || !canPublishLiveSignals.value) return
   livePublishLoading.value = true
   message.value = ''
@@ -2070,7 +2078,7 @@ async function previewLivePublish() {
 }
 
 async function publishLiveSignals() {
-  const planId = selectedLatestPlanId.value
+  const planId = selectedOperationPlanId.value
   if (!planId || !selectedLiveAccountId.value || !canPublishLiveSignals.value) return
   livePublishLoading.value = true
   message.value = ''
@@ -2094,7 +2102,7 @@ async function publishLiveSignals() {
 }
 
 async function previewRemainder() {
-  const planId = selectedLatestPlanId.value
+  const planId = selectedOperationPlanId.value
   if (!planId || !selectedLiveAccountId.value) return
   remainderLoading.value = true
   message.value = ''
@@ -2115,7 +2123,7 @@ async function previewRemainder() {
 }
 
 async function confirmRemainder() {
-  const planId = selectedLatestPlanId.value
+  const planId = selectedOperationPlanId.value
   if (!planId || !selectedLiveAccountId.value) return
   remainderLoading.value = true
   message.value = ''
@@ -2142,7 +2150,7 @@ async function confirmRemainder() {
 }
 
 async function executePaperNow() {
-  const planId = selectedLatestPlanId.value
+  const planId = selectedOperationPlanId.value
   if (!planId || !canExecutePaperNow.value) return
   paperExecuteLoading.value = true
   message.value = ''
@@ -2161,7 +2169,7 @@ async function executePaperNow() {
 }
 
 async function cancelCurrentPlan() {
-  const planId = selectedLatestPlanId.value
+  const planId = selectedOperationPlanId.value
   if (!planId || !canCancelCurrentPlan.value) return
   const ok = window.confirm(
     '确定作废当前计划吗？如果已发布 live signals 且尚未成交，会一起标记为 cancelled；如果已有成交，后端会拒绝作废。'
@@ -2184,7 +2192,7 @@ async function cancelCurrentPlan() {
 }
 
 async function submitForceRebalance() {
-  const planId = selectedLatestPlanId.value
+  const planId = selectedOperationPlanId.value
   if (!planId) return
   if (forceRebalanceBlockReason.value) {
     message.value = forceRebalanceBlockReason.value
@@ -2793,11 +2801,10 @@ async function refreshDetail() {
   message.value = ''
   messageIsError.value = false
   try {
-    const [timelineRes, latestPlanRes] = await Promise.all([
-      getPortfolioPlanLineageTimeline(planId, { limit: 120 }),
-      getPortfolioPlan(planId),
-    ])
+    const timelineRes = await getPortfolioPlanLineageTimeline(planId, { limit: 120 })
     timelineData.value = timelineRes.data || null
+    const operationPlanId = timelineData.value?.operation_plan?.plan_id || planId
+    const latestPlanRes = await getPortfolioPlan(operationPlanId)
     latestPlanDetail.value = latestPlanRes.data || null
     livePublishPreview.value = null
     remainderPreview.value = null
