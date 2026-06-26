@@ -183,6 +183,18 @@
               最新 plan：<code>{{ shortPlanId(selectedLatestPlanId) }}</code> · 待审批 ·
               请先核对下方买/卖/持有方向与 AI 风控，再决定批准或拒绝。
             </p>
+            <p class="plan-id-row">
+              <span class="label">完整 plan_id</span>
+              <code>{{ selectedLatestPlanId || '-' }}</code>
+              <button
+                type="button"
+                class="link-button"
+                :disabled="!selectedLatestPlanId"
+                @click="copyPlanId(selectedLatestPlanId)"
+              >
+                复制
+              </button>
+            </p>
           </div>
           <div class="pending-plan-summary">
             <span class="tag-buy">买 {{ planReviewSummary.buy }}</span>
@@ -283,6 +295,18 @@
               当前组合最新 plan：<code>{{ shortPlanId(selectedLatestPlanId) }}</code>
               · {{ selectedPlanStatus || '-' }}
               · {{ selectedPlanExecutionModeLabel }}
+            </p>
+            <p class="plan-id-row">
+              <span class="label">完整 plan_id</span>
+              <code>{{ selectedLatestPlanId || '-' }}</code>
+              <button
+                type="button"
+                class="link-button"
+                :disabled="!selectedLatestPlanId"
+                @click="copyPlanId(selectedLatestPlanId)"
+              >
+                复制
+              </button>
             </p>
           </div>
           <span class="funding-badge" :class="`mode-${selectedPortfolio.execution_venue}`">
@@ -1304,7 +1328,10 @@ const latestPlan = computed(() => latestPlanDetail.value?.plan || null)
 const executionStatus = computed(() => latestPlanDetail.value?.execution_status || {})
 const selectedPlanStatus = computed(() => latestPlan.value?.status || '')
 const selectedPlanExecutionMode = computed(() => latestPlanDetail.value?.execution_mode || 'not_executed')
+const liveExecutionContext = computed(() => latestPlanDetail.value?.live_execution_context || {})
 const selectedPlanHasLiveSignals = computed(() => selectedPlanExecutionMode.value === 'live')
+const selectedPlanLiveSignalCount = computed(() => Number(liveExecutionContext.value?.signal_count || 0))
+const selectedPlanActiveLiveSignalCount = computed(() => Number(liveExecutionContext.value?.active_signal_count || 0))
 const latestPlanItems = computed(() => latestPlanDetail.value?.items || [])
 const paperExecutionCount = computed(() => Number(executionStatus.value?.execution_count || 0))
 const hasPaperExecution = computed(() => Boolean(latestPlan.value?.paper_executed_at) || paperExecutionCount.value > 0)
@@ -1341,14 +1368,19 @@ const showPlanOpsPanel = computed(() => (
   && (isPaperPortfolio.value || isLivePortfolio.value)
 ))
 const selectedPlanExecutionModeLabel = computed(() => {
-  if (selectedPlanExecutionMode.value === 'live') return '已发布实盘'
+  if (selectedPlanExecutionMode.value === 'live') {
+    if (selectedPlanActiveLiveSignalCount.value > 0) {
+      return `实盘信号在途 ${selectedPlanActiveLiveSignalCount.value}/${selectedPlanLiveSignalCount.value}`
+    }
+    return `有历史实盘信号（无在途，${selectedPlanLiveSignalCount.value} 条）`
+  }
   if (selectedPlanExecutionMode.value === 'paper') return '已执行 Paper'
   return '未执行'
 })
 const paperExecuteReadyText = computed(() => {
   if (!isPaperPortfolio.value) return '仅纸面组合支持 Paper 执行'
   if (hasPaperExecution.value) return '该 plan 已执行过 Paper，不能重复执行'
-  if (selectedPlanHasLiveSignals.value) return '该 plan 已发布实盘信号，不能再执行 Paper'
+  if (selectedPlanHasLiveSignals.value) return '该 plan 存在实盘信号历史，不能再执行 Paper'
   if (selectedPlanStatus.value !== 'approved') return '需要先审核通过 plan'
   if (executionStatus.value?.missing_execute_date) return '缺少 execute_date，请等待自动执行或先补齐下一交易日 execute_date'
   if (executionStatus.value?.open_price_ready === false) {
@@ -1361,7 +1393,7 @@ const paperExecuteReadyText = computed(() => {
 const cancelPlanReadyText = computed(() => {
   if (hasPaperExecution.value) return '该 plan 已执行 Paper，不能作废'
   if (selectedPlanStatus.value !== 'approved') return '只有 approved plan 可以作废'
-  if (selectedPlanHasLiveSignals.value) return '作废会把未成交 live signals 标记为 cancelled；若已有成交，后端会拒绝'
+  if (selectedPlanHasLiveSignals.value) return '该 plan 存在实盘信号历史；作废会取消未成交信号，若已有成交后端会拒绝'
   return '误点确认发布/审批后可作废；作废后状态变为 cancelled'
 })
 const liveAccountOptions = computed(() => securitiesAccounts.value.map((account) => ({
@@ -1502,6 +1534,19 @@ function shortPlanId(planId) {
   if (!text) return '-'
   if (text.length <= 28) return text
   return `${text.slice(0, 18)}…${text.slice(-8)}`
+}
+
+async function copyPlanId(planId) {
+  const text = String(planId || '')
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    message.value = `已复制 plan_id：${text}`
+    messageIsError.value = false
+  } catch {
+    message.value = `无法自动复制，请手动复制 plan_id：${text}`
+    messageIsError.value = true
+  }
 }
 
 function paperExecutionModeLabel(mode) {
@@ -3138,6 +3183,43 @@ button:disabled {
 .plan-ops-header h3 {
   font-size: 15px;
   margin: 0 0 4px;
+}
+
+.plan-id-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+}
+
+.plan-id-row .label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.plan-id-row code {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #0f172a;
+  font-size: 12px;
+  padding: 2px 6px;
+}
+
+.link-button {
+  background: transparent;
+  border: 0;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.link-button:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
 }
 
 .plan-ops-actions {
