@@ -157,9 +157,7 @@
         <div v-if="timelineData.action_required || selectedLatestPlanId" class="cycle-actions">
           <p v-if="pendingActionPlan" class="action-banner">
             待审批计划：<strong>{{ pendingActionPlan.date }}</strong> · {{ pendingActionPlan.today_state }}
-            <button type="button" :disabled="approveSubmitting" @click="approvePendingPlan">
-              {{ approveSubmitting ? '审批中…' : '一键审批' }}
-            </button>
+            <span class="muted">请在下方「待审批计划复核」核对标的与 AI 风控后批准/拒绝。</span>
           </p>
           <button
             type="button"
@@ -174,6 +172,106 @@
           <span v-else class="muted">
             重新生成一份强制调仓计划；不会执行当前已有 plan。
           </span>
+        </div>
+      </section>
+
+      <section v-if="needsReviewPlan && planTargetRows.length" class="plan-ops-card plan-review-card">
+        <div class="plan-ops-header">
+          <div>
+            <h3>待审批计划复核</h3>
+            <p class="muted">
+              最新 plan：<code>{{ shortPlanId(selectedLatestPlanId) }}</code> · 待审批 ·
+              请先核对下方买/卖/持有方向与 AI 风控，再决定批准或拒绝。
+            </p>
+          </div>
+          <div class="pending-plan-summary">
+            <span class="tag-buy">买 {{ planReviewSummary.buy }}</span>
+            <span class="tag-sell">卖 {{ planReviewSummary.sell }}</span>
+            <span class="tag-hold">持有 {{ planReviewSummary.hold }}</span>
+          </div>
+        </div>
+
+        <p
+          v-if="planReviewRiskSummary.high"
+          class="warning-text plan-review-risk-warning"
+        >
+          AI 风控发现 {{ planReviewRiskSummary.high }} 个高风险标的，批准前请重点确认。
+        </p>
+
+        <div class="table-wrap compact risk-report-table">
+          <table>
+            <thead>
+              <tr>
+                <th>方向</th>
+                <th>标的</th>
+                <th>行业</th>
+                <th>加权分</th>
+                <th>当前</th>
+                <th>目标</th>
+                <th>变化</th>
+                <th>预估价</th>
+                <th>预估金额</th>
+                <th>AI风控</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in planTargetRows" :key="row.symbol">
+                <td>
+                  <span class="action-tag" :class="planItemActionClass(row.action)">
+                    {{ planItemActionLabel(row.action) }}
+                  </span>
+                </td>
+                <td>
+                  <strong>{{ row.name || row.symbol }}</strong>
+                  <small class="muted symbol-line">{{ row.symbol }}</small>
+                </td>
+                <td>{{ row.industry || '-' }}</td>
+                <td>{{ num(row.score_value) }}</td>
+                <td>{{ row.current_shares ?? 0 }}</td>
+                <td>{{ row.target_shares ?? 0 }}</td>
+                <td :class="signClass(row.delta_shares)">{{ formatShareDelta(row.delta_shares) }}</td>
+                <td>{{ num(row.estimated_price) }}</td>
+                <td>{{ money(row.estimated_amount) }}</td>
+                <td>
+                  <span
+                    v-if="row.ai_risk"
+                    class="risk-badge"
+                    :class="`risk-${row.ai_risk.severity || 'none'}`"
+                    :title="(row.ai_risk.reasons || []).join('、')"
+                  >
+                    {{ riskSeverityLabel(row.ai_risk.severity) }}
+                  </span>
+                  <span v-else class="muted">-</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="plan-ops-actions plan-review-actions">
+          <button
+            type="button"
+            :disabled="approveSubmitting || rejectSubmitting || !reviewPlanId"
+            @click="approvePendingPlan"
+          >
+            {{ approveSubmitting ? '审批中…' : '批准计划' }}
+          </button>
+          <button
+            type="button"
+            class="secondary"
+            :disabled="reviewAiRiskLoading"
+            @click="rerunReviewAiRisk"
+          >
+            {{ reviewAiRiskLoading ? 'AI 风控复检中…' : '运行 AI 风控复检' }}
+          </button>
+          <button
+            type="button"
+            class="danger"
+            :disabled="approveSubmitting || rejectSubmitting || !reviewPlanId"
+            @click="rejectPendingPlan"
+          >
+            {{ rejectSubmitting ? '拒绝中…' : '拒绝计划' }}
+          </button>
         </div>
       </section>
 
@@ -393,115 +491,6 @@
               </tbody>
             </table>
           </div>
-        </div>
-      </section>
-
-      <section v-if="benchData" class="lineup-card">
-        <div class="lineup-header">
-          <div>
-            <h3>今日阵容 / 推荐</h3>
-            <p class="muted lineup-hint">
-              首发 = 当前真实持仓；替补席 = 算法最新评分候选。可从替补席单点换人（预览确认后立即下单）。
-              评分快照 {{ benchData.score_date || '-' }} · 替补席约 {{ benchData.bench_multiplier }}×Top{{ benchData.top_n }}。
-            </p>
-          </div>
-          <button type="button" class="link-btn" @click="lineupExpanded = !lineupExpanded">
-            {{ lineupExpanded ? '收起' : '展开' }}
-          </button>
-        </div>
-        <div v-if="lineupExpanded">
-          <div v-if="benchLoading" class="muted">加载阵容中…</div>
-          <template v-else>
-            <h4>首发阵容（当前持仓）</h4>
-            <div v-if="!benchData.starters?.length" class="muted">暂无持仓（空账户可先点「立即调仓 / 强制建仓」）。</div>
-            <div v-else class="table-wrap">
-              <table class="lineup-table">
-                <thead>
-                  <tr>
-                    <th>排名</th>
-                    <th>代码</th>
-                    <th>名称</th>
-                    <th>分数</th>
-                    <th>持仓股数</th>
-                    <th>参考价</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in benchData.starters" :key="row.symbol">
-                    <td>{{ row.rank ?? '-' }}</td>
-                    <td>{{ row.symbol }}</td>
-                    <td>
-                      {{ row.name || '-' }}
-                      <span v-if="row.in_universe === false" class="off-universe-tag">池外</span>
-                    </td>
-                    <td>{{ num(row.score_value) }}</td>
-                    <td>{{ row.current_shares }}</td>
-                    <td>{{ num(row.estimated_price) }}</td>
-                    <td>
-                      <button type="button" class="link-btn" @click="openSwapModal(row)">换人</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <details class="bench-details" :open="benchExpanded">
-              <summary @click.prevent="benchExpanded = !benchExpanded">替补席（{{ benchData.bench?.length || 0 }}）</summary>
-              <div class="bench-risk-bar">
-                <span v-if="benchRisk" class="bench-risk-summary">
-                  AI风控：<b class="risk-high">{{ benchRisk.high || 0 }}高</b>
-                  / <b class="risk-medium">{{ benchRisk.medium || 0 }}中</b>
-                  / <b class="risk-low">{{ benchRisk.low || 0 }}低</b>
-                </span>
-                <span v-else class="muted">替补席也可先体检——高风险候选上场前会二次确认。</span>
-                <button
-                  type="button"
-                  class="link-btn"
-                  :disabled="benchRiskLoading || !benchData.bench?.length"
-                  @click="loadBenchRisk"
-                >
-                  {{ benchRiskLoading ? 'AI 风控运行中…' : '运行 AI 风控' }}
-                </button>
-              </div>
-              <div v-if="benchData.bench?.length" class="table-wrap">
-                <table class="lineup-table">
-                  <thead>
-                    <tr>
-                      <th>排名</th>
-                      <th>代码</th>
-                      <th>名称</th>
-                      <th>行业</th>
-                      <th>分数</th>
-                      <th>最新收盘</th>
-                      <th>AI风控</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in benchData.bench" :key="row.symbol">
-                      <td>{{ row.rank }}</td>
-                      <td>{{ row.symbol }}</td>
-                      <td>{{ row.name || '-' }}</td>
-                      <td>{{ row.industry || '-' }}</td>
-                      <td>{{ num(row.score_value) }}</td>
-                      <td>{{ num(row.latest_close) }}</td>
-                      <td>
-                        <span
-                          v-if="benchRiskBySymbol[row.symbol]"
-                          class="risk-badge"
-                          :class="`risk-${benchRiskBySymbol[row.symbol].severity}`"
-                          :title="(benchRiskBySymbol[row.symbol].reasons || []).join('、')"
-                        >
-                          {{ riskSeverityLabel(benchRiskBySymbol[row.symbol].severity) }}
-                        </span>
-                        <span v-else class="muted">-</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <p v-else class="muted">暂无替补候选。</p>
-            </details>
-          </template>
         </div>
       </section>
 
@@ -793,8 +782,9 @@
                 <td>{{ money(row.market_value) }}</td>
                 <td :class="signClass(row.unrealized_pnl)">{{ signedMoney(row.unrealized_pnl) }}</td>
                 <td class="fast-actions">
-                  <button type="button" class="link-btn" @click="openQuickReduceModal(row, halfTargetShares(row))">减半</button>
-                  <button type="button" class="link-btn danger-text" @click="openQuickReduceModal(row, 0)">清仓</button>
+                  <button type="button" class="fast-btn fast-btn-swap" @click="openSwapModal(row)">换股</button>
+                  <button type="button" class="fast-btn fast-btn-reduce" @click="openQuickReduceModal(row, halfTargetShares(row))">减半</button>
+                  <button type="button" class="fast-btn fast-btn-clear" @click="openQuickReduceModal(row, 0)">清仓</button>
                 </td>
               </tr>
             </tbody>
@@ -806,11 +796,84 @@
             </span>
           </p>
         </div>
+
+        <section v-if="benchData" class="lineup-card bench-candidates-card">
+          <div class="lineup-header">
+            <div>
+              <h3>替补候选</h3>
+              <p class="muted lineup-hint">
+                当前不在持仓中的策略候选，按算法评分排序。评分快照 {{ benchData.score_date || '-' }} ·
+                替补池约 {{ benchData.bench_multiplier }}×Top{{ benchData.top_n }}。
+              </p>
+            </div>
+            <button type="button" class="link-btn" @click="benchExpanded = !benchExpanded">
+              {{ benchExpanded ? '收起' : '展开' }}
+            </button>
+          </div>
+          <div v-if="benchExpanded">
+            <div v-if="benchLoading" class="muted">加载替补候选中…</div>
+            <template v-else>
+              <div class="bench-risk-bar">
+                <span v-if="benchRisk" class="bench-risk-summary">
+                  AI风控：<b class="risk-high">{{ benchRisk.high || 0 }}高</b>
+                  / <b class="risk-medium">{{ benchRisk.medium || 0 }}中</b>
+                  / <b class="risk-low">{{ benchRisk.low || 0 }}低</b>
+                </span>
+                <span v-else class="muted">替补候选可先体检，高风险候选上场前会二次确认。</span>
+                <button
+                  type="button"
+                  class="link-btn"
+                  :disabled="benchRiskLoading || !benchData.bench?.length"
+                  @click="loadBenchRisk"
+                >
+                  {{ benchRiskLoading ? 'AI 风控运行中…' : '运行 AI 风控' }}
+                </button>
+              </div>
+              <div v-if="benchData.bench?.length" class="table-wrap">
+                <table class="lineup-table">
+                  <thead>
+                    <tr>
+                      <th>排名</th>
+                      <th>代码</th>
+                      <th>名称</th>
+                      <th>行业</th>
+                      <th>分数</th>
+                      <th>最新收盘</th>
+                      <th>AI风控</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in benchData.bench" :key="row.symbol">
+                      <td>{{ row.rank }}</td>
+                      <td>{{ row.symbol }}</td>
+                      <td>{{ row.name || '-' }}</td>
+                      <td>{{ row.industry || '-' }}</td>
+                      <td>{{ num(row.score_value) }}</td>
+                      <td>{{ num(row.latest_close) }}</td>
+                      <td>
+                        <span
+                          v-if="benchRiskBySymbol[row.symbol]"
+                          class="risk-badge"
+                          :class="`risk-${benchRiskBySymbol[row.symbol].severity}`"
+                          :title="(benchRiskBySymbol[row.symbol].reasons || []).join('、')"
+                        >
+                          {{ riskSeverityLabel(benchRiskBySymbol[row.symbol].severity) }}
+                        </span>
+                        <span v-else class="muted">-</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p v-else class="muted">暂无替补候选。</p>
+            </template>
+          </div>
+        </section>
       </section>
 
       <div v-if="showSwapModal" class="modal-backdrop" @click.self="showSwapModal = false">
         <div class="modal-card modal-wide">
-          <h3>替补换人</h3>
+          <h3>替补换股</h3>
           <p class="muted">
             换下 <strong>{{ swapStarter?.symbol }}</strong>（{{ swapStarter?.name || '-' }}），从替补席选择上场球员。
             仅本次生效，预览确认后立即下单。
@@ -864,14 +927,14 @@
                   </td>
                   <td>
                     <button type="button" class="link-btn" :disabled="fastActionSubmitting" @click="previewSwap(row)">
-                      选为替补上场
+                      替补上场
                     </button>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <p v-else class="muted">替补席为空，无法换人。</p>
+          <p v-else class="muted">替补席为空，无法换股。</p>
           <p v-if="swapError" class="modal-error">{{ swapError }}</p>
           <div class="modal-actions">
             <button type="button" @click="showSwapModal = false">取消</button>
@@ -1151,7 +1214,9 @@ import {
   listPortfolios,
   publishPortfolioPlanLiveSignals,
   recordExternalManualRecord,
+  rejectPortfolioPlan,
   replanPortfolioPlanRemainder,
+  rerunPortfolioPlanAiRisk,
   resumePortfolioLineage,
 } from '../api/portfolioPlans'
 import { getSecuritiesAccounts } from '../api/trader'
@@ -1195,7 +1260,6 @@ const benchData = ref(null)
 const benchLoading = ref(false)
 const benchRisk = ref(null)
 const benchRiskLoading = ref(false)
-const lineupExpanded = ref(false)
 const reconcileData = ref(null)
 const benchExpanded = ref(false)
 const showSwapModal = ref(false)
@@ -1205,6 +1269,8 @@ const showFastActionModal = ref(false)
 const fastActionSubmitting = ref(false)
 const fastActionPreview = ref({ title: '', description: '', targets: {}, items: [], blocked: false })
 const approveSubmitting = ref(false)
+const rejectSubmitting = ref(false)
+const reviewAiRiskLoading = ref(false)
 const forceRebalanceSubmitting = ref(false)
 const securitiesAccounts = ref([])
 const selectedLiveAccountId = ref('')
@@ -1313,9 +1379,13 @@ const remainderBlockers = computed(() => {
   const items = remainderPreview.value?.risk_report?.items || []
   return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
 })
-const pendingPlanRows = computed(() => {
-  if (!hasApprovedPlanAwaitingAction.value) return []
-  return latestPlanItems.value
+// Normalized plan target list (buy/sell/hold, skip filtered, score-sorted).
+// AI risk (ai_risk) is written onto each item by the plan-generation worker, so
+// it is available as soon as the plan exists — including while it is still
+// needs_review. The display gating below is purely about *which lifecycle
+// states* should surface this table, not about data availability.
+const planTargetRows = computed(() => (
+  latestPlanItems.value
     .map((item) => normalizePlanItemRow(item))
     .filter((item) => item.action !== 'skip')
     .sort((a, b) => {
@@ -1328,16 +1398,38 @@ const pendingPlanRows = computed(() => {
       if (aHasScore !== bHasScore) return aHasScore ? -1 : 1
       return (order[a.action] ?? 9) - (order[b.action] ?? 9) || String(a.symbol).localeCompare(String(b.symbol))
     })
-})
-const pendingPlanSummary = computed(() => pendingPlanRows.value.reduce(
+))
+function summarizePlanRows(rows) {
+  return rows.reduce(
+    (acc, row) => {
+      if (row.action === 'buy') acc.buy += 1
+      else if (row.action === 'sell') acc.sell += 1
+      else if (row.action === 'hold') acc.hold += 1
+      return acc
+    },
+    { buy: 0, sell: 0, hold: 0 },
+  )
+}
+const needsReviewPlan = computed(() => selectedPlanStatus.value === 'needs_review')
+// Single source of truth for which plan the review card acts on. Prefer the
+// timeline's action-required node, but fall back to the currently selected
+// latest plan so approve/reject always target the plan the user is looking at.
+const reviewPlanId = computed(() => pendingActionPlan.value?.plan_id || selectedLatestPlanId.value || '')
+const planReviewRiskSummary = computed(() => planTargetRows.value.reduce(
   (acc, row) => {
-    if (row.action === 'buy') acc.buy += 1
-    else if (row.action === 'sell') acc.sell += 1
-    else if (row.action === 'hold') acc.hold += 1
+    const severity = row.ai_risk?.severity
+    if (severity === 'high') acc.high += 1
+    else if (severity === 'medium') acc.medium += 1
+    else if (severity === 'low') acc.low += 1
     return acc
   },
-  { buy: 0, sell: 0, hold: 0 },
+  { high: 0, medium: 0, low: 0 },
 ))
+const pendingPlanRows = computed(() => (
+  hasApprovedPlanAwaitingAction.value ? planTargetRows.value : []
+))
+const pendingPlanSummary = computed(() => summarizePlanRows(pendingPlanRows.value))
+const planReviewSummary = computed(() => summarizePlanRows(planTargetRows.value))
 
 const cycleProgressPct = computed(() => {
   const cycle = timelineData.value?.current_cycle
@@ -1744,7 +1836,12 @@ function halfTargetShares(row) {
 }
 
 function openSwapModal(starter) {
-  swapStarter.value = starter
+  swapStarter.value = {
+    ...starter,
+    current_shares: starter?.current_shares ?? starter?.shares ?? 0,
+    target_shares: effectiveTarget(starter?.symbol),
+    estimated_price: starter?.estimated_price ?? starter?.last_price ?? starter?.price ?? 0,
+  }
   swapError.value = ''
   showSwapModal.value = true
 }
@@ -1785,7 +1882,7 @@ async function previewSwap(benchPlayer) {
   }
   const benchShares = estimateSwapBenchShares(starter, benchPlayer)
   if (!benchShares) {
-    swapError.value = `按 ${starter.symbol} 仓位金额估算 ${benchPlayer.symbol} 不足 1 手，无法换人。`
+    swapError.value = `按 ${starter.symbol} 仓位金额估算 ${benchPlayer.symbol} 不足 1 手，无法换股。`
     return
   }
   const targets = {
@@ -1793,7 +1890,7 @@ async function previewSwap(benchPlayer) {
     [benchPlayer.symbol]: benchShares,
   }
   const ok = await previewFastAction({
-    title: '确认替补换人',
+    title: '确认替补换股',
     description: `换下 ${starter.symbol}，换上 ${benchPlayer.symbol}（约 ${benchShares} 股）；仅本次生效。`,
     targets,
   })
@@ -1850,7 +1947,7 @@ async function confirmFastAction() {
 }
 
 async function approvePendingPlan() {
-  const planId = pendingActionPlan.value?.plan_id
+  const planId = reviewPlanId.value
   if (!planId) return
   approveSubmitting.value = true
   message.value = ''
@@ -1864,6 +1961,46 @@ async function approvePendingPlan() {
     messageIsError.value = true
   } finally {
     approveSubmitting.value = false
+  }
+}
+
+async function rejectPendingPlan() {
+  const planId = reviewPlanId.value
+  if (!planId) return
+  const reason = window.prompt('拒绝原因（可选，会记录到 plan review）：', '')
+  if (reason === null) return
+  rejectSubmitting.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    await rejectPortfolioPlan(planId, { comment: reason || 'rejected from portfolio overview' })
+    message.value = `计划 ${planId} 已拒绝。`
+    await Promise.all([loadPortfolios(), refreshDetail()])
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '拒绝失败'
+    messageIsError.value = true
+  } finally {
+    rejectSubmitting.value = false
+  }
+}
+
+async function rerunReviewAiRisk() {
+  const planId = selectedLatestPlanId.value
+  if (!planId) return
+  reviewAiRiskLoading.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await rerunPortfolioPlanAiRisk(planId)
+    const taskId = res.data?.task_id
+    if (taskId) await pollGenerationTask(taskId)
+    await refreshDetail()
+    message.value = 'AI 风控已复检，标的风险等级已刷新。'
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || 'AI 风控复检失败'
+    messageIsError.value = true
+  } finally {
+    reviewAiRiskLoading.value = false
   }
 }
 
@@ -2707,7 +2844,6 @@ watch(selectedPortfolioKey, (key) => {
   livePublishPreview.value = null
   remainderPreview.value = null
   remainderReason.value = ''
-  lineupExpanded.value = false
   if (key) refreshDetail()
   else {
     timelineData.value = null
@@ -2975,6 +3111,20 @@ button:disabled {
   border-radius: 8px;
   margin-bottom: 16px;
   padding: 14px 16px;
+}
+
+/* 待审批复核卡片：用琥珀色边框强调“需要先看清楚再批” */
+.plan-review-card {
+  border-color: #f59e0b;
+  background: #fffdf7;
+}
+
+.plan-review-risk-warning {
+  margin: 8px 0 4px;
+}
+
+.plan-review-actions {
+  margin-top: 12px;
 }
 
 .plan-ops-header {
@@ -3719,17 +3869,12 @@ button.danger:disabled {
   margin: 6px 0 0;
 }
 
+.bench-candidates-card {
+  margin-top: 16px;
+}
+
 .lineup-table {
   width: 100%;
-}
-
-.bench-details {
-  margin-top: 14px;
-}
-
-.bench-details summary {
-  cursor: pointer;
-  font-weight: 600;
 }
 
 .modal-wide {
@@ -3738,6 +3883,52 @@ button.danger:disabled {
 
 .fast-actions {
   white-space: nowrap;
+}
+
+.fast-actions .fast-btn {
+  display: inline-block;
+  margin: 2px 4px 2px 0;
+  padding: 3px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+/* 换股：中性蓝，表示“替换为替补” */
+.fast-btn-swap {
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+.fast-btn-swap:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+/* 减半：警示橙，表示“部分减仓” */
+.fast-btn-reduce {
+  color: #b45309;
+  border-color: #fcd9a8;
+  background: #fff7ed;
+}
+.fast-btn-reduce:hover {
+  background: #ffedd5;
+  border-color: #fbbf24;
+}
+
+/* 清仓：危险红，表示“全部卖出” */
+.fast-btn-clear {
+  color: #b91c1c;
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+.fast-btn-clear:hover {
+  background: #fee2e2;
+  border-color: #f87171;
 }
 
 .danger-text {
