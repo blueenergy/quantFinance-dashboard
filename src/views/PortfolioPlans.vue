@@ -1679,6 +1679,7 @@ function filterBySelectedAccount(rows) {
 function blockerText(blocker) {
   const labels = {
     account_binding_missing: '账户绑定不完整',
+    account_position_capped: '按账户可卖数量封顶',
     insufficient_available_position: '可卖持仓不足',
     insufficient_cash: '可用资金不足',
     limit_up: '已涨停',
