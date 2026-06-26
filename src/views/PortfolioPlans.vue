@@ -447,7 +447,7 @@
                 </span>
                 <span v-if="selectedDetail.plan.next_rebalance_date">
                   · 下次调仓 {{ selectedDetail.plan.next_rebalance_date }}<template
-                    v-if="selectedDetail.plan.plan_type === 'monitor' && selectedDetail.plan.elapsed_trading_days_since_rebalance != null"
+                    v-if="selectedDetail.plan.record_kind === 'observation' && selectedDetail.plan.elapsed_trading_days_since_rebalance != null"
                   >（已过 {{ selectedDetail.plan.elapsed_trading_days_since_rebalance }} 个交易日）</template>
                 </span>
               </p>
@@ -1123,7 +1123,7 @@ const displayPlans = computed(() => (
   plans.value.filter((plan) => {
     if (
       hideMonitorPlans.value
-      && plan.plan_type === 'monitor'
+      && plan.record_kind === 'observation'
       && plan.executable === false
       && plan.non_executable_reason === 'monitor_no_trade'
     ) {
@@ -1630,7 +1630,7 @@ function previousPlanIdFor(plan) {
     && row.params_hash === plan.params_hash
     && row.strategy_template_id === plan.strategy_template_id
     && (!plan.user_id || row.user_id === plan.user_id)
-    && row.plan_type === 'rebalance'
+    && row.record_kind === 'trade_plan'
   ))
   return previous?.plan_id || ''
 }
@@ -2200,37 +2200,40 @@ function actionBadge(itemOrAction) {
 
 function planCadenceBadge(plan) {
   if (!plan) return { text: '-', cls: 'cadence-unknown' }
-  if (plan.origin === 'manual' && plan.manual_action === 'external_manual') {
+  // record_kind is the authoritative type stamped by the backend. origin is the
+  // orthogonal provenance dimension (manual vs scheduled) used only to refine the
+  // label within a trade_plan; we no longer infer the kind from plan_type / origin.
+  const pending = ['needs_review', 'generated', 'draft'].includes(plan.status)
+  if (plan.record_kind === 'ledger_event') {
     return plan.is_liquidation
       ? { text: '手工补录·清仓', cls: 'cadence-manual' }
       : { text: '手工补录', cls: 'cadence-manual' }
   }
-  if (plan.origin === 'manual' && plan.plan_type === 'rebalance') {
-    if (['needs_review', 'generated', 'draft'].includes(plan.status)) {
-      return { text: '手动调仓·待审', cls: 'cadence-manual-pending' }
-    }
-    return { text: '手动调仓', cls: 'cadence-manual' }
-  }
-  if (plan.plan_type === 'rebalance') {
-    if (plan.is_rebalance_day === false) {
-      return { text: '未到周期', cls: 'cadence-not-due' }
-    }
-    if (!plan.previous_rebalance_date) {
-      return ['needs_review', 'generated', 'draft'].includes(plan.status)
-        ? { text: '待审核建仓', cls: 'cadence-rebalance-pending' }
-        : { text: '首次建仓', cls: 'cadence-rebalance' }
-    }
-    if (['needs_review', 'generated', 'draft'].includes(plan.status)) {
-      return { text: '待审核调仓', cls: 'cadence-rebalance-pending' }
-    }
-    return { text: '调仓日', cls: 'cadence-rebalance' }
-  }
-  if (plan.plan_type === 'monitor') {
+  if (plan.record_kind === 'observation') {
     return plan.executable === false
       ? { text: '观察·不交易', cls: 'cadence-monitor-readonly' }
       : { text: '观察·可交易', cls: 'cadence-monitor-trade' }
   }
-  return { text: plan.plan_type || '-', cls: 'cadence-unknown' }
+  if (plan.record_kind === 'trade_plan') {
+    if (plan.origin === 'manual') {
+      return pending
+        ? { text: '手动调仓·待审', cls: 'cadence-manual-pending' }
+        : { text: '手动调仓', cls: 'cadence-manual' }
+    }
+    if (plan.is_rebalance_day === false) {
+      return { text: '未到周期', cls: 'cadence-not-due' }
+    }
+    if (!plan.previous_rebalance_date) {
+      return pending
+        ? { text: '待审核建仓', cls: 'cadence-rebalance-pending' }
+        : { text: '首次建仓', cls: 'cadence-rebalance' }
+    }
+    if (pending) {
+      return { text: '待审核调仓', cls: 'cadence-rebalance-pending' }
+    }
+    return { text: '调仓日', cls: 'cadence-rebalance' }
+  }
+  return { text: plan.plan_type || plan.record_kind || '-', cls: 'cadence-unknown' }
 }
 
 function driftBadge(item) {
