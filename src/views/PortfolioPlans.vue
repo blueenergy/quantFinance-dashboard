@@ -469,6 +469,12 @@
             </template>
           </p>
 
+          <p v-if="scoreSnapshotStale" class="watermark-warning">
+            评分快照 {{ liveOverlay?.score_snapshot_date || '-' }}，最新评分 {{ liveOverlay?.latest_score_date || '-' }}
+            <template v-if="liveOverlay?.score_snapshot_age_days != null">（已过期 {{ liveOverlay.score_snapshot_age_days }} 天）</template>
+            · 排名与价格可能已变化，发布时将按最新价重算股数
+          </p>
+
           <section v-if="planLineage(selectedDetail.plan).show" class="lineage-panel">
             <div>
               <span>当前 plan</span>
@@ -653,6 +659,34 @@
                 待写入 {{ livePublishPreview.new_signals?.length ?? 0 }} 条，已有 {{ livePublishPreview.existing_count ?? 0 }} 条，
                 阻断 {{ livePublishPreview.risk_report?.blocked_count ?? 0 }} 条
               </p>
+              <p v-if="livePublishPreview.reprice_summary?.stale_price_symbols?.length" class="watermark-warning">
+                以下标的按昨收定价（实时未就绪）：{{ livePublishPreview.reprice_summary.stale_price_symbols.join(', ') }}
+              </p>
+              <div v-if="livePublishRepriceRows.length" class="table-wrap compact risk-report-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>标的</th>
+                      <th>计划价→新价</th>
+                      <th>目标股数</th>
+                      <th>Δ股数</th>
+                      <th>价格来源</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in livePublishRepriceRows" :key="row.symbol">
+                      <td>{{ row.symbol }}</td>
+                      <td>{{ num(row.old_estimated_price) }} → {{ num(row.new_estimated_price) }}</td>
+                      <td>{{ row.old_target_shares ?? 0 }} → {{ row.new_target_shares ?? 0 }}</td>
+                      <td>{{ row.old_delta_shares ?? 0 }} → {{ row.new_delta_shares ?? 0 }}</td>
+                      <td>
+                        <span :class="priceSourceClass(row.price_source)">{{ priceSourceLabel(row.price_source) }}</span>
+                        <small v-if="row.price_as_of">{{ formatPriceAsOf(row.price_as_of) }}</small>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
               <p v-if="livePublishBlockers.length" class="watermark-warning">
                 {{ livePublishBlockers.slice(0, 8).join(' / ') }}
               </p>
@@ -682,10 +716,17 @@
                       <td>{{ num(item.price) }}</td>
                       <td>{{ money(item.estimated_amount) }}</td>
                       <td class="risk-reasons">
-                        <span v-if="!item.blockers?.length">可发布</span>
+                        <span v-if="!item.blockers?.length && !(item.warnings || []).length">可发布</span>
+                        <span
+                          v-for="warning in (item.warnings || [])"
+                          :key="`${item.order_id}-warn-${warning}`"
+                          class="risk-chip warn"
+                          :title="blockerText(warning)"
+                        >
+                          {{ blockerText(warning) }}
+                        </span>
                         <span
                           v-for="blocker in item.blockers"
-                          v-else
                           :key="`${item.order_id}-${blocker}`"
                           class="risk-chip"
                           :title="blocker"
@@ -865,6 +906,8 @@
                     <th v-if="selectedPlanHasLiveSignals" class="col-num">剩余</th>
                     <th v-if="selectedPlanHasLiveSignals" class="col-narrow">实盘状态</th>
                     <th class="col-num">预估价</th>
+                    <th class="col-num">现价</th>
+                    <th class="col-narrow">最新排名</th>
                     <th class="col-narrow">候选</th>
                     <th v-if="canReselectItems" class="col-action">操作</th>
                     <th class="col-airisk">AI风控</th>
@@ -900,6 +943,20 @@
                     <td v-if="selectedPlanHasLiveSignals" class="col-num">{{ item.live_remaining_qty ?? Math.abs(item.delta_shares ?? 0) }}</td>
                     <td v-if="selectedPlanHasLiveSignals" class="col-narrow">{{ item.live_status || '-' }}</td>
                     <td class="col-num">{{ num(item.estimated_price) }}</td>
+                    <td class="col-num">
+                      <span :class="priceSourceClass(item.live_price_source)">{{ num(item.live_price) }}</span>
+                      <small v-if="item.live_price_as_of" class="price-as-of" :title="item.live_price_as_of">
+                        {{ priceSourceLabel(item.live_price_source) }} {{ formatPriceAsOf(item.live_price_as_of) }}
+                      </small>
+                      <small v-if="item.price_drift_pct != null" class="price-drift">{{ pctSigned(item.price_drift_pct) }}</small>
+                    </td>
+                    <td class="col-narrow">
+                      <span>{{ item.latest_rank ?? '-' }}</span>
+                      <small v-if="item.rank_delta != null" :class="item.rank_delta > 0 ? 'rank-up' : item.rank_delta < 0 ? 'rank-down' : ''">
+                        {{ item.rank_delta > 0 ? `↑${item.rank_delta}` : item.rank_delta < 0 ? `↓${Math.abs(item.rank_delta)}` : '—' }}
+                      </small>
+                      <small v-if="item.dropped_out_of_top_n" class="dropped-flag">掉出TopN</small>
+                    </td>
                     <td class="col-narrow">{{ item.candidate_appearances ?? 0 }}</td>
                     <td v-if="canReselectItems" class="col-action">
                       <button
@@ -1404,6 +1461,9 @@ const livePublishBlockers = computed(() => {
   return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
 })
 const livePublishRiskRows = computed(() => livePublishPreview.value?.risk_report?.items || [])
+const livePublishRepriceRows = computed(() => livePublishPreview.value?.reprice_summary?.items || [])
+const liveOverlay = computed(() => selectedDetail.value?.live_overlay || null)
+const scoreSnapshotStale = computed(() => Boolean(liveOverlay.value?.score_snapshot_stale))
 const remainderRows = computed(() => remainderPreview.value?.remainder || [])
 const remainderActionableCount = computed(() => remainderPreview.value?.actionable_count || 0)
 const remainderBlockers = computed(() => {
@@ -1483,6 +1543,29 @@ function money(value) {
 function num(value) {
   const number = Number(value)
   return Number.isFinite(number) ? number.toFixed(2) : '-'
+}
+
+function pctSigned(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '-'
+  return `${number >= 0 ? '+' : ''}${number.toFixed(2)}%`
+}
+
+function priceSourceLabel(source) {
+  const labels = { realtime: '实时', daily_close: '昨收', none: '无价' }
+  return labels[source] || source || '-'
+}
+
+function priceSourceClass(source) {
+  if (source === 'realtime') return 'price-source-realtime'
+  if (source === 'daily_close') return 'price-source-daily'
+  if (source === 'none') return 'price-source-none'
+  return ''
+}
+
+function formatPriceAsOf(asOf) {
+  if (!asOf) return ''
+  return String(asOf).slice(0, 19)
 }
 
 function signedMoney(value) {
@@ -1688,6 +1771,7 @@ function blockerText(blocker) {
     max_order_amount_exceeded: '超过单笔金额上限',
     max_position_pct_exceeded: '超过单票仓位上限',
     missing_price: '缺少有效价格',
+    priced_from_stale_close: '按昨收定价',
     st_stock: 'ST 股票',
     suspended: '停牌',
   }
@@ -2741,6 +2825,40 @@ button.danger {
   min-width: 22px;
   padding: 0 4px;
   text-align: center;
+}
+
+.price-source-realtime {
+  color: #1f9d55;
+}
+
+.price-source-daily {
+  color: #b8860b;
+}
+
+.price-source-none {
+  color: #d12b2b;
+}
+
+.price-as-of,
+.price-drift,
+.dropped-flag {
+  color: var(--muted, #888);
+  display: block;
+  font-size: 11px;
+}
+
+.rank-up {
+  color: #1f9d55;
+}
+
+.rank-down {
+  color: #d12b2b;
+}
+
+.risk-chip.warn {
+  background: #fff7e6;
+  border-color: #e08e0b;
+  color: #9a6700;
 }
 
 /* A股配色：风险越高越红 */
