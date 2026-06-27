@@ -1324,6 +1324,13 @@ const pendingActionPlan = computed(() => {
   const nodes = timelineData.value?.timeline || []
   return nodes.find((node) => node.action_required && node.status === 'needs_review') || null
 })
+const openLineageTradePlan = computed(() => {
+  const nodes = timelineData.value?.timeline || []
+  return nodes.find((node) => {
+    const isTradePlan = node.record_kind === 'trade_plan' || node.node_type === 'rebalance'
+    return isTradePlan && ['needs_review', 'approved'].includes(node.status)
+  }) || null
+})
 
 const isLivePortfolio = computed(() => selectedPortfolio.value?.execution_venue === 'live')
 const isPaperPortfolio = computed(() => selectedPortfolio.value?.execution_venue === 'paper')
@@ -1348,11 +1355,16 @@ const hasApprovedPlanAwaitingAction = computed(() => (
   && !selectedPlanHasLiveSignals.value
   && !hasPaperExecution.value
 ))
-const forceRebalanceBlockReason = computed(() => (
-  hasApprovedPlanAwaitingAction.value
-    ? '当前已有已批准计划，请先发布/执行或拒绝后再重新生成'
-    : ''
-))
+const forceRebalanceBlockReason = computed(() => {
+  const openPlan = openLineageTradePlan.value
+  if (openPlan?.status === 'needs_review') {
+    return '当前已有待审批交易计划，请先批准或拒绝后再重新生成'
+  }
+  if (openPlan?.status === 'approved' || hasApprovedPlanAwaitingAction.value) {
+    return '当前已有已批准交易计划，请先发布/执行或拒绝后再重新生成'
+  }
+  return ''
+})
 const canExecutePaperNow = computed(() => (
   isPaperPortfolio.value
   && selectedPlanStatus.value === 'approved'
@@ -1608,6 +1620,7 @@ function nodeTypeLabel(nodeType) {
 function timelineEntryClass(entry) {
   if (entry.type === 'monitor_fold') return 'timeline-item timeline-fold'
   const node = entry.node
+  if (node.status === 'rejected') return 'timeline-item timeline-rejected'
   if (node.action_required) return 'timeline-item timeline-strong'
   if (node.node_type === 'rebalance') return 'timeline-item timeline-strong'
   return 'timeline-item'
@@ -3446,6 +3459,16 @@ button:disabled {
 
 .timeline-strong .node-type {
   color: #1d4ed8;
+  font-weight: 600;
+}
+
+.timeline-rejected {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.timeline-rejected .node-type {
+  color: #991b1b;
   font-weight: 600;
 }
 
