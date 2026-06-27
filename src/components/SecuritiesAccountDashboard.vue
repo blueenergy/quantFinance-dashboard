@@ -287,6 +287,7 @@
       :prefill-action="tradeDialogAction"
       :prefill-available-qty="tradeDialogAvailableQty"
       :prefill-current-price="tradeDialogCurrentPrice"
+      :securities-account-id="selectedAccountId"
       :available-cash="overview.available_cash"
       :positions="enrichedPositions"
       @success="onTradeSuccess"

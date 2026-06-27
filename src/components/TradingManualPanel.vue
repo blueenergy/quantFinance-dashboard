@@ -332,6 +332,17 @@
             <v-form ref="manualOrderFormRef" @submit.prevent="submitManualOrder">
               <v-row>
                 <v-col cols="12" md="6">
+                  <v-select
+                    v-model="manualOrderForm.securities_account_id"
+                    :items="securitiesAccountOptions"
+                    :loading="loading.accounts"
+                    label="证券账户 *"
+                    placeholder="请选择下单账户"
+                    required
+                  ></v-select>
+                </v-col>
+
+                <v-col cols="12" md="6">
                   <v-text-field
                     v-model="manualOrderForm.symbol"
                     label="股票代码 *"
@@ -535,7 +546,8 @@ const loading = reactive({
   summary: false,
   active: false,
   failed: false,
-  retryPending: false
+  retryPending: false,
+  accounts: false
 })
 
 // 表格头定义
@@ -581,6 +593,11 @@ const activeSignals = ref([])
 const failedSignals = ref([])
 const retryPendingSignals = ref([])
 const attentionSignals = computed(() => activeSignals.value.filter(isAttentionSignal))
+const securitiesAccounts = ref([])
+const securitiesAccountOptions = computed(() => securitiesAccounts.value.map((account) => ({
+  title: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}`,
+  value: account.id || account._id || account.securities_account_id,
+})))
 
 // 分页
 const failedPage = ref(1)
@@ -591,6 +608,7 @@ const failedTotal = ref(0)
 const manualOrderFormRef = ref()
 const manualOrderSubmitting = ref(false)
 const manualOrderForm = reactive({
+  securities_account_id: '',
   symbol: '',
   action: 'buy',
   size: 100,
@@ -660,6 +678,23 @@ const searchStocks = async (query) => {
     searchResults.value = []
   } finally {
     searchLoading.value = false
+  }
+}
+
+const fetchSecuritiesAccounts = async () => {
+  loading.accounts = true
+  try {
+    const accounts = await get('/user/securities_accounts')
+    securitiesAccounts.value = Array.isArray(accounts) ? accounts : []
+    if (!manualOrderForm.securities_account_id && securitiesAccounts.value.length) {
+      const first = securitiesAccounts.value[0]
+      manualOrderForm.securities_account_id = first.id || first._id || first.securities_account_id || ''
+    }
+  } catch (error) {
+    console.error('获取证券账户失败:', error)
+    securitiesAccounts.value = []
+  } finally {
+    loading.accounts = false
   }
 }
 
@@ -784,7 +819,12 @@ const batchRetry = async (statusType) => {
 
 const submitManualOrder = async () => {
   try {
+    if (!manualOrderForm.securities_account_id) {
+      alert('请选择证券账户')
+      return
+    }
     const payload = {
+      securities_account_id: manualOrderForm.securities_account_id,
       symbol: manualOrderForm.symbol,
       action: manualOrderForm.action,
       size: parseInt(manualOrderForm.size),
@@ -812,6 +852,10 @@ const submitManualOrder = async () => {
 }
 
 const resetManualOrderForm = () => {
+  if (!manualOrderForm.securities_account_id && securitiesAccounts.value.length) {
+    const first = securitiesAccounts.value[0]
+    manualOrderForm.securities_account_id = first.id || first._id || first.securities_account_id || ''
+  }
   manualOrderForm.symbol = ''
   manualOrderForm.action = 'buy'
   manualOrderForm.size = 100
@@ -866,6 +910,7 @@ const onStatusCardClick = (status) => {
 
 const prefillManualOrderFromSignal = (signal) => {
   const suggestion = signal.chase_suggestion || {}
+  manualOrderForm.securities_account_id = signal.securities_account_id || manualOrderForm.securities_account_id
   manualOrderForm.symbol = signal.symbol || ''
   manualOrderForm.action = signal.action || 'sell'
   manualOrderForm.size = suggestion.remaining_size || remainingSize(signal) || signal.size || 100
@@ -1035,6 +1080,7 @@ const formatAge = (seconds) => {
 
 // 生命周期
 onMounted(() => {
+  fetchSecuritiesAccounts()
   fetchStatusSummary()
   fetchActiveSignals()
   fetchFailedSignals()

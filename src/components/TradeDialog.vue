@@ -236,6 +236,7 @@ const props = defineProps({
   prefillAction: String,
   prefillAvailableQty: Number,
   prefillCurrentPrice: Number,
+  securitiesAccountId: String,
   availableCash: Number,
   positions: {
     type: Array,
@@ -375,6 +376,7 @@ const isValid = computed(() => {
   if (f.action === 'sell' && availableQty.value > 0 && f.size > availableQty.value) return false
   // 限价时必须输入价格
   if (priceType.value === 'limit' && (!f.price || f.price <= 0)) return false
+  if (!props.securitiesAccountId) return false
   return true
 })
 
@@ -415,7 +417,8 @@ async function submitOrder() {
       symbol,
       form.value.action,
       form.value.size,
-      orderPrice
+      orderPrice,
+      props.securitiesAccountId
     )
 
     if (result.success) {

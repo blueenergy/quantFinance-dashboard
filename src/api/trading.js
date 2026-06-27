@@ -19,11 +19,13 @@ function authHeaders() {
  * @param {string} action - 操作类型: 'buy' | 'sell'
  * @param {number} size - 交易数量
  * @param {number|null} price - 价格 (null=市价)
+ * @param {string} securitiesAccountId - 证券账户 ID
  */
-export async function createManualSignal(symbol, action, size, price = null) {
+export async function createManualSignal(symbol, action, size, price = null, securitiesAccountId = '') {
     const url = `${API_BASE}/trade-signals/manual-create`;
 
     const body = {
+        securities_account_id: securitiesAccountId,
         symbol,
         action,
         size: parseInt(size)
