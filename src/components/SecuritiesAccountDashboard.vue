@@ -544,9 +544,20 @@ const topPositions = computed(() => {
     .slice(0, 5)
 })
 
+function positionQuantity(row) {
+  const raw = row?.raw || row || {}
+  for (const field of ['quantity', 'qty', 'volume', 'shares', 'current_volume', 'total_volume']) {
+    if (raw[field] !== undefined && raw[field] !== null) {
+      const value = Number(raw[field])
+      return Number.isFinite(value) ? value : 0
+    }
+  }
+  return 0
+}
+
 // 计算丰富化的持仓数据，使用数据库中的已有数据
 const enrichedPositions = computed(() => {
-  return positions.value.map(item => {
+  return positions.value.filter(item => positionQuantity(item) > 0).map(item => {
     const pos = item.raw;
     
     // 使用数据库中的平均成本、浮盈和浮盈比例数据
