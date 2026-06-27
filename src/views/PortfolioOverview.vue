@@ -284,426 +284,100 @@
         </div>
       </section>
 
-      <section class="holdings-section">
-        <div class="holdings-header">
-          <h3>最新持仓</h3>
-          <div class="holdings-actions">
-            <button type="button" :disabled="!selectedLatestPlanId || riskLoading" @click="loadHoldingsRisk(true)">
-              {{ riskLoading ? '体检中…' : '风控体检' }}
-            </button>
-            <button type="button" :disabled="!manualChangeRows.length" @click="openManualModal">
-              提交手动调仓
-            </button>
-            <button
-              type="button"
-              class="danger"
-              :disabled="!latestHoldingRows.length || liquidateSubmitting"
-              @click="openLiquidateModal"
-            >
-              {{ isLivePortfolio ? '实盘一键清仓' : '纸面一键清仓' }}
-            </button>
-            <button
-              v-if="isLivePortfolio"
-              type="button"
-              :disabled="externalManualSubmitting"
-              @click="openExternalManualModal"
-            >
-              {{ externalManualSubmitting ? '补录中…' : '补录 miniQMT 手工操作' }}
-            </button>
-          </div>
-        </div>
-        <p v-if="holdingsRisk?.reviewed_count" class="muted holdings-risk-summary">
-          持仓风控：高 {{ holdingsRisk.high }} · 中 {{ holdingsRisk.medium }} · 低 {{ holdingsRisk.low }}
-          <span v-if="holdingsRisk.checked_at"> · 更新 {{ formatRiskTime(holdingsRisk.checked_at) }}</span>
-        </p>
-        <div v-if="!latestHoldingRows.length" class="muted">暂无当前持仓。</div>
-        <div v-else class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>风控</th>
-                <th>代码</th>
-                <th>名称</th>
-                <th>买入日</th>
-                <th>当前</th>
-                <th>目标</th>
-                <th>变动</th>
-                <th>均价</th>
-                <th>现价</th>
-                <th>市值</th>
-                <th>浮动</th>
-                <th>快思考</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in latestHoldingRows" :key="row.symbol" :class="riskRowClass(row.symbol)">
-                <td>
-                  <span v-if="holdingsRiskBySymbol[row.symbol]" class="risk-badge" :class="`risk-${holdingsRiskBySymbol[row.symbol].severity}`">
-                    {{ riskSeverityLabel(holdingsRiskBySymbol[row.symbol].severity) }}
-                  </span>
-                  <span v-else class="muted">-</span>
-                </td>
-                <td>{{ row.symbol }}</td>
-                <td>{{ row.name || '-' }}</td>
-                <td>{{ row.buy_date || '-' }}</td>
-                <td>{{ row.shares }}</td>
-                <td>
-                  <input
-                    :value="effectiveTarget(row.symbol)"
-                    type="number"
-                    min="0"
-                    step="100"
-                    class="target-input"
-                    @input="setManualTarget(row.symbol, $event.target.value)"
-                  >
-                </td>
-                <td :class="signClass(manualDelta(row))">{{ formatShareDelta(manualDelta(row)) }}</td>
-                <td>{{ num(row.avg_cost) }}</td>
-                <td>{{ num(row.last_price) }}</td>
-                <td>{{ money(row.market_value) }}</td>
-                <td :class="signClass(row.unrealized_pnl)">{{ signedMoney(row.unrealized_pnl) }}</td>
-                <td class="fast-actions">
-                  <button type="button" class="fast-btn fast-btn-swap" @click="openSwapModal(row)">换股</button>
-                  <button type="button" class="fast-btn fast-btn-reduce" @click="openQuickReduceModal(row, halfTargetShares(row))">减半</button>
-                  <button type="button" class="fast-btn fast-btn-clear" @click="openQuickReduceModal(row, 0)">清仓</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <p v-if="holdingsRiskBySymbolHigh.length" class="muted">
-            高风险提示：
-            <span v-for="item in holdingsRiskBySymbolHigh" :key="item.symbol">
-              {{ item.symbol }}（{{ item.ai_risk?.reasons?.join('、') || '风险' }}）
-            </span>
-          </p>
-        </div>
+      <HoldingsPanel
+        :selected-latest-plan-id="selectedLatestPlanId"
+        :risk-loading="riskLoading"
+        :manual-change-rows="manualChangeRows"
+        :latest-holding-rows="latestHoldingRows"
+        :liquidate-submitting="liquidateSubmitting"
+        :is-live-portfolio="isLivePortfolio"
+        :external-manual-submitting="externalManualSubmitting"
+        :holdings-risk="holdingsRisk"
+        :holdings-risk-by-symbol="holdingsRiskBySymbol"
+        :holdings-risk-by-symbol-high="holdingsRiskBySymbolHigh"
+        :bench-data="benchData"
+        :bench-expanded="benchExpanded"
+        :bench-loading="benchLoading"
+        :bench-risk="benchRisk"
+        :bench-risk-by-symbol="benchRiskBySymbol"
+        :bench-risk-loading="benchRiskLoading"
+        :effective-target="effectiveTarget"
+        :manual-delta="manualDelta"
+        :risk-row-class="riskRowClass"
+        :format-risk-time="formatRiskTime"
+        :half-target-shares="halfTargetShares"
+        :signed-money="signedMoney"
+        @load-risk="loadHoldingsRisk(true)"
+        @open-manual="openManualModal"
+        @open-liquidate="openLiquidateModal"
+        @open-external-manual="openExternalManualModal"
+        @update-target="setManualTarget"
+        @open-swap="openSwapModal"
+        @quick-reduce="openQuickReduceModal"
+        @toggle-bench="benchExpanded = !benchExpanded"
+        @load-bench-risk="loadBenchRisk"
+      />
 
-        <section v-if="benchData" class="lineup-card bench-candidates-card">
-          <div class="lineup-header">
-            <div>
-              <h3>替补候选</h3>
-              <p class="muted lineup-hint">
-                当前不在持仓中的策略候选，按算法评分排序。评分快照 {{ benchData.score_date || '-' }} ·
-                替补池约 {{ benchData.bench_multiplier }}×Top{{ benchData.top_n }}。
-              </p>
-            </div>
-            <button type="button" class="link-btn" @click="benchExpanded = !benchExpanded">
-              {{ benchExpanded ? '收起' : '展开' }}
-            </button>
-          </div>
-          <div v-if="benchExpanded">
-            <div v-if="benchLoading" class="muted">加载替补候选中…</div>
-            <template v-else>
-              <div class="bench-risk-bar">
-                <span v-if="benchRisk" class="bench-risk-summary">
-                  AI风控：<b class="risk-high">{{ benchRisk.high || 0 }}高</b>
-                  / <b class="risk-medium">{{ benchRisk.medium || 0 }}中</b>
-                  / <b class="risk-low">{{ benchRisk.low || 0 }}低</b>
-                </span>
-                <span v-else class="muted">替补候选可先体检，高风险候选上场前会二次确认。</span>
-                <button
-                  type="button"
-                  class="link-btn"
-                  :disabled="benchRiskLoading || !benchData.bench?.length"
-                  @click="loadBenchRisk"
-                >
-                  {{ benchRiskLoading ? 'AI 风控运行中…' : '运行 AI 风控' }}
-                </button>
-              </div>
-              <div v-if="benchData.bench?.length" class="table-wrap">
-                <table class="lineup-table">
-                  <thead>
-                    <tr>
-                      <th>排名</th>
-                      <th>代码</th>
-                      <th>名称</th>
-                      <th>行业</th>
-                      <th>分数</th>
-                      <th>最新收盘</th>
-                      <th>AI风控</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in benchData.bench" :key="row.symbol">
-                      <td>{{ row.rank }}</td>
-                      <td>{{ row.symbol }}</td>
-                      <td>{{ row.name || '-' }}</td>
-                      <td>{{ row.industry || '-' }}</td>
-                      <td>{{ num(row.score_value) }}</td>
-                      <td>{{ num(row.latest_close) }}</td>
-                      <td>
-                        <span
-                          v-if="benchRiskBySymbol[row.symbol]"
-                          class="risk-badge"
-                          :class="`risk-${benchRiskBySymbol[row.symbol].severity}`"
-                          :title="(benchRiskBySymbol[row.symbol].reasons || []).join('、')"
-                        >
-                          {{ riskSeverityLabel(benchRiskBySymbol[row.symbol].severity) }}
-                        </span>
-                        <span v-else class="muted">-</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <p v-else class="muted">暂无替补候选。</p>
-            </template>
-          </div>
-        </section>
-      </section>
+      <SwapModal
+        :visible="showSwapModal"
+        :starter="swapStarter"
+        :bench-data="benchData"
+        :bench-risk="benchRisk"
+        :bench-risk-by-symbol="benchRiskBySymbol"
+        :bench-risk-loading="benchRiskLoading"
+        :submitting="fastActionSubmitting"
+        :error="swapError"
+        @close="showSwapModal = false"
+        @load-bench-risk="loadBenchRisk"
+        @preview-swap="previewSwap"
+      />
 
-      <div v-if="showSwapModal" class="modal-backdrop" @click.self="showSwapModal = false">
-        <div class="modal-card modal-wide">
-          <h3>替补换股</h3>
-          <p class="muted">
-            换下 <strong>{{ swapStarter?.symbol }}</strong>（{{ swapStarter?.name || '-' }}），从替补席选择上场球员。
-            仅本次生效，预览确认后立即下单。
-          </p>
-          <div class="bench-risk-bar">
-            <span v-if="benchRisk" class="bench-risk-summary">
-              AI风控：<b class="risk-high">{{ benchRisk.high || 0 }}高</b>
-              / <b class="risk-medium">{{ benchRisk.medium || 0 }}中</b>
-              / <b class="risk-low">{{ benchRisk.low || 0 }}低</b>
-            </span>
-            <span v-else class="muted">未体检；高风险候选上场前会二次确认。</span>
-            <button
-              type="button"
-              class="link-btn"
-              :disabled="benchRiskLoading || !benchData?.bench?.length"
-              @click="loadBenchRisk"
-            >
-              {{ benchRiskLoading ? 'AI 风控运行中…' : '运行 AI 风控' }}
-            </button>
-          </div>
-          <div v-if="benchData?.bench?.length" class="table-wrap">
-            <table class="lineup-table">
-              <thead>
-                <tr>
-                  <th>排名</th>
-                  <th>代码</th>
-                  <th>名称</th>
-                  <th>分数</th>
-                  <th>最新收盘</th>
-                  <th>AI风控</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in benchData.bench" :key="row.symbol">
-                  <td>{{ row.rank }}</td>
-                  <td>{{ row.symbol }}</td>
-                  <td>{{ row.name || '-' }}</td>
-                  <td>{{ num(row.score_value) }}</td>
-                  <td>{{ num(row.latest_close) }}</td>
-                  <td>
-                    <span
-                      v-if="benchRiskBySymbol[row.symbol]"
-                      class="risk-badge"
-                      :class="`risk-${benchRiskBySymbol[row.symbol].severity}`"
-                      :title="(benchRiskBySymbol[row.symbol].reasons || []).join('、')"
-                    >
-                      {{ riskSeverityLabel(benchRiskBySymbol[row.symbol].severity) }}
-                    </span>
-                    <span v-else class="muted">-</span>
-                  </td>
-                  <td>
-                    <button type="button" class="link-btn" :disabled="fastActionSubmitting" @click="previewSwap(row)">
-                      替补上场
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p v-else class="muted">替补席为空，无法换股。</p>
-          <p v-if="swapError" class="modal-error">{{ swapError }}</p>
-          <div class="modal-actions">
-            <button type="button" @click="showSwapModal = false">取消</button>
-          </div>
-        </div>
-      </div>
+      <FastActionModal
+        :visible="showFastActionModal"
+        :preview="fastActionPreview"
+        :submitting="fastActionSubmitting"
+        :is-live-portfolio="isLivePortfolio"
+        @close="showFastActionModal = false"
+        @confirm="confirmFastAction"
+      />
 
-      <div v-if="showFastActionModal" class="modal-backdrop" @click.self="showFastActionModal = false">
-        <div class="modal-card">
-          <h3>{{ fastActionPreview.title }}</h3>
-          <p class="muted">{{ fastActionPreview.description }}</p>
-          <ul v-if="fastActionPreview.items?.length" class="manual-preview">
-            <li v-for="item in fastActionPreview.items" :key="item.symbol">
-              {{ item.symbol }} {{ item.name || '' }}：
-              {{ item.current_shares }} → {{ item.target_shares }}
-              （{{ formatShareDelta(item.delta_shares) }}）
-              <span v-if="item.blockers?.length" class="warning-text"> · {{ item.blockers.join('、') }}</span>
-            </li>
-          </ul>
-          <p v-if="fastActionPreview.blocked" class="warning-text">风控拦截，无法提交。</p>
-          <div class="modal-actions">
-            <button type="button" @click="showFastActionModal = false">取消</button>
-            <button
-              type="button"
-              :disabled="fastActionSubmitting || fastActionPreview.blocked || !fastActionPreview.items?.length"
-              @click="confirmFastAction"
-            >
-              {{ fastActionSubmitting ? '提交中…' : (isLivePortfolio ? '确认并下单' : '确认执行') }}
-            </button>
-          </div>
-        </div>
-      </div>
+      <ManualRebalanceModal
+        v-model:exclude-after="excludeAfter"
+        :visible="showManualModal"
+        :is-live-portfolio="isLivePortfolio"
+        :high-risk-rows="holdingsRiskBySymbolHigh"
+        :rows="manualChangeRows"
+        :will-pause-after-manual="willPauseAfterManual"
+        :submitting="manualSubmitting"
+        @close="showManualModal = false"
+        @confirm="submitManualRebalance"
+      />
 
-      <div v-if="showManualModal" class="modal-backdrop" @click.self="showManualModal = false">
-        <div class="modal-card">
-          <h3>确认手动调仓</h3>
-          <p v-if="isLivePortfolio" class="muted">
-            实盘组合：将按实盘持仓即时下发买/卖委托（交易器盘中约 1 秒轮询执行），并落一条 origin=manual 计划留痕。
-          </p>
-          <p v-else class="muted">
-            纸面组合：将按当前纸面持仓即时按<strong>实时价</strong>成交买/卖，并写入纸面快照/净值；同时落一条 origin=manual 计划留痕。
-          </p>
-          <p v-if="holdingsRiskBySymbolHigh.length" class="muted">高风险标的已默认清仓，可在上方表格调整目标股数。</p>
-          <ul class="manual-preview">
-            <li v-for="row in manualChangeRows" :key="row.symbol">
-              {{ row.symbol }} {{ row.name || '' }}：
-              {{ row.shares }} → {{ row.target }}
-              （{{ formatShareDelta(row.delta) }}）
-            </li>
-          </ul>
-          <p v-if="willPauseAfterManual" class="warning-text">全部卖空后将暂停该组合自动调仓。</p>
-          <label class="checkbox-row">
-            <input v-model="excludeAfter" type="checkbox">
-            将卖出的标的加入排除名单（下次策略调仓不再买回）
-          </label>
-          <div class="modal-actions">
-            <button type="button" @click="showManualModal = false">取消</button>
-            <button type="button" :disabled="manualSubmitting" @click="submitManualRebalance">
-              {{ manualSubmitting ? '提交中…' : (isLivePortfolio ? '确认并下单' : '确认生成计划') }}
-            </button>
-          </div>
-        </div>
-      </div>
+      <LiquidateModal
+        v-model:exclude-after="liquidateExcludeAfter"
+        :visible="showLiquidateModal"
+        :is-live-portfolio="isLivePortfolio"
+        :targets="liquidateTargets"
+        :holding-name-by-symbol="holdingNameBySymbol"
+        :holding-shares-by-symbol="holdingSharesBySymbol"
+        :submitting="liquidateSubmitting"
+        @close="showLiquidateModal = false"
+        @confirm="submitLiveLiquidate"
+      />
 
-      <div v-if="showLiquidateModal" class="modal-backdrop" @click.self="showLiquidateModal = false">
-        <div class="modal-card">
-          <h3>{{ isLivePortfolio ? '确认实盘清仓' : '确认纸面清仓' }}</h3>
-          <p v-if="isLivePortfolio" class="muted">
-            将按实盘持仓即时下发<strong>卖出</strong>信号，交易器盘中（约 1 秒轮询）提交券商执行；
-            同时落一条 origin=manual 的清仓计划留痕。跌停等市场原因卖不出由市场决定，不会拦截。
-          </p>
-          <p v-else class="muted">
-            将按当前纸面持仓即时按<strong>实时价</strong>成交清仓，并写入纸面快照/净值；同时落一条 origin=manual 计划留痕。
-          </p>
-          <ul class="manual-preview">
-            <li v-for="sym in liquidateTargets" :key="sym">
-              {{ sym }} {{ holdingNameBySymbol[sym] || '' }}：{{ holdingSharesBySymbol[sym] || 0 }} → 0
-            </li>
-          </ul>
-          <p v-if="!liquidateTargets.length" class="warning-text">没有可清仓的持仓。</p>
-          <label class="checkbox-row">
-            <input v-model="liquidateExcludeAfter" type="checkbox">
-            将清仓标的加入排除名单（下次策略调仓不再买回）
-          </label>
-          <div class="modal-actions">
-            <button type="button" @click="showLiquidateModal = false">取消</button>
-            <button
-              type="button"
-              class="danger"
-              :disabled="liquidateSubmitting || !liquidateTargets.length"
-              @click="submitLiveLiquidate"
-            >
-              {{ liquidateSubmitting ? '提交中…' : (isLivePortfolio ? '确认清仓并下单' : '确认清仓') }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="showExternalManualModal" class="modal-backdrop" @click.self="showExternalManualModal = false">
-        <div class="modal-card wide">
-          <h3>补录 miniQMT 手工操作</h3>
-          <p class="muted">
-            用于你已经在 miniQMT 直接买/卖的情况。这里不会再下单，只会把成交补进组合实盘账本留痕；
-            支持部分减仓/加仓或全部清仓。只需填方向、数量和成交价，费用默认 0，成交时间/批次号/说明由系统自动填充。
-          </p>
-          <div class="table-wrap compact external-fill-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>方向</th>
-                  <th>代码</th>
-                  <th>名称</th>
-                  <th>数量</th>
-                  <th>成交价</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(row, idx) in externalManualRows" :key="row.key">
-                  <td>
-                    <select
-                      :value="row.action"
-                      @change="updateExternalManualRow(idx, 'action', $event.target.value)"
-                    >
-                      <option value="sell">卖出</option>
-                      <option value="buy">买入</option>
-                    </select>
-                  </td>
-                  <td>
-                    <span v-if="!row.editableSymbol">{{ row.symbol }}</span>
-                    <input
-                      v-else
-                      :value="row.symbol"
-                      type="text"
-                      placeholder="如 600000.SH"
-                      @input="updateExternalManualRow(idx, 'symbol', $event.target.value)"
-                    >
-                  </td>
-                  <td>{{ row.name || '-' }}</td>
-                  <td>
-                    <input
-                      :value="row.filled_size"
-                      type="number"
-                      min="1"
-                      step="100"
-                      @input="updateExternalManualRow(idx, 'filled_size', $event.target.value)"
-                    >
-                  </td>
-                  <td>
-                    <input
-                      :value="row.filled_price"
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      @input="updateExternalManualRow(idx, 'filled_price', $event.target.value)"
-                    >
-                  </td>
-                  <td>
-                    <button type="button" class="link-btn" @click="removeExternalManualRow(idx)">移除</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <button type="button" class="add-row-btn" @click="addExternalManualRow">+ 添加一笔</button>
-          <p class="muted">
-            结果持仓 = 当前持仓 + 手工买入 − 手工卖出。默认只更新账本，不影响后续策略调仓建议。
-          </p>
-          <label class="checkbox-row">
-            <input v-model="externalManualExcludeAfter" type="checkbox">
-            将清空（卖到 0）的标的加入排除名单（通常不需要）
-          </label>
-          <label class="checkbox-row">
-            <input v-model="externalManualPauseLineage" type="checkbox">
-            若清空全部持仓，则暂停该组合自动调仓（通常不需要）
-          </label>
-          <div class="modal-actions">
-            <button type="button" @click="showExternalManualModal = false">取消</button>
-            <button
-              type="button"
-              :disabled="externalManualSubmitting || !externalManualReady"
-              @click="submitExternalManual"
-            >
-              {{ externalManualSubmitting ? '补录中…' : '确认补录' }}
-            </button>
-          </div>
-        </div>
-      </div>
+      <ExternalManualModal
+        v-model:exclude-after="externalManualExcludeAfter"
+        v-model:pause-lineage="externalManualPauseLineage"
+        :visible="showExternalManualModal"
+        :rows="externalManualRows"
+        :submitting="externalManualSubmitting"
+        :ready="externalManualReady"
+        @close="showExternalManualModal = false"
+        @confirm="submitExternalManual"
+        @add-row="addExternalManualRow"
+        @remove-row="removeExternalManualRow"
+        @update-row="updateExternalManualRow"
+      />
 
       <ExecutionsPanel
         :rows="tradeDetailRows"
@@ -746,10 +420,15 @@ import PlanOpsPanel from '../components/portfolio/PlanOpsPanel.vue'
 import PlanPublishPreviewModal from '../components/portfolio/PlanPublishPreviewModal.vue'
 import LineageTimeline from '../components/portfolio/LineageTimeline.vue'
 import ExecutionsPanel from '../components/portfolio/ExecutionsPanel.vue'
+import HoldingsPanel from '../components/portfolio/HoldingsPanel.vue'
+import SwapModal from '../components/portfolio/SwapModal.vue'
+import FastActionModal from '../components/portfolio/FastActionModal.vue'
+import ManualRebalanceModal from '../components/portfolio/ManualRebalanceModal.vue'
+import LiquidateModal from '../components/portfolio/LiquidateModal.vue'
+import ExternalManualModal from '../components/portfolio/ExternalManualModal.vue'
 import { usePlanOps } from '../composables/usePlanOps'
 import {
   formatShareDelta,
-  riskSeverityLabel,
 } from '../composables/usePortfolioPlanFormat'
 
 const portfolios = ref([])
@@ -3013,179 +2692,6 @@ button.danger:disabled {
   border-color: #fca5a5;
 }
 
-.holdings-section {
-  margin-top: 8px;
-}
-
-.holdings-header {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.holdings-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.paused-banner {
-  align-items: center;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
-  border-radius: 8px;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  margin-top: 12px;
-  padding: 10px 12px;
-}
-
-.target-input {
-  max-width: 88px;
-  width: 88px;
-}
-
-.risk-badge {
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 6px;
-}
-
-.risk-badge.risk-high {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.risk-badge.risk-medium {
-  background: #ffedd5;
-  color: #c2410c;
-}
-
-.risk-badge.risk-low {
-  background: #fef9c3;
-  color: #a16207;
-}
-
-.risk-badge.risk-none {
-  background: #ecfdf5;
-  color: #047857;
-}
-
-.risk-row-high {
-  background: #fff7f7;
-}
-
-.bench-risk-bar {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: space-between;
-  margin: 8px 0;
-}
-
-.bench-risk-summary {
-  font-size: 12px;
-}
-
-.bench-risk-summary .risk-high {
-  color: #dc2626;
-}
-
-.bench-risk-summary .risk-medium {
-  color: #c2410c;
-}
-
-.bench-risk-summary .risk-low {
-  color: #a16207;
-}
-
-.modal-backdrop {
-  align-items: center;
-  background: rgba(17, 24, 39, 0.45);
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  position: fixed;
-  z-index: 50;
-}
-
-.modal-card {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-  max-width: 520px;
-  padding: 20px;
-  width: calc(100% - 32px);
-}
-
-.modal-card.wide {
-  max-width: 920px;
-}
-
-.external-fill-table input,
-.external-fill-table select {
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  box-sizing: border-box;
-  color: #111827;
-  max-width: 180px;
-  padding: 7px 8px;
-  width: 100%;
-}
-
-.add-row-btn {
-  background: none;
-  border: 1px dashed #94a3b8;
-  border-radius: 4px;
-  color: #2563eb;
-  cursor: pointer;
-  margin-top: 8px;
-  padding: 6px 10px;
-}
-
-.link-btn {
-  background: none;
-  border: none;
-  color: #c2410c;
-  cursor: pointer;
-  padding: 0;
-}
-
-.external-fill-table {
-  margin-top: 10px;
-}
-
-.external-fill-table td {
-  vertical-align: middle;
-}
-
-.manual-preview {
-  margin: 12px 0;
-  padding-left: 18px;
-}
-
-.checkbox-row {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  margin: 12px 0;
-}
-
-.warning-text {
-  color: #c2410c;
-  font-weight: 600;
-}
-
-.modal-error {
-  margin: 8px 0 0;
-  color: #b91c1c;
-  font-weight: 600;
-}
-
 .off-universe-tag {
   margin-left: 6px;
   padding: 0 6px;
@@ -3223,117 +2729,6 @@ button.danger:disabled {
 .reconcile-banner .neg {
   color: #b91c1c;
   font-weight: 600;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
-
-.cycle-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.action-banner {
-  align-items: center;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
-  border-radius: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 0;
-  padding: 10px 12px;
-}
-
-.lineup-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  margin-top: 16px;
-  padding: 16px;
-}
-
-.lineup-header {
-  align-items: flex-start;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-}
-
-.lineup-hint {
-  margin: 6px 0 0;
-}
-
-.bench-candidates-card {
-  margin-top: 16px;
-}
-
-.lineup-table {
-  width: 100%;
-}
-
-.modal-wide {
-  max-width: 760px;
-}
-
-.fast-actions {
-  white-space: nowrap;
-}
-
-.fast-actions .fast-btn {
-  display: inline-block;
-  margin: 2px 4px 2px 0;
-  padding: 3px 10px;
-  font-size: 12px;
-  line-height: 1.4;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  background: #fff;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-/* 换股：中性蓝，表示“替换为替补” */
-.fast-btn-swap {
-  color: #1d4ed8;
-  border-color: #bfdbfe;
-  background: #eff6ff;
-}
-.fast-btn-swap:hover {
-  background: #dbeafe;
-  border-color: #93c5fd;
-}
-
-/* 减半：警示橙，表示“部分减仓” */
-.fast-btn-reduce {
-  color: #b45309;
-  border-color: #fcd9a8;
-  background: #fff7ed;
-}
-.fast-btn-reduce:hover {
-  background: #ffedd5;
-  border-color: #fbbf24;
-}
-
-/* 清仓：危险红，表示“全部卖出” */
-.fast-btn-clear {
-  color: #b91c1c;
-  border-color: #fca5a5;
-  background: #fef2f2;
-}
-.fast-btn-clear:hover {
-  background: #fee2e2;
-  border-color: #f87171;
-}
-
-.danger-text {
-  color: #c2410c;
 }
 
 button.secondary {

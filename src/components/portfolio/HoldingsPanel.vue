@@ -1,0 +1,457 @@
+<template>
+  <section class="holdings-section">
+    <div class="holdings-header">
+      <h3>最新持仓</h3>
+      <div class="holdings-actions">
+        <button type="button" :disabled="!selectedLatestPlanId || riskLoading" @click="$emit('load-risk')">
+          {{ riskLoading ? '体检中…' : '风控体检' }}
+        </button>
+        <button type="button" :disabled="!manualChangeRows.length" @click="$emit('open-manual')">
+          提交手动调仓
+        </button>
+        <button
+          type="button"
+          class="danger"
+          :disabled="!latestHoldingRows.length || liquidateSubmitting"
+          @click="$emit('open-liquidate')"
+        >
+          {{ isLivePortfolio ? '实盘一键清仓' : '纸面一键清仓' }}
+        </button>
+        <button
+          v-if="isLivePortfolio"
+          type="button"
+          :disabled="externalManualSubmitting"
+          @click="$emit('open-external-manual')"
+        >
+          {{ externalManualSubmitting ? '补录中…' : '补录 miniQMT 手工操作' }}
+        </button>
+      </div>
+    </div>
+    <p v-if="holdingsRisk?.reviewed_count" class="muted holdings-risk-summary">
+      持仓风控：高 {{ holdingsRisk.high }} · 中 {{ holdingsRisk.medium }} · 低 {{ holdingsRisk.low }}
+      <span v-if="holdingsRisk.checked_at"> · 更新 {{ formatRiskTime(holdingsRisk.checked_at) }}</span>
+    </p>
+    <div v-if="!latestHoldingRows.length" class="muted">暂无当前持仓。</div>
+    <div v-else class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>风控</th>
+            <th>代码</th>
+            <th>名称</th>
+            <th>买入日</th>
+            <th>当前</th>
+            <th>目标</th>
+            <th>变动</th>
+            <th>均价</th>
+            <th>现价</th>
+            <th>市值</th>
+            <th>浮动</th>
+            <th>快思考</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in latestHoldingRows" :key="row.symbol" :class="riskRowClass(row.symbol)">
+            <td>
+              <span v-if="holdingsRiskBySymbol[row.symbol]" class="risk-badge" :class="`risk-${holdingsRiskBySymbol[row.symbol].severity}`">
+                {{ riskSeverityLabel(holdingsRiskBySymbol[row.symbol].severity) }}
+              </span>
+              <span v-else class="muted">-</span>
+            </td>
+            <td>{{ row.symbol }}</td>
+            <td>{{ row.name || '-' }}</td>
+            <td>{{ row.buy_date || '-' }}</td>
+            <td>{{ row.shares }}</td>
+            <td>
+              <input
+                :value="effectiveTarget(row.symbol)"
+                type="number"
+                min="0"
+                step="100"
+                class="target-input"
+                @input="$emit('update-target', row.symbol, $event.target.value)"
+              >
+            </td>
+            <td :class="signClass(manualDelta(row))">{{ formatShareDelta(manualDelta(row)) }}</td>
+            <td>{{ num(row.avg_cost) }}</td>
+            <td>{{ num(row.last_price) }}</td>
+            <td>{{ money(row.market_value) }}</td>
+            <td :class="signClass(row.unrealized_pnl)">{{ signedMoney(row.unrealized_pnl) }}</td>
+            <td class="fast-actions">
+              <button type="button" class="fast-btn fast-btn-swap" @click="$emit('open-swap', row)">换股</button>
+              <button type="button" class="fast-btn fast-btn-reduce" @click="$emit('quick-reduce', row, halfTargetShares(row))">减半</button>
+              <button type="button" class="fast-btn fast-btn-clear" @click="$emit('quick-reduce', row, 0)">清仓</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-if="holdingsRiskBySymbolHigh.length" class="muted">
+        高风险提示：
+        <span v-for="item in holdingsRiskBySymbolHigh" :key="item.symbol">
+          {{ item.symbol }}（{{ item.ai_risk?.reasons?.join('、') || '风险' }}）
+        </span>
+      </p>
+    </div>
+
+    <section v-if="benchData" class="lineup-card bench-candidates-card">
+      <div class="lineup-header">
+        <div>
+          <h3>替补候选</h3>
+          <p class="muted lineup-hint">
+            当前不在持仓中的策略候选，按算法评分排序。评分快照 {{ benchData.score_date || '-' }} ·
+            替补池约 {{ benchData.bench_multiplier }}×Top{{ benchData.top_n }}。
+          </p>
+        </div>
+        <button type="button" class="link-btn" @click="$emit('toggle-bench')">
+          {{ benchExpanded ? '收起' : '展开' }}
+        </button>
+      </div>
+      <div v-if="benchExpanded">
+        <div v-if="benchLoading" class="muted">加载替补候选中…</div>
+        <template v-else>
+          <div class="bench-risk-bar">
+            <span v-if="benchRisk" class="bench-risk-summary">
+              AI风控：<b class="risk-high">{{ benchRisk.high || 0 }}高</b>
+              / <b class="risk-medium">{{ benchRisk.medium || 0 }}中</b>
+              / <b class="risk-low">{{ benchRisk.low || 0 }}低</b>
+            </span>
+            <span v-else class="muted">替补候选可先体检，高风险候选上场前会二次确认。</span>
+            <button
+              type="button"
+              class="link-btn"
+              :disabled="benchRiskLoading || !benchData.bench?.length"
+              @click="$emit('load-bench-risk')"
+            >
+              {{ benchRiskLoading ? 'AI 风控运行中…' : '运行 AI 风控' }}
+            </button>
+          </div>
+          <div v-if="benchData.bench?.length" class="table-wrap">
+            <table class="lineup-table">
+              <thead>
+                <tr>
+                  <th>排名</th>
+                  <th>代码</th>
+                  <th>名称</th>
+                  <th>行业</th>
+                  <th>分数</th>
+                  <th>最新收盘</th>
+                  <th>AI风控</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in benchData.bench" :key="row.symbol">
+                  <td>{{ row.rank }}</td>
+                  <td>{{ row.symbol }}</td>
+                  <td>{{ row.name || '-' }}</td>
+                  <td>{{ row.industry || '-' }}</td>
+                  <td>{{ num(row.score_value) }}</td>
+                  <td>{{ num(row.latest_close) }}</td>
+                  <td>
+                    <span
+                      v-if="benchRiskBySymbol[row.symbol]"
+                      class="risk-badge"
+                      :class="`risk-${benchRiskBySymbol[row.symbol].severity}`"
+                      :title="(benchRiskBySymbol[row.symbol].reasons || []).join('、')"
+                    >
+                      {{ riskSeverityLabel(benchRiskBySymbol[row.symbol].severity) }}
+                    </span>
+                    <span v-else class="muted">-</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-else class="muted">暂无替补候选。</p>
+        </template>
+      </div>
+    </section>
+  </section>
+</template>
+
+<script setup>
+import {
+  formatShareDelta,
+  money,
+  num,
+  riskSeverityLabel,
+  signClass,
+} from '../../composables/usePortfolioPlanFormat'
+
+defineProps({
+  selectedLatestPlanId: { type: String, default: '' },
+  riskLoading: { type: Boolean, default: false },
+  manualChangeRows: { type: Array, default: () => [] },
+  latestHoldingRows: { type: Array, default: () => [] },
+  liquidateSubmitting: { type: Boolean, default: false },
+  isLivePortfolio: { type: Boolean, default: false },
+  externalManualSubmitting: { type: Boolean, default: false },
+  holdingsRisk: { type: Object, default: null },
+  holdingsRiskBySymbol: { type: Object, default: () => ({}) },
+  holdingsRiskBySymbolHigh: { type: Array, default: () => [] },
+  benchData: { type: Object, default: null },
+  benchExpanded: { type: Boolean, default: false },
+  benchLoading: { type: Boolean, default: false },
+  benchRisk: { type: Object, default: null },
+  benchRiskBySymbol: { type: Object, default: () => ({}) },
+  benchRiskLoading: { type: Boolean, default: false },
+  effectiveTarget: { type: Function, required: true },
+  manualDelta: { type: Function, required: true },
+  riskRowClass: { type: Function, required: true },
+  formatRiskTime: { type: Function, required: true },
+  halfTargetShares: { type: Function, required: true },
+  signedMoney: { type: Function, required: true },
+})
+
+defineEmits([
+  'load-risk',
+  'open-manual',
+  'open-liquidate',
+  'open-external-manual',
+  'update-target',
+  'open-swap',
+  'quick-reduce',
+  'toggle-bench',
+  'load-bench-risk',
+])
+</script>
+
+<style scoped>
+.holdings-section {
+  margin-top: 8px;
+}
+
+.holdings-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.holdings-header h3,
+.lineup-header h3 {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.holdings-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.muted {
+  color: #374151;
+  font-size: 13px;
+  margin: 0;
+}
+
+.holdings-risk-summary {
+  margin-bottom: 8px;
+}
+
+.table-wrap {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e5e7eb;
+  color: #111827;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+th {
+  background: #f3f4f6;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+tbody tr:hover td {
+  background: #f9fafb;
+}
+
+.target-input {
+  max-width: 88px;
+  width: 88px;
+}
+
+.risk-badge {
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+}
+
+.risk-badge.risk-high {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.risk-badge.risk-medium {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.risk-badge.risk-low {
+  background: #fef9c3;
+  color: #a16207;
+}
+
+.risk-badge.risk-none {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.risk-row-high {
+  background: #fff7f7;
+}
+
+.lineup-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.lineup-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.lineup-hint {
+  margin: 6px 0 0;
+}
+
+.bench-risk-bar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  margin: 8px 0;
+}
+
+.bench-risk-summary {
+  font-size: 12px;
+}
+
+.bench-risk-summary .risk-high {
+  color: #dc2626;
+}
+
+.bench-risk-summary .risk-medium {
+  color: #c2410c;
+}
+
+.bench-risk-summary .risk-low {
+  color: #a16207;
+}
+
+.lineup-table {
+  width: 100%;
+}
+
+.fast-actions {
+  white-space: nowrap;
+}
+
+.fast-actions .fast-btn {
+  background: #fff;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 2px 4px 2px 0;
+  padding: 3px 10px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.fast-btn-swap {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.fast-btn-swap:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.fast-btn-reduce {
+  background: #fff7ed;
+  border-color: #fcd9a8;
+  color: #b45309;
+}
+
+.fast-btn-reduce:hover {
+  background: #ffedd5;
+  border-color: #fbbf24;
+}
+
+.fast-btn-clear {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.fast-btn-clear:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+button {
+  background: #fff;
+  border: 1px solid #111827;
+  border-radius: 4px;
+  color: #111827;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 8px 10px;
+}
+
+button.danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+button:disabled {
+  border-color: #9ca3af;
+  color: #6b7280;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: #c2410c;
+  cursor: pointer;
+  padding: 0;
+}
+
+.pos {
+  color: #dc2626;
+}
+
+.neg {
+  color: #16a34a;
+}
+</style>
