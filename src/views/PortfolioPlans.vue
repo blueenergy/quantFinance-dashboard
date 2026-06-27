@@ -654,113 +654,15 @@
                 </button>
               </div>
             </div>
-            <div v-if="livePublishPreview" class="risk-report">
-              <p>
-                待写入 {{ livePublishPreview.new_signals?.length ?? 0 }} 条，已有 {{ livePublishPreview.existing_count ?? 0 }} 条，
-                阻断 {{ livePublishPreview.risk_report?.blocked_count ?? 0 }} 条
-              </p>
-              <p v-if="livePublishPreview.reprice_summary?.stale_price_symbols?.length" class="watermark-warning">
-                以下标的按昨收定价（实时未就绪）：{{ livePublishPreview.reprice_summary.stale_price_symbols.join(', ') }}
-              </p>
-              <div v-if="livePublishRepriceRows.length" class="table-wrap compact risk-report-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>标的</th>
-                      <th>计划价→新价</th>
-                      <th>目标股数</th>
-                      <th>Δ股数</th>
-                      <th>价格来源</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in livePublishRepriceRows" :key="row.symbol">
-                      <td>{{ row.symbol }}</td>
-                      <td>{{ num(row.old_estimated_price) }} → {{ num(row.new_estimated_price) }}</td>
-                      <td>{{ row.old_target_shares ?? 0 }} → {{ row.new_target_shares ?? 0 }}</td>
-                      <td>{{ row.old_delta_shares ?? 0 }} → {{ row.new_delta_shares ?? 0 }}</td>
-                      <td>
-                        <span :class="priceSourceClass(row.price_source)">{{ priceSourceLabel(row.price_source) }}</span>
-                        <small v-if="row.price_as_of">{{ formatPriceAsOf(row.price_as_of) }}</small>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <p v-if="livePublishBlockers.length" class="watermark-warning">
-                {{ livePublishBlockers.slice(0, 8).join(' / ') }}
-              </p>
-              <div v-if="livePublishRiskRows.length" class="table-wrap compact risk-report-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>状态</th>
-                      <th>股票</th>
-                      <th>方向</th>
-                      <th>数量</th>
-                      <th>价格</th>
-                      <th>预估金额</th>
-                      <th>预检结果</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="item in livePublishRiskRows"
-                      :key="item.order_id || `${item.symbol}-${item.action}-${item.size}`"
-                      :class="{ blocked: item.blockers?.length }"
-                    >
-                      <td>{{ item.blockers?.length ? '阻断' : '通过' }}</td>
-                      <td>{{ item.symbol || '-' }}</td>
-                      <td>{{ item.action || '-' }}</td>
-                      <td>{{ item.size ?? '-' }}</td>
-                      <td>{{ num(item.price) }}</td>
-                      <td>{{ money(item.estimated_amount) }}</td>
-                      <td class="risk-reasons">
-                        <span v-if="!item.blockers?.length && !(item.warnings || []).length">可发布</span>
-                        <span
-                          v-for="warning in (item.warnings || [])"
-                          :key="`${item.order_id}-warn-${warning}`"
-                          class="risk-chip warn"
-                          :title="blockerText(warning)"
-                        >
-                          {{ blockerText(warning) }}
-                        </span>
-                        <span
-                          v-for="blocker in item.blockers"
-                          :key="`${item.order_id}-${blocker}`"
-                          class="risk-chip"
-                          :title="blocker"
-                        >
-                          {{ blockerText(blocker) }}
-                        </span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div v-if="livePublishPreview.new_signals?.length" class="table-wrap compact">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>代码</th>
-                      <th>方向</th>
-                      <th>数量</th>
-                      <th>限价</th>
-                      <th>order_id</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="signal in livePublishPreview.new_signals.slice(0, 8)" :key="signal.order_id">
-                      <td>{{ signalDisplayName(signal) }}</td>
-                      <td>{{ signal.action }}</td>
-                      <td>{{ signal.size }}</td>
-                      <td>{{ num(signal.price) }}</td>
-                      <td class="truncate" :title="signal.order_id">{{ signal.order_id }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <PlanPublishPreviewModal
+              :visible="showPublishModal"
+              :preview="livePublishPreview"
+              :loading="livePublishLoading"
+              :blocker-messages="livePublishBlockers"
+              :confirm-disabled="Boolean(livePublishBlockers.length)"
+              @close="showPublishModal = false"
+              @confirm="publishLiveSignals"
+            />
           </section>
 
           <section v-if="selectedDetail.plan.status === 'approved' && selectedPlanHasLiveSignals" class="live-publish-panel">
@@ -890,111 +792,22 @@
                 </button>
               </span>
             </div>
-            <div class="table-wrap">
-              <table class="plan-items-table">
-                <thead>
-                  <tr>
-                    <th v-if="canReselectItems" class="col-select">选</th>
-                    <th class="col-narrow">Rank</th>
-                    <th class="col-stock">标的</th>
-                    <th class="col-ind">行业</th>
-                    <th class="col-num">{{ selectedPlanHasLiveSignals ? '策略股数' : '当前股数' }}</th>
-                    <th class="col-num">目标股数</th>
-                    <th v-if="selectedPlanIsMonitorNoTrade" class="col-num">漂移</th>
-                    <th v-if="selectedPlanHasLiveSignals" class="col-num">账户股数</th>
-                    <th v-if="selectedPlanHasLiveSignals" class="col-num">已成交</th>
-                    <th v-if="selectedPlanHasLiveSignals" class="col-num">剩余</th>
-                    <th v-if="selectedPlanHasLiveSignals" class="col-narrow">实盘状态</th>
-                    <th class="col-num">预估价</th>
-                    <th class="col-num">现价</th>
-                    <th class="col-narrow">最新排名</th>
-                    <th class="col-narrow">候选</th>
-                    <th v-if="canReselectItems" class="col-action">操作</th>
-                    <th class="col-airisk">AI风控</th>
-                    <th class="col-risk">风险</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="item in selectedDetail.items" :key="`${item.symbol}-${item.rank}`">
-                    <td v-if="canReselectItems" class="col-select">
-                      <input
-                        type="checkbox"
-                        :checked="isReselectSelected(item.symbol)"
-                        :disabled="!canSelectReselectItem(item) || actionLoading || reselectBusy"
-                        @change="toggleReselectSelection(item.symbol, $event.target.checked)"
-                      />
-                    </td>
-                    <td class="col-narrow">{{ item.rank ?? '-' }}</td>
-                    <td class="col-stock" :title="`${actionBadge(item).label} ${item.name || ''} ${item.symbol || ''}`">
-                      <button type="button" class="stock-workbench-link" @click="openStockWorkbench(item.symbol)">
-                        <span class="action-tag" :class="actionBadge(item).cls">{{ actionBadge(item).text }}</span>
-                        <span class="stock-workbench-link__name">{{ item.name || item.symbol || '-' }}</span>
-                        <span v-if="item.symbol" class="stock-workbench-link__symbol">{{ item.symbol }}</span>
-                      </button>
-                    </td>
-                    <td class="col-ind" :title="item.industry || ''">{{ item.industry || '-' }}</td>
-                    <td class="col-num">{{ item.current_shares ?? 0 }}</td>
-                    <td class="col-num">{{ item.target_shares ?? 0 }}</td>
-                    <td v-if="selectedPlanIsMonitorNoTrade" class="col-num drift-cell" :class="driftBadge(item).cls">
-                      {{ driftBadge(item).text }}
-                    </td>
-                    <td v-if="selectedPlanHasLiveSignals" class="col-num">{{ item.account_current_shares ?? '-' }}</td>
-                    <td v-if="selectedPlanHasLiveSignals" class="col-num">{{ item.live_filled_qty ?? 0 }}</td>
-                    <td v-if="selectedPlanHasLiveSignals" class="col-num">{{ item.live_remaining_qty ?? Math.abs(item.delta_shares ?? 0) }}</td>
-                    <td v-if="selectedPlanHasLiveSignals" class="col-narrow">{{ item.live_status || '-' }}</td>
-                    <td class="col-num">{{ num(item.estimated_price) }}</td>
-                    <td class="col-num">
-                      <span :class="priceSourceClass(item.live_price_source)">{{ num(item.live_price) }}</span>
-                      <small v-if="item.live_price_as_of" class="price-as-of" :title="item.live_price_as_of">
-                        {{ priceSourceLabel(item.live_price_source) }} {{ formatPriceAsOf(item.live_price_as_of) }}
-                      </small>
-                      <small v-if="item.price_drift_pct != null" class="price-drift">{{ pctSigned(item.price_drift_pct) }}</small>
-                    </td>
-                    <td class="col-narrow">
-                      <span>{{ item.latest_rank ?? '-' }}</span>
-                      <small v-if="item.rank_delta != null" :class="item.rank_delta > 0 ? 'rank-up' : item.rank_delta < 0 ? 'rank-down' : ''">
-                        {{ item.rank_delta > 0 ? `↑${item.rank_delta}` : item.rank_delta < 0 ? `↓${Math.abs(item.rank_delta)}` : '—' }}
-                      </small>
-                      <small v-if="item.dropped_out_of_top_n" class="dropped-flag">掉出TopN</small>
-                    </td>
-                    <td class="col-narrow">{{ item.candidate_appearances ?? 0 }}</td>
-                    <td v-if="canReselectItems" class="col-action">
-                      <button
-                        v-if="selectedPlanExcluded.includes(item.symbol)"
-                        class="link-btn"
-                        :disabled="actionLoading || reselectBusy"
-                        @click="reselectItem(item.symbol, true)"
-                      >{{ reselectBusy && pendingReselect?.symbol === item.symbol ? '恢复中…' : '恢复' }}</button>
-                      <button
-                        v-else-if="item.rank != null && (item.current_shares ?? 0) > 0"
-                        class="link-btn danger"
-                        :disabled="actionLoading || reselectBusy"
-                        title="移出目标并清仓该持仓，由候选池补一只新标的"
-                        @click="reselectItem(item.symbol)"
-                      >{{ reselectBusy && pendingReselect?.symbol === item.symbol ? '处理中…' : '清仓' }}</button>
-                      <button
-                        v-else-if="item.rank != null"
-                        class="link-btn"
-                        :disabled="actionLoading || reselectBusy"
-                        title="拒绝该买入推荐，用候选池下一名替换"
-                        @click="reselectItem(item.symbol)"
-                      >{{ reselectBusy && pendingReselect?.symbol === item.symbol ? '处理中…' : '换一只' }}</button>
-                      <span v-else>-</span>
-                    </td>
-                    <td class="col-airisk">
-                      <span
-                        v-if="aiRiskBadge(item).show"
-                        class="ai-risk-tag"
-                        :class="aiRiskBadge(item).cls"
-                        :title="aiRiskBadge(item).title"
-                      >{{ aiRiskBadge(item).text }}</span>
-                      <span v-else>-</span>
-                    </td>
-                    <td class="col-risk" :title="(item.blockers || []).join(', ')">{{ (item.blockers || []).join(', ') || '-' }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <PlanItemsTable
+              mode="plan"
+              :items="selectedDetail.items"
+              :overlay="liveOverlay"
+              :can-reselect-items="canReselectItems"
+              :selected-plan-has-live-signals="selectedPlanHasLiveSignals"
+              :selected-plan-is-monitor-no-trade="selectedPlanIsMonitorNoTrade"
+              :selected-reselect-symbols="selectedReselectSymbols"
+              :selected-plan-excluded="selectedPlanExcluded"
+              :action-loading="actionLoading"
+              :reselect-busy="reselectBusy"
+              :pending-reselect-symbol="pendingReselect?.symbol || ''"
+              @toggle-reselect="toggleReselectSelection"
+              @reselect="(symbol, restore) => reselectItem(symbol, restore)"
+              @open-stock="openStockWorkbench"
+            />
           </section>
 
           <section v-if="selectedPlanHasLiveSignals || showPaperSections">
@@ -1170,6 +983,14 @@ import {
   restorePortfolioPlanItem,
 } from '../api/portfolioPlans'
 import { getSecuritiesAccounts } from '../api/trader'
+import PlanItemsTable from '../components/portfolio/PlanItemsTable.vue'
+import PlanPublishPreviewModal from '../components/portfolio/PlanPublishPreviewModal.vue'
+import {
+  blockerText,
+  money,
+  num,
+  remainderReasonText,
+} from '../composables/usePortfolioPlanFormat'
 
 const strategies = ref([])
 const parameterPresets = ref([])
@@ -1233,6 +1054,7 @@ const liveOpsExpanded = ref(false)
 const securitiesAccounts = ref([])
 const selectedLiveAccountId = ref('')
 const livePublishPreview = ref(null)
+const showPublishModal = ref(false)
 const remainderPreview = ref(null)
 const remainderLoading = ref(false)
 const remainderReason = ref('')
@@ -1460,8 +1282,6 @@ const livePublishBlockers = computed(() => {
   const items = livePublishPreview.value?.risk_report?.items || []
   return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
 })
-const livePublishRiskRows = computed(() => livePublishPreview.value?.risk_report?.items || [])
-const livePublishRepriceRows = computed(() => livePublishPreview.value?.reprice_summary?.items || [])
 const liveOverlay = computed(() => selectedDetail.value?.live_overlay || null)
 const scoreSnapshotStale = computed(() => Boolean(liveOverlay.value?.score_snapshot_stale))
 const remainderRows = computed(() => remainderPreview.value?.remainder || [])
@@ -1533,39 +1353,6 @@ const equityChart = computed(() => {
 function pct(value) {
   const number = Number(value)
   return Number.isFinite(number) ? `${(number * 100).toFixed(2)}%` : '-'
-}
-
-function money(value) {
-  const number = Number(value)
-  return Number.isFinite(number) ? number.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) : '-'
-}
-
-function num(value) {
-  const number = Number(value)
-  return Number.isFinite(number) ? number.toFixed(2) : '-'
-}
-
-function pctSigned(value) {
-  const number = Number(value)
-  if (!Number.isFinite(number)) return '-'
-  return `${number >= 0 ? '+' : ''}${number.toFixed(2)}%`
-}
-
-function priceSourceLabel(source) {
-  const labels = { realtime: '实时', daily_close: '昨收', none: '无价' }
-  return labels[source] || source || '-'
-}
-
-function priceSourceClass(source) {
-  if (source === 'realtime') return 'price-source-realtime'
-  if (source === 'daily_close') return 'price-source-daily'
-  if (source === 'none') return 'price-source-none'
-  return ''
-}
-
-function formatPriceAsOf(asOf) {
-  if (!asOf) return ''
-  return String(asOf).slice(0, 19)
 }
 
 function signedMoney(value) {
@@ -1757,40 +1544,6 @@ function planRowClass(plan) {
 function filterBySelectedAccount(rows) {
   if (!selectedLiveAccountId.value) return rows
   return rows.filter((row) => String(row.securities_account_id || '') === String(selectedLiveAccountId.value))
-}
-
-function blockerText(blocker) {
-  const labels = {
-    account_binding_missing: '账户绑定不完整',
-    account_position_capped: '按账户可卖数量封顶',
-    insufficient_available_position: '可卖持仓不足',
-    insufficient_cash: '可用资金不足',
-    limit_up: '已涨停',
-    live_trading_disabled: '账户未开启实盘',
-    max_daily_amount_exceeded: '超过单日交易金额上限',
-    max_order_amount_exceeded: '超过单笔金额上限',
-    max_position_pct_exceeded: '超过单票仓位上限',
-    missing_price: '缺少有效价格',
-    priced_from_stale_close: '按昨收定价',
-    st_stock: 'ST 股票',
-    suspended: '停牌',
-  }
-  return labels[blocker] || blocker || '-'
-}
-
-function remainderReasonText(reason) {
-  const labels = {
-    item_not_a_planned_trade: '非计划交易项',
-    already_at_target: '已达目标',
-    live_signal_active: '有在飞信号',
-    reference_price_unavailable: '无可用价格',
-    account_not_synced: '账户未同步',
-    budget_capped: '预算封顶',
-    cash_capped: '现金封顶',
-    available_position_below_gap: '可卖持仓不足',
-    estimated_price_missing: '缺计划价',
-  }
-  return labels[reason] || reason || '-'
 }
 
 async function previewRemainder() {
@@ -2128,6 +1881,7 @@ async function previewLivePublish() {
       dry_run: true,
     })
     livePublishPreview.value = res.data
+    showPublishModal.value = true
   } catch (error) {
     message.value = error.response?.data?.detail?.message || error.response?.data?.detail || error.message || '实盘发布预检失败'
   } finally {
@@ -2145,6 +1899,7 @@ async function publishLiveSignals() {
       dry_run: false,
     })
     livePublishPreview.value = res.data
+    showPublishModal.value = false
     message.value = `已发布 ${res.data?.inserted_count ?? 0} 条 live signals，已有 ${res.data?.existing_count ?? 0} 条`
     await loadLiveOps()
     await loadPlans()
@@ -2258,29 +2013,8 @@ async function review(decision) {
   }
 }
 
-function isKeepItem(item) {
-  const currentShares = Number(item?.current_shares ?? 0)
-  const targetShares = Number(item?.target_shares ?? 0)
-  const deltaShares = Number(item?.delta_shares ?? 0)
-  return currentShares > 0 && targetShares > 0 && deltaShares === 0
-}
-
-function actionBadge(itemOrAction) {
-  const item = typeof itemOrAction === 'object' ? itemOrAction : null
-  const action = item?.action ?? itemOrAction
-  if (item && isKeepItem(item)) {
-    return { text: 'K', label: '保留不动', cls: 'tag-keep' }
-  }
-  switch (action) {
-    case 'buy':
-      return { text: 'B', label: '买入', cls: 'tag-buy' }
-    case 'sell':
-      return { text: 'S', label: '卖出', cls: 'tag-sell' }
-    case 'hold':
-      return { text: 'H', label: '持有', cls: 'tag-hold' }
-    default:
-      return { text: '·', label: '跳过', cls: 'tag-skip' }
-  }
+function canSelectReselectItem(item) {
+  return Boolean(item?.symbol && item.rank != null && !selectedPlanExcluded.value.includes(item.symbol))
 }
 
 function planCadenceBadge(plan) {
@@ -2321,40 +2055,7 @@ function planCadenceBadge(plan) {
   return { text: plan.plan_type || plan.record_kind || '-', cls: 'cadence-unknown' }
 }
 
-function driftBadge(item) {
-  // On a no-trade monitor plan the would-be trade is preserved in
-  // drift_delta_shares; surface it so reviewers can see pending churn.
-  const drift = Number(item?.drift_delta_shares ?? 0)
-  if (!Number.isFinite(drift) || drift === 0) return { text: '持平', cls: 'drift-flat' }
-  if (drift > 0) return { text: `+${drift} 待买`, cls: 'drift-buy' }
-  return { text: `${drift} 待卖`, cls: 'drift-sell' }
-}
-
 const aiRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_summary || null)
-
-function aiRiskBadge(item) {
-  const risk = item?.ai_risk
-  if (!risk || !risk.severity || risk.severity === 'none') {
-    // Only buy/hold targets are reviewed; sells/skips show a neutral dash.
-    return { show: ['buy', 'hold'].includes(item?.action), text: '正常', cls: 'risk-none', title: '未发现规则风控信号' }
-  }
-  const labelMap = { high: '高', medium: '中', low: '低' }
-  const reasons = (risk.findings || []).map((f) => `${f.title}：${f.detail}`).join('\n') || (risk.reasons || []).join('、')
-  return {
-    show: true,
-    text: labelMap[risk.severity] || risk.severity,
-    cls: `risk-${risk.severity}`,
-    title: reasons || '风险信号',
-  }
-}
-
-function canSelectReselectItem(item) {
-  return Boolean(item?.symbol && item.rank != null && !selectedPlanExcluded.value.includes(item.symbol))
-}
-
-function isReselectSelected(symbol) {
-  return selectedReselectSymbols.value.has(symbol)
-}
 
 function toggleReselectSelection(symbol, checked) {
   if (!symbol) return

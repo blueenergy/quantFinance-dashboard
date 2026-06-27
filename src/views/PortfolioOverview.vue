@@ -30,55 +30,11 @@
     <p v-if="message" class="message" :class="{ error: messageIsError }">{{ message }}</p>
 
     <template v-if="selectedPortfolioKey && selectedPortfolio">
-      <section class="portfolio-identity-card">
-        <h3>组合标识</h3>
-        <div class="identity-grid">
-          <div>
-            <span class="label">策略</span>
-            <strong>{{ selectedPortfolio.strategy_name || selectedPortfolio.strategy_template_id }}</strong>
-            <small>{{ selectedPortfolio.strategy_template_id }}</small>
-          </div>
-          <div>
-            <span class="label">参数摘要</span>
-            <strong>{{ selectedPortfolio.param_summary || '-' }}</strong>
-            <small>
-              universe {{ selectedPortfolio.universe_index || '-' }}
-              · Top{{ selectedPortfolio.top_n ?? '-' }}
-              · {{ selectedPortfolio.rebalance_days ?? '-' }} 日调仓
-              · {{ selectedPortfolio.construction_mode || '-' }}
-            </small>
-          </div>
-          <div>
-            <span class="label">params_hash</span>
-            <strong :title="selectedPortfolio.params_hash">{{ selectedPortfolio.params_hash_short || '-' }}</strong>
-            <small>完整：{{ selectedPortfolio.params_hash || '-' }}</small>
-          </div>
-          <div>
-            <span class="label">维护区间</span>
-            <strong>{{ selectedPortfolio.first_base_date || '-' }} → {{ selectedPortfolio.last_base_date || '-' }}</strong>
-            <small>{{ selectedPortfolio.plan_count }} 期 plan · 最新 {{ selectedPortfolio.latest_plan_type || '-' }} / {{ selectedPortfolio.latest_plan_status || '-' }}</small>
-          </div>
-          <div v-if="selectedPortfolio.execution_venue === 'paper'">
-            <span class="label">纸面快照</span>
-            <strong>{{ selectedPortfolio.paper_snapshot_date || '无快照' }}</strong>
-            <small>持仓 {{ selectedPortfolio.paper_holding_count ?? 0 }} 只 · 权益 {{ money(selectedPortfolio.paper_equity) }}</small>
-          </div>
-          <div v-if="selectedPortfolio.paper_execution_mode">
-            <span class="label">纸面执行</span>
-            <strong>{{ paperExecutionModeLabel(selectedPortfolio.paper_execution_mode) }}</strong>
-            <small v-if="selectedPortfolio.paper_execution_mode === 'auto_shadow'">调仓日自动批准，次日开盘价执行</small>
-          </div>
-          <div v-if="selectedPortfolio.paused">
-            <span class="label">自动调仓</span>
-            <strong class="negative">已暂停</strong>
-            <small>手动清仓后暂停；可恢复自动调仓</small>
-          </div>
-        </div>
-        <div v-if="selectedPortfolio.paused" class="paused-banner">
-          <span>该组合已暂停自动调仓（上次手动清仓或主动暂停）。</span>
-          <button type="button" :disabled="manualSubmitting" @click="resumeLineageAction">恢复自动调仓</button>
-        </div>
-      </section>
+      <PortfolioIdentityCard
+        :portfolio="selectedPortfolio"
+        :resume-submitting="manualSubmitting"
+        @resume-lineage="resumeLineageAction"
+      />
 
       <section v-if="holdingsOutOfSync" class="reconcile-banner">
         <div class="reconcile-head">
@@ -113,492 +69,90 @@
         </div>
       </section>
 
-      <section v-if="timelineData" class="cycle-card" :class="{ 'needs-action': timelineData.action_required }">
-        <div class="cycle-card-header">
-          <div>
-            <h3>当前周期状态</h3>
-            <p class="cycle-state">{{ timelineData.today_state }}</p>
-          </div>
-          <span class="funding-badge" :class="`mode-${selectedPortfolio.execution_venue}`">
-            {{ executionVenueLabel(selectedPortfolio.execution_venue) }}
-          </span>
-        </div>
-        <div class="cycle-metrics">
-          <div>
-            <span class="label">调仓进度</span>
-            <strong>
-              {{ timelineData.current_cycle?.elapsed_trading_days ?? 0 }}
-              / {{ timelineData.current_cycle?.rebalance_days ?? '-' }} 交易日
-            </strong>
-            <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: `${cycleProgressPct}%` }" />
-            </div>
-          </div>
-          <div>
-            <span class="label">预计下次调仓</span>
-            <strong>{{ timelineData.current_cycle?.next_rebalance_estimate || '-' }}</strong>
-          </div>
-          <div>
-            <span class="label">理论漂移换手</span>
-            <strong>{{ pct(timelineData.latest_drift_summary?.estimated_turnover) }}</strong>
-            <small>
-              买 {{ timelineData.latest_drift_summary?.buy_count ?? 0 }}
-              / 卖 {{ timelineData.latest_drift_summary?.sell_count ?? 0 }}
-            </small>
-          </div>
-          <div>
-            <span class="label">需处理</span>
-            <strong>{{ timelineData.action_required ? '是' : '否' }}</strong>
-          </div>
-        </div>
-        <p v-if="timelineData.latest_drift_summary?.non_executable_reason === 'monitor_no_trade'" class="monitor-hint">
-          未到调仓周期，本日不交易；上方漂移为若今日调仓的理论变化。
-        </p>
-        <div v-if="timelineData.action_required || selectedLatestPlanId" class="cycle-actions">
-          <p v-if="pendingActionPlan" class="action-banner">
-            待审批计划：<strong>{{ pendingActionPlan.date }}</strong> · {{ pendingActionPlan.today_state }}
-            <span class="muted">请在下方「待审批计划复核」核对标的与 AI 风控后批准/拒绝。</span>
-          </p>
-          <button
-            type="button"
-            class="secondary"
-            :disabled="forceRebalanceSubmitting || !selectedOperationPlanId || Boolean(forceRebalanceBlockReason)"
-            :title="forceRebalanceBlockReason || ''"
-            @click="submitForceRebalance"
-          >
-            {{ forceRebalanceSubmitting ? '提交中…' : '立即调仓 / 强制建仓' }}
-          </button>
-          <span v-if="forceRebalanceBlockReason" class="warning-text">{{ forceRebalanceBlockReason }}</span>
-          <span v-else class="muted">
-            重新生成一份强制调仓计划；不会执行当前已有 plan。
-          </span>
-        </div>
-      </section>
+      <CurrentPeriodStatus
+        :timeline-data="timelineData"
+        :execution-venue="selectedPortfolio.execution_venue"
+        :execution-venue-label="executionVenueLabel(selectedPortfolio.execution_venue)"
+        :cycle-progress-pct="cycleProgressPct"
+        :pending-action-plan="pendingActionPlan"
+        :latest-plan-id="selectedLatestPlanId"
+        :operation-plan-id="selectedOperationPlanId"
+        :force-rebalance-submitting="forceRebalanceSubmitting"
+        :force-rebalance-block-reason="forceRebalanceBlockReason"
+        @force-rebalance="submitForceRebalance"
+      />
 
-      <section v-if="needsReviewPlan && planTargetRows.length" class="plan-ops-card plan-review-card">
-        <div class="plan-ops-header">
-          <div>
-            <h3>待审批计划复核</h3>
-            <p class="muted">
-              最新 plan：<code>{{ shortPlanId(selectedOperationPlanId) }}</code> · 待审批 ·
-              请先核对下方买/卖/持有方向与 AI 风控，再决定批准或拒绝。
-            </p>
-            <p class="plan-id-row">
-              <span class="label">完整 plan_id</span>
-              <code>{{ selectedOperationPlanId || '-' }}</code>
-              <button
-                type="button"
-                class="link-button"
-                :disabled="!selectedOperationPlanId"
-                @click="copyPlanId(selectedOperationPlanId)"
-              >
-                复制
-              </button>
-            </p>
-          </div>
-          <div class="pending-plan-summary">
-            <span class="tag-buy">买 {{ planReviewSummary.buy }}</span>
-            <span class="tag-sell">卖 {{ planReviewSummary.sell }}</span>
-            <span class="tag-hold">持有 {{ planReviewSummary.hold }}</span>
-          </div>
-        </div>
+      <PlanReviewPanel
+        :visible="needsReviewPlan && planTargetRows.length > 0"
+        :plan-id="selectedOperationPlanId"
+        :items="planTargetRows"
+        :overlay="liveOverlay"
+        :score-snapshot-stale="scoreSnapshotStale"
+        :summary="planReviewSummary"
+        :risk-summary="planReviewRiskSummary"
+        :approve-submitting="approveSubmitting"
+        :reject-submitting="rejectSubmitting"
+        :review-ai-risk-loading="reviewAiRiskLoading"
+        @approve="approvePendingPlan"
+        @reject="rejectPendingPlan"
+        @rerun-ai-risk="rerunReviewAiRisk"
+        @copy-plan-id="copyPlanId"
+      />
 
-        <p
-          v-if="planReviewRiskSummary.high"
-          class="warning-text plan-review-risk-warning"
-        >
-          AI 风控发现 {{ planReviewRiskSummary.high }} 个高风险标的，批准前请重点确认。
-        </p>
+      <PlanOpsPanel
+        :visible="showPlanOpsPanel"
+        :plan-id="selectedOperationPlanId"
+        :plan-status="selectedPlanStatus"
+        :execution-mode-label="selectedPlanExecutionModeLabel"
+        :execution-venue="selectedPortfolio.execution_venue"
+        :execution-venue-label="executionVenueLabel(selectedPortfolio.execution_venue)"
+        :overlay="liveOverlay"
+        :score-snapshot-stale="scoreSnapshotStale"
+        :is-paper="isPaperPortfolio"
+        :can-execute-paper-now="canExecutePaperNow"
+        :paper-execute-ready-text="paperExecuteReadyText"
+        :paper-execute-loading="paperExecuteLoading"
+        v-model:selected-live-account-id="selectedLiveAccountId"
+        :live-account-options="liveAccountOptions"
+        :can-publish-live-signals="canPublishLiveSignals"
+        :has-published-live-signals="selectedPlanHasPublishedLiveSignals"
+        :live-publish-loading="livePublishLoading"
+        :live-publish-blockers="livePublishBlockers"
+        :can-cancel-current-plan="canCancelCurrentPlan"
+        :cancel-plan-ready-text="cancelPlanReadyText"
+        :cancel-plan-loading="cancelPlanLoading"
+        :pending-items="pendingPlanRows"
+        :pending-summary="pendingPlanSummary"
+        :remainder-preview="remainderPreview"
+        :remainder-rows="remainderRows"
+        :remainder-actionable-count="remainderActionableCount"
+        :remainder-blockers="remainderBlockers"
+        :remainder-loading="remainderLoading"
+        v-model:remainder-reason="remainderReason"
+        @copy-plan-id="copyPlanId"
+        @execute-paper="executePaperNow"
+        @preview-publish="previewLivePublish"
+        @confirm-publish="publishLiveSignals"
+        @preview-remainder="previewRemainder"
+        @confirm-remainder="confirmRemainder"
+        @cancel-plan="cancelCurrentPlan"
+      />
 
-        <div class="table-wrap compact risk-report-table">
-          <table>
-            <thead>
-              <tr>
-                <th>方向</th>
-                <th>标的</th>
-                <th>行业</th>
-                <th>加权分</th>
-                <th>当前</th>
-                <th>目标</th>
-                <th>变化</th>
-                <th>预估价</th>
-                <th>预估金额</th>
-                <th>AI风控</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in planTargetRows" :key="row.symbol">
-                <td>
-                  <span class="action-tag" :class="planItemActionClass(row.action)">
-                    {{ planItemActionLabel(row.action) }}
-                  </span>
-                </td>
-                <td>
-                  <strong>{{ row.name || row.symbol }}</strong>
-                  <small class="muted symbol-line">{{ row.symbol }}</small>
-                </td>
-                <td>{{ row.industry || '-' }}</td>
-                <td>{{ num(row.score_value) }}</td>
-                <td>{{ row.current_shares ?? 0 }}</td>
-                <td>{{ row.target_shares ?? 0 }}</td>
-                <td :class="signClass(row.delta_shares)">{{ formatShareDelta(row.delta_shares) }}</td>
-                <td>{{ num(row.estimated_price) }}</td>
-                <td>{{ money(row.estimated_amount) }}</td>
-                <td>
-                  <span
-                    v-if="row.ai_risk"
-                    class="risk-badge"
-                    :class="`risk-${row.ai_risk.severity || 'none'}`"
-                    :title="(row.ai_risk.reasons || []).join('、')"
-                  >
-                    {{ riskSeverityLabel(row.ai_risk.severity) }}
-                  </span>
-                  <span v-else class="muted">-</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <PlanPublishPreviewModal
+        :visible="showPublishModal"
+        :preview="livePublishPreview"
+        :loading="livePublishLoading"
+        :blocker-messages="livePublishBlockers"
+        :confirm-disabled="Boolean(livePublishBlockers.length)"
+        @close="showPublishModal = false"
+        @confirm="publishLiveSignals"
+      />
 
-        <div class="plan-ops-actions plan-review-actions">
-          <button
-            type="button"
-            :disabled="approveSubmitting || rejectSubmitting || !reviewPlanId"
-            @click="approvePendingPlan"
-          >
-            {{ approveSubmitting ? '审批中…' : '批准计划' }}
-          </button>
-          <button
-            type="button"
-            class="secondary"
-            :disabled="reviewAiRiskLoading"
-            @click="rerunReviewAiRisk"
-          >
-            {{ reviewAiRiskLoading ? 'AI 风控复检中…' : '运行 AI 风控复检' }}
-          </button>
-          <button
-            type="button"
-            class="danger"
-            :disabled="approveSubmitting || rejectSubmitting || !reviewPlanId"
-            @click="rejectPendingPlan"
-          >
-            {{ rejectSubmitting ? '拒绝中…' : '拒绝计划' }}
-          </button>
-        </div>
-      </section>
-
-      <section v-if="showPlanOpsPanel" class="plan-ops-card">
-        <div class="plan-ops-header">
-          <div>
-            <h3>计划执行操作</h3>
-            <p class="muted">
-              当前操作 plan：<code>{{ shortPlanId(selectedOperationPlanId) }}</code>
-              · {{ selectedPlanStatus || '-' }}
-              · {{ selectedPlanExecutionModeLabel }}
-            </p>
-            <p class="plan-id-row">
-              <span class="label">完整 plan_id</span>
-              <code>{{ selectedOperationPlanId || '-' }}</code>
-              <button
-                type="button"
-                class="link-button"
-                :disabled="!selectedOperationPlanId"
-                @click="copyPlanId(selectedOperationPlanId)"
-              >
-                复制
-              </button>
-            </p>
-          </div>
-          <span class="funding-badge" :class="`mode-${selectedPortfolio.execution_venue}`">
-            {{ executionVenueLabel(selectedPortfolio.execution_venue) }}
-          </span>
-        </div>
-
-        <div v-if="isPaperPortfolio" class="plan-ops-actions">
-          <button
-            type="button"
-            :disabled="paperExecuteLoading || !canExecutePaperNow"
-            :title="paperExecuteReadyText"
-            @click="executePaperNow"
-          >
-            {{ paperExecuteLoading ? '执行中…' : '立即执行 Paper' }}
-          </button>
-          <span class="muted">{{ paperExecuteReadyText }}</span>
-        </div>
-
-        <div v-else class="plan-ops-actions">
-          <select v-model="selectedLiveAccountId">
-            <option value="">请选择账户</option>
-            <option v-for="account in liveAccountOptions" :key="account.id" :value="account.id">
-              {{ account.label }}
-            </option>
-          </select>
-          <template v-if="!selectedPlanHasPublishedLiveSignals">
-            <button
-              type="button"
-              :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals"
-              @click="previewLivePublish"
-            >
-              {{ livePublishLoading ? '预检中…' : '实盘预检' }}
-            </button>
-            <button
-              type="button"
-              :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals || livePublishBlockers.length"
-              @click="publishLiveSignals"
-            >
-              确认发布
-            </button>
-          </template>
-          <template v-else>
-            <input v-model="remainderReason" class="reason-input" type="text" placeholder="补单原因（可选）">
-            <button type="button" :disabled="remainderLoading || !selectedLiveAccountId" @click="previewRemainder">
-              {{ remainderLoading ? '预检中…' : '缺口预检' }}
-            </button>
-            <button
-              type="button"
-              :disabled="remainderLoading || !selectedLiveAccountId || !remainderActionableCount || remainderBlockers.length"
-              @click="confirmRemainder"
-            >
-              确认补单
-            </button>
-          </template>
-        </div>
-
-        <div class="plan-ops-actions cancel-plan-row">
-          <button
-            type="button"
-            class="danger"
-            :disabled="cancelPlanLoading || !canCancelCurrentPlan"
-            :title="cancelPlanReadyText"
-            @click="cancelCurrentPlan"
-          >
-            {{ cancelPlanLoading ? '作废中…' : '作废当前计划' }}
-          </button>
-          <span class="muted">{{ cancelPlanReadyText }}</span>
-        </div>
-
-        <div v-if="pendingPlanRows.length" class="pending-plan-items">
-          <div class="pending-plan-header">
-            <div>
-              <h4>待发布/待执行计划标的</h4>
-              <p class="muted">
-                当前 approved plan 的目标列表；发布/执行前请确认买卖方向和目标股数。
-              </p>
-            </div>
-            <div class="pending-plan-summary">
-              <span class="tag-buy">买 {{ pendingPlanSummary.buy }}</span>
-              <span class="tag-sell">卖 {{ pendingPlanSummary.sell }}</span>
-              <span class="tag-hold">持有 {{ pendingPlanSummary.hold }}</span>
-            </div>
-          </div>
-          <div class="table-wrap compact risk-report-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>方向</th>
-                  <th>标的</th>
-                  <th>行业</th>
-                  <th>加权分</th>
-                  <th>当前</th>
-                  <th>目标</th>
-                  <th>变化</th>
-                  <th>预估价</th>
-                  <th>预估金额</th>
-                  <th>AI风控</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in pendingPlanRows" :key="row.symbol">
-                  <td>
-                    <span class="action-tag" :class="planItemActionClass(row.action)">
-                      {{ planItemActionLabel(row.action) }}
-                    </span>
-                  </td>
-                  <td>
-                    <strong>{{ row.name || row.symbol }}</strong>
-                    <small class="muted symbol-line">{{ row.symbol }}</small>
-                  </td>
-                  <td>{{ row.industry || '-' }}</td>
-                  <td>{{ num(row.score_value) }}</td>
-                  <td>{{ row.current_shares ?? 0 }}</td>
-                  <td>{{ row.target_shares ?? 0 }}</td>
-                  <td :class="signClass(row.delta_shares)">{{ formatShareDelta(row.delta_shares) }}</td>
-                  <td>{{ num(row.estimated_price) }}</td>
-                  <td>{{ money(row.estimated_amount) }}</td>
-                  <td>
-                    <span
-                      v-if="row.ai_risk"
-                      class="risk-badge"
-                      :class="`risk-${row.ai_risk.severity || 'none'}`"
-                      :title="(row.ai_risk.reasons || []).join('、')"
-                    >
-                      {{ riskSeverityLabel(row.ai_risk.severity) }}
-                    </span>
-                    <span v-else class="muted">-</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div v-if="livePublishPreview" class="risk-report">
-          <p>
-            待写入 {{ livePublishPreview.new_signals?.length ?? 0 }} 条，已有 {{ livePublishPreview.existing_count ?? 0 }} 条，
-            阻断 {{ livePublishPreview.risk_report?.blocked_count ?? 0 }} 条
-          </p>
-          <p v-if="livePublishBlockers.length" class="warning-text">
-            {{ livePublishBlockers.slice(0, 8).join(' / ') }}
-          </p>
-          <div v-if="livePublishRiskRows.length" class="table-wrap compact risk-report-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>状态</th>
-                  <th>股票</th>
-                  <th>方向</th>
-                  <th>数量</th>
-                  <th>价格</th>
-                  <th>预估金额</th>
-                  <th>预检结果</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="item in livePublishRiskRows" :key="item.order_id || `${item.symbol}-${item.action}-${item.size}`" :class="{ blocked: item.blockers?.length }">
-                  <td>{{ item.blockers?.length ? '阻断' : '通过' }}</td>
-                  <td>{{ item.symbol || '-' }}</td>
-                  <td>{{ item.action || '-' }}</td>
-                  <td>{{ item.size ?? '-' }}</td>
-                  <td>{{ num(item.price) }}</td>
-                  <td>{{ money(item.estimated_amount) }}</td>
-                  <td>{{ (item.blockers || []).map(blockerText).join(' / ') || '可发布' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div v-if="remainderPreview" class="risk-report">
-          <p>
-            可补 {{ remainderActionableCount }} 项，阻断 {{ remainderPreview.risk_report?.blocked_count ?? 0 }} 条，
-            可用现金 {{ money(remainderPreview.available_cash) }}
-            <span v-if="remainderPreview.account_synced === false" class="warning-text">账户未同步持仓，无法补单</span>
-          </p>
-          <p v-if="remainderBlockers.length" class="warning-text">
-            {{ remainderBlockers.slice(0, 8).join(' / ') }}
-          </p>
-          <div v-if="remainderRows.length" class="table-wrap compact risk-report-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>股票</th>
-                  <th>方向</th>
-                  <th>目标</th>
-                  <th>账户持仓</th>
-                  <th>缺口</th>
-                  <th>补单量</th>
-                  <th>预估金额</th>
-                  <th>说明</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in remainderRows" :key="row.symbol" :class="{ blocked: !row.actionable }">
-                  <td>{{ row.name || row.symbol }}</td>
-                  <td>{{ row.action || '-' }}</td>
-                  <td>{{ row.target_shares ?? '-' }}</td>
-                  <td>{{ row.account_current_shares ?? '-' }}</td>
-                  <td>{{ row.gap_shares ?? 0 }}</td>
-                  <td>{{ row.topup_shares ?? 0 }}</td>
-                  <td>{{ money(row.estimated_amount) }}</td>
-                  <td>{{ (row.reasons || []).map(remainderReasonText).join(' / ') || '-' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section v-if="foldedTimeline.length" class="timeline-section">
-        <h3>观察 / 调仓时间线</h3>
-        <p class="timeline-hint muted">调仓节点可展开查看买卖明细；观察日折叠段仅显示漂移摘要。</p>
-        <ul class="timeline-list">
-          <li
-            v-for="(entry, idx) in foldedTimeline"
-            :key="entry.type === 'monitor_fold' ? `fold-${entry.end}-${idx}` : entry.node.plan_id"
-            :class="timelineEntryClass(entry)"
-          >
-            <template v-if="entry.type === 'monitor_fold'">
-              <strong>{{ entry.end }} ~ {{ entry.start }}</strong>
-              <span>观察 {{ entry.count }} 次</span>
-              <span v-if="entry.maxDrift > 0">最大漂移换手 {{ pct(entry.maxDrift) }}</span>
-            </template>
-            <template v-else>
-              <div class="timeline-node-head">
-                <button
-                  v-if="timelineTradeItems(entry.node).length"
-                  type="button"
-                  class="timeline-expand"
-                  :aria-expanded="expandedTimelinePlanId === entry.node.plan_id"
-                  @click="toggleTimelineDetail(entry.node.plan_id)"
-                >
-                  {{ expandedTimelinePlanId === entry.node.plan_id ? '▾' : '▸' }}
-                </button>
-                <strong>{{ entry.node.date }}</strong>
-                <span class="node-type">{{ nodeTypeLabel(entry.node.node_type) }}</span>
-                <span>{{ entry.node.today_state }}</span>
-                <span v-if="entry.node.drift_brief?.buy_count">
-                  买 {{ entry.node.drift_brief.buy_count }}
-                </span>
-                <span v-if="entry.node.drift_brief?.sell_count">
-                  卖 {{ entry.node.drift_brief.sell_count }}
-                </span>
-                <span v-if="entry.node.drift_brief?.estimated_turnover != null">
-                  换手 {{ pct(entry.node.drift_brief.estimated_turnover) }}
-                </span>
-                <span v-if="timelineTradePlanId(entry.node)" class="timeline-plan-id">
-                  交易计划ID <code>{{ timelineTradePlanId(entry.node) }}</code>
-                </span>
-              </div>
-              <div
-                v-if="expandedTimelinePlanId === entry.node.plan_id && timelineTradeItems(entry.node).length"
-                class="timeline-trade-detail"
-              >
-                <p v-if="entry.node.drift_brief?.mode === 'drift'" class="timeline-detail-note">
-                  观察日未执行，以下为若今日调仓的理论买卖。
-                </p>
-                <div class="table-wrap compact">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>方向</th>
-                        <th>代码</th>
-                        <th>名称</th>
-                        <th>变动股数</th>
-                        <th>持仓 → 目标</th>
-                        <th>估算金额</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="row in timelineTradeItems(entry.node)" :key="`${entry.node.plan_id}-${row.symbol}`">
-                        <td>
-                          <span class="action-tag" :class="row.action === 'buy' ? 'tag-buy' : 'tag-sell'">
-                            {{ row.action === 'buy' ? '买' : '卖' }}
-                          </span>
-                        </td>
-                        <td>{{ row.symbol }}</td>
-                        <td>{{ row.name || '-' }}</td>
-                        <td>{{ formatShareDelta(row.delta_shares) }}</td>
-                        <td>{{ row.current_shares }} → {{ row.target_shares }}</td>
-                        <td>{{ money(row.estimated_amount) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </template>
-          </li>
-        </ul>
-      </section>
+      <LineageTimeline
+        :entries="foldedTimeline"
+        :expanded-plan-id="expandedTimelinePlanId"
+        @toggle-detail="toggleTimelineDetail"
+      />
 
       <section v-if="equityCaveat" class="caveat-box">
         <strong>说明：</strong>{{ equityCaveat }}
@@ -1151,67 +705,11 @@
         </div>
       </div>
 
-      <section>
-        <h3>{{ isLivePortfolio ? '实盘成交明细' : '纸面成交明细' }}</h3>
-        <div v-if="!tradeDetailRows.length" class="muted">暂无成交记录。</div>
-        <div v-else class="table-wrap compact">
-          <table>
-            <thead>
-              <tr>
-                <th>调仓日</th>
-                <th>代码</th>
-                <th>名称</th>
-                <th>买入日</th>
-                <th>买价</th>
-                <th>卖出日</th>
-                <th>卖价</th>
-                <th>数量</th>
-                <th>买入额</th>
-                <th>持有收益</th>
-                <th>净盈亏</th>
-                <th>费用</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, idx) in tradeDetailRows" :key="`${row.trade_id || row.buy_order_id || row.symbol}-${idx}`" :class="{ 'open-trade': row.status === 'open' }">
-                <td>{{ row.rebalance_date || '-' }}</td>
-                <td>{{ row.symbol || '-' }}</td>
-                <td>{{ row.name || '-' }}</td>
-                <td>{{ row.buy_date || '-' }}</td>
-                <td>{{ num(row.buy_price) }}</td>
-                <td>{{ row.sell_date || '-' }}</td>
-                <td>
-                  <span v-if="row.status === 'open'" class="badge-open">持有中</span>
-                  <span v-else>{{ num(row.sell_price) }}</span>
-                </td>
-                <td>{{ money(row.quantity) }}</td>
-                <td>{{ money(row.buy_amount) }}</td>
-                <td :class="signClass(row.holding_return)">{{ pct(row.holding_return) }}</td>
-                <td :class="signClass(row.net_pnl)">{{ signedMoney(row.net_pnl) }}</td>
-                <td>{{ money(row.fee) }}</td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr class="totals-row">
-                <td colspan="8">合计（{{ tradeTotals.count }} 笔 · 已平 {{ tradeTotals.closedCount }} / 持有 {{ tradeTotals.openCount }}）</td>
-                <td>{{ money(tradeTotals.buyAmount) }}</td>
-                <td></td>
-                <td :class="signClass(tradeTotals.netPnl)">{{ signedMoney(tradeTotals.netPnl) }}</td>
-                <td>{{ money(tradeTotals.fee) }}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        <p v-if="tradeDetailRows.length" class="muted combo-note">
-          成交明细按 <strong>FIFO（先进先出）</strong> 将每笔卖出与对应买入批次配对，一行为一段往返；未平仓部分以“持有中”行按最新价估算浮动盈亏。
-          <template v-if="isLivePortfolio">
-            上方汇总卡片的「已实现盈亏」按<strong>加权平均成本法</strong>计算，与本表净盈亏合计在分批建仓/部分卖出时口径不同，全部平仓后两者一致。
-          </template>
-          <template v-else>
-            纸面成交来自各调仓日开盘价模拟执行（portfolio_paper_executions），不含佣金。
-          </template>
-        </p>
-      </section>
+      <ExecutionsPanel
+        :rows="tradeDetailRows"
+        :totals="tradeTotals"
+        :is-live="isLivePortfolio"
+      />
     </template>
   </div>
 </template>
@@ -1219,9 +717,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import {
-  approvePortfolioPlan,
-  cancelPortfolioPlan,
-  executePortfolioPlanPaper,
   forceRebalanceLineage,
   getLineageLiveEquity,
   getLineageLiveExecutions,
@@ -1239,14 +734,23 @@ import {
   getPortfolioPlanLineageEquity,
   getPortfolioPlanLineageTimeline,
   listPortfolios,
-  publishPortfolioPlanLiveSignals,
   recordExternalManualRecord,
-  rejectPortfolioPlan,
-  replanPortfolioPlanRemainder,
   rerunPortfolioPlanAiRisk,
   resumePortfolioLineage,
 } from '../api/portfolioPlans'
 import { getSecuritiesAccounts } from '../api/trader'
+import PortfolioIdentityCard from '../components/portfolio/PortfolioIdentityCard.vue'
+import CurrentPeriodStatus from '../components/portfolio/CurrentPeriodStatus.vue'
+import PlanReviewPanel from '../components/portfolio/PlanReviewPanel.vue'
+import PlanOpsPanel from '../components/portfolio/PlanOpsPanel.vue'
+import PlanPublishPreviewModal from '../components/portfolio/PlanPublishPreviewModal.vue'
+import LineageTimeline from '../components/portfolio/LineageTimeline.vue'
+import ExecutionsPanel from '../components/portfolio/ExecutionsPanel.vue'
+import { usePlanOps } from '../composables/usePlanOps'
+import {
+  formatShareDelta,
+  riskSeverityLabel,
+} from '../composables/usePortfolioPlanFormat'
 
 const portfolios = ref([])
 const selectedPortfolioKey = ref('')
@@ -1295,19 +799,10 @@ const swapError = ref('')
 const showFastActionModal = ref(false)
 const fastActionSubmitting = ref(false)
 const fastActionPreview = ref({ title: '', description: '', targets: {}, items: [], blocked: false })
-const approveSubmitting = ref(false)
-const rejectSubmitting = ref(false)
 const reviewAiRiskLoading = ref(false)
 const forceRebalanceSubmitting = ref(false)
 const securitiesAccounts = ref([])
 const selectedLiveAccountId = ref('')
-const livePublishPreview = ref(null)
-const livePublishLoading = ref(false)
-const paperExecuteLoading = ref(false)
-const cancelPlanLoading = ref(false)
-const remainderPreview = ref(null)
-const remainderLoading = ref(false)
-const remainderReason = ref('')
 
 const selectedPortfolio = computed(() => (
   portfolios.value.find((row) => portfolioKey(row) === selectedPortfolioKey.value) || null
@@ -1348,6 +843,8 @@ const selectedPlanHasPublishedLiveSignals = computed(() => (
 const selectedPlanLiveSignalCount = computed(() => Number(liveExecutionContext.value?.signal_count || 0))
 const selectedPlanActiveLiveSignalCount = computed(() => Number(liveExecutionContext.value?.active_signal_count || 0))
 const latestPlanItems = computed(() => latestPlanDetail.value?.items || [])
+const liveOverlay = computed(() => latestPlanDetail.value?.live_overlay || null)
+const scoreSnapshotStale = computed(() => Boolean(liveOverlay.value?.score_snapshot_stale))
 const paperExecutionCount = computed(() => Number(executionStatus.value?.execution_count || 0))
 const hasPaperExecution = computed(() => Boolean(latestPlan.value?.paper_executed_at) || paperExecutionCount.value > 0)
 const hasApprovedPlanAwaitingAction = computed(() => (
@@ -1423,17 +920,6 @@ const liveAccountOptions = computed(() => securitiesAccounts.value.map((account)
   id: account.id || account._id,
   label: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}`,
 })))
-const livePublishBlockers = computed(() => {
-  const items = livePublishPreview.value?.risk_report?.items || []
-  return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
-})
-const livePublishRiskRows = computed(() => livePublishPreview.value?.risk_report?.items || [])
-const remainderRows = computed(() => remainderPreview.value?.remainder || [])
-const remainderActionableCount = computed(() => remainderPreview.value?.actionable_count || 0)
-const remainderBlockers = computed(() => {
-  const items = remainderPreview.value?.risk_report?.items || []
-  return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
-})
 // Normalized plan target list (buy/sell/hold, skip filtered, score-sorted).
 // AI risk (ai_risk) is written onto each item by the plan-generation worker, so
 // it is available as soon as the plan exists — including while it is still
@@ -1485,6 +971,47 @@ const pendingPlanRows = computed(() => (
 ))
 const pendingPlanSummary = computed(() => summarizePlanRows(pendingPlanRows.value))
 const planReviewSummary = computed(() => summarizePlanRows(planTargetRows.value))
+
+const {
+  livePublishPreview,
+  livePublishLoading,
+  showPublishModal,
+  livePublishBlockers,
+  paperExecuteLoading,
+  cancelPlanLoading,
+  remainderPreview,
+  remainderLoading,
+  remainderReason,
+  remainderRows,
+  remainderActionableCount,
+  remainderBlockers,
+  approveSubmitting,
+  rejectSubmitting,
+  previewLivePublish,
+  publishLiveSignals,
+  previewRemainder,
+  confirmRemainder,
+  executePaperNow,
+  cancelCurrentPlan,
+  approvePendingPlan,
+  rejectPendingPlan,
+  resetPlanOpsState,
+} = usePlanOps({
+  selectedOperationPlanId,
+  selectedLiveAccountId,
+  canPublishLiveSignals,
+  canExecutePaperNow,
+  canCancelCurrentPlan,
+  reviewPlanId,
+  onRefresh: async () => {
+    await loadPortfolios()
+    await refreshDetail()
+  },
+  onMessage: (msg, isError) => {
+    message.value = msg
+    messageIsError.value = isError
+  },
+})
 
 const cycleProgressPct = computed(() => {
   const cycle = timelineData.value?.current_cycle
@@ -1578,64 +1105,6 @@ function paperExecutionModeLabel(mode) {
   return mode || '-'
 }
 
-function blockerText(blocker) {
-  const labels = {
-    account_binding_missing: '账户绑定不完整',
-    account_position_capped: '按账户可卖数量封顶',
-    insufficient_available_position: '可卖持仓不足',
-    insufficient_cash: '可用资金不足',
-    limit_up: '已涨停',
-    live_trading_disabled: '账户未开启实盘',
-    max_daily_amount_exceeded: '超过单日交易金额上限',
-    max_order_amount_exceeded: '超过单笔金额上限',
-    max_position_pct_exceeded: '超过单票仓位上限',
-    missing_price: '缺少有效价格',
-    st_stock: 'ST 股票',
-    suspended: '停牌',
-  }
-  return labels[blocker] || blocker || '-'
-}
-
-function remainderReasonText(reason) {
-  const labels = {
-    item_not_a_planned_trade: '非计划交易项',
-    already_at_target: '已达目标',
-    live_signal_active: '有在飞信号',
-    reference_price_unavailable: '无可用价格',
-    account_not_synced: '账户未同步',
-    budget_capped: '预算封顶',
-    cash_capped: '现金封顶',
-    available_position_below_gap: '可卖持仓不足',
-    estimated_price_missing: '缺计划价',
-  }
-  return labels[reason] || reason || '-'
-}
-
-function nodeTypeLabel(nodeType) {
-  if (nodeType === 'rebalance') return '调仓'
-  if (nodeType === 'manual') return '补录'
-  return '观察'
-}
-
-function timelineEntryClass(entry) {
-  if (entry.type === 'monitor_fold') return 'timeline-item timeline-fold'
-  const node = entry.node
-  if (node.status === 'rejected') return 'timeline-item timeline-rejected'
-  if (node.action_required) return 'timeline-item timeline-strong'
-  if (node.node_type === 'rebalance') return 'timeline-item timeline-strong'
-  return 'timeline-item'
-}
-
-function timelineTradeItems(node) {
-  return node?.drift_brief?.items || []
-}
-
-function timelineTradePlanId(node) {
-  if (!node) return ''
-  const isTradePlan = node.record_kind === 'trade_plan' || node.node_type === 'rebalance'
-  return isTradePlan ? (node.plan_id || '') : ''
-}
-
 function toggleTimelineDetail(planId) {
   expandedTimelinePlanId.value = expandedTimelinePlanId.value === planId ? null : planId
 }
@@ -1662,26 +1131,6 @@ function normalizePlanItemRow(item) {
     target_shares: target,
     delta_shares: delta,
   }
-}
-
-function planItemActionLabel(action) {
-  if (action === 'buy') return '买'
-  if (action === 'sell') return '卖'
-  if (action === 'hold') return '持'
-  return '跳过'
-}
-
-function planItemActionClass(action) {
-  if (action === 'buy') return 'tag-buy'
-  if (action === 'sell') return 'tag-sell'
-  if (action === 'hold') return 'tag-hold'
-  return 'tag-skip'
-}
-
-function formatShareDelta(value) {
-  const n = Number(value || 0)
-  if (!Number.isFinite(n) || n === 0) return '0'
-  return n > 0 ? `+${n}` : String(n)
 }
 
 function formatSyncedAt(value) {
@@ -1804,13 +1253,6 @@ function syncManualTargets() {
 
 function manualDelta(row) {
   return effectiveTarget(row.symbol) - Number(row.shares || 0)
-}
-
-function riskSeverityLabel(severity) {
-  if (severity === 'high') return '高'
-  if (severity === 'medium') return '中'
-  if (severity === 'low') return '低'
-  return '无'
 }
 
 function riskRowClass(symbol) {
@@ -2022,44 +1464,6 @@ async function confirmFastAction() {
   }
 }
 
-async function approvePendingPlan() {
-  const planId = reviewPlanId.value
-  if (!planId) return
-  approveSubmitting.value = true
-  message.value = ''
-  messageIsError.value = false
-  try {
-    await approvePortfolioPlan(planId, { comment: 'approved from portfolio overview' })
-    message.value = `计划 ${planId} 已审批通过。`
-    await Promise.all([loadPortfolios(), refreshDetail()])
-  } catch (error) {
-    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '审批失败'
-    messageIsError.value = true
-  } finally {
-    approveSubmitting.value = false
-  }
-}
-
-async function rejectPendingPlan() {
-  const planId = reviewPlanId.value
-  if (!planId) return
-  const reason = window.prompt('拒绝原因（可选，会记录到 plan review）：', '')
-  if (reason === null) return
-  rejectSubmitting.value = true
-  message.value = ''
-  messageIsError.value = false
-  try {
-    await rejectPortfolioPlan(planId, { comment: reason || 'rejected from portfolio overview' })
-    message.value = `计划 ${planId} 已拒绝。`
-    await Promise.all([loadPortfolios(), refreshDetail()])
-  } catch (error) {
-    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '拒绝失败'
-    messageIsError.value = true
-  } finally {
-    rejectSubmitting.value = false
-  }
-}
-
 async function rerunReviewAiRisk() {
   const planId = selectedOperationPlanId.value
   if (!planId) return
@@ -2077,140 +1481,6 @@ async function rerunReviewAiRisk() {
     messageIsError.value = true
   } finally {
     reviewAiRiskLoading.value = false
-  }
-}
-
-async function previewLivePublish() {
-  const planId = selectedOperationPlanId.value
-  if (!planId || !selectedLiveAccountId.value || !canPublishLiveSignals.value) return
-  livePublishLoading.value = true
-  message.value = ''
-  messageIsError.value = false
-  try {
-    const res = await publishPortfolioPlanLiveSignals(planId, {
-      securities_account_id: selectedLiveAccountId.value,
-      dry_run: true,
-    })
-    livePublishPreview.value = res.data || {}
-  } catch (error) {
-    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '实盘发布预检失败'
-    messageIsError.value = true
-  } finally {
-    livePublishLoading.value = false
-  }
-}
-
-async function publishLiveSignals() {
-  const planId = selectedOperationPlanId.value
-  if (!planId || !selectedLiveAccountId.value || !canPublishLiveSignals.value) return
-  livePublishLoading.value = true
-  message.value = ''
-  messageIsError.value = false
-  try {
-    const res = await publishPortfolioPlanLiveSignals(planId, {
-      securities_account_id: selectedLiveAccountId.value,
-      dry_run: false,
-    })
-    livePublishPreview.value = res.data || {}
-    message.value = `已发布 ${res.data?.inserted_count ?? 0} 条 live signals，已有 ${res.data?.existing_count ?? 0} 条。`
-    await Promise.all([loadPortfolios(), refreshDetail()])
-  } catch (error) {
-    const detail = error.response?.data?.detail
-    livePublishPreview.value = detail?.risk_report ? { risk_report: detail.risk_report, blocked: true } : livePublishPreview.value
-    message.value = formatApiDetail(detail) || error.message || '实盘发布失败'
-    messageIsError.value = true
-  } finally {
-    livePublishLoading.value = false
-  }
-}
-
-async function previewRemainder() {
-  const planId = selectedOperationPlanId.value
-  if (!planId || !selectedLiveAccountId.value) return
-  remainderLoading.value = true
-  message.value = ''
-  messageIsError.value = false
-  try {
-    const res = await replanPortfolioPlanRemainder(planId, {
-      securities_account_id: selectedLiveAccountId.value,
-      dry_run: true,
-      reason: remainderReason.value || '',
-    })
-    remainderPreview.value = res.data || {}
-  } catch (error) {
-    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '补缺口预检失败'
-    messageIsError.value = true
-  } finally {
-    remainderLoading.value = false
-  }
-}
-
-async function confirmRemainder() {
-  const planId = selectedOperationPlanId.value
-  if (!planId || !selectedLiveAccountId.value) return
-  remainderLoading.value = true
-  message.value = ''
-  messageIsError.value = false
-  try {
-    const res = await replanPortfolioPlanRemainder(planId, {
-      securities_account_id: selectedLiveAccountId.value,
-      dry_run: false,
-      reason: remainderReason.value || '',
-    })
-    remainderPreview.value = res.data || {}
-    message.value = `已补发 ${res.data?.inserted_count ?? 0} 条 plan_topup 信号。`
-    await Promise.all([loadPortfolios(), refreshDetail()])
-  } catch (error) {
-    const detail = error.response?.data?.detail
-    remainderPreview.value = detail?.risk_report
-      ? { ...(remainderPreview.value || {}), risk_report: detail.risk_report, blocked: true }
-      : remainderPreview.value
-    message.value = formatApiDetail(detail) || error.message || '补缺口失败'
-    messageIsError.value = true
-  } finally {
-    remainderLoading.value = false
-  }
-}
-
-async function executePaperNow() {
-  const planId = selectedOperationPlanId.value
-  if (!planId || !canExecutePaperNow.value) return
-  paperExecuteLoading.value = true
-  message.value = ''
-  messageIsError.value = false
-  try {
-    const res = await executePortfolioPlanPaper(planId, { force: false })
-    const status = res.data?.status || 'executed_paper'
-    message.value = `Paper 执行已触发：${status}。`
-    await Promise.all([loadPortfolios(), refreshDetail()])
-  } catch (error) {
-    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '执行 Paper 失败'
-    messageIsError.value = true
-  } finally {
-    paperExecuteLoading.value = false
-  }
-}
-
-async function cancelCurrentPlan() {
-  const planId = selectedOperationPlanId.value
-  if (!planId || !canCancelCurrentPlan.value) return
-  const ok = window.confirm(
-    '确定作废当前计划吗？如果已发布 live signals 且尚未成交，会一起标记为 cancelled；如果已有成交，后端会拒绝作废。'
-  )
-  if (!ok) return
-  cancelPlanLoading.value = true
-  message.value = ''
-  messageIsError.value = false
-  try {
-    const res = await cancelPortfolioPlan(planId, { comment: 'cancelled from portfolio overview' })
-    const count = res.data?.cancelled_signal_count ?? 0
-    message.value = `计划 ${planId} 已作废，取消 ${count} 条未成交 live signals。`
-    await Promise.all([loadPortfolios(), refreshDetail()])
-  } catch (error) {
-    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '作废计划失败'
-    messageIsError.value = true
-  } finally {
-    cancelPlanLoading.value = false
   }
 }
 
@@ -2829,9 +2099,7 @@ async function refreshDetail() {
     const operationPlanId = timelineData.value?.operation_plan?.plan_id || planId
     const latestPlanRes = await getPortfolioPlan(operationPlanId)
     latestPlanDetail.value = latestPlanRes.data || null
-    livePublishPreview.value = null
-    remainderPreview.value = null
-    remainderReason.value = ''
+    resetPlanOpsState()
     syncSelectedLiveAccount()
 
     if (isLivePortfolio.value) {
@@ -2916,9 +2184,7 @@ watch(selectedPortfolioKey, (key) => {
   benchData.value = null
   reconcileData.value = null
   latestPlanDetail.value = null
-  livePublishPreview.value = null
-  remainderPreview.value = null
-  remainderReason.value = ''
+  resetPlanOpsState()
   if (key) refreshDetail()
   else {
     timelineData.value = null
