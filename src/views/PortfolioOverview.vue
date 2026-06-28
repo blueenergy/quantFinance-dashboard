@@ -184,6 +184,7 @@
         :risk-loading="riskLoading"
         :manual-change-rows="manualChangeRows"
         :latest-holding-rows="latestHoldingRows"
+        :trades-by-symbol="tradesBySymbol"
         :liquidate-submitting="liquidateSubmitting"
         :is-live-portfolio="isLivePortfolio"
         :external-manual-submitting="externalManualSubmitting"
@@ -871,6 +872,18 @@ const tradeTotals = computed(() => {
     else closedCount += 1
   }
   return { count: rows.length, closedCount, openCount, netPnl, fee, buyAmount }
+})
+
+const tradesBySymbol = computed(() => {
+  /** @type {Record<string, any[]>} */
+  const map = {}
+  for (const row of tradeDetailRows.value) {
+    const symbol = row.symbol
+    if (!symbol) continue
+    if (!map[symbol]) map[symbol] = []
+    map[symbol].push(row)
+  }
+  return map
 })
 
 function money(value) {

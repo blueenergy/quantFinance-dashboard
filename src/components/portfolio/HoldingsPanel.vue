@@ -48,10 +48,12 @@
             <th>市值</th>
             <th>浮动</th>
             <th>快思考</th>
+            <th>明细</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in latestHoldingRows" :key="row.symbol" :class="riskRowClass(row.symbol)">
+          <template v-for="row in latestHoldingRows" :key="row.symbol">
+          <tr :class="riskRowClass(row.symbol)">
             <td>
               <span v-if="holdingsRiskBySymbol[row.symbol]" class="risk-badge" :class="`risk-${holdingsRiskBySymbol[row.symbol].severity}`">
                 {{ riskSeverityLabel(holdingsRiskBySymbol[row.symbol].severity) }}
@@ -92,7 +94,63 @@
               <button type="button" class="fast-btn fast-btn-reduce" @click="$emit('quick-reduce', row, halfTargetShares(row))">减半</button>
               <button type="button" class="fast-btn fast-btn-clear" @click="$emit('quick-reduce', row, 0)">清仓</button>
             </td>
+            <td class="detail-toggle-cell">
+              <button
+                v-if="symbolTrades(row.symbol).length"
+                type="button"
+                class="detail-toggle"
+                :aria-expanded="isExpanded(row.symbol)"
+                @click="toggleDetail(row.symbol)"
+              >
+                {{ isExpanded(row.symbol) ? '收起' : `展开(${symbolTrades(row.symbol).length})` }}
+              </button>
+              <span v-else class="muted">-</span>
+            </td>
           </tr>
+          <tr v-if="isExpanded(row.symbol)" class="detail-row">
+            <td :colspan="13">
+              <div class="detail-wrap">
+                <table class="detail-table">
+                  <thead>
+                    <tr>
+                      <th>调仓日</th>
+                      <th>买入日</th>
+                      <th>买价</th>
+                      <th>卖出日</th>
+                      <th>卖价</th>
+                      <th>数量</th>
+                      <th>买入额</th>
+                      <th>持有收益</th>
+                      <th>净盈亏</th>
+                      <th>费用</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="(trade, tIdx) in symbolTrades(row.symbol)"
+                      :key="`${trade.trade_id || trade.buy_order_id || trade.symbol}-${tIdx}`"
+                      :class="{ 'open-trade': trade.status === 'open' }"
+                    >
+                      <td>{{ trade.rebalance_date || '-' }}</td>
+                      <td>{{ trade.buy_date || '-' }}</td>
+                      <td>{{ num(trade.buy_price) }}</td>
+                      <td>{{ trade.sell_date || '-' }}</td>
+                      <td>
+                        <span v-if="trade.status === 'open'" class="badge-open">持有中</span>
+                        <span v-else>{{ num(trade.sell_price) }}</span>
+                      </td>
+                      <td>{{ money(trade.quantity) }}</td>
+                      <td>{{ money(trade.buy_amount) }}</td>
+                      <td :class="signClass(trade.holding_return)">{{ pct(trade.holding_return) }}</td>
+                      <td :class="signClass(trade.net_pnl)">{{ signedMoney(trade.net_pnl) }}</td>
+                      <td>{{ money(trade.fee) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </td>
+          </tr>
+          </template>
         </tbody>
       </table>
       <p v-if="holdingsRiskBySymbolHigh.length" class="muted">
@@ -179,6 +237,7 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import AppLink from '../common/AppLink.vue'
 import {
   formatShareDelta,
@@ -188,11 +247,12 @@ import {
   signClass,
 } from '../../composables/usePortfolioPlanFormat'
 
-defineProps({
+const props = defineProps({
   selectedLatestPlanId: { type: String, default: '' },
   riskLoading: { type: Boolean, default: false },
   manualChangeRows: { type: Array, default: () => [] },
   latestHoldingRows: { type: Array, default: () => [] },
+  tradesBySymbol: { type: Object, default: () => ({}) },
   liquidateSubmitting: { type: Boolean, default: false },
   isLivePortfolio: { type: Boolean, default: false },
   externalManualSubmitting: { type: Boolean, default: false },
@@ -224,6 +284,28 @@ defineEmits([
   'toggle-bench',
   'load-bench-risk',
 ])
+
+const expandedSymbols = ref(new Set())
+
+function symbolTrades(symbol) {
+  return props.tradesBySymbol[symbol] || []
+}
+
+function isExpanded(symbol) {
+  return expandedSymbols.value.has(symbol)
+}
+
+function toggleDetail(symbol) {
+  const next = new Set(expandedSymbols.value)
+  if (next.has(symbol)) next.delete(symbol)
+  else next.add(symbol)
+  expandedSymbols.value = next
+}
+
+function pct(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? `${(number * 100).toFixed(2)}%` : '-'
+}
 </script>
 
 <style scoped>
@@ -327,6 +409,61 @@ tbody tr:hover td {
 
 .risk-row-high {
   background: #fff7f7;
+}
+
+.detail-toggle-cell {
+  white-space: nowrap;
+}
+
+.detail-toggle {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 10px;
+}
+
+.detail-toggle:hover {
+  background: #e5e7eb;
+}
+
+.detail-row td {
+  background: #f9fafb;
+  padding: 0;
+}
+
+.detail-wrap {
+  overflow-x: auto;
+  padding: 8px 12px 12px;
+}
+
+.detail-table {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  width: 100%;
+}
+
+.detail-table th,
+.detail-table td {
+  padding: 6px 10px;
+}
+
+.detail-table .open-trade td {
+  background: #f8fafc;
+}
+
+.badge-open {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  color: #1d4ed8;
+  font-size: 12px;
+  padding: 1px 6px;
+  white-space: nowrap;
 }
 
 .stock-workbench-link {
