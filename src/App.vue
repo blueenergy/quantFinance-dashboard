@@ -97,14 +97,15 @@
 
         <template v-if="tabsShellReady">
         <div class="tabs">
-          <button 
-            v-for="tab in adminTabs" 
-            :key="tab.id" 
+          <a
+            v-for="tab in adminTabs"
+            :key="tab.id"
+            :href="tabHref(tab.id)"
             :class="['tab-button', { active: activeTab === tab.id }]"
-            @click="switchTab(tab.id)"
+            @click="onTabButtonClick($event, tab.id)"
           >
             {{ tab.name }}
-          </button>
+          </a>
         </div>
 
         <div v-if="user?.is_admin || adminTabs.length" class="tab-content">
@@ -146,7 +147,7 @@ import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
 import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getRenderableTabViews, getTabProps as buildTabProps, getTabListeners as buildTabListeners } from './utils/tabViews.js'
-import { parseDeepLinkFromUrl } from './utils/appDeepLinks.js'
+import { parseDeepLinkFromUrl, buildDeepLinkHref, isModifiedClick } from './utils/appDeepLinks.js'
 import { useAppStartupFlow } from './composables/useAppStartupFlow.js'
 import { useHomeSummaries } from './composables/useHomeSummaries.js'
 import { useChartWorkspace } from './composables/useChartWorkspace.js'
@@ -279,6 +280,18 @@ function applyDeepLink({ tab, params = {} }) {
     switchTab(tab)
   }
   return true
+}
+
+function tabHref(tabId) {
+  return buildDeepLinkHref(tabId)
+}
+
+function onTabButtonClick(event, tabId) {
+  // Let the browser handle modified clicks (ctrl/cmd/middle) to open a new tab.
+  if (isModifiedClick(event)) return
+  event.preventDefault()
+  // Preserve existing toggle behavior on plain left click.
+  switchTab(tabId)
 }
 
 const {
@@ -750,6 +763,7 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 500;
   color: #b19cd9;
+  text-decoration: none;
   border-bottom: 2px solid transparent;
   transition: all 0.3s;
   position: relative;

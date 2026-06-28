@@ -45,9 +45,12 @@ export function buildDeepLinkHref(tab, params = {}) {
 export function parseDeepLinkFromUrl(search = window.location.search) {
   const query = new URLSearchParams(search)
   const tab = query.get('tab')
-  if (!tab || !DEEP_LINK_TABS[tab]) return null
+  if (!tab) return null
 
-  const allowed = DEEP_LINK_TABS[tab]
+  // Any tab id is accepted here; final permission gating happens at apply
+  // time against the user's visible tabs. DEEP_LINK_TABS only declares
+  // which extra params a tab understands.
+  const allowed = DEEP_LINK_TABS[tab] || []
   /** @type {Record<string, string>} */
   const params = {}
   for (const key of allowed) {
