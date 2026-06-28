@@ -58,7 +58,11 @@
               </span>
               <span v-else class="muted">-</span>
             </td>
-            <td>{{ row.symbol }}</td>
+            <td>
+              <button type="button" class="stock-workbench-link" @click="$emit('open-stock', row.symbol)">
+                {{ row.symbol }}
+              </button>
+            </td>
             <td>{{ row.name || '-' }}</td>
             <td>{{ row.buy_date || '-' }}</td>
             <td>{{ row.shares }}</td>
@@ -209,6 +213,7 @@ defineEmits([
   'open-external-manual',
   'update-target',
   'open-swap',
+  'open-stock',
   'quick-reduce',
   'toggle-bench',
   'load-bench-risk',
@@ -316,6 +321,19 @@ tbody tr:hover td {
 
 .risk-row-high {
   background: #fff7f7;
+}
+
+.stock-workbench-link {
+  background: transparent;
+  border: 0;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+}
+
+.stock-workbench-link:hover {
+  text-decoration: underline;
 }
 
 .lineup-card {

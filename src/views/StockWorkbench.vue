@@ -1424,6 +1424,13 @@ import MoneyFlowPanel from '../components/MoneyFlowPanel.vue'
 import StockKLineChart from '../components/StockKLineChart.vue'
 import StockSearchInput from '../components/StockSearchInput.vue'
 
+const props = defineProps({
+  pendingNavigation: {
+    type: Object,
+    default: null,
+  },
+})
+
 const SCORE_DEFS = [
   { key: 'technical', label: '技术面' },
   { key: 'fundamental', label: '基本面' },
@@ -2173,6 +2180,17 @@ watch(quoteKlineTf, (tf) => {
     ensureQuoteMoneyFlow(tf),
   ])
 })
+
+watch(
+  () => props.pendingNavigation,
+  async (detail) => {
+    const symbol = detail?.symbol
+    if (!symbol) return
+    directSymbol.value = symbol
+    await loadSymbol(symbol)
+  },
+  { immediate: true }
+)
 
 function selectSearchCandidate(item) {
   if (!item) return

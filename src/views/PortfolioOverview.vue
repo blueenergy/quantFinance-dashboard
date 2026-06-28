@@ -209,6 +209,7 @@
         @open-external-manual="openExternalManualModal"
         @update-target="setManualTarget"
         @open-swap="openSwapModal"
+        @open-stock="openStockWorkbench"
         @quick-reduce="openQuickReduceModal"
         @toggle-bench="benchExpanded = !benchExpanded"
         @load-bench-risk="loadBenchRisk"

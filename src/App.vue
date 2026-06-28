@@ -278,6 +278,7 @@ const {
 })
 
 const pendingEtfNavigation = ref(null)
+const pendingStockWorkbenchNavigation = ref(null)
 
 const renderableTabViews = computed(() => {
   return getRenderableTabViews(adminTabs.value)
@@ -301,6 +302,7 @@ function getTabProps(tabId) {
     currentPreset: currentPreset.value,
     user: user.value,
     pendingEtfNavigation: pendingEtfNavigation.value,
+    pendingStockWorkbenchNavigation: pendingStockWorkbenchNavigation.value,
   })
 }
 
@@ -356,10 +358,17 @@ async function onShenwanSelectIndustry (e) {
 }
 
 async function onOpenStockWorkbench (e) {
-  switchTab('stock-workbench')
-  await nextTick()
-  await new Promise(r => requestAnimationFrame(r))
-  window.dispatchEvent(new CustomEvent('stock-workbench:set-symbol', { detail: e.detail }))
+  const detail = e?.detail || {}
+  const symbol = typeof detail === 'string' ? detail : detail.symbol
+  if (!symbol) return
+  pendingStockWorkbenchNavigation.value = {
+    ...(typeof detail === 'object' ? detail : {}),
+    symbol,
+    requestId: Date.now(),
+  }
+  if (activeTab.value !== 'stock-workbench') {
+    switchTab('stock-workbench')
+  }
 }
 
 onMounted(() => {

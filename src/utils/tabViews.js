@@ -337,6 +337,12 @@ export function getTabProps(tabId, context) {
     }
   }
 
+  if (tabId === 'stock-workbench') {
+    return {
+      pendingNavigation: context.pendingStockWorkbenchNavigation,
+    }
+  }
+
   if (tabId === 'spectrum') {
     return {
       defaultMode: 'daily',
