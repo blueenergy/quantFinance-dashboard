@@ -326,6 +326,31 @@ const renderableTabViews = computed(() => {
   return getRenderableTabViews(adminTabs.value)
 })
 
+const DEFAULT_DOCUMENT_TITLE = '悟空量化金融智能助手'
+
+function cleanTabName(name) {
+  return String(name || '').replace(/^[^\p{L}\p{N}]+/u, '').trim()
+}
+
+function pageTitleForTab(tabId) {
+  if (!tabId) return DEFAULT_DOCUMENT_TITLE
+  const tab = adminTabs.value.find((item) => item.id === tabId)
+  const tabName = cleanTabName(tab?.name) || tabId
+  if (tabId === 'stock-workbench') {
+    const symbol = pendingStockWorkbenchNavigation.value?.symbol
+    return symbol ? `${tabName} ${symbol}` : tabName
+  }
+  return tabName
+}
+
+watch(
+  [activeTab, adminTabs, pendingStockWorkbenchNavigation],
+  () => {
+    document.title = pageTitleForTab(activeTab.value)
+  },
+  { immediate: true, deep: true }
+)
+
 function getTabProps(tabId) {
   return buildTabProps(tabId, {
     chartSymbol: chartSymbol.value,
