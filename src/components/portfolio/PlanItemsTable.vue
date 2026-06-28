@@ -50,8 +50,10 @@
             </span>
           </td>
           <td>
-            <strong>{{ row.name || row.symbol }}</strong>
-            <small class="muted symbol-line">{{ row.symbol }}</small>
+            <button type="button" class="stock-workbench-link pending-stock-link" @click="$emit('open-stock', row.symbol)">
+              <span class="stock-workbench-link__name">{{ row.name || row.symbol || '-' }}</span>
+              <span v-if="row.symbol" class="stock-workbench-link__symbol">{{ row.symbol }}</span>
+            </button>
           </td>
           <td>{{ row.industry || '-' }}</td>
           <td>{{ num(row.score_value) }}</td>

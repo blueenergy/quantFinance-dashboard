@@ -30,7 +30,13 @@
       AI 风控发现 {{ riskSummary.high }} 个高风险标的，批准前请重点确认。
     </p>
 
-    <PlanItemsTable mode="pending" :items="items" :overlay="overlay" compact />
+    <PlanItemsTable
+      mode="pending"
+      :items="items"
+      :overlay="overlay"
+      compact
+      @open-stock="$emit('open-stock', $event)"
+    />
 
     <div class="plan-ops-actions plan-review-actions">
       <button type="button" :disabled="approveSubmitting || rejectSubmitting || !planId" @click="$emit('approve')">
@@ -62,7 +68,7 @@ defineProps({
   reviewAiRiskLoading: { type: Boolean, default: false },
 })
 
-defineEmits(['approve', 'reject', 'rerun-ai-risk', 'copy-plan-id'])
+defineEmits(['approve', 'reject', 'rerun-ai-risk', 'copy-plan-id', 'open-stock'])
 
 function shortPlanId(planId) {
   const text = String(planId || '')
