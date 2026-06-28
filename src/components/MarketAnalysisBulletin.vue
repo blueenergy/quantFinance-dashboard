@@ -94,7 +94,10 @@
         </div>
 
         <!-- 与上一交易日同时段对比 -->
-        <div v-if="comparisonRows.length > 0" class="comparison-card">
+        <div v-if="comparisonBlockedReason" class="comparison-notice">
+          {{ comparisonBlockedReason }}
+        </div>
+        <div v-else-if="comparisonRows.length > 0" class="comparison-card">
           <div class="comparison-header" @click="comparisonExpanded = !comparisonExpanded">
             <span class="comparison-title">
               📐 vs {{ analysis.previousMeta?.analysis_date }} {{ formatSlot(analysis.previousMeta?.time_slot) }}
@@ -252,8 +255,10 @@ const currentSlot = ref(null)
 const availableSlots = ref([])
 const comparisonExpanded = ref(false)
 const PRESET_SLOTS = ['1000', '1130', '1630']
+const MAX_COMPARISON_LAG_MINUTES = 30
 const { user } = useAuth()
 const canTriggerMarketAnalysis = computed(() => canUseProFeature(user.value))
+let analysisRequestSeq = 0
 
 function formatSlot(slot) {
   if (!slot) return ''
@@ -275,6 +280,8 @@ function handleDateChange() {
 
 // 获取最新的大盘分析（由 quantAnalyzer 自动生成）
 async function fetchLatestAnalysis() {
+  const requestSeq = ++analysisRequestSeq
+  const requestedSlot = currentSlot.value
   loading.value = true
   error.value = ''
   errorTip.value = ''
@@ -282,15 +289,19 @@ async function fetchLatestAnalysis() {
 
   try {
     const params = { date: selectedDate.value }
-    if (currentSlot.value) {
-      params.time_slot = currentSlot.value
+    if (requestedSlot) {
+      params.time_slot = requestedSlot
     }
     const response = await request.get('/market-analysis', { params })
+    if (requestSeq !== analysisRequestSeq) return
 
     // Capture slot metadata regardless of success — failure case may still expose the slot list.
     availableSlots.value = Array.isArray(response.available_slots) ? response.available_slots : []
 
     if (response.success) {
+      if (requestedSlot && response.time_slot && response.time_slot !== requestedSlot) {
+        throw new Error(`请求 ${formatSlot(requestedSlot)} 分析，但后端返回 ${formatSlot(response.time_slot)}。请刷新后重试。`)
+      }
       currentSlot.value = response.time_slot || currentSlot.value
       analysis.value = {
         timestamp: response.cache_info?.created_at || new Date().toISOString(),
@@ -336,6 +347,7 @@ async function fetchLatestAnalysis() {
       throw new Error(response.error || '暂无分析数据')
     }
   } catch (err) {
+    if (requestSeq !== analysisRequestSeq) return
     console.error('获取市场分析失败:', err)
 
     // 如果 err.response 存在，说明服务器响应了错误（如 4xx/5xx）
@@ -350,7 +362,9 @@ async function fetchLatestAnalysis() {
       errorTip.value = '请联系系统管理员检查后台服务运行状态'
     }
   } finally {
-    loading.value = false
+    if (requestSeq === analysisRequestSeq) {
+      loading.value = false
+    }
   }
 }
 
@@ -515,6 +529,7 @@ function _buildRow(label, cur, prev, unit = '亿') {
 }
 
 const comparisonRows = computed(() => {
+  if (comparisonBlockedReason.value) return []
   const cur = analysis.value?.snapshot
   const prev = analysis.value?.previousSnapshot
   if (!cur || !prev) return []
@@ -538,6 +553,14 @@ const comparisonRows = computed(() => {
   rows.push({ ..._buildRow('融资融券余额', cur.capital_flow?.margin_balance_yi, prev.capital_flow?.margin_balance_yi, '亿'), _detail: true })
   rows.push({ ..._buildRow('最高连板', cur.ladder?.max_streak, prev.ladder?.max_streak, '板'), _detail: true })
   return rows
+})
+
+const comparisonBlockedReason = computed(() => {
+  const meta = analysis.value?.previousMeta
+  if (!meta || meta.lag_minutes == null) return ''
+  const lag = Number(meta.lag_minutes)
+  if (!Number.isFinite(lag) || lag <= MAX_COMPARISON_LAG_MINUTES) return ''
+  return `上一交易日缺少同阶段快照（最近为 ${meta.analysis_date || '-'} ${formatSlot(meta.time_slot)}，相差 ${lag} 分钟），暂不展示成交额等累计指标对比。`
 })
 
 const primaryComparisonRows = computed(() => comparisonRows.value.filter((r) => !r._detail))
@@ -1023,6 +1046,15 @@ onMounted(() => {
   border-radius: 8px;
   margin: 12px 0;
   overflow: hidden;
+}
+.comparison-notice {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  color: #9a3412;
+  font-size: 13px;
+  margin: 12px 0;
+  padding: 8px 12px;
 }
 .comparison-header {
   background: #f9fafb;
