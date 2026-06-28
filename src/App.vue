@@ -146,6 +146,7 @@ import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
 import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getRenderableTabViews, getTabProps as buildTabProps, getTabListeners as buildTabListeners } from './utils/tabViews.js'
+import { parseDeepLinkFromUrl } from './utils/appDeepLinks.js'
 import { useAppStartupFlow } from './composables/useAppStartupFlow.js'
 import { useHomeSummaries } from './composables/useHomeSummaries.js'
 import { useChartWorkspace } from './composables/useChartWorkspace.js'
@@ -251,6 +252,35 @@ const {
   adminTabs,
 })
 
+const pendingEtfNavigation = ref(null)
+const pendingStockWorkbenchNavigation = ref(null)
+
+/**
+ * @param {{ tab: string, params?: Record<string, string> }} payload
+ * @returns {boolean}
+ */
+function applyDeepLink({ tab, params = {} }) {
+  if (!tab) return false
+
+  const visibleIds = adminTabs.value.map((t) => t.id)
+  if (!visibleIds.includes(tab)) return false
+
+  if (tab === 'stock-workbench') {
+    const symbol = params.symbol
+    if (!symbol) return false
+    pendingStockWorkbenchNavigation.value = {
+      ...params,
+      symbol,
+      requestId: Date.now(),
+    }
+  }
+
+  if (activeTab.value !== tab) {
+    switchTab(tab)
+  }
+  return true
+}
+
 const {
   isAccountActivateMode,
   accountActivateToken,
@@ -275,10 +305,9 @@ const {
   refreshVisibleHomeSummaries,
   loadAppChartWatchlist,
   resetHomeCardSummaries,
+  applyDeepLink,
+  parseDeepLinkFromUrl,
 })
-
-const pendingEtfNavigation = ref(null)
-const pendingStockWorkbenchNavigation = ref(null)
 
 const renderableTabViews = computed(() => {
   return getRenderableTabViews(adminTabs.value)
@@ -361,25 +390,31 @@ async function onOpenStockWorkbench (e) {
   const detail = e?.detail || {}
   const symbol = typeof detail === 'string' ? detail : detail.symbol
   if (!symbol) return
-  pendingStockWorkbenchNavigation.value = {
-    ...(typeof detail === 'object' ? detail : {}),
-    symbol,
-    requestId: Date.now(),
-  }
-  if (activeTab.value !== 'stock-workbench') {
-    switchTab('stock-workbench')
-  }
+  applyDeepLink({
+    tab: 'stock-workbench',
+    params: {
+      ...(typeof detail === 'object' ? detail : {}),
+      symbol,
+    },
+  })
+}
+
+function onAppNavigate (e) {
+  const detail = e?.detail || {}
+  applyDeepLink(detail)
 }
 
 onMounted(() => {
   window.addEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
   window.addEventListener('shenwan:select-industry', onShenwanSelectIndustry)
   window.addEventListener('stock-workbench:open', onOpenStockWorkbench)
+  window.addEventListener('app:navigate', onAppNavigate)
 })
 onUnmounted(() => {
   window.removeEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
   window.removeEventListener('shenwan:select-industry', onShenwanSelectIndustry)
   window.removeEventListener('stock-workbench:open', onOpenStockWorkbench)
+  window.removeEventListener('app:navigate', onAppNavigate)
 })
 </script>
 

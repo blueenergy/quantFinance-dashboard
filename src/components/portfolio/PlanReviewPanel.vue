@@ -35,7 +35,6 @@
       :items="items"
       :overlay="overlay"
       compact
-      @open-stock="$emit('open-stock', $event)"
     />
 
     <div class="plan-ops-actions plan-review-actions">
@@ -68,7 +67,7 @@ defineProps({
   reviewAiRiskLoading: { type: Boolean, default: false },
 })
 
-defineEmits(['approve', 'reject', 'rerun-ai-risk', 'copy-plan-id', 'open-stock'])
+defineEmits(['approve', 'reject', 'rerun-ai-risk', 'copy-plan-id'])
 
 function shortPlanId(planId) {
   const text = String(planId || '')

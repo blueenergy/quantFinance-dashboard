@@ -17,11 +17,23 @@ export function useAppStartupFlow({
   refreshVisibleHomeSummaries,
   loadAppChartWatchlist,
   resetHomeCardSummaries,
+  applyDeepLink,
+  parseDeepLinkFromUrl,
 }) {
   const isAccountActivateMode = ref(false)
   const accountActivateToken = ref('')
   const isResetPasswordMode = ref(false)
   const resetToken = ref('')
+
+  function tryApplyDeepLinkFromUrl(visibleTabIds) {
+    if (typeof parseDeepLinkFromUrl !== 'function' || typeof applyDeepLink !== 'function') {
+      return false
+    }
+    const dl = parseDeepLinkFromUrl()
+    if (!dl?.tab) return false
+    if (!Array.isArray(visibleTabIds) || !visibleTabIds.includes(dl.tab)) return false
+    return applyDeepLink(dl)
+  }
 
   async function handleLoginSuccess(authData) {
     console.log('登录成功:', authData.user.username)
@@ -49,6 +61,11 @@ export function useAppStartupFlow({
     const visibleIds = user.value?.is_admin
       ? adminTabs.value.map((tab) => tab.id)
       : (Array.isArray(ids) ? ids : [])
+
+    if (tryApplyDeepLinkFromUrl(visibleIds)) {
+      refreshVisibleHomeSummaries()
+      return
+    }
 
     if (savedTab && visibleIds.includes(savedTab)) {
       switchTab(savedTab)
@@ -107,6 +124,15 @@ export function useAppStartupFlow({
 
     const savedTab = readSavedActiveTab()
     console.log('尝试恢复tab:', savedTab, '用户:', user.value?.username, '是否管理员:', user.value?.is_admin)
+
+    const visibleIds = adminTabs.value.map((tab) => tab.id)
+    if (tryApplyDeepLinkFromUrl(visibleIds)) {
+      refreshVisibleHomeSummaries()
+      if (activeTab.value === 'chart' || activeTab.value === 'watchlist') {
+        await loadAppChartWatchlist()
+      }
+      return
+    }
 
     if (savedTab && adminTabs.value.some((tab) => tab.id === savedTab)) {
       if (savedTab === 'admin' && !user.value?.is_admin) {

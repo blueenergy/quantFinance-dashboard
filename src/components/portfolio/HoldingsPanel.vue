@@ -59,9 +59,15 @@
               <span v-else class="muted">-</span>
             </td>
             <td>
-              <button type="button" class="stock-workbench-link" @click="$emit('open-stock', row.symbol)">
+              <AppLink
+                v-if="row.symbol"
+                tab="stock-workbench"
+                :params="{ symbol: row.symbol }"
+                class="stock-workbench-link"
+              >
                 {{ row.symbol }}
-              </button>
+              </AppLink>
+              <span v-else>-</span>
             </td>
             <td>{{ row.name || '-' }}</td>
             <td>{{ row.buy_date || '-' }}</td>
@@ -173,6 +179,7 @@
 </template>
 
 <script setup>
+import AppLink from '../common/AppLink.vue'
 import {
   formatShareDelta,
   money,
@@ -213,7 +220,6 @@ defineEmits([
   'open-external-manual',
   'update-target',
   'open-swap',
-  'open-stock',
   'quick-reduce',
   'toggle-bench',
   'load-bench-risk',
@@ -330,6 +336,7 @@ tbody tr:hover td {
   cursor: pointer;
   font-weight: 600;
   padding: 0;
+  text-decoration: none;
 }
 
 .stock-workbench-link:hover {

@@ -50,10 +50,14 @@
             </span>
           </td>
           <td>
-            <button type="button" class="stock-workbench-link pending-stock-link" @click="$emit('open-stock', row.symbol)">
+            <AppLink
+              tab="stock-workbench"
+              :params="{ symbol: row.symbol }"
+              class="stock-workbench-link pending-stock-link"
+            >
               <span class="stock-workbench-link__name">{{ row.name || row.symbol || '-' }}</span>
               <span v-if="row.symbol" class="stock-workbench-link__symbol">{{ row.symbol }}</span>
-            </button>
+            </AppLink>
           </td>
           <td>{{ row.industry || '-' }}</td>
           <td>{{ num(row.score_value) }}</td>
@@ -148,11 +152,15 @@
           </td>
           <td class="col-narrow">{{ item.rank ?? '-' }}</td>
           <td class="col-stock" :title="`${actionBadge(item).label} ${item.name || ''} ${item.symbol || ''}`">
-            <button type="button" class="stock-workbench-link" @click="$emit('open-stock', item.symbol)">
+            <AppLink
+              tab="stock-workbench"
+              :params="{ symbol: item.symbol }"
+              class="stock-workbench-link"
+            >
               <span class="action-tag" :class="actionBadge(item).cls">{{ actionBadge(item).text }}</span>
               <span class="stock-workbench-link__name">{{ item.name || item.symbol || '-' }}</span>
               <span v-if="item.symbol" class="stock-workbench-link__symbol">{{ item.symbol }}</span>
-            </button>
+            </AppLink>
           </td>
           <td class="col-ind" :title="item.industry || ''">{{ item.industry || '-' }}</td>
           <td class="col-num">{{ item.current_shares ?? 0 }}</td>
@@ -221,6 +229,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import AppLink from '../common/AppLink.vue'
 import {
   actionBadge,
   aiRiskBadge,
@@ -254,7 +263,7 @@ const props = defineProps({
   pendingReselectSymbol: { type: String, default: '' },
 })
 
-defineEmits(['toggle-reselect', 'reselect', 'open-stock'])
+defineEmits(['toggle-reselect', 'reselect'])
 
 const showOverlay = computed(() => Boolean(props.overlay?.enabled !== false))
 
@@ -440,6 +449,7 @@ function canSelectReselectItem(item) {
   min-width: 0;
   padding: 0;
   text-align: left;
+  text-decoration: none;
 }
 
 .stock-workbench-link:hover .stock-workbench-link__name,

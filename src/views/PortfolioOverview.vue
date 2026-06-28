@@ -97,7 +97,6 @@
         @reject="rejectPendingPlan"
         @rerun-ai-risk="rerunReviewAiRisk"
         @copy-plan-id="copyPlanId"
-        @open-stock="openStockWorkbench"
       />
 
       <PlanOpsPanel
@@ -209,7 +208,6 @@
         @open-external-manual="openExternalManualModal"
         @update-target="setManualTarget"
         @open-swap="openSwapModal"
-        @open-stock="openStockWorkbench"
         @quick-reduce="openQuickReduceModal"
         @toggle-bench="benchExpanded = !benchExpanded"
         @load-bench-risk="loadBenchRisk"
@@ -718,11 +716,6 @@ async function copyPlanId(planId) {
     message.value = `无法自动复制，请手动复制 plan_id：${text}`
     messageIsError.value = true
   }
-}
-
-function openStockWorkbench(symbol) {
-  if (!symbol) return
-  window.dispatchEvent(new CustomEvent('stock-workbench:open', { detail: { symbol } }))
 }
 
 function paperExecutionModeLabel(mode) {

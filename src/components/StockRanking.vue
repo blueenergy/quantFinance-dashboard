@@ -296,7 +296,14 @@
             <div v-else-if="!loadingDetail" class="detail-empty">暂无 {{ translateCategory(scoreDetailCategory) }} 详情</div>
           </div>
           <div class="score-detail-actions">
-            <button @click="openStockWorkbench(selectedStock?.symbol)" class="btn-base btn-md btn-gradient-blue">打开工作台</button>
+            <AppLink
+              v-if="selectedStock?.symbol"
+              tab="stock-workbench"
+              :params="{ symbol: selectedStock.symbol }"
+              class="btn-base btn-md btn-gradient-blue"
+            >
+              打开工作台
+            </AppLink>
             <button @click="viewChart(selectedStock?.symbol)" class="btn-base btn-md btn-gradient-teal">查看走势图</button>
             <button @click="toggleWatchlist(selectedStock?.symbol)" class="btn-base btn-md btn-gradient-green">
               {{ isInWatchlist(selectedStock?.symbol) ? '从自选股移除' : '添加到自选股' }}
@@ -311,6 +318,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import AppLink from './common/AppLink.vue'
 import StockRankingControls from './StockRankingControls.vue'
 import RankingTable from './RankingTable.vue'
 import axios from 'axios'
@@ -1612,11 +1620,6 @@ function getRowClass(stock, rank) {
 
 function viewChart(symbol) {
   emit('view-chart', symbol)
-}
-
-function openStockWorkbench(symbol) {
-  if (!symbol) return
-  window.dispatchEvent(new CustomEvent('stock-workbench:open', { detail: { symbol } }))
 }
 
 function showScoreDetailModal(stock) {

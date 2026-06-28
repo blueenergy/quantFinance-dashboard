@@ -806,7 +806,6 @@
               :pending-reselect-symbol="pendingReselect?.symbol || ''"
               @toggle-reselect="toggleReselectSelection"
               @reselect="(symbol, restore) => reselectItem(symbol, restore)"
-              @open-stock="openStockWorkbench"
             />
           </section>
 
@@ -1408,11 +1407,6 @@ function formatSummary(summary) {
 
 function signalDisplayName(signal) {
   return signal?.name || signal?.stock_name || signal?.symbol || '-'
-}
-
-function openStockWorkbench(symbol) {
-  if (!symbol) return
-  window.dispatchEvent(new CustomEvent('stock-workbench:open', { detail: { symbol } }))
 }
 
 function effectiveTopN(plan) {
