@@ -99,6 +99,15 @@
                 :class="`risk-${row.ai_risk.llm.severity || 'none'}`"
                 :title="llmRiskTitle(row.ai_risk)"
               >LLM</span>
+              <button
+                v-if="row.ai_risk?.llm"
+                type="button"
+                class="llm-risk-copy"
+                :title="llmCopyTitle(row.ai_risk)"
+                @click.stop="copyLlmRisk(row.ai_risk, llmCopyKey(row, 'pending'))"
+              >
+                {{ copiedLlmRiskKey === llmCopyKey(row, 'pending') ? '已复制' : '复制' }}
+              </button>
             </div>
           </td>
           <td v-if="showOverlay" class="col-risk risk-reasons">
@@ -233,6 +242,15 @@
                 :class="`risk-${item.ai_risk.llm.severity || 'none'}`"
                 :title="llmRiskTitle(item.ai_risk)"
               >LLM</span>
+              <button
+                v-if="item.ai_risk?.llm"
+                type="button"
+                class="llm-risk-copy"
+                :title="llmCopyTitle(item.ai_risk)"
+                @click.stop="copyLlmRisk(item.ai_risk, llmCopyKey(item, 'detail'))"
+              >
+                {{ copiedLlmRiskKey === llmCopyKey(item, 'detail') ? '已复制' : '复制' }}
+              </button>
             </div>
           </td>
           <td class="col-risk" :title="(item.blockers || []).join(', ')">{{ (item.blockers || []).join(', ') || '-' }}</td>
@@ -243,7 +261,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import AppLink from '../common/AppLink.vue'
 import {
   actionBadge,
@@ -265,6 +283,7 @@ import {
   riskSeverityLabel,
   signClass,
 } from '../../composables/usePortfolioPlanFormat'
+import { copyTextToClipboard } from '../../utils/clipboard'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -284,6 +303,26 @@ const props = defineProps({
 defineEmits(['toggle-reselect', 'reselect'])
 
 const showOverlay = computed(() => Boolean(props.overlay?.enabled !== false))
+const copiedLlmRiskKey = ref('')
+
+function llmCopyKey(item, scope) {
+  return `${scope}:${item?.symbol || item?.name || 'unknown'}:${item?.rank ?? ''}`
+}
+
+function llmCopyTitle(risk) {
+  return `${llmRiskTitle(risk)}\n\n点击复制完整 LLM 风控文本`
+}
+
+let copiedResetTimer = null
+async function copyLlmRisk(risk, key) {
+  const ok = await copyTextToClipboard(llmRiskTitle(risk))
+  if (!ok) return
+  copiedLlmRiskKey.value = key
+  if (copiedResetTimer) clearTimeout(copiedResetTimer)
+  copiedResetTimer = setTimeout(() => {
+    if (copiedLlmRiskKey.value === key) copiedLlmRiskKey.value = ''
+  }, 2000)
+}
 
 function isReselectSelected(symbol) {
   return props.selectedReselectSymbols?.has?.(symbol)
@@ -392,7 +431,7 @@ function canSelectReselectItem(item) {
 }
 
 .plan-items-table .col-airisk {
-  width: 86px;
+  width: 116px;
   text-align: center;
 }
 
@@ -516,6 +555,22 @@ function canSelectReselectItem(item) {
   background: #ecfdf5;
   border-color: #34d399;
   color: #047857;
+}
+
+.llm-risk-copy {
+  background: #fff;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  color: #4338ca;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 1px 5px;
+}
+
+.llm-risk-copy:hover {
+  background: #eef2ff;
 }
 
 .stock-workbench-link {

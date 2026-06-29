@@ -36,7 +36,6 @@
       <table>
         <thead>
           <tr>
-            <th>风控</th>
             <th>代码</th>
             <th>名称</th>
             <th>买入日</th>
@@ -49,22 +48,12 @@
             <th>浮动</th>
             <th>快思考</th>
             <th>明细</th>
+            <th>风控</th>
           </tr>
         </thead>
         <tbody>
           <template v-for="row in latestHoldingRows" :key="row.symbol">
           <tr :class="riskRowClass(row.symbol)">
-            <td>
-              <span
-                v-if="holdingsRiskBySymbol[row.symbol]"
-                class="risk-badge"
-                :class="`risk-${holdingsRiskBySymbol[row.symbol].severity}`"
-                :title="aiRiskTitle(holdingsRiskBySymbol[row.symbol])"
-              >
-                {{ riskSeverityLabel(holdingsRiskBySymbol[row.symbol].severity) }}
-              </span>
-              <span v-else class="muted">-</span>
-            </td>
             <td>
               <AppLink
                 v-if="row.symbol"
@@ -110,6 +99,34 @@
                 {{ isExpanded(row.symbol) ? '收起' : `展开(${symbolTrades(row.symbol).length})` }}
               </button>
               <span v-else class="muted">-</span>
+            </td>
+            <td>
+              <div class="risk-tags">
+                <span
+                  v-if="holdingRowRisk(row)"
+                  class="risk-badge"
+                  :class="`risk-${riskDisplaySeverity(holdingRowRisk(row))}`"
+                  :title="aiRiskTitle(holdingRowRisk(row))"
+                >
+                  {{ riskSeverityLabel(riskDisplaySeverity(holdingRowRisk(row))) }}
+                </span>
+                <span v-else class="muted">-</span>
+                <span
+                  v-if="holdingRowRisk(row)?.llm"
+                  class="llm-risk-tag"
+                  :class="`risk-${holdingRowRisk(row).llm.severity || 'none'}`"
+                  :title="llmRiskTitle(holdingRowRisk(row))"
+                >LLM</span>
+                <button
+                  v-if="holdingRowRisk(row)?.llm"
+                  type="button"
+                  class="llm-risk-copy"
+                  :title="llmCopyTitle(holdingRowRisk(row))"
+                  @click.stop="copyLlmRisk(holdingRowRisk(row), row.symbol)"
+                >
+                  {{ copiedLlmRiskSymbol === row.symbol ? '已复制' : '复制' }}
+                </button>
+              </div>
             </td>
           </tr>
           <tr v-if="isExpanded(row.symbol)" class="detail-row">
@@ -243,20 +260,29 @@
                   <td>
                     <div class="risk-tags">
                       <span
-                        v-if="benchRiskBySymbol[row.symbol]"
+                        v-if="benchRowRisk(row)"
                         class="risk-badge"
-                        :class="`risk-${riskDisplaySeverity(benchRiskBySymbol[row.symbol])}`"
-                        :title="aiRiskTitle(benchRiskBySymbol[row.symbol])"
+                        :class="`risk-${riskDisplaySeverity(benchRowRisk(row))}`"
+                        :title="aiRiskTitle(benchRowRisk(row))"
                       >
-                        {{ riskSeverityLabel(riskDisplaySeverity(benchRiskBySymbol[row.symbol])) }}
+                        {{ riskSeverityLabel(riskDisplaySeverity(benchRowRisk(row))) }}
                       </span>
                       <span v-else class="muted">-</span>
                       <span
-                        v-if="benchRiskBySymbol[row.symbol]?.llm"
+                        v-if="benchRowRisk(row)?.llm"
                         class="llm-risk-tag"
-                        :class="`risk-${benchRiskBySymbol[row.symbol].llm.severity || 'none'}`"
-                        :title="llmRiskTitle(benchRiskBySymbol[row.symbol])"
+                        :class="`risk-${benchRowRisk(row).llm.severity || 'none'}`"
+                        :title="llmRiskTitle(benchRowRisk(row))"
                       >LLM</span>
+                      <button
+                        v-if="benchRowRisk(row)?.llm"
+                        type="button"
+                        class="llm-risk-copy"
+                        :title="llmCopyTitle(benchRowRisk(row))"
+                        @click.stop="copyLlmRisk(benchRowRisk(row), row.symbol)"
+                      >
+                        {{ copiedLlmRiskSymbol === row.symbol ? '已复制' : '复制' }}
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -284,6 +310,7 @@ import {
   riskSeverityLabel,
   signClass,
 } from '../../composables/usePortfolioPlanFormat'
+import { copyTextToClipboard } from '../../utils/clipboard'
 
 const props = defineProps({
   selectedLatestPlanId: { type: String, default: '' },
@@ -296,6 +323,7 @@ const props = defineProps({
   externalManualSubmitting: { type: Boolean, default: false },
   holdingsRisk: { type: Object, default: null },
   holdingsRiskBySymbol: { type: Object, default: () => ({}) },
+  holdingPlanRiskBySymbol: { type: Object, default: () => ({}) },
   holdingsRiskBySymbolHigh: { type: Array, default: () => [] },
   benchData: { type: Object, default: null },
   benchExpanded: { type: Boolean, default: false },
@@ -311,6 +339,46 @@ const props = defineProps({
   halfTargetShares: { type: Function, required: true },
   signedMoney: { type: Function, required: true },
 })
+
+const copiedLlmRiskSymbol = ref('')
+
+function llmCopyTitle(risk) {
+  return `${llmRiskTitle(risk)}\n\n点击复制完整 LLM 风控文本`
+}
+
+let copiedResetTimer = null
+async function copyLlmRisk(risk, symbol) {
+  const ok = await copyTextToClipboard(llmRiskTitle(risk))
+  if (!ok) return
+  copiedLlmRiskSymbol.value = symbol
+  if (copiedResetTimer) clearTimeout(copiedResetTimer)
+  copiedResetTimer = setTimeout(() => {
+    if (copiedLlmRiskSymbol.value === symbol) copiedLlmRiskSymbol.value = ''
+  }, 2000)
+}
+
+function symbolRisk(map, symbol) {
+  const text = String(symbol || '')
+  return map?.[text] || map?.[text.split('.')[0]] || null
+}
+
+function mergeRisk(primary, secondary) {
+  const merged = { ...(secondary || {}), ...(primary || {}) }
+  if (primary?.llm || secondary?.llm) merged.llm = primary?.llm || secondary?.llm
+  return Object.keys(merged).length ? merged : null
+}
+
+function holdingRowRisk(row) {
+  const ruleRisk = symbolRisk(props.holdingsRiskBySymbol, row?.symbol)
+  const planRisk = symbolRisk(props.holdingPlanRiskBySymbol, row?.symbol)
+  return mergeRisk(ruleRisk, planRisk)
+}
+
+function benchRowRisk(row) {
+  const rowRisk = row?.ai_risk || null
+  const keyedRisk = symbolRisk(props.benchRiskBySymbol, row?.symbol)
+  return mergeRisk(rowRisk, keyedRisk)
+}
 
 defineEmits([
   'load-risk',
@@ -513,6 +581,22 @@ tbody tr:hover td {
   background: #ecfdf5;
   border-color: #34d399;
   color: #047857;
+}
+
+.llm-risk-copy {
+  background: #fff;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  color: #4338ca;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 1px 5px;
+}
+
+.llm-risk-copy:hover {
+  background: #eef2ff;
 }
 
 .risk-row-high {

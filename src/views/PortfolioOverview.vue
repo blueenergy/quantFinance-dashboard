@@ -90,6 +90,7 @@
         :score-snapshot-stale="scoreSnapshotStale"
         :summary="planReviewSummary"
         :risk-summary="planReviewRiskSummary"
+        :llm-risk-summary="overviewLlmRiskSummary"
         :approve-submitting="approveSubmitting"
         :reject-submitting="rejectSubmitting"
         :review-ai-risk-loading="reviewAiRiskLoading"
@@ -125,6 +126,7 @@
         :cancel-plan-loading="cancelPlanLoading"
         :pending-items="pendingPlanRows"
         :pending-summary="pendingPlanSummary"
+        :llm-risk-summary="overviewLlmRiskSummary"
         :llm-risk-loading="opsLlmRiskLoading"
         :remainder-preview="remainderPreview"
         :remainder-rows="remainderRows"
@@ -194,6 +196,7 @@
         :external-manual-submitting="externalManualSubmitting"
         :holdings-risk="holdingsRisk"
         :holdings-risk-by-symbol="holdingsRiskBySymbol"
+        :holding-plan-risk-by-symbol="holdingPlanRiskBySymbol"
         :holdings-risk-by-symbol-high="holdingsRiskBySymbolHigh"
         :bench-data="benchData"
         :bench-expanded="benchExpanded"
@@ -574,6 +577,16 @@ const planTargetRows = computed(() => (
       return (order[a.action] ?? 9) - (order[b.action] ?? 9) || String(a.symbol).localeCompare(String(b.symbol))
     })
 ))
+const holdingPlanRiskBySymbol = computed(() => {
+  const map = {}
+  for (const row of planTargetRows.value) {
+    if (!row?.symbol || !row.ai_risk) continue
+    map[row.symbol] = row.ai_risk
+    const bareSymbol = String(row.symbol).split('.')[0]
+    if (bareSymbol) map[bareSymbol] = row.ai_risk
+  }
+  return map
+})
 function summarizePlanRows(rows) {
   return rows.reduce(
     (acc, row) => {
@@ -605,6 +618,7 @@ const pendingPlanRows = computed(() => (
 ))
 const pendingPlanSummary = computed(() => summarizePlanRows(pendingPlanRows.value))
 const planReviewSummary = computed(() => summarizePlanRows(planTargetRows.value))
+const overviewLlmRiskSummary = computed(() => latestPlan.value?.summary?.ai_risk_llm_summary || null)
 
 const {
   livePublishPreview,

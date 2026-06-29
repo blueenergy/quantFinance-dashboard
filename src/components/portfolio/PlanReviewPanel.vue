@@ -29,6 +29,11 @@
     <p v-if="riskSummary.high" class="warning-text plan-review-risk-warning">
       AI 风控发现 {{ riskSummary.high }} 个高风险标的，批准前请重点确认。
     </p>
+    <p v-if="llmRiskSummary?.run_id" class="llm-risk-summary" :class="`status-${llmRiskSummary.status || 'completed'}`">
+      LLM风控：{{ llmRiskStatusText(llmRiskSummary.status) }}
+      · {{ llmRiskSummary.industry_count || 0 }}行业 / {{ llmRiskSummary.symbol_count || 0 }}标的
+      <span v-if="llmRiskSummary.status === 'completed_with_failures'"> · 部分行业失败，已展示可用结果</span>
+    </p>
 
     <PlanItemsTable
       mode="pending"
@@ -65,6 +70,7 @@ defineProps({
   scoreSnapshotStale: { type: Boolean, default: false },
   summary: { type: Object, default: () => ({ buy: 0, sell: 0, hold: 0 }) },
   riskSummary: { type: Object, default: () => ({ high: 0, medium: 0, low: 0 }) },
+  llmRiskSummary: { type: Object, default: null },
   approveSubmitting: { type: Boolean, default: false },
   rejectSubmitting: { type: Boolean, default: false },
   reviewAiRiskLoading: { type: Boolean, default: false },
@@ -78,6 +84,13 @@ function shortPlanId(planId) {
   if (!text) return '-'
   if (text.length <= 28) return text
   return `${text.slice(0, 18)}…${text.slice(-8)}`
+}
+
+function llmRiskStatusText(status) {
+  if (status === 'completed_with_failures') return '部分完成'
+  if (status === 'failed') return '失败'
+  if (status === 'running') return '运行中'
+  return '完成'
 }
 </script>
 
@@ -187,6 +200,29 @@ function shortPlanId(planId) {
 
 .plan-review-risk-warning {
   margin: 8px 0 8px;
+}
+
+.llm-risk-summary {
+  background: #eef2ff;
+  border: 1px solid #818cf8;
+  border-radius: 6px;
+  color: #3730a3;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 8px 0;
+  padding: 6px 8px;
+}
+
+.llm-risk-summary.status-completed_with_failures {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.llm-risk-summary.status-failed {
+  background: #fef2f2;
+  border-color: #f87171;
+  color: #991b1b;
 }
 
 .plan-ops-actions {

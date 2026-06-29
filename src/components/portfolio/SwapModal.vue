@@ -53,20 +53,29 @@
               <td>
                 <div class="risk-tags">
                   <span
-                    v-if="benchRiskBySymbol[row.symbol]"
+                    v-if="benchRowRisk(row)"
                     class="risk-badge"
-                    :class="`risk-${riskDisplaySeverity(benchRiskBySymbol[row.symbol])}`"
-                    :title="aiRiskTitle(benchRiskBySymbol[row.symbol])"
+                    :class="`risk-${riskDisplaySeverity(benchRowRisk(row))}`"
+                    :title="aiRiskTitle(benchRowRisk(row))"
                   >
-                    {{ riskSeverityLabel(riskDisplaySeverity(benchRiskBySymbol[row.symbol])) }}
+                    {{ riskSeverityLabel(riskDisplaySeverity(benchRowRisk(row))) }}
                   </span>
                   <span v-else class="muted">-</span>
                   <span
-                    v-if="benchRiskBySymbol[row.symbol]?.llm"
+                    v-if="benchRowRisk(row)?.llm"
                     class="llm-risk-tag"
-                    :class="`risk-${benchRiskBySymbol[row.symbol].llm.severity || 'none'}`"
-                    :title="llmRiskTitle(benchRiskBySymbol[row.symbol])"
+                    :class="`risk-${benchRowRisk(row).llm.severity || 'none'}`"
+                    :title="llmRiskTitle(benchRowRisk(row))"
                   >LLM</span>
+                  <button
+                    v-if="benchRowRisk(row)?.llm"
+                    type="button"
+                    class="llm-risk-copy"
+                    :title="llmCopyTitle(benchRowRisk(row))"
+                    @click.stop="copyLlmRisk(benchRowRisk(row), row.symbol)"
+                  >
+                    {{ copiedLlmRiskSymbol === row.symbol ? '已复制' : '复制' }}
+                  </button>
                 </div>
               </td>
               <td>
@@ -88,9 +97,11 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { aiRiskTitle, llmRiskTitle, num, riskDisplaySeverity, riskSeverityLabel } from '../../composables/usePortfolioPlanFormat'
+import { copyTextToClipboard } from '../../utils/clipboard'
 
-defineProps({
+const props = defineProps({
   visible: { type: Boolean, default: false },
   starter: { type: Object, default: null },
   benchData: { type: Object, default: null },
@@ -103,6 +114,36 @@ defineProps({
 })
 
 defineEmits(['close', 'load-bench-risk', 'load-bench-llm-risk', 'preview-swap'])
+
+const copiedLlmRiskSymbol = ref('')
+
+function llmCopyTitle(risk) {
+  return `${llmRiskTitle(risk)}\n\n点击复制完整 LLM 风控文本`
+}
+
+let copiedResetTimer = null
+async function copyLlmRisk(risk, symbol) {
+  const ok = await copyTextToClipboard(llmRiskTitle(risk))
+  if (!ok) return
+  copiedLlmRiskSymbol.value = symbol
+  if (copiedResetTimer) clearTimeout(copiedResetTimer)
+  copiedResetTimer = setTimeout(() => {
+    if (copiedLlmRiskSymbol.value === symbol) copiedLlmRiskSymbol.value = ''
+  }, 2000)
+}
+
+function symbolRisk(map, symbol) {
+  const text = String(symbol || '')
+  return map?.[text] || map?.[text.split('.')[0]] || null
+}
+
+function benchRowRisk(row) {
+  const rowRisk = row?.ai_risk || null
+  const keyedRisk = symbolRisk(props.benchRiskBySymbol, row?.symbol)
+  const merged = { ...(keyedRisk || {}), ...(rowRisk || {}) }
+  if (rowRisk?.llm || keyedRisk?.llm) merged.llm = rowRisk?.llm || keyedRisk?.llm
+  return Object.keys(merged).length ? merged : null
+}
 </script>
 
 <style scoped>
@@ -264,6 +305,22 @@ tbody tr:hover td {
   background: #ecfdf5;
   border-color: #34d399;
   color: #047857;
+}
+
+.llm-risk-copy {
+  background: #fff;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  color: #4338ca;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 1px 5px;
+}
+
+.llm-risk-copy:hover {
+  background: #eef2ff;
 }
 
 .modal-error {

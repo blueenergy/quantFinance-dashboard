@@ -118,6 +118,11 @@
           </button>
         </div>
       </div>
+      <p v-if="llmRiskSummary?.run_id" class="llm-risk-summary" :class="`status-${llmRiskSummary.status || 'completed'}`">
+        LLM风控：{{ llmRiskStatusText(llmRiskSummary.status) }}
+        · {{ llmRiskSummary.industry_count || 0 }}行业 / {{ llmRiskSummary.symbol_count || 0 }}标的
+        <span v-if="llmRiskSummary.status === 'completed_with_failures'"> · 部分行业失败，已展示可用结果</span>
+      </p>
       <PlanItemsTable mode="pending" :items="pendingItems" :overlay="overlay" compact />
     </div>
 
@@ -201,6 +206,7 @@ const props = defineProps({
   cancelPlanLoading: { type: Boolean, default: false },
   pendingItems: { type: Array, default: () => [] },
   pendingSummary: { type: Object, default: () => ({ buy: 0, sell: 0, hold: 0 }) },
+  llmRiskSummary: { type: Object, default: null },
   llmRiskLoading: { type: Boolean, default: false },
   remainderPreview: { type: Object, default: null },
   remainderRows: { type: Array, default: () => [] },
@@ -228,6 +234,13 @@ function shortPlanId(planId) {
   if (!text) return '-'
   if (text.length <= 28) return text
   return `${text.slice(0, 18)}…${text.slice(-8)}`
+}
+
+function llmRiskStatusText(status) {
+  if (status === 'completed_with_failures') return '部分完成'
+  if (status === 'failed') return '失败'
+  if (status === 'running') return '运行中'
+  return '完成'
 }
 </script>
 
@@ -392,6 +405,29 @@ function shortPlanId(planId) {
 
 .pending-plan-summary .tag-hold {
   background: #64748b;
+}
+
+.llm-risk-summary {
+  background: #eef2ff;
+  border: 1px solid #818cf8;
+  border-radius: 6px;
+  color: #3730a3;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 8px 0;
+  padding: 6px 8px;
+}
+
+.llm-risk-summary.status-completed_with_failures {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.llm-risk-summary.status-failed {
+  background: #fef2f2;
+  border-color: #f87171;
+  color: #991b1b;
 }
 
 .risk-report {

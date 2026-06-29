@@ -125,7 +125,10 @@ export function useHoldingsOps({
   const holdingsRiskBySymbol = computed(() => {
     const map = {}
     for (const row of holdingsRisk.value?.holdings || []) {
-      if (row?.symbol) map[row.symbol] = row.ai_risk || {}
+      if (!row?.symbol) continue
+      map[row.symbol] = row.ai_risk || {}
+      const bareSymbol = String(row.symbol).split('.')[0]
+      if (bareSymbol) map[bareSymbol] = row.ai_risk || {}
     }
     return map
   })
@@ -137,10 +140,17 @@ export function useHoldingsOps({
   const benchRiskBySymbol = computed(() => {
     const map = {}
     for (const row of benchData.value?.bench || []) {
-      if (row?.symbol && row.ai_risk) map[row.symbol] = row.ai_risk
+      if (!row?.symbol || !row.ai_risk) continue
+      map[row.symbol] = row.ai_risk
+      const bareSymbol = String(row.symbol).split('.')[0]
+      if (bareSymbol) map[bareSymbol] = row.ai_risk
     }
     for (const row of benchRisk.value?.symbols || []) {
-      if (row?.symbol) map[row.symbol] = { ...(map[row.symbol] || {}), ...(row.ai_risk || {}) }
+      if (!row?.symbol) continue
+      const merged = { ...(map[row.symbol] || {}), ...(row.ai_risk || {}) }
+      map[row.symbol] = merged
+      const bareSymbol = String(row.symbol).split('.')[0]
+      if (bareSymbol) map[bareSymbol] = { ...(map[bareSymbol] || {}), ...merged }
     }
     return map
   })
@@ -380,22 +390,24 @@ export function useHoldingsOps({
     }
   }
 
-  async function loadBench({ resetRisk = true } = {}) {
+  async function loadBench({ resetRisk = true, silent = false } = {}) {
     const planId = benchPlanId.value
     if (!planId) {
       benchData.value = null
       return
     }
-    benchLoading.value = true
+    if (!silent) benchLoading.value = true
     if (resetRisk) benchRisk.value = null
     try {
       const res = await getPortfolioPlanBench(planId, { bench_multiplier: 1.5 })
       benchData.value = res.data || null
     } catch (error) {
-      benchData.value = null
-      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '加载阵容失败', true)
+      if (!silent) {
+        benchData.value = null
+        onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '加载阵容失败', true)
+      }
     } finally {
-      benchLoading.value = false
+      if (!silent) benchLoading.value = false
     }
   }
 
@@ -415,10 +427,16 @@ export function useHoldingsOps({
     }
   }
 
-  async function pollBenchLlmRiskRun(planId, runId, { attempts = 90, intervalMs = 2000 } = {}) {
+  async function pollBenchLlmRiskRun(planId, runId, { attempts = 90, intervalMs = 2000, onProgress = null } = {}) {
+    let lastCompleted = -1
     for (let i = 0; i < attempts; i += 1) {
       const res = await getPortfolioLlmRiskRun(planId, runId, { target_scope: 'bench' })
       const run = res.data || {}
+      const completed = Number(run.completed || 0)
+      if (completed > 0 && completed !== lastCompleted) {
+        lastCompleted = completed
+        if (onProgress) await onProgress(run)
+      }
       if (['completed', 'completed_with_failures', 'failed'].includes(run.status)) return run
       await new Promise((resolve) => setTimeout(resolve, intervalMs))
     }
@@ -437,7 +455,11 @@ export function useHoldingsOps({
       })
       const runId = res.data?.run_id
       if (runId) {
-        const run = await pollBenchLlmRiskRun(planId, runId)
+        const run = await pollBenchLlmRiskRun(planId, runId, {
+          onProgress: async () => {
+            await loadBench({ resetRisk: false, silent: true })
+          },
+        })
         const summaryText = run.partial_summary || ''
         if (run.status === 'failed') {
           onMessage(
