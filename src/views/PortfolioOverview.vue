@@ -833,13 +833,17 @@ async function rerunPlanLlmRisk(planIdRef, source = 'ops') {
     const runId = res.data?.run_id
     if (runId) {
       const run = await pollLlmRiskRun(planId, runId)
+      const summaryText = run.partial_summary || ''
       if (run.status === 'completed_with_failures') {
-        message.value = `LLM 风控部分完成：${run.partial_summary || ''}`
+        message.value = `LLM 风控部分完成：${summaryText || '部分行业任务失败，已刷新可用结果'}`
       } else if (run.status === 'failed') {
-        throw new Error('LLM 风控任务失败')
+        message.value = `LLM 风控失败：${summaryText || '所有行业任务均未完成，请稍后重试或检查 worker 日志'}`
+        messageIsError.value = true
       } else {
         message.value = 'LLM 风控已完成，标的事件风险已刷新。'
       }
+    } else {
+      message.value = 'LLM 风控已提交，但未返回 run_id；请稍后刷新查看任务状态。'
     }
     await refreshDetail()
   } catch (error) {

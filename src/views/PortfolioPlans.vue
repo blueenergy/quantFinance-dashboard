@@ -2173,10 +2173,11 @@ async function pollLlmRiskRun(runId) {
   try {
     const res = await getPortfolioLlmRiskRun(selectedPlanId.value, runId)
     const status = res.data?.status
+    const summaryText = res.data?.partial_summary || ''
     llmRiskMeta.value = {
       runId,
       status: status || '',
-      summary: res.data?.partial_summary || '',
+      summary: summaryText,
     }
     if (['completed', 'completed_with_failures', 'failed'].includes(status)) {
       if (llmRiskTimer) {
@@ -2190,9 +2191,9 @@ async function pollLlmRiskRun(runId) {
         message.value = 'LLM 风控审查完成'
       } else if (status === 'completed_with_failures') {
         await selectPlan(selectedPlanId.value)
-        message.value = `LLM 风控部分完成：${res.data?.partial_summary || ''}`
+        message.value = `LLM 风控部分完成：${summaryText || '部分行业任务失败，已刷新可用结果'}`
       } else {
-        message.value = 'LLM 风控审查失败'
+        message.value = `LLM 风控审查失败：${summaryText || '所有行业任务均未完成，请稍后重试或检查 worker 日志'}`
       }
     }
   } catch (error) {

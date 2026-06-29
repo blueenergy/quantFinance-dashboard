@@ -438,13 +438,22 @@ export function useHoldingsOps({
       const runId = res.data?.run_id
       if (runId) {
         const run = await pollBenchLlmRiskRun(planId, runId)
-        if (run.status === 'failed') throw new Error('替补 LLM 风控任务失败')
+        const summaryText = run.partial_summary || ''
+        if (run.status === 'failed') {
+          onMessage(
+            `替补 LLM 风控失败：${summaryText || '所有行业任务均未完成，请稍后重试或检查 worker 日志'}`,
+            true,
+          )
+          return
+        }
         onMessage(
           run.status === 'completed_with_failures'
-            ? `替补 LLM 风控部分完成：${run.partial_summary || ''}`
+            ? `替补 LLM 风控部分完成：${summaryText || '部分行业任务失败，已刷新可用结果'}`
             : '替补 LLM 风控已完成，候选事件风险已刷新。',
           run.status === 'completed_with_failures',
         )
+      } else {
+        onMessage('替补 LLM 风控已提交，但未返回 run_id；请稍后刷新查看任务状态。', true)
       }
       await loadBench({ resetRisk: false })
     } catch (error) {
