@@ -3,7 +3,7 @@
     <table v-if="mode === 'reprice'" class="plan-items-table">
       <thead>
         <tr>
-          <th>标的</th>
+          <th class="col-stock">标的</th>
           <th>计划价→新价</th>
           <th>目标股数</th>
           <th>Δ股数</th>
@@ -49,14 +49,13 @@
               {{ planItemActionLabel(row.action) }}
             </span>
           </td>
-          <td>
+          <td class="col-stock" :title="`${row.name || ''} ${row.symbol || ''}`">
             <AppLink
               tab="stock-workbench"
               :params="{ symbol: row.symbol }"
               class="stock-workbench-link pending-stock-link"
             >
-              <span class="stock-workbench-link__name">{{ row.name || row.symbol || '-' }}</span>
-              <span v-if="row.symbol" class="stock-workbench-link__symbol">{{ row.symbol }}</span>
+              <span class="stock-workbench-link__name pending-stock-link__name">{{ row.name || row.symbol || '-' }}</span>
             </AppLink>
           </td>
           <td>{{ row.industry || '-' }}</td>
@@ -468,6 +467,11 @@ function canSelectReselectItem(item) {
   color: #6b7280;
   flex-shrink: 0;
   font-size: 11px;
+}
+
+.pending-stock-link__name {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .action-tag {
