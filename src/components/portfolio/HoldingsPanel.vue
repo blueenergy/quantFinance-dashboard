@@ -213,7 +213,16 @@
                   <td>{{ row.name || '-' }}</td>
                   <td>{{ row.industry || '-' }}</td>
                   <td>{{ num(row.score_value) }}</td>
-                  <td>{{ num(row.latest_close) }}</td>
+                  <td class="bench-price-cell" :title="benchDailyTitle(row)">
+                    <span>{{ num(row.latest_close) }}</span>
+                    <small v-if="row.latest_trade_date">{{ formatBenchTradeDate(row.latest_trade_date) }}</small>
+                    <small
+                      v-if="row.latest_pct_chg != null"
+                      :class="signClass(row.latest_pct_chg)"
+                    >
+                      {{ pctSigned(row.latest_pct_chg) }}
+                    </small>
+                  </td>
                   <td>
                     <span
                       v-if="benchRiskBySymbol[row.symbol]"
@@ -243,6 +252,7 @@ import {
   formatShareDelta,
   money,
   num,
+  pctSigned,
   riskSeverityLabel,
   signClass,
 } from '../../composables/usePortfolioPlanFormat'
@@ -305,6 +315,31 @@ function toggleDetail(symbol) {
 function pct(value) {
   const number = Number(value)
   return Number.isFinite(number) ? `${(number * 100).toFixed(2)}%` : '-'
+}
+
+function formatBenchTradeDate(value) {
+  const text = String(value || '')
+  if (text.length === 8) return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
+  return text || '-'
+}
+
+function benchDailyTitle(row) {
+  const parts = [
+    `${row.name || row.symbol || '-'} ${row.symbol || ''}`.trim(),
+    `日期：${formatBenchTradeDate(row.latest_trade_date)}`,
+    `开：${num(row.latest_open)}`,
+    `高：${num(row.latest_high)}`,
+    `低：${num(row.latest_low)}`,
+    `收：${num(row.latest_close)}`,
+    `昨收：${num(row.latest_pre_close)}`,
+    `涨跌：${num(row.latest_change)}`,
+    `涨跌幅：${pctSigned(row.latest_pct_chg)}`,
+    `成交量：${money(row.latest_volume)}`,
+    `成交额：${money(row.latest_amount)}`,
+    `更新：${row.latest_update_time || '-'}`,
+    `来源：${row.latest_price_source || '-'}`,
+  ]
+  return parts.join('\n')
 }
 </script>
 
@@ -526,6 +561,21 @@ tbody tr:hover td {
 
 .lineup-table {
   width: 100%;
+}
+
+.bench-price-cell small {
+  color: #64748b;
+  display: block;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.bench-price-cell small.pos {
+  color: #dc2626;
+}
+
+.bench-price-cell small.neg {
+  color: #16a34a;
 }
 
 .fast-actions {
