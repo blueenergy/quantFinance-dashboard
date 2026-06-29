@@ -142,7 +142,7 @@
               <th>股票</th>
               <th>方向</th>
               <th>目标</th>
-              <th>账户持仓</th>
+              <th>计划持仓</th>
               <th>缺口</th>
               <th>补单量</th>
               <th>预估金额</th>
@@ -154,7 +154,9 @@
               <td>{{ row.name || row.symbol }}</td>
               <td>{{ row.action || '-' }}</td>
               <td>{{ row.target_shares ?? '-' }}</td>
-              <td>{{ row.account_current_shares ?? '-' }}</td>
+              <td :title="`账户聚合持仓：${row.account_current_shares ?? '-'}`">
+                {{ row.baseline_current_shares ?? row.account_current_shares ?? '-' }}
+              </td>
               <td>{{ row.gap_shares ?? 0 }}</td>
               <td>{{ row.topup_shares ?? 0 }}</td>
               <td>{{ money(row.estimated_amount) }}</td>
