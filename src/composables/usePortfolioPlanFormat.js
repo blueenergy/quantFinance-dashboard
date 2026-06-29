@@ -44,6 +44,7 @@ export function blockerText(blocker) {
     max_position_pct_exceeded: '超过单票仓位上限',
     missing_plan_equity: '缺少计划权益基准',
     missing_plan_cash: '缺少计划现金基准',
+    missing_frozen_price: '活跃买单缺少冻结价格',
     missing_price: '缺少有效价格',
     missing_price_market_sell: '缺价按市价卖出',
     priced_from_stale_close: '按昨收定价',

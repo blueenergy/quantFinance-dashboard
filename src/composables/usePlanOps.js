@@ -58,7 +58,11 @@ export function usePlanOps({
   const remainderActionableCount = computed(() => remainderPreview.value?.actionable_count || 0)
   const remainderBlockers = computed(() => {
     const items = remainderPreview.value?.risk_report?.items || []
-    return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
+    const riskBlockers = items.flatMap((item) =>
+      (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`),
+    )
+    const cashBlockers = (remainderPreview.value?.cash_blockers || []).map((blocker) => blockerText(blocker))
+    return [...riskBlockers, ...cashBlockers]
   })
 
   async function previewLivePublish() {

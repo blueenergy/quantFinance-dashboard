@@ -127,9 +127,9 @@
     </div>
 
     <div v-if="remainderPreview" class="risk-report">
+      <p v-if="remainderCashUsageText" class="muted">{{ remainderCashUsageText }}</p>
       <p>
-        可补 {{ remainderActionableCount }} 项，阻断 {{ remainderPreview.risk_report?.blocked_count ?? 0 }} 条，
-        可用现金 {{ money(remainderPreview.available_cash) }}
+        可补 {{ remainderActionableCount }} 项，阻断 {{ remainderPreview.risk_report?.blocked_count ?? 0 }} 条
         <span v-if="remainderPreview.account_synced === false" class="warning-text">账户未同步持仓，无法补单</span>
       </p>
       <p v-if="remainderBlockers.length" class="warning-text">
@@ -181,6 +181,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import PlanItemsTable from './PlanItemsTable.vue'
 import { money, remainderReasonText } from '../../composables/usePortfolioPlanFormat'
 
@@ -216,6 +217,31 @@ const props = defineProps({
   remainderBlockers: { type: Array, default: () => [] },
   remainderLoading: { type: Boolean, default: false },
   remainderReason: { type: String, default: '' },
+})
+
+const remainderCashUsageText = computed(() => {
+  const preview = props.remainderPreview
+  if (!preview) return ''
+  const hasPlan =
+    preview.plan_available_cash != null ||
+    preview.lineage_book_cash != null ||
+    preview.frozen_buy_cash != null
+  const hasBroker = preview.broker_available_cash != null
+  if (!hasPlan && !hasBroker) return ''
+  const parts = []
+  if (hasPlan) {
+    const frozen =
+      preview.frozen_buy_cash != null && Number(preview.frozen_buy_cash) > 0
+        ? `，冻结 ${money(preview.frozen_buy_cash)}`
+        : ''
+    parts.push(
+      `计划可用现金 ${money(preview.plan_available_cash ?? preview.available_cash)}（账本 ${money(preview.lineage_book_cash)}${frozen}）`,
+    )
+  }
+  if (hasBroker) {
+    parts.push(`账户可用现金 ${money(preview.broker_available_cash)}`)
+  }
+  return parts.join('；')
 })
 
 defineEmits([

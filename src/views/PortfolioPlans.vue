@@ -692,9 +692,9 @@
               </div>
             </div>
             <div v-if="remainderPreview" class="risk-report">
+              <p v-if="remainderCashUsageText" class="muted">{{ remainderCashUsageText }}</p>
               <p>
-                可补 {{ remainderActionableCount }} 项，阻断 {{ remainderPreview.risk_report?.blocked_count ?? 0 }} 条，
-                可用现金 {{ money(remainderPreview.available_cash) }}
+                可补 {{ remainderActionableCount }} 项，阻断 {{ remainderPreview.risk_report?.blocked_count ?? 0 }} 条
                 <span v-if="remainderPreview.account_synced === false" class="watermark-warning">账户未同步持仓，无法补单</span>
               </p>
               <p v-if="remainderBlockers.length" class="watermark-warning">
@@ -707,7 +707,7 @@
                       <th>股票</th>
                       <th>方向</th>
                       <th>目标</th>
-                      <th>账户持仓</th>
+                      <th>计划持仓</th>
                       <th>缺口</th>
                       <th>补单量</th>
                       <th>预估金额</th>
@@ -719,7 +719,9 @@
                       <td>{{ row.name || row.symbol }}</td>
                       <td>{{ row.action || '-' }}</td>
                       <td>{{ row.target_shares ?? '-' }}</td>
-                      <td>{{ row.account_current_shares ?? '-' }}</td>
+                      <td :title="`账户聚合持仓：${row.account_current_shares ?? '-'}`">
+                        {{ row.baseline_current_shares ?? row.account_current_shares ?? '-' }}
+                      </td>
                       <td>{{ row.gap_shares ?? 0 }}</td>
                       <td>{{ row.topup_shares ?? 0 }}</td>
                       <td>{{ money(row.estimated_amount) }}</td>
@@ -1300,7 +1302,36 @@ const remainderRows = computed(() => remainderPreview.value?.remainder || [])
 const remainderActionableCount = computed(() => remainderPreview.value?.actionable_count || 0)
 const remainderBlockers = computed(() => {
   const items = remainderPreview.value?.risk_report?.items || []
-  return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
+  const riskBlockers = items.flatMap((item) =>
+    (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`),
+  )
+  const cashBlockers = (remainderPreview.value?.cash_blockers || []).map((blocker) => blockerText(blocker))
+  return [...riskBlockers, ...cashBlockers]
+})
+
+const remainderCashUsageText = computed(() => {
+  const preview = remainderPreview.value
+  if (!preview) return ''
+  const hasPlan =
+    preview.plan_available_cash != null ||
+    preview.lineage_book_cash != null ||
+    preview.frozen_buy_cash != null
+  const hasBroker = preview.broker_available_cash != null
+  if (!hasPlan && !hasBroker) return ''
+  const parts = []
+  if (hasPlan) {
+    const frozen =
+      preview.frozen_buy_cash != null && Number(preview.frozen_buy_cash) > 0
+        ? `，冻结 ${money(preview.frozen_buy_cash)}`
+        : ''
+    parts.push(
+      `计划可用现金 ${money(preview.plan_available_cash ?? preview.available_cash)}（账本 ${money(preview.lineage_book_cash)}${frozen}）`,
+    )
+  }
+  if (hasBroker) {
+    parts.push(`账户可用现金 ${money(preview.broker_available_cash)}`)
+  }
+  return parts.join('；')
 })
 
 const targetScoringRunText = computed(() => scoringRunText(planGenerationWatermark.value?.target_scoring_run))
