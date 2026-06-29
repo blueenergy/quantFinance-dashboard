@@ -201,6 +201,14 @@
             >
               {{ benchRiskLoading ? 'AI 风控运行中…' : '运行 AI 风控' }}
             </button>
+            <button
+              type="button"
+              class="link-btn"
+              :disabled="benchLlmRiskLoading || !benchData.bench?.length"
+              @click="$emit('load-bench-llm-risk')"
+            >
+              {{ benchLlmRiskLoading ? 'LLM 风控运行中…' : '运行 LLM 风控' }}
+            </button>
           </div>
           <div v-if="benchData.bench?.length" class="table-wrap">
             <table class="lineup-table">
@@ -236,10 +244,10 @@
                     <span
                       v-if="benchRiskBySymbol[row.symbol]"
                       class="risk-badge"
-                      :class="`risk-${benchRiskBySymbol[row.symbol].severity}`"
+                      :class="`risk-${riskDisplaySeverity(benchRiskBySymbol[row.symbol])}`"
                       :title="aiRiskTitle(benchRiskBySymbol[row.symbol])"
                     >
-                      {{ riskSeverityLabel(benchRiskBySymbol[row.symbol].severity) }}
+                      {{ riskSeverityLabel(riskDisplaySeverity(benchRiskBySymbol[row.symbol])) }}
                     </span>
                     <span v-else class="muted">-</span>
                   </td>
@@ -263,6 +271,7 @@ import {
   money,
   num,
   pctSigned,
+  riskDisplaySeverity,
   riskSeverityLabel,
   signClass,
 } from '../../composables/usePortfolioPlanFormat'
@@ -285,6 +294,7 @@ const props = defineProps({
   benchRisk: { type: Object, default: null },
   benchRiskBySymbol: { type: Object, default: () => ({}) },
   benchRiskLoading: { type: Boolean, default: false },
+  benchLlmRiskLoading: { type: Boolean, default: false },
   effectiveTarget: { type: Function, required: true },
   manualDelta: { type: Function, required: true },
   riskRowClass: { type: Function, required: true },
@@ -303,6 +313,7 @@ defineEmits([
   'quick-reduce',
   'toggle-bench',
   'load-bench-risk',
+  'load-bench-llm-risk',
 ])
 
 const expandedSymbols = ref(new Set())

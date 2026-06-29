@@ -2,13 +2,15 @@ import { computed, ref } from 'vue'
 import {
   enqueuePortfolioBenchRisk,
   enqueuePortfolioHoldingsRisk,
+  enqueuePortfolioLlmRisk,
+  getPortfolioLlmRiskRun,
   getPortfolioPlanBench,
   liveRebalancePortfolio,
   paperRebalancePortfolio,
   reconcilePortfolioHoldings,
   recordExternalManualRecord,
 } from '../api/portfolioPlans'
-import { aiRiskTitle } from './usePortfolioPlanFormat'
+import { aiRiskTitle, riskDisplaySeverity } from './usePortfolioPlanFormat'
 
 function formatApiDetail(detail) {
   if (!detail) return ''
@@ -82,6 +84,7 @@ export function useHoldingsOps({
   const benchLoading = ref(false)
   const benchRisk = ref(null)
   const benchRiskLoading = ref(false)
+  const benchLlmRiskLoading = ref(false)
   const benchExpanded = ref(false)
   const reconcileData = ref(null)
 
@@ -133,8 +136,11 @@ export function useHoldingsOps({
 
   const benchRiskBySymbol = computed(() => {
     const map = {}
+    for (const row of benchData.value?.bench || []) {
+      if (row?.symbol && row.ai_risk) map[row.symbol] = row.ai_risk
+    }
     for (const row of benchRisk.value?.symbols || []) {
-      if (row?.symbol) map[row.symbol] = row.ai_risk || {}
+      if (row?.symbol) map[row.symbol] = { ...(map[row.symbol] || {}), ...(row.ai_risk || {}) }
     }
     return map
   })
@@ -292,7 +298,7 @@ export function useHoldingsOps({
     if (!starter || !benchPlayer) return
     swapError.value = ''
     const benchRiskInfo = benchRiskBySymbol.value[benchPlayer.symbol]
-    if (benchRiskInfo?.severity === 'high') {
+    if (riskDisplaySeverity(benchRiskInfo) === 'high') {
       const reasons = aiRiskTitle(benchRiskInfo) || '高风险信号'
       const proceed = window.confirm(
         `AI 风控提示：替补 ${benchPlayer.symbol}（${benchPlayer.name || '-'}）为高风险——${reasons}。仍要换上吗？`
@@ -374,14 +380,14 @@ export function useHoldingsOps({
     }
   }
 
-  async function loadBench() {
+  async function loadBench({ resetRisk = true } = {}) {
     const planId = benchPlanId.value
     if (!planId) {
       benchData.value = null
       return
     }
     benchLoading.value = true
-    benchRisk.value = null
+    if (resetRisk) benchRisk.value = null
     try {
       const res = await getPortfolioPlanBench(planId, { bench_multiplier: 1.5 })
       benchData.value = res.data || null
@@ -406,6 +412,45 @@ export function useHoldingsOps({
       onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '替补风控加载失败', true)
     } finally {
       benchRiskLoading.value = false
+    }
+  }
+
+  async function pollBenchLlmRiskRun(planId, runId, { attempts = 90, intervalMs = 2000 } = {}) {
+    for (let i = 0; i < attempts; i += 1) {
+      const res = await getPortfolioLlmRiskRun(planId, runId, { target_scope: 'bench' })
+      const run = res.data || {}
+      if (['completed', 'completed_with_failures', 'failed'].includes(run.status)) return run
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+    throw new Error('LLM 风控任务处理超时，请稍后刷新查看结果')
+  }
+
+  async function loadBenchLlmRisk() {
+    const planId = benchPlanId.value
+    if (!planId) return
+    benchLlmRiskLoading.value = true
+    onMessage('', false)
+    try {
+      const res = await enqueuePortfolioLlmRisk(planId, {
+        target_scope: 'bench',
+        bench_multiplier: 1.5,
+      })
+      const runId = res.data?.run_id
+      if (runId) {
+        const run = await pollBenchLlmRiskRun(planId, runId)
+        if (run.status === 'failed') throw new Error('替补 LLM 风控任务失败')
+        onMessage(
+          run.status === 'completed_with_failures'
+            ? `替补 LLM 风控部分完成：${run.partial_summary || ''}`
+            : '替补 LLM 风控已完成，候选事件风险已刷新。',
+          run.status === 'completed_with_failures',
+        )
+      }
+      await loadBench({ resetRisk: false })
+    } catch (error) {
+      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '替补 LLM 风控加载失败', true)
+    } finally {
+      benchLlmRiskLoading.value = false
     }
   }
 
@@ -634,6 +679,7 @@ export function useHoldingsOps({
     showSwapModal.value = false
     showFastActionModal.value = false
     benchData.value = null
+    benchRisk.value = null
     reconcileData.value = null
   }
 
@@ -656,6 +702,7 @@ export function useHoldingsOps({
     benchLoading,
     benchRisk,
     benchRiskLoading,
+    benchLlmRiskLoading,
     benchExpanded,
     reconcileData,
     showSwapModal,
@@ -688,6 +735,7 @@ export function useHoldingsOps({
     confirmFastAction,
     loadBench,
     loadBenchRisk,
+    loadBenchLlmRisk,
     loadReconcile,
     openLiquidateModal,
     submitLiveLiquidate,

@@ -201,6 +201,7 @@
         :bench-risk="benchRisk"
         :bench-risk-by-symbol="benchRiskBySymbol"
         :bench-risk-loading="benchRiskLoading"
+        :bench-llm-risk-loading="benchLlmRiskLoading"
         :effective-target="effectiveTarget"
         :manual-delta="manualDelta"
         :risk-row-class="riskRowClass"
@@ -216,6 +217,7 @@
         @quick-reduce="openQuickReduceModal"
         @toggle-bench="benchExpanded = !benchExpanded"
         @load-bench-risk="loadBenchRisk"
+        @load-bench-llm-risk="loadBenchLlmRisk"
       />
 
       <SwapModal
@@ -225,10 +227,12 @@
         :bench-risk="benchRisk"
         :bench-risk-by-symbol="benchRiskBySymbol"
         :bench-risk-loading="benchRiskLoading"
+        :bench-llm-risk-loading="benchLlmRiskLoading"
         :submitting="fastActionSubmitting"
         :error="swapError"
         @close="showSwapModal = false"
         @load-bench-risk="loadBenchRisk"
+        @load-bench-llm-risk="loadBenchLlmRisk"
         @preview-swap="previewSwap"
       />
 
@@ -396,6 +400,7 @@ const {
   benchLoading,
   benchRisk,
   benchRiskLoading,
+  benchLlmRiskLoading,
   benchExpanded,
   reconcileData,
   showSwapModal,
@@ -428,6 +433,7 @@ const {
   confirmFastAction,
   loadBench,
   loadBenchRisk,
+  loadBenchLlmRisk,
   loadReconcile,
   openLiquidateModal,
   submitLiveLiquidate,

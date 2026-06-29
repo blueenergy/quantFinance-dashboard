@@ -96,8 +96,8 @@ export function enqueuePortfolioLlmRisk(planId, data = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/llm-risk-review`, method: 'post', data })
 }
 
-export function getPortfolioLlmRiskRun(planId, runId) {
-  return request({ url: `/portfolio-plans/plans/${planId}/llm-risk-review/runs/${runId}`, method: 'get' })
+export function getPortfolioLlmRiskRun(planId, runId, params = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/llm-risk-review/runs/${runId}`, method: 'get', params })
 }
 
 export function getPortfolioPlanExecutions(planId) {
