@@ -44,6 +44,9 @@
       <button type="button" class="secondary" :disabled="reviewAiRiskLoading" @click="$emit('rerun-ai-risk')">
         {{ reviewAiRiskLoading ? 'AI 风控复检中…' : '运行 AI 风控复检' }}
       </button>
+      <button type="button" class="secondary" :disabled="reviewLlmRiskLoading || !planId" @click="$emit('rerun-llm-risk')">
+        {{ reviewLlmRiskLoading ? 'LLM 风控运行中…' : '运行 LLM 风控' }}
+      </button>
       <button type="button" class="danger" :disabled="approveSubmitting || rejectSubmitting || !planId" @click="$emit('reject')">
         {{ rejectSubmitting ? '拒绝中…' : '拒绝计划' }}
       </button>
@@ -65,9 +68,10 @@ defineProps({
   approveSubmitting: { type: Boolean, default: false },
   rejectSubmitting: { type: Boolean, default: false },
   reviewAiRiskLoading: { type: Boolean, default: false },
+  reviewLlmRiskLoading: { type: Boolean, default: false },
 })
 
-defineEmits(['approve', 'reject', 'rerun-ai-risk', 'copy-plan-id'])
+defineEmits(['approve', 'reject', 'rerun-ai-risk', 'rerun-llm-risk', 'copy-plan-id'])
 
 function shortPlanId(planId) {
   const text = String(planId || '')

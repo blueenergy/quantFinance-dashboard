@@ -102,10 +102,20 @@
           <h4>待发布/待执行计划标的</h4>
           <p class="muted">当前 approved plan 的目标列表；发布/执行前请确认买卖方向和目标股数。</p>
         </div>
-        <div class="pending-plan-summary">
-          <span class="tag-buy">买 {{ pendingSummary.buy }}</span>
-          <span class="tag-sell">卖 {{ pendingSummary.sell }}</span>
-          <span class="tag-hold">持有 {{ pendingSummary.hold }}</span>
+        <div class="pending-plan-side">
+          <div class="pending-plan-summary">
+            <span class="tag-buy">买 {{ pendingSummary.buy }}</span>
+            <span class="tag-sell">卖 {{ pendingSummary.sell }}</span>
+            <span class="tag-hold">持有 {{ pendingSummary.hold }}</span>
+          </div>
+          <button
+            type="button"
+            class="secondary"
+            :disabled="llmRiskLoading || !planId || !pendingItems.length"
+            @click="$emit('rerun-llm-risk')"
+          >
+            {{ llmRiskLoading ? 'LLM 风控运行中…' : '运行 LLM 风控' }}
+          </button>
         </div>
       </div>
       <PlanItemsTable mode="pending" :items="pendingItems" :overlay="overlay" compact />
@@ -191,6 +201,7 @@ const props = defineProps({
   cancelPlanLoading: { type: Boolean, default: false },
   pendingItems: { type: Array, default: () => [] },
   pendingSummary: { type: Object, default: () => ({ buy: 0, sell: 0, hold: 0 }) },
+  llmRiskLoading: { type: Boolean, default: false },
   remainderPreview: { type: Object, default: null },
   remainderRows: { type: Array, default: () => [] },
   remainderActionableCount: { type: Number, default: 0 },
@@ -207,6 +218,7 @@ defineEmits([
   'preview-remainder',
   'confirm-remainder',
   'cancel-plan',
+  'rerun-llm-risk',
   'update:selectedLiveAccountId',
   'update:remainderReason',
 ])
@@ -352,6 +364,13 @@ function shortPlanId(planId) {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.pending-plan-side {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .pending-plan-summary span {

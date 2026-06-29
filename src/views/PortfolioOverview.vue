@@ -93,9 +93,11 @@
         :approve-submitting="approveSubmitting"
         :reject-submitting="rejectSubmitting"
         :review-ai-risk-loading="reviewAiRiskLoading"
+        :review-llm-risk-loading="reviewLlmRiskLoading"
         @approve="approvePendingPlan"
         @reject="rejectPendingPlan"
         @rerun-ai-risk="rerunReviewAiRisk"
+        @rerun-llm-risk="() => rerunPlanLlmRisk(reviewPlanId, 'review')"
         @copy-plan-id="copyPlanId"
       />
 
@@ -123,6 +125,7 @@
         :cancel-plan-loading="cancelPlanLoading"
         :pending-items="pendingPlanRows"
         :pending-summary="pendingPlanSummary"
+        :llm-risk-loading="opsLlmRiskLoading"
         :remainder-preview="remainderPreview"
         :remainder-rows="remainderRows"
         :remainder-actionable-count="remainderActionableCount"
@@ -136,6 +139,7 @@
         @preview-remainder="previewRemainder"
         @confirm-remainder="confirmRemainder"
         @cancel-plan="cancelCurrentPlan"
+        @rerun-llm-risk="() => rerunPlanLlmRisk(selectedOperationPlanId, 'ops')"
       />
 
       <PlanPublishPreviewModal
@@ -287,7 +291,9 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import {
+  enqueuePortfolioLlmRisk,
   forceRebalanceLineage,
+  getPortfolioLlmRiskRun,
   getLineageLiveEquity,
   getLineageLiveExecutions,
   getLineageLivePositions,
@@ -339,6 +345,8 @@ const timelineData = ref(null)
 const latestPlanDetail = ref(null)
 const expandedTimelinePlanId = ref(null)
 const reviewAiRiskLoading = ref(false)
+const reviewLlmRiskLoading = ref(false)
+const opsLlmRiskLoading = ref(false)
 const forceRebalanceSubmitting = ref(false)
 const securitiesAccounts = ref([])
 const selectedLiveAccountId = ref('')
@@ -793,6 +801,47 @@ async function rerunReviewAiRisk() {
     messageIsError.value = true
   } finally {
     reviewAiRiskLoading.value = false
+  }
+}
+
+async function pollLlmRiskRun(planId, runId, { attempts = 90, intervalMs = 2000 } = {}) {
+  for (let i = 0; i < attempts; i += 1) {
+    const res = await getPortfolioLlmRiskRun(planId, runId)
+    const run = res.data || {}
+    if (['completed', 'completed_with_failures', 'failed'].includes(run.status)) return run
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+  throw new Error('LLM 风控任务处理超时，请稍后刷新查看结果')
+}
+
+async function rerunPlanLlmRisk(planIdRef, source = 'ops') {
+  const planId = typeof planIdRef === 'object' ? planIdRef.value : planIdRef
+  if (!planId) return
+  const isReviewPlan = source === 'review'
+  if (isReviewPlan) reviewLlmRiskLoading.value = true
+  else opsLlmRiskLoading.value = true
+  message.value = ''
+  messageIsError.value = false
+  try {
+    const res = await enqueuePortfolioLlmRisk(planId)
+    const runId = res.data?.run_id
+    if (runId) {
+      const run = await pollLlmRiskRun(planId, runId)
+      if (run.status === 'completed_with_failures') {
+        message.value = `LLM 风控部分完成：${run.partial_summary || ''}`
+      } else if (run.status === 'failed') {
+        throw new Error('LLM 风控任务失败')
+      } else {
+        message.value = 'LLM 风控已完成，标的事件风险已刷新。'
+      }
+    }
+    await refreshDetail()
+  } catch (error) {
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || 'LLM 风控失败'
+    messageIsError.value = true
+  } finally {
+    reviewLlmRiskLoading.value = false
+    opsLlmRiskLoading.value = false
   }
 }
 
