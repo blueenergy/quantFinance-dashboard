@@ -86,10 +86,10 @@
             <span
               v-if="row.ai_risk"
               class="risk-badge"
-              :class="`risk-${row.ai_risk.severity || 'none'}`"
+              :class="`risk-${riskDisplaySeverity(row.ai_risk)}`"
               :title="aiRiskTitle(row.ai_risk)"
             >
-              {{ riskSeverityLabel(row.ai_risk.severity) }}
+              {{ riskSeverityLabel(riskDisplaySeverity(row.ai_risk)) }}
             </span>
             <span v-else class="muted">-</span>
           </td>
@@ -244,6 +244,7 @@ import {
   planItemActionLabel,
   priceSourceClass,
   priceSourceLabel,
+  riskDisplaySeverity,
   riskSeverityLabel,
   signClass,
 } from '../../composables/usePortfolioPlanFormat'

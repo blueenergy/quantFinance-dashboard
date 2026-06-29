@@ -99,17 +99,42 @@ export function riskSeverityLabel(severity) {
   return '正常'
 }
 
+const severityRank = { none: 0, low: 1, medium: 2, high: 3 }
+
+export function riskDisplaySeverity(risk) {
+  if (!risk) return 'none'
+  const ruleSeverity = risk.severity || 'none'
+  const llmSeverity = risk.llm?.severity || 'none'
+  return (severityRank[llmSeverity] || 0) > (severityRank[ruleSeverity] || 0) ? llmSeverity : ruleSeverity
+}
+
+function findingLine(finding) {
+  const title = finding?.title || finding?.code || '风险信号'
+  const detail = finding?.detail || ''
+  const sourceBits = [finding?.source_date, finding?.source_title].filter(Boolean)
+  const source = sourceBits.length ? `（${sourceBits.join(' ')}）` : ''
+  return `${detail ? `${title}：${detail}` : title}${source}`
+}
+
 export function aiRiskTitle(risk) {
   if (!risk) return '未发现规则风控信号'
-  const findingLines = (risk.findings || [])
-    .map((finding) => {
-      const title = finding?.title || finding?.code || '风险信号'
-      const detail = finding?.detail || ''
-      return detail ? `${title}：${detail}` : title
-    })
-    .filter(Boolean)
-  if (findingLines.length) return findingLines.join('\n')
-  return (risk.reasons || []).join('、') || '风险信号'
+  const sections = []
+  const ruleLines = (risk.findings || []).map(findingLine).filter(Boolean)
+  if (!ruleLines.length && (risk.reasons || []).length) {
+    ruleLines.push((risk.reasons || []).join('、'))
+  }
+  if (ruleLines.length) sections.push(`规则风控\n${ruleLines.join('\n')}`)
+
+  const llm = risk.llm
+  if (llm) {
+    const llmLines = []
+    if (llm.summary) llmLines.push(llm.summary)
+    llmLines.push(...(llm.findings || []).map(findingLine).filter(Boolean))
+    if (llmLines.length) sections.push(`LLM 事件风控\n${llmLines.join('\n')}`)
+  }
+
+  if (sections.length) return sections.join('\n\n')
+  return '未发现明确风控信号'
 }
 
 export function isKeepItem(item) {
@@ -146,14 +171,15 @@ export function driftBadge(item) {
 
 export function aiRiskBadge(item) {
   const risk = item?.ai_risk
-  if (!risk || !risk.severity || risk.severity === 'none') {
+  const severity = riskDisplaySeverity(risk)
+  if (!risk || severity === 'none') {
     return { show: ['buy', 'hold'].includes(item?.action), text: '正常', cls: 'risk-none', title: '未发现规则风控信号' }
   }
   const labelMap = { high: '高', medium: '中', low: '低' }
   return {
     show: true,
-    text: labelMap[risk.severity] || risk.severity,
-    cls: `risk-${risk.severity}`,
+    text: labelMap[severity] || severity,
+    cls: `risk-${severity}`,
     title: aiRiskTitle(risk),
   }
 }
@@ -173,6 +199,7 @@ export function usePortfolioPlanFormat() {
     formatShareDelta,
     signClass,
     riskSeverityLabel,
+    riskDisplaySeverity,
     aiRiskTitle,
     actionBadge,
     driftBadge,

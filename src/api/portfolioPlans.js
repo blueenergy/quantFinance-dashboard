@@ -92,6 +92,14 @@ export function rerunPortfolioPlanAiRisk(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/ai-risk-review`, method: 'post' })
 }
 
+export function enqueuePortfolioLlmRisk(planId, data = {}) {
+  return request({ url: `/portfolio-plans/plans/${planId}/llm-risk-review`, method: 'post', data })
+}
+
+export function getPortfolioLlmRiskRun(planId, runId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/llm-risk-review/runs/${runId}`, method: 'get' })
+}
+
 export function getPortfolioPlanExecutions(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/executions`, method: 'get' })
 }

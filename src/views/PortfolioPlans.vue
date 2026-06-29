@@ -751,6 +751,9 @@
                   / <b class="risk-medium">{{ aiRiskSummary.medium || 0 }}中</b>
                   / <b class="risk-low">{{ aiRiskSummary.low || 0 }}低</b>
                 </span>
+                <span v-if="llmRiskSummary" class="ai-risk-summary">
+                  LLM风控：{{ llmRiskSummary.industry_count || 0 }}行业 / {{ llmRiskSummary.symbol_count || 0 }}标的
+                </span>
                 <button
                   v-if="canReselectItems"
                   class="link-btn"
@@ -772,6 +775,10 @@
                 <button class="link-btn" :disabled="aiRiskRunning" @click="runAiRisk">
                   <span v-if="aiRiskRunning" class="spinner" />
                   {{ aiRiskRunning ? 'AI 风控运行中…' : '运行 AI 风控' }}
+                </button>
+                <button class="link-btn" :disabled="llmRiskRunning" @click="runLlmRisk">
+                  <span v-if="llmRiskRunning" class="spinner" />
+                  {{ llmRiskRunning ? `LLM 风控 ${llmRiskMeta.summary || '运行中…'}` : '运行 LLM 风控' }}
                 </button>
               </div>
             </div>
@@ -955,8 +962,10 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   approvePortfolioPlan,
   bulkRejectPortfolioPlanItems,
+  enqueuePortfolioLlmRisk,
   executePortfolioPlanPaper,
   generatePortfolioPlan,
+  getPortfolioLlmRiskRun,
   getPortfolioPlan,
   getPortfolioPlanOperationLogs,
   getPortfolioPlanExecutions,
@@ -989,6 +998,7 @@ import {
   money,
   num,
   remainderReasonText,
+  riskDisplaySeverity,
 } from '../composables/usePortfolioPlanFormat'
 
 const strategies = ref([])
@@ -1037,6 +1047,8 @@ const livePublishLoading = ref(false)
 const paperExecuteLoading = ref(false)
 const operationLogsLoading = ref(false)
 const aiRiskRunning = ref(false)
+const llmRiskRunning = ref(false)
+const llmRiskMeta = ref({ runId: '', status: '', summary: '' })
 const currentGenerationTask = ref(null)
 // Tracks an in-flight per-item reselect so we can report the replacement once
 // the regeneration task finishes (which symbol filled the freed slot).
@@ -1066,6 +1078,7 @@ const selectedReselectSymbols = ref(new Set())
 let realtimeTimer = null
 let generationTaskTimer = null
 let aiRiskTimer = null
+let llmRiskTimer = null
 
 const generateForm = ref({
   strategy_template_id: '',
@@ -2050,6 +2063,7 @@ function planCadenceBadge(plan) {
 }
 
 const aiRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_summary || null)
+const llmRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_llm_summary || null)
 
 function toggleReselectSelection(symbol, checked) {
   if (!symbol) return
@@ -2064,7 +2078,7 @@ function toggleReselectSelection(symbol, checked) {
 
 function selectHighRiskReselectItems() {
   const symbols = (selectedDetail.value?.items || [])
-    .filter((item) => canSelectReselectItem(item) && item?.ai_risk?.severity === 'high')
+    .filter((item) => canSelectReselectItem(item) && riskDisplaySeverity(item?.ai_risk) === 'high')
     .map((item) => item.symbol)
   if (!symbols.length) {
     message.value = '当前没有可批量换股的 AI 高风险标的'
@@ -2121,6 +2135,73 @@ async function pollAiRiskTask(taskId) {
     }
     aiRiskRunning.value = false
     message.value = error.message || 'AI 风控任务查询失败'
+  }
+}
+
+async function runLlmRisk() {
+  if (!selectedPlanId.value || llmRiskRunning.value) return
+  llmRiskRunning.value = true
+  llmRiskMeta.value = { runId: '', status: 'pending', summary: '' }
+  message.value = 'LLM 风控审查已提交，正在按行业分桶分析…'
+  try {
+    const res = await enqueuePortfolioLlmRisk(selectedPlanId.value)
+    const runId = res.data?.run_id
+    const summary = res.data?.summary || {}
+    llmRiskMeta.value = {
+      runId: runId || '',
+      status: summary.status || 'pending',
+      summary: summary.partial_summary || '',
+    }
+    await loadOperationLogs()
+    if (!runId) {
+      llmRiskRunning.value = false
+      return
+    }
+    if (llmRiskTimer) window.clearInterval(llmRiskTimer)
+    await pollLlmRiskRun(runId)
+    if (llmRiskRunning.value) {
+      llmRiskTimer = window.setInterval(() => pollLlmRiskRun(runId), 2000)
+    }
+  } catch (error) {
+    llmRiskRunning.value = false
+    const detailText = formatApiDetail(error.response?.data?.detail)
+    message.value = detailText || error.message || 'LLM 风控审查失败'
+  }
+}
+
+async function pollLlmRiskRun(runId) {
+  try {
+    const res = await getPortfolioLlmRiskRun(selectedPlanId.value, runId)
+    const status = res.data?.status
+    llmRiskMeta.value = {
+      runId,
+      status: status || '',
+      summary: res.data?.partial_summary || '',
+    }
+    if (['completed', 'completed_with_failures', 'failed'].includes(status)) {
+      if (llmRiskTimer) {
+        window.clearInterval(llmRiskTimer)
+        llmRiskTimer = null
+      }
+      llmRiskRunning.value = false
+      await loadOperationLogs()
+      if (status === 'completed') {
+        await selectPlan(selectedPlanId.value)
+        message.value = 'LLM 风控审查完成'
+      } else if (status === 'completed_with_failures') {
+        await selectPlan(selectedPlanId.value)
+        message.value = `LLM 风控部分完成：${res.data?.partial_summary || ''}`
+      } else {
+        message.value = 'LLM 风控审查失败'
+      }
+    }
+  } catch (error) {
+    if (llmRiskTimer) {
+      window.clearInterval(llmRiskTimer)
+      llmRiskTimer = null
+    }
+    llmRiskRunning.value = false
+    message.value = error.message || 'LLM 风控任务查询失败'
   }
 }
 
@@ -2265,6 +2346,7 @@ onUnmounted(() => {
   if (realtimeTimer) window.clearInterval(realtimeTimer)
   if (generationTaskTimer) window.clearInterval(generationTaskTimer)
   if (aiRiskTimer) window.clearInterval(aiRiskTimer)
+  if (llmRiskTimer) window.clearInterval(llmRiskTimer)
 })
 </script>
 
