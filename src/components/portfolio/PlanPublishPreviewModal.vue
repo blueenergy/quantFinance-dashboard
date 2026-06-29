@@ -3,6 +3,7 @@
     <div class="modal-card modal-wide">
       <h3>{{ title }}</h3>
       <p v-if="summaryText" class="muted">{{ summaryText }}</p>
+      <p v-if="capitalUsageText" class="muted">{{ capitalUsageText }}</p>
       <p v-if="stalePriceSymbols.length" class="watermark-warning">
         以下标的按昨收定价（实时未就绪）：{{ stalePriceSymbols.join(', ') }}
       </p>
@@ -126,6 +127,22 @@ const summaryText = computed(() => {
   const preview = props.preview
   if (!preview) return ''
   return `待写入 ${preview.new_signals?.length ?? 0} 条，已有 ${preview.existing_count ?? 0} 条，阻断 ${preview.risk_report?.blocked_count ?? 0} 条`
+})
+
+const capitalUsageText = computed(() => {
+  const summary = props.preview?.reprice_summary
+  if (!summary) return ''
+  const hasPlan = summary.plan_equity_used != null || summary.plan_cash_used != null
+  const hasAccount = summary.account_available_cash != null
+  if (!hasPlan && !hasAccount) return ''
+  const parts = []
+  if (hasPlan) {
+    parts.push(`Plan 资金基准：权益 ${money(summary.plan_equity_used)}，可用现金 ${money(summary.plan_cash_used)}`)
+  }
+  if (hasAccount) {
+    parts.push(`账户可用现金：${money(summary.account_available_cash)}`)
+  }
+  return parts.join('；')
 })
 
 const stalePriceSymbols = computed(() => props.preview?.reprice_summary?.stale_price_symbols || [])

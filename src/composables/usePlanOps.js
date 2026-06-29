@@ -40,7 +40,16 @@ export function usePlanOps({
 
   const livePublishBlockers = computed(() => {
     const items = livePublishPreview.value?.risk_report?.items || []
-    return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
+    const riskBlockers = items.flatMap((item) =>
+      (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`),
+    )
+    // Plan-level reprice/capital blockers (e.g. missing_price, missing_plan_equity)
+    // are not tied to a single signal item, but still hard-block confirm on the
+    // backend; surface them so the confirm button disables consistently.
+    const repriceBlockers = (livePublishPreview.value?.reprice_summary?.blockers || []).map((blocker) =>
+      blockerText(blocker),
+    )
+    return [...riskBlockers, ...repriceBlockers]
   })
 
   const livePublishRiskRows = computed(() => livePublishPreview.value?.risk_report?.items || [])
