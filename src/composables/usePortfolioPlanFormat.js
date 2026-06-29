@@ -137,6 +137,17 @@ export function aiRiskTitle(risk) {
   return '未发现明确风控信号'
 }
 
+export function llmRiskTitle(risk) {
+  const llm = risk?.llm || risk
+  if (!llm) return '暂无 LLM 事件风控结果'
+  const lines = []
+  if (llm.summary) lines.push(llm.summary)
+  lines.push(...(llm.findings || []).map(findingLine).filter(Boolean))
+  if (llm.model) lines.push(`模型：${llm.model}`)
+  if (llm.analyzed_at) lines.push(`分析时间：${String(llm.analyzed_at).slice(0, 19).replace('T', ' ')}`)
+  return lines.length ? `LLM 事件风控\n${lines.join('\n')}` : 'LLM 事件风控：未发现明确风险信号'
+}
+
 export function isKeepItem(item) {
   const currentShares = Number(item?.current_shares ?? 0)
   const targetShares = Number(item?.target_shares ?? 0)
@@ -201,6 +212,7 @@ export function usePortfolioPlanFormat() {
     riskSeverityLabel,
     riskDisplaySeverity,
     aiRiskTitle,
+    llmRiskTitle,
     actionBadge,
     driftBadge,
     aiRiskBadge,

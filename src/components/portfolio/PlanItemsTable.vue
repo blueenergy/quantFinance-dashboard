@@ -83,15 +83,23 @@
           </td>
           <td class="col-money">{{ money(row.estimated_amount) }}</td>
           <td class="col-airisk">
-            <span
-              v-if="row.ai_risk"
-              class="risk-badge"
-              :class="`risk-${riskDisplaySeverity(row.ai_risk)}`"
-              :title="aiRiskTitle(row.ai_risk)"
-            >
-              {{ riskSeverityLabel(riskDisplaySeverity(row.ai_risk)) }}
-            </span>
-            <span v-else class="muted">-</span>
+            <div class="risk-tags">
+              <span
+                v-if="row.ai_risk"
+                class="risk-badge"
+                :class="`risk-${riskDisplaySeverity(row.ai_risk)}`"
+                :title="aiRiskTitle(row.ai_risk)"
+              >
+                {{ riskSeverityLabel(riskDisplaySeverity(row.ai_risk)) }}
+              </span>
+              <span v-else class="muted">-</span>
+              <span
+                v-if="row.ai_risk?.llm"
+                class="llm-risk-tag"
+                :class="`risk-${row.ai_risk.llm.severity || 'none'}`"
+                :title="llmRiskTitle(row.ai_risk)"
+              >LLM</span>
+            </div>
           </td>
           <td v-if="showOverlay" class="col-risk risk-reasons">
             <span
@@ -211,13 +219,21 @@
             <span v-else>-</span>
           </td>
           <td class="col-airisk">
-            <span
-              v-if="aiRiskBadge(item).show"
-              class="ai-risk-tag"
-              :class="aiRiskBadge(item).cls"
-              :title="aiRiskBadge(item).title"
-            >{{ aiRiskBadge(item).text }}</span>
-            <span v-else>-</span>
+            <div class="risk-tags">
+              <span
+                v-if="aiRiskBadge(item).show"
+                class="ai-risk-tag"
+                :class="aiRiskBadge(item).cls"
+                :title="aiRiskBadge(item).title"
+              >{{ aiRiskBadge(item).text }}</span>
+              <span v-else>-</span>
+              <span
+                v-if="item.ai_risk?.llm"
+                class="llm-risk-tag"
+                :class="`risk-${item.ai_risk.llm.severity || 'none'}`"
+                :title="llmRiskTitle(item.ai_risk)"
+              >LLM</span>
+            </div>
           </td>
           <td class="col-risk" :title="(item.blockers || []).join(', ')">{{ (item.blockers || []).join(', ') || '-' }}</td>
         </tr>
@@ -237,6 +253,7 @@ import {
   driftBadge,
   formatPriceAsOf,
   formatShareDelta,
+  llmRiskTitle,
   money,
   num,
   pctSigned,
@@ -375,7 +392,7 @@ function canSelectReselectItem(item) {
 }
 
 .plan-items-table .col-airisk {
-  width: 52px;
+  width: 86px;
   text-align: center;
 }
 
@@ -455,6 +472,50 @@ function canSelectReselectItem(item) {
 
 .ai-risk-tag.risk-none {
   background: #1f9d55;
+}
+
+.risk-tags {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+}
+
+.llm-risk-tag {
+  background: #eef2ff;
+  border: 1px solid #818cf8;
+  border-radius: 999px;
+  color: #3730a3;
+  cursor: help;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 1px 5px;
+}
+
+.llm-risk-tag.risk-high {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+.llm-risk-tag.risk-medium {
+  background: #ffedd5;
+  border-color: #fb923c;
+  color: #c2410c;
+}
+
+.llm-risk-tag.risk-low {
+  background: #fef9c3;
+  border-color: #facc15;
+  color: #854d0e;
+}
+
+.llm-risk-tag.risk-none {
+  background: #ecfdf5;
+  border-color: #34d399;
+  color: #047857;
 }
 
 .stock-workbench-link {

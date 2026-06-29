@@ -241,15 +241,23 @@
                     </small>
                   </td>
                   <td>
-                    <span
-                      v-if="benchRiskBySymbol[row.symbol]"
-                      class="risk-badge"
-                      :class="`risk-${riskDisplaySeverity(benchRiskBySymbol[row.symbol])}`"
-                      :title="aiRiskTitle(benchRiskBySymbol[row.symbol])"
-                    >
-                      {{ riskSeverityLabel(riskDisplaySeverity(benchRiskBySymbol[row.symbol])) }}
-                    </span>
-                    <span v-else class="muted">-</span>
+                    <div class="risk-tags">
+                      <span
+                        v-if="benchRiskBySymbol[row.symbol]"
+                        class="risk-badge"
+                        :class="`risk-${riskDisplaySeverity(benchRiskBySymbol[row.symbol])}`"
+                        :title="aiRiskTitle(benchRiskBySymbol[row.symbol])"
+                      >
+                        {{ riskSeverityLabel(riskDisplaySeverity(benchRiskBySymbol[row.symbol])) }}
+                      </span>
+                      <span v-else class="muted">-</span>
+                      <span
+                        v-if="benchRiskBySymbol[row.symbol]?.llm"
+                        class="llm-risk-tag"
+                        :class="`risk-${benchRiskBySymbol[row.symbol].llm.severity || 'none'}`"
+                        :title="llmRiskTitle(benchRiskBySymbol[row.symbol])"
+                      >LLM</span>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -268,6 +276,7 @@ import AppLink from '../common/AppLink.vue'
 import {
   formatShareDelta,
   aiRiskTitle,
+  llmRiskTitle,
   money,
   num,
   pctSigned,
@@ -460,6 +469,49 @@ tbody tr:hover td {
 
 .risk-badge.risk-none {
   background: #ecfdf5;
+  color: #047857;
+}
+
+.risk-tags {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.llm-risk-tag {
+  background: #eef2ff;
+  border: 1px solid #818cf8;
+  border-radius: 999px;
+  color: #3730a3;
+  cursor: help;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 1px 5px;
+}
+
+.llm-risk-tag.risk-high {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+.llm-risk-tag.risk-medium {
+  background: #ffedd5;
+  border-color: #fb923c;
+  color: #c2410c;
+}
+
+.llm-risk-tag.risk-low {
+  background: #fef9c3;
+  border-color: #facc15;
+  color: #854d0e;
+}
+
+.llm-risk-tag.risk-none {
+  background: #ecfdf5;
+  border-color: #34d399;
   color: #047857;
 }
 
