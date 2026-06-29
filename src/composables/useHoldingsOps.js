@@ -345,14 +345,26 @@ export function useHoldingsOps({
   }
 
   function normalizeFastPreviewItems(data) {
-    return (data?.items || []).map((item) => ({
-      symbol: item.symbol,
-      name: item.name || '',
-      current_shares: Number(item.current_shares || 0),
-      target_shares: Number(item.target_shares || 0),
-      delta_shares: Number(item.delta_shares || 0),
-      blockers: item.blockers || [],
-    }))
+    const signalsBySymbol = Object.fromEntries(
+      (data?.signals || [])
+        .filter((signal) => signal?.symbol)
+        .map((signal) => [signal.symbol, signal]),
+    )
+    return (data?.items || []).map((item) => {
+      const signal = signalsBySymbol[item.symbol] || null
+      return {
+        symbol: item.symbol,
+        name: item.name || '',
+        current_shares: Number(item.current_shares || 0),
+        target_shares: Number(item.target_shares || 0),
+        delta_shares: Number(item.delta_shares || 0),
+        blockers: item.blockers || [],
+        reference_price: signal?.reference_price ?? item.estimated_price ?? null,
+        effective_limit_price: signal?.effective_limit_price ?? null,
+        max_slippage_bps: signal?.max_slippage_bps ?? null,
+        action: signal?.action || (Number(item.delta_shares || 0) > 0 ? 'buy' : 'sell'),
+      }
+    })
   }
 
   async function previewFastAction({ title, description, targets }) {

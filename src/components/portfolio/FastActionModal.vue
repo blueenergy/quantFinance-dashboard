@@ -9,6 +9,15 @@
           {{ item.current_shares }} → {{ item.target_shares }}
           （{{ formatShareDelta(item.delta_shares) }}）
           <span v-if="item.blockers?.length" class="warning-text"> · {{ item.blockers.join('、') }}</span>
+          <div
+            v-if="isLivePortfolio && item.reference_price != null && item.effective_limit_price != null"
+            class="execution-price-note"
+          >
+            参考价 {{ formatPrice(item.reference_price) }}
+            · {{ item.action === 'sell' ? '保护限价（最低可成交价）' : '保护限价（最高可成交价）' }}
+            {{ formatPrice(item.effective_limit_price) }}
+            <span v-if="item.max_slippage_bps != null"> · 最大滑点 {{ item.max_slippage_bps }} bps</span>
+          </div>
         </li>
       </ul>
       <p v-if="preview.blocked" class="warning-text">风控拦截，无法提交。</p>
@@ -37,6 +46,11 @@ defineProps({
 })
 
 defineEmits(['close', 'confirm'])
+
+function formatPrice(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number.toFixed(2) : '-'
+}
 </script>
 
 <style scoped>
@@ -73,6 +87,12 @@ defineEmits(['close', 'confirm'])
 .manual-preview {
   margin: 12px 0;
   padding-left: 18px;
+}
+
+.execution-price-note {
+  color: #4b5563;
+  font-size: 12px;
+  margin-top: 4px;
 }
 
 .warning-text {
