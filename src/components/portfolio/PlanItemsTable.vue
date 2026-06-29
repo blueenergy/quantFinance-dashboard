@@ -27,29 +27,29 @@
     <table v-else-if="mode === 'pending'" class="plan-items-table">
       <thead>
         <tr>
-          <th>方向</th>
-          <th>标的</th>
-          <th>行业</th>
-          <th>加权分</th>
-          <th>当前</th>
-          <th>目标</th>
-          <th>变化</th>
-          <th>预估价</th>
-          <th v-if="showOverlay">现价</th>
-          <th v-if="showOverlay">最新排名</th>
-          <th>预估金额</th>
-          <th>AI风控</th>
-          <th v-if="showOverlay">提示</th>
+          <th class="col-action-tag">方向</th>
+          <th class="col-stock">标的</th>
+          <th class="col-ind">行业</th>
+          <th class="col-num">加权分</th>
+          <th class="col-num">当前</th>
+          <th class="col-num">目标</th>
+          <th class="col-num">变化</th>
+          <th class="col-num">预估价</th>
+          <th v-if="showOverlay" class="col-num">现价</th>
+          <th v-if="showOverlay" class="col-rank">最新排名</th>
+          <th class="col-money">预估金额</th>
+          <th class="col-airisk">AI风控</th>
+          <th v-if="showOverlay" class="col-risk">提示</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="row in items" :key="row.symbol">
-          <td>
+          <td class="col-action-tag">
             <span class="action-tag" :class="planItemActionClass(row.action)">
               {{ planItemActionLabel(row.action) }}
             </span>
           </td>
-          <td class="col-stock" :title="`${row.name || ''} ${row.symbol || ''}`">
+          <td class="col-stock pending-stock-cell" :title="`${row.name || ''} ${row.symbol || ''}`">
             <AppLink
               tab="stock-workbench"
               :params="{ symbol: row.symbol }"
@@ -58,12 +58,12 @@
               <span class="stock-workbench-link__name pending-stock-link__name">{{ row.name || row.symbol || '-' }}</span>
             </AppLink>
           </td>
-          <td>{{ row.industry || '-' }}</td>
-          <td>{{ num(row.score_value) }}</td>
-          <td>{{ row.current_shares ?? 0 }}</td>
-          <td>{{ row.target_shares ?? 0 }}</td>
-          <td :class="signClass(row.delta_shares)">{{ formatShareDelta(row.delta_shares) }}</td>
-          <td>{{ num(row.estimated_price) }}</td>
+          <td class="col-ind">{{ row.industry || '-' }}</td>
+          <td class="col-num">{{ num(row.score_value) }}</td>
+          <td class="col-num">{{ row.current_shares ?? 0 }}</td>
+          <td class="col-num">{{ row.target_shares ?? 0 }}</td>
+          <td class="col-num" :class="signClass(row.delta_shares)">{{ formatShareDelta(row.delta_shares) }}</td>
+          <td class="col-num">{{ num(row.estimated_price) }}</td>
           <td v-if="showOverlay" class="col-num">
             <span :class="priceSourceClass(row.live_price_source)">{{ num(row.live_price) }}</span>
             <small v-if="row.live_price_as_of" class="price-as-of" :title="row.live_price_as_of">
@@ -71,7 +71,7 @@
             </small>
             <small v-if="row.price_drift_pct != null" class="price-drift">{{ pctSigned(row.price_drift_pct) }}</small>
           </td>
-          <td v-if="showOverlay" class="col-narrow">
+          <td v-if="showOverlay" class="col-rank">
             <span>{{ row.latest_rank ?? '-' }}</span>
             <small
               v-if="row.rank_delta != null"
@@ -81,19 +81,19 @@
             </small>
             <small v-if="row.dropped_out_of_top_n" class="dropped-flag">掉出TopN</small>
           </td>
-          <td>{{ money(row.estimated_amount) }}</td>
-          <td>
+          <td class="col-money">{{ money(row.estimated_amount) }}</td>
+          <td class="col-airisk">
             <span
               v-if="row.ai_risk"
               class="risk-badge"
               :class="`risk-${row.ai_risk.severity || 'none'}`"
-              :title="(row.ai_risk.reasons || []).join('、')"
+              :title="aiRiskTitle(row.ai_risk)"
             >
               {{ riskSeverityLabel(row.ai_risk.severity) }}
             </span>
             <span v-else class="muted">-</span>
           </td>
-          <td v-if="showOverlay" class="risk-reasons">
+          <td v-if="showOverlay" class="col-risk risk-reasons">
             <span
               v-for="warning in (row.warnings || [])"
               :key="`${row.symbol}-warn-${warning}`"
@@ -232,6 +232,7 @@ import AppLink from '../common/AppLink.vue'
 import {
   actionBadge,
   aiRiskBadge,
+  aiRiskTitle,
   blockerText,
   driftBadge,
   formatPriceAsOf,
@@ -323,6 +324,21 @@ function canSelectReselectItem(item) {
   width: 54px;
 }
 
+.plan-items-table .col-action-tag {
+  text-align: center;
+  width: 42px;
+}
+
+.plan-items-table .col-money {
+  text-align: right;
+  width: 72px;
+}
+
+.plan-items-table .col-rank {
+  text-align: center;
+  width: 58px;
+}
+
 .plan-items-table .col-narrow {
   width: 44px;
 }
@@ -334,6 +350,10 @@ function canSelectReselectItem(item) {
 
 .plan-items-table .col-stock {
   width: 138px;
+}
+
+.plan-items-table .pending-stock-cell {
+  padding-left: 16px;
 }
 
 .plan-items-table .col-ind {
