@@ -97,6 +97,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'market-analysis', name: '🤖 AI大盘分析' },
       { id: 'limit-up-ladder', name: '📊 连板天梯' },
       { id: 'market-risk', name: '🚨 风险预警' },
+      { id: 'market-regime', name: '📡 广度估值' },
       { id: 'china-macro', name: '🇨🇳 中国宏观' },
       { id: 'us-rates', name: '🇺🇸 美国利率' },
       { id: 'x-influencer-voices', name: '🐦 X大V情报' },
