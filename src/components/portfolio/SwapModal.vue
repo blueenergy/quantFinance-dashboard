@@ -47,7 +47,7 @@
                   v-if="benchRiskBySymbol[row.symbol]"
                   class="risk-badge"
                   :class="`risk-${benchRiskBySymbol[row.symbol].severity}`"
-                  :title="(benchRiskBySymbol[row.symbol].reasons || []).join('、')"
+                  :title="aiRiskTitle(benchRiskBySymbol[row.symbol])"
                 >
                   {{ riskSeverityLabel(benchRiskBySymbol[row.symbol].severity) }}
                 </span>
@@ -72,7 +72,7 @@
 </template>
 
 <script setup>
-import { num, riskSeverityLabel } from '../../composables/usePortfolioPlanFormat'
+import { aiRiskTitle, num, riskSeverityLabel } from '../../composables/usePortfolioPlanFormat'
 
 defineProps({
   visible: { type: Boolean, default: false },

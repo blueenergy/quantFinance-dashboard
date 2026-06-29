@@ -99,6 +99,19 @@ export function riskSeverityLabel(severity) {
   return '正常'
 }
 
+export function aiRiskTitle(risk) {
+  if (!risk) return '未发现规则风控信号'
+  const findingLines = (risk.findings || [])
+    .map((finding) => {
+      const title = finding?.title || finding?.code || '风险信号'
+      const detail = finding?.detail || ''
+      return detail ? `${title}：${detail}` : title
+    })
+    .filter(Boolean)
+  if (findingLines.length) return findingLines.join('\n')
+  return (risk.reasons || []).join('、') || '风险信号'
+}
+
 export function isKeepItem(item) {
   const currentShares = Number(item?.current_shares ?? 0)
   const targetShares = Number(item?.target_shares ?? 0)
@@ -137,12 +150,11 @@ export function aiRiskBadge(item) {
     return { show: ['buy', 'hold'].includes(item?.action), text: '正常', cls: 'risk-none', title: '未发现规则风控信号' }
   }
   const labelMap = { high: '高', medium: '中', low: '低' }
-  const reasons = (risk.findings || []).map((f) => `${f.title}：${f.detail}`).join('\n') || (risk.reasons || []).join('、')
   return {
     show: true,
     text: labelMap[risk.severity] || risk.severity,
     cls: `risk-${risk.severity}`,
-    title: reasons || '风险信号',
+    title: aiRiskTitle(risk),
   }
 }
 
@@ -161,6 +173,7 @@ export function usePortfolioPlanFormat() {
     formatShareDelta,
     signClass,
     riskSeverityLabel,
+    aiRiskTitle,
     actionBadge,
     driftBadge,
     aiRiskBadge,

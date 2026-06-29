@@ -8,6 +8,7 @@ import {
   reconcilePortfolioHoldings,
   recordExternalManualRecord,
 } from '../api/portfolioPlans'
+import { aiRiskTitle } from './usePortfolioPlanFormat'
 
 function formatApiDetail(detail) {
   if (!detail) return ''
@@ -292,7 +293,7 @@ export function useHoldingsOps({
     swapError.value = ''
     const benchRiskInfo = benchRiskBySymbol.value[benchPlayer.symbol]
     if (benchRiskInfo?.severity === 'high') {
-      const reasons = (benchRiskInfo.reasons || []).join('、') || '高风险信号'
+      const reasons = aiRiskTitle(benchRiskInfo) || '高风险信号'
       const proceed = window.confirm(
         `AI 风控提示：替补 ${benchPlayer.symbol}（${benchPlayer.name || '-'}）为高风险——${reasons}。仍要换上吗？`
       )

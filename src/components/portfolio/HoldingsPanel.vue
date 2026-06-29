@@ -55,7 +55,12 @@
           <template v-for="row in latestHoldingRows" :key="row.symbol">
           <tr :class="riskRowClass(row.symbol)">
             <td>
-              <span v-if="holdingsRiskBySymbol[row.symbol]" class="risk-badge" :class="`risk-${holdingsRiskBySymbol[row.symbol].severity}`">
+              <span
+                v-if="holdingsRiskBySymbol[row.symbol]"
+                class="risk-badge"
+                :class="`risk-${holdingsRiskBySymbol[row.symbol].severity}`"
+                :title="aiRiskTitle(holdingsRiskBySymbol[row.symbol])"
+              >
                 {{ riskSeverityLabel(holdingsRiskBySymbol[row.symbol].severity) }}
               </span>
               <span v-else class="muted">-</span>
@@ -155,7 +160,11 @@
       </table>
       <p v-if="holdingsRiskBySymbolHigh.length" class="muted">
         高风险提示：
-        <span v-for="item in holdingsRiskBySymbolHigh" :key="item.symbol">
+        <span
+          v-for="item in holdingsRiskBySymbolHigh"
+          :key="item.symbol"
+          :title="aiRiskTitle(item.ai_risk)"
+        >
           {{ item.symbol }}（{{ item.ai_risk?.reasons?.join('、') || '风险' }}）
         </span>
       </p>
@@ -228,7 +237,7 @@
                       v-if="benchRiskBySymbol[row.symbol]"
                       class="risk-badge"
                       :class="`risk-${benchRiskBySymbol[row.symbol].severity}`"
-                      :title="(benchRiskBySymbol[row.symbol].reasons || []).join('、')"
+                      :title="aiRiskTitle(benchRiskBySymbol[row.symbol])"
                     >
                       {{ riskSeverityLabel(benchRiskBySymbol[row.symbol].severity) }}
                     </span>
@@ -250,6 +259,7 @@ import { ref } from 'vue'
 import AppLink from '../common/AppLink.vue'
 import {
   formatShareDelta,
+  aiRiskTitle,
   money,
   num,
   pctSigned,
