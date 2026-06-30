@@ -31,3 +31,23 @@ export async function getIndexCapeHistory(indexCode = '000300.SH', limit = 180) 
   if (!res.ok) throw new Error(`getIndexCapeHistory failed: ${res.status}`)
   return await res.json()
 }
+
+export async function getMarketRegimeAnalysisLatest() {
+  const res = await fetch(`${API_BASE}/market-regime/analysis/latest`, { headers: authHeaders() })
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`getMarketRegimeAnalysisLatest failed: ${res.status}`)
+  return await res.json()
+}
+
+export async function triggerMarketRegimeAnalysis(date = null, force = false) {
+  const params = new URLSearchParams()
+  if (date) params.set('date', date)
+  if (force) params.set('force', 'true')
+  const qs = params.toString()
+  const res = await fetch(`${API_BASE}/market-regime/analysis/trigger${qs ? `?${qs}` : ''}`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error(`triggerMarketRegimeAnalysis failed: ${res.status}`)
+  return await res.json()
+}
