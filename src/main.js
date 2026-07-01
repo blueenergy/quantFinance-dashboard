@@ -3,6 +3,7 @@ import './assets/styles/design-tokens.css';
 import './assets/styles/utilities.css';
 import { createApp } from 'vue';
 import App from './App.vue';
+import { installPreloadErrorReload } from './utils/preloadRecovery';
 
 // Vuetify 3 setup
 import 'vuetify/styles'; // Global CSS has to be imported
@@ -56,6 +57,8 @@ const vuetify = createVuetify({
 		},
 	},
 });
+
+installPreloadErrorReload();
 
 const app = createApp(App);
 app.use(vuetify);
