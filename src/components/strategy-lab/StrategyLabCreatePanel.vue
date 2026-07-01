@@ -33,7 +33,7 @@
         </label>
         <label v-if="form.target_mode === 'index'">
           指数
-          <input v-model="form.universe_value" placeholder="例如 csi1000" />
+          <input v-model="form.universe_value" placeholder="例如 csi1000 或 csi2000" />
         </label>
         <label v-else-if="form.target_mode === 'single_etf'">
           ETF

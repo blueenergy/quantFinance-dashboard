@@ -192,6 +192,16 @@
               </button>
               <span class="bulk-selected-count">已选 {{ csi1000SelectedCount }} / {{ csi1000Stocks.length }}</span>
             </div>
+            <!-- 中证2000 批量操作条 -->
+            <div v-if="selectedCategory === 'csi2000' && csi2000Stocks.length > 0" class="bulk-select-bar">
+              <button @click="() => selectAllIndex('csi2000')" class="btn-base btn-sm btn-gradient-green" :disabled="csi2000SelectedCount === csi2000Stocks.length">
+                全选中证2000 ({{ csi2000Stocks.length }})
+              </button>
+              <button @click="() => deselectAllIndex('csi2000')" class="btn-base btn-sm btn-gradient-gray" :disabled="csi2000SelectedCount === 0">
+                取消选择
+              </button>
+              <span class="bulk-selected-count">已选 {{ csi2000SelectedCount }} / {{ csi2000Stocks.length }}</span>
+            </div>
             <!-- 🆕 STAR50 批量操作条 -->
             <div v-if="selectedCategory === 'star50' && star50Stocks.length > 0" class="bulk-select-bar">
               <button @click="() => selectAllIndex('star50')" class="btn-base btn-sm btn-gradient-green" :disabled="star50SelectedCount === star50Stocks.length">
@@ -510,6 +520,7 @@ const quickSelectCategories = ref([
   { key: 'a500', name: '中证A500 成分股', stocks: [] },
   { key: 'csi500', name: '中证500 成分股', stocks: [] },
   { key: 'csi1000', name: '中证1000 成分股', stocks: [] },
+  { key: 'csi2000', name: '中证2000 成分股', stocks: [] },
   { key: 'star50', name: '科创50 成分股', stocks: [] }
 ])
 const selectedCategory = ref(quickSelectCategories.value[0].key)
@@ -520,7 +531,7 @@ const rankingPageOffset = ref(0)
 const rankingTotal = ref(0)
 const usePagedRankingsFetch = computed(() => {
   const vm = viewMode.value
-  if (vm === 'hs300' || vm === 'csi500' || vm === 'csi1000' || vm === 'a500' || vm === 'star50') return true
+  if (vm === 'hs300' || vm === 'csi500' || vm === 'csi1000' || vm === 'csi2000' || vm === 'a500' || vm === 'star50') return true
   if (vm === 'watchlist' && (watchlist.value || []).length > STOCK_RANKINGS_PAGE_SIZE) return true
   if (
     vm === 'selected' &&
@@ -580,6 +591,8 @@ const csi500Stocks = ref([])
 const csi500Loading = ref(false)
 const csi1000Stocks = ref([])
 const csi1000Loading = ref(false)
+const csi2000Stocks = ref([])
+const csi2000Loading = ref(false)
 // Tabs horizontal scroll helpers
 const tabsScrollRef = ref(null)
 const showTabsScrollLeft = ref(false)
@@ -617,6 +630,9 @@ const getCurrentCategoryStocks = computed(() => {
   }
   if (selectedCategory.value === 'csi1000') {
     return csi1000Stocks.value || []
+  }
+  if (selectedCategory.value === 'csi2000') {
+    return csi2000Stocks.value || []
   }
   const category = quickSelectCategories.value.find(cat => cat.key === selectedCategory.value)
   return category ? category.stocks : []
@@ -711,6 +727,8 @@ async function fetchRankings() {
           return (csi500Stocks.value || []).map((s) => s.symbol)
         case 'csi1000':
           return (csi1000Stocks.value || []).map((s) => s.symbol)
+        case 'csi2000':
+          return (csi2000Stocks.value || []).map((s) => s.symbol)
         case 'a500':
           return (a500Stocks.value || []).map((s) => s.symbol)
         case 'star50':
@@ -766,12 +784,14 @@ async function fetchRankings() {
       case 'hs300':
       case 'csi500':
       case 'csi1000':
+      case 'csi2000':
       case 'a500':
       case 'star50': {
         const indexLabels = {
           hs300: '沪深300',
           csi500: '中证500',
           csi1000: '中证1000',
+          csi2000: '中证2000',
           a500: '中证A500',
           star50: '科创50',
         }
@@ -1158,6 +1178,7 @@ function onViewModeChange() {
     case 'hs300':
     case 'csi500':
     case 'csi1000':
+    case 'csi2000':
     case 'a500':
     case 'star50':
       // 指数榜数据来自 GET by-index，不依赖成分列表；避免 .then 晚到与快速切换 viewMode 竞态
@@ -1258,6 +1279,9 @@ async function showQuickSelectModal() {
     if (selectedCategory.value === 'csi1000' && (!csi1000Stocks.value || csi1000Stocks.value.length === 0)) {
   try { await fetchIndexConstituents('csi1000') } catch (e) { console.warn('fetchIndexConstituents csi1000 failed', e) }
     }
+    if (selectedCategory.value === 'csi2000' && (!csi2000Stocks.value || csi2000Stocks.value.length === 0)) {
+  try { await fetchIndexConstituents('csi2000') } catch (e) { console.warn('fetchIndexConstituents csi2000 failed', e) }
+    }
     showQuickSelect.value = true
   } catch (e) {
     console.error('[StockRanking] showQuickSelectModal error:', e)
@@ -1337,6 +1361,8 @@ function getNoDataMessage() {
       return '暂无中证500指数数据'
     case 'csi1000':
       return '暂无中证1000指数数据'
+    case 'csi2000':
+      return '暂无中证2000指数数据'
     case 'a500':
       return '暂无中证A500指数数据'
     case 'star50':
@@ -1360,6 +1386,8 @@ function getNoDataSubMessage() {
       return '暂无中证500指数数据'
     case 'csi1000':
       return '暂无中证1000指数数据'
+    case 'csi2000':
+      return '暂无中证2000指数数据'
     case 'a500':
       return '暂无中证A500指数数据'
     case 'star50':
@@ -1383,6 +1411,8 @@ function getModeTitle() {
       return `中证500指数成分股评分 (共 ${csi500Stocks.value.length} 只)`
     case 'csi1000':
       return `中证1000指数成分股评分 (共 ${csi1000Stocks.value.length} 只)`
+    case 'csi2000':
+      return `中证2000指数成分股评分 (共 ${csi2000Stocks.value.length} 只)`
     case 'a500':
       return `中证A500指数成分股评分 (共 ${a500Stocks.value.length} 只)`
     case 'star50':
@@ -1634,6 +1664,7 @@ function getCategorySelectedCount(key) {
   if (key === 'a500') return a500SelectedCount.value
   if (key === 'csi500') return csi500SelectedCount.value
   if (key === 'csi1000') return csi1000SelectedCount.value
+  if (key === 'csi2000') return csi2000SelectedCount.value
   if (key === 'star50') return star50SelectedCount.value
   const cat = quickSelectCategories.value.find(c => c.key === key)
   if (!cat) return 0
@@ -1646,6 +1677,7 @@ function getCategoryTotalCount(key) {
   if (key === 'a500') return a500Stocks.value.length
   if (key === 'csi500') return csi500Stocks.value.length
   if (key === 'csi1000') return csi1000Stocks.value.length
+  if (key === 'csi2000') return csi2000Stocks.value.length
   if (key === 'star50') return star50Stocks.value.length
   const cat = quickSelectCategories.value.find(c => c.key === key)
   return cat && Array.isArray(cat.stocks) ? cat.stocks.length : 0
@@ -1724,6 +1756,9 @@ watch(selectedCategory, async (val) => {
   if (val === 'csi1000' && (!csi1000Stocks.value || csi1000Stocks.value.length === 0) && !csi1000Loading.value) {
     try { await fetchIndexConstituents('csi1000') } catch (e) { console.warn('auto csi1000 fetch failed', e) }
   }
+  if (val === 'csi2000' && (!csi2000Stocks.value || csi2000Stocks.value.length === 0) && !csi2000Loading.value) {
+    try { await fetchIndexConstituents('csi2000') } catch (e) { console.warn('auto csi2000 fetch failed', e) }
+  }
 })
 
 onMounted(() => {
@@ -1747,6 +1782,7 @@ function onRankingStrategyChange() {
     'hs300',
     'csi500',
     'csi1000',
+    'csi2000',
     'a500',
     'star50',
   ])
@@ -1790,6 +1826,11 @@ const indexStateMap = {
     { symbol: '300014.SZ', name: '亿纬锂能', industry: '电力设备', market_cap: 80000000000, weight: 0.32 },
     { symbol: '002304.SZ', name: '洋河股份', industry: '食品饮料', market_cap: 120000000000, weight: 0.28 },
     { symbol: '600887.SH', name: '伊利股份', industry: '食品饮料', market_cap: 150000000000, weight: 0.30 }
+  ] },
+  csi2000: { list: csi2000Stocks, loading: csi2000Loading, path: '/api/index/csi2000/constituents', fallback: [
+    { symbol: '300014.SZ', name: '亿纬锂能', industry: '电力设备', market_cap: 80000000000, weight: 0.20 },
+    { symbol: '002304.SZ', name: '洋河股份', industry: '食品饮料', market_cap: 120000000000, weight: 0.18 },
+    { symbol: '603986.SH', name: '兆易创新', industry: '电子', market_cap: 90000000000, weight: 0.16 }
   ] },
   star50: { list: star50Stocks, loading: star50Loading, path: '/api/index/star50/constituents', fallback: [
     { symbol: '688001.SH', name: '华兴源创', industry: '半导体', market_cap: 45000000000, weight: 1.10 },
@@ -1866,6 +1907,12 @@ const csi1000SelectedCount = computed(() => {
   if (!csi1000Stocks.value || csi1000Stocks.value.length === 0) return 0
   const set = new Set(selectedStocks.value)
   return csi1000Stocks.value.filter(s => set.has(s.symbol)).length
+})
+
+const csi2000SelectedCount = computed(() => {
+  if (!csi2000Stocks.value || csi2000Stocks.value.length === 0) return 0
+  const set = new Set(selectedStocks.value)
+  return csi2000Stocks.value.filter(s => set.has(s.symbol)).length
 })
 
 const star50SelectedCount = computed(() => {

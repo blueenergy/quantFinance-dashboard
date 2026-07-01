@@ -39,7 +39,7 @@
     </v-row>
 
     <v-row
-      v-if="viewMode === 'ranking' || viewMode === 'watchlist' || viewMode === 'selected' || viewMode === 'hs300' || viewMode === 'csi500' || viewMode === 'csi1000' || viewMode === 'a500' || viewMode === 'star50'"
+      v-if="viewMode === 'ranking' || viewMode === 'watchlist' || viewMode === 'selected' || isIndexViewMode()"
       class="control-group"
       align="center"
     >
@@ -248,7 +248,7 @@ const watchlistLength = refs.watchlistLength
 const lastUpdateTime = refs.lastUpdateTime
 
 /** 指数类显示模式（与 StockRanking 侧 index 分支一致） */
-const INDEX_CODE_VIEW_MODES = new Set(['hs300', 'csi500', 'csi1000', 'a500', 'star50'])
+const INDEX_CODE_VIEW_MODES = new Set(['hs300', 'csi500', 'csi1000', 'csi2000', 'a500', 'star50'])
 function isIndexViewMode() {
   return INDEX_CODE_VIEW_MODES.has(String(viewMode.value || ''))
 }
@@ -261,6 +261,7 @@ const viewModeOptions = [
   { label: '沪深300模式', value: 'hs300' },
   { label: '中证500模式', value: 'csi500' },
   { label: '中证1000模式', value: 'csi1000' },
+  { label: '中证2000模式', value: 'csi2000' },
   { label: '中证A500模式', value: 'a500' },
   { label: '科创50模式', value: 'star50' },
 ]

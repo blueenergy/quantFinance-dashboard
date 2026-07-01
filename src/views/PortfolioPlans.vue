@@ -1170,6 +1170,7 @@ const universeOptions = [
   { value: 'a500', label: 'a500 - 中证A500' },
   { value: 'csi500', label: 'csi500 - 中证500' },
   { value: 'csi1000', label: 'csi1000 - 中证1000' },
+  { value: 'csi2000', label: 'csi2000 - 中证2000' },
   { value: 'star50', label: 'star50 - 科创50' },
 ]
 

@@ -1354,7 +1354,7 @@ function validateLoopBatchConfig(config) {
     errors.push(config.asset_type === 'etf' ? '请填写 ETF 代码' : '自定义标的需填写 symbols（逗号/空格分隔）')
   }
   if (universeType === 'index' && !String(config.universe_value || '').trim()) {
-    errors.push('指数成分股需填写指数代码（如 csi1000）')
+    errors.push('指数成分股需填写指数代码（如 csi1000 或 csi2000）')
   }
   if (universeType === 'strategy_pool' && !String(config.universe_value || '').trim()) {
     errors.push('策略选股池需填写池子名称')

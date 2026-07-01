@@ -20,6 +20,7 @@
         指数
         <select v-model="indexCode" @change="loadRankings">
           <option value="csi1000">中证1000</option>
+          <option value="csi2000">中证2000</option>
           <option value="csi500">中证500</option>
           <option value="hs300">沪深300</option>
           <option value="a500">中证A500</option>
