@@ -36,11 +36,15 @@
     </p>
 
     <PlanItemsTable
+      v-if="items.length"
       mode="pending"
       :items="items"
       :overlay="overlay"
       compact
     />
+    <p v-else class="muted plan-review-empty">
+      计划明细仍在加载或暂不可用；如已核对 plan_id，可先批准或拒绝，失败原因会由后端返回。
+    </p>
 
     <div class="plan-ops-actions plan-review-actions">
       <button type="button" :disabled="approveSubmitting || rejectSubmitting || !planId" @click="$emit('approve')">
@@ -200,6 +204,14 @@ function llmRiskStatusText(status) {
 
 .plan-review-risk-warning {
   margin: 8px 0 8px;
+}
+
+.plan-review-empty {
+  background: #fffbeb;
+  border: 1px dashed #f59e0b;
+  border-radius: 6px;
+  margin: 8px 0;
+  padding: 8px;
 }
 
 .llm-risk-summary {

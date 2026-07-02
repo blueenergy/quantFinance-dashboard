@@ -83,8 +83,8 @@
       />
 
       <PlanReviewPanel
-        :visible="needsReviewPlan && planTargetRows.length > 0"
-        :plan-id="selectedOperationPlanId"
+        :visible="needsReviewPlan && Boolean(reviewPlanId)"
+        :plan-id="reviewPlanId"
         :items="planTargetRows"
         :overlay="liveOverlay"
         :score-snapshot-stale="scoreSnapshotStale"
@@ -469,7 +469,8 @@ const {
 
 const latestPlan = computed(() => latestPlanDetail.value?.plan || null)
 const executionStatus = computed(() => latestPlanDetail.value?.execution_status || {})
-const selectedPlanStatus = computed(() => latestPlan.value?.status || '')
+const operationPlanStatus = computed(() => timelineData.value?.operation_plan?.status || '')
+const selectedPlanStatus = computed(() => latestPlan.value?.status || operationPlanStatus.value || '')
 const selectedPlanExecutionMode = computed(() => latestPlanDetail.value?.execution_mode || 'not_executed')
 const liveExecutionContext = computed(() => latestPlanDetail.value?.live_execution_context || {})
 const selectedPlanHasLiveSignals = computed(() => selectedPlanExecutionMode.value === 'live')
@@ -1044,7 +1045,7 @@ async function refreshDetail() {
   message.value = ''
   messageIsError.value = false
   try {
-    const timelineRes = await getPortfolioPlanLineageTimeline(planId, { limit: 120 })
+    const timelineRes = await getPortfolioPlanLineageTimeline(planId, { limit: 40 })
     timelineData.value = timelineRes.data || null
     const operationPlanId = timelineData.value?.operation_plan?.plan_id || planId
     const latestPlanRes = await getPortfolioPlan(operationPlanId)
