@@ -1045,20 +1045,48 @@ async function refreshDetail() {
   message.value = ''
   messageIsError.value = false
   try {
+    const capture = (promise) => promise.then(
+      (value) => ({ value, error: null }),
+      (error) => ({ value: null, error }),
+    )
+    const isLive = isLivePortfolio.value
+    const reconcilePromise = loadReconcile()
+    const selectedPlanDetailPromise = capture(getPortfolioPlan(planId))
+    const lineageDataPromise = capture(Promise.all(
+      isLive
+        ? [
+            getLineageLiveEquity(planId),
+            getLineageLivePositions(planId),
+            getLineageLiveExecutions(planId),
+          ]
+        : [
+            getPortfolioPlanLineageEquity(planId),
+            getLineagePaperPositions(planId),
+            getLineagePaperExecutions(planId),
+          ],
+    ))
+
     const timelineRes = await getPortfolioPlanLineageTimeline(planId, { limit: 40 })
     timelineData.value = timelineRes.data || null
+    const benchPromise = loadBench()
     const operationPlanId = timelineData.value?.operation_plan?.plan_id || planId
-    const latestPlanRes = await getPortfolioPlan(operationPlanId)
+    let latestPlanRes
+    if (operationPlanId === planId) {
+      const selectedPlanDetail = await selectedPlanDetailPromise
+      if (selectedPlanDetail.error) throw selectedPlanDetail.error
+      latestPlanRes = selectedPlanDetail.value
+    } else {
+      latestPlanRes = await getPortfolioPlan(operationPlanId)
+    }
     latestPlanDetail.value = latestPlanRes.data || null
     resetPlanOpsState()
     syncSelectedLiveAccount()
 
-    if (isLivePortfolio.value) {
-      const [eqRes, posRes, exRes] = await Promise.all([
-        getLineageLiveEquity(planId),
-        getLineageLivePositions(planId),
-        getLineageLiveExecutions(planId),
-      ])
+    const lineageData = await lineageDataPromise
+    if (lineageData.error) throw lineageData.error
+    const [eqRes, posRes, exRes] = lineageData.value
+
+    if (isLive) {
       equityRows.value = (eqRes.data?.rows || []).map((row) => ({
         ...row,
         equity: Number(row.equity),
@@ -1069,11 +1097,6 @@ async function refreshDetail() {
       positionSummary.value = posRes.data?.summary || null
       tradeRows.value = exRes.data?.trades || []
     } else {
-      const [eqRes, posRes, exRes] = await Promise.all([
-        getPortfolioPlanLineageEquity(planId),
-        getLineagePaperPositions(planId),
-        getLineagePaperExecutions(planId),
-      ])
       const rows = eqRes.data?.rows || []
       equityRows.value = rows.map((row) => ({
         ...row,
@@ -1112,8 +1135,7 @@ async function refreshDetail() {
       tradeRows.value = exRes.data?.trades || []
     }
     syncManualTargets()
-    await loadBench()
-    await loadReconcile()
+    await Promise.all([benchPromise, reconcilePromise])
   } catch (error) {
     message.value = formatApiDetail(error.response?.data?.detail) || error.message || '加载详情失败'
     messageIsError.value = true
