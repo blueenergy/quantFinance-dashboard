@@ -207,6 +207,14 @@ export function getLineageLiveEquity(planId, params = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/lineage-live-equity`, method: 'get', params })
 }
 
+export function getPortfolioPlanLiveSummary(planId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/live-summary`, method: 'get' })
+}
+
+export function recalculatePortfolioPlanLiveSnapshot(planId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/recalculate-live-snapshot`, method: 'post' })
+}
+
 export function getPortfolioPlanBench(planId, params = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/bench`, method: 'get', params })
 }

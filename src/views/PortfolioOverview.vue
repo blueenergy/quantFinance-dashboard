@@ -301,9 +301,7 @@ import {
   enqueuePortfolioLlmRisk,
   forceRebalanceLineage,
   getPortfolioLlmRiskRun,
-  getLineageLiveEquity,
-  getLineageLiveExecutions,
-  getLineageLivePositions,
+  getPortfolioPlanLiveSummary,
   getLineagePaperExecutions,
   getLineagePaperPositions,
   getPortfolioPlan,
@@ -1054,22 +1052,18 @@ async function refreshDetail() {
       (error) => ({ value: null, error }),
     )
     const isLive = isLivePortfolio.value
-    const reconcilePromise = loadReconcile()
+    const reconcilePromise = isLive ? Promise.resolve() : loadReconcile()
     const selectedPlanDetailPromise = capture(getPortfolioPlan(planId))
     const portfolioSummaryPromise = capture(getPortfolioPlanSummary(planId))
-    const lineageDataPromise = capture(Promise.all(
+    const lineageDataPromise = capture(
       isLive
-        ? [
-            getLineageLiveEquity(planId),
-            getLineageLivePositions(planId),
-            getLineageLiveExecutions(planId),
-          ]
-        : [
+        ? getPortfolioPlanLiveSummary(planId)
+        : Promise.all([
             getPortfolioPlanLineageEquity(planId),
             getLineagePaperPositions(planId),
             getLineagePaperExecutions(planId),
-          ],
-    ))
+          ]),
+    )
 
     const timelineRes = await getPortfolioPlanLineageTimeline(planId, { limit: 40 })
     timelineData.value = timelineRes.data || null
@@ -1093,19 +1087,22 @@ async function refreshDetail() {
 
     const lineageData = await lineageDataPromise
     if (lineageData.error) throw lineageData.error
-    const [eqRes, posRes, exRes] = lineageData.value
 
     if (isLive) {
-      equityRows.value = (eqRes.data?.rows || []).map((row) => ({
+      const summaryData = lineageData.value?.data || {}
+      const equity = summaryData.equity || {}
+      equityRows.value = (equity.rows || []).map((row) => ({
         ...row,
         equity: Number(row.equity),
       }))
-      equityCaveat.value = eqRes.data?.caveat || ''
-      bookEquity.value = eqRes.data?.current_book_equity || null
-      positionRows.value = posRes.data?.positions || []
-      positionSummary.value = posRes.data?.summary || null
-      tradeRows.value = exRes.data?.trades || []
+      equityCaveat.value = equity.caveat || ''
+      bookEquity.value = equity.current_book_equity || null
+      positionRows.value = summaryData.positions?.positions || []
+      positionSummary.value = summaryData.positions?.summary || null
+      tradeRows.value = summaryData.trades || []
+      reconcileData.value = summaryData.reconcile || null
     } else {
+      const [eqRes, posRes, exRes] = lineageData.value
       const rows = eqRes.data?.rows || []
       equityRows.value = rows.map((row) => ({
         ...row,
