@@ -136,6 +136,10 @@ export function listPortfolios() {
   return request({ url: '/portfolio-plans/portfolios', method: 'get' })
 }
 
+export function getPortfolioPlanSummary(planId) {
+  return request({ url: `/portfolio-plans/plans/${planId}/portfolio-summary`, method: 'get' })
+}
+
 export function listLivePortfolios() {
   return request({ url: '/portfolio-plans/live-portfolios', method: 'get' })
 }

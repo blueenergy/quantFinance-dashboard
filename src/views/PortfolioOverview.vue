@@ -29,9 +29,9 @@
 
     <p v-if="message" class="message" :class="{ error: messageIsError }">{{ message }}</p>
 
-    <template v-if="selectedPortfolioKey && selectedPortfolio">
+    <template v-if="selectedPortfolioKey && selectedPortfolioDisplay">
       <PortfolioIdentityCard
-        :portfolio="selectedPortfolio"
+        :portfolio="selectedPortfolioDisplay"
         :resume-submitting="manualSubmitting"
         @resume-lineage="resumeLineageAction"
       />
@@ -310,6 +310,7 @@ import {
   getPortfolioPlanGenerationTask,
   getPortfolioPlanLineageEquity,
   getPortfolioPlanLineageTimeline,
+  getPortfolioPlanSummary,
   listPortfolios,
   rerunPortfolioPlanAiRisk,
   resumePortfolioLineage,
@@ -336,6 +337,7 @@ import {
 } from '../composables/usePortfolioPlanFormat'
 
 const portfolios = ref([])
+const portfolioSummary = ref(null)
 const selectedPortfolioKey = ref('')
 const loadingList = ref(false)
 const loadingDetail = ref(false)
@@ -361,6 +363,11 @@ const selectedLiveAccountId = ref('')
 const selectedPortfolio = computed(() => (
   portfolios.value.find((row) => portfolioKey(row) === selectedPortfolioKey.value) || null
 ))
+
+const selectedPortfolioDisplay = computed(() => {
+  if (!selectedPortfolio.value) return null
+  return { ...selectedPortfolio.value, ...(portfolioSummary.value || {}) }
+})
 
 const selectedLatestPlanId = computed(() => selectedPortfolio.value?.latest_plan_id || '')
 const selectedOperationPlanId = computed(() => timelineData.value?.operation_plan?.plan_id || selectedLatestPlanId.value)
@@ -713,13 +720,10 @@ function portfolioOptionLabel(portfolio) {
     ? `${portfolio.first_base_date}→${portfolio.last_base_date}`
     : (portfolio.last_base_date || '-')
   const hash = portfolio.params_hash_short || (portfolio.params_hash ? portfolio.params_hash.slice(0, 8) : '--------')
-  const holdings = portfolio.execution_venue === 'paper'
-    ? ` · 持仓${portfolio.paper_holding_count ?? 0}`
-    : ''
   const account = portfolio.securities_account_id
     ? ` · 账户${portfolio.securities_account_id.slice(-6)}`
     : ''
-  return `${name} · ${params} · ${range}（${portfolio.plan_count}期${holdings}${account} · #${hash}）`
+  return `${name} · ${params} · ${range}（${portfolio.plan_count}期${account} · #${hash}）`
 }
 
 function executionVenueLabel(venue) {
@@ -1052,6 +1056,7 @@ async function refreshDetail() {
     const isLive = isLivePortfolio.value
     const reconcilePromise = loadReconcile()
     const selectedPlanDetailPromise = capture(getPortfolioPlan(planId))
+    const portfolioSummaryPromise = capture(getPortfolioPlanSummary(planId))
     const lineageDataPromise = capture(Promise.all(
       isLive
         ? [
@@ -1081,6 +1086,10 @@ async function refreshDetail() {
     latestPlanDetail.value = latestPlanRes.data || null
     resetPlanOpsState()
     syncSelectedLiveAccount()
+
+    const summaryResult = await portfolioSummaryPromise
+    if (summaryResult.error) throw summaryResult.error
+    portfolioSummary.value = summaryResult.value?.data || null
 
     const lineageData = await lineageDataPromise
     if (lineageData.error) throw lineageData.error
@@ -1151,6 +1160,7 @@ watch(selectedPortfolioKey, (key) => {
   resetPlanOpsState()
   if (key) refreshDetail()
   else {
+    portfolioSummary.value = null
     timelineData.value = null
     equityRows.value = []
     equityCaveat.value = ''
