@@ -158,6 +158,10 @@
               <strong>{{ selectedJob.data_watermark?.dataset_rows ?? '-' }}</strong>
             </div>
             <div>
+              <span>成分口径</span>
+              <strong>{{ universePitQualityLabel }}</strong>
+            </div>
+            <div>
               <span>已保存预设</span>
               <strong>{{ publishedPresetLabel }}</strong>
             </div>
@@ -466,6 +470,13 @@ const publishActionLabel = computed(() => {
     evidence_attached: '作为 evidence 附加',
   }
   return labels[publishAction.value] || '-'
+})
+const universePitQualityLabel = computed(() => {
+  const quality = selectedJob.value?.data_watermark?.universe_pit_quality
+    || resultDetail.value?.data_watermark?.universe_pit_quality
+  if (quality === 'point_in_time') return 'Point-in-time（当时成分）'
+  if (quality === 'latest_only') return 'Latest-only（幸存者近似，需复核）'
+  return '-'
 })
 
 function universeName(value) {
