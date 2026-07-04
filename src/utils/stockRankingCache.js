@@ -6,7 +6,7 @@ export const RANKING_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 export const STOCK_RANKINGS_PAGE_SIZE = 30
 
 function cacheBlobKey() {
-  return `stockRanking_cache_blob_v2__${getStockRankingPrefsUsername()}`
+  return `stockRanking_cache_blob_v4__${getStockRankingPrefsUsername()}`
 }
 
 /** @param {string} s */
@@ -85,6 +85,7 @@ export function buildStockRankingCacheKey(state) {
     case 'hs300':
     case 'csi500':
     case 'csi1000':
+    case 'csi2000':
     case 'a500':
     case 'star50': {
       const dseg = dp || 'latest'

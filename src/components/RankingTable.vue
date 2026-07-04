@@ -117,7 +117,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, toRefs } from 'vue'
 
 const props = defineProps({
   displayRows: { type: Array, required: true },
@@ -138,20 +138,47 @@ function onRemoveStock(symbol) { emit('remove-stock', symbol) }
 function onShowScore(stock) { emit('show-score', stock) }
 function emitCategory(row, category) { emit('show-score-detail', { stock: row, category }) }
 
+const INDEX_CODE_LABELS = {
+  hs300: '沪深300',
+  csi500: '中证500',
+  csi1000: '中证1000',
+  csi2000: '中证2000',
+  a500: '中证A500',
+  star50: '科创50',
+}
+
 function stockNameTitle(row) {
   const name = row?.name || '-'
   const symbol = row?.symbol || '-'
-  return `${name} ${symbol}`
+  const lines = [`${name} ${symbol}`]
+  if (row?.industry) lines.push(`行业：${row.industry}`)
+  const codes = Array.isArray(row?.index_codes) ? row.index_codes : []
+  if (codes.length) {
+    const labels = codes.map(c => INDEX_CODE_LABELS[c] || c)
+    lines.push(`所属指数：${labels.join('、')}`)
+  }
+  const score = row?.display_composite_score
+  if (score != null && score !== '' && !Number.isNaN(Number(score))) {
+    const scoreLabel = props.sortBy === 'weighted' ? '加权分' : '综合分'
+    lines.push(`${scoreLabel}：${score}`)
+  }
+  const sd = row?.display_date || row?.score_date
+  if (sd) lines.push(`评分日：${formatDateDisplay(sd)}`)
+  return lines.join('\n')
 }
 
 // helpers to access props in template
+// displayRows / viewMode change over time (e.g. switching index mode), so they
+// MUST stay reactive. Capturing them as plain consts froze the first value and
+// left the table rendering stale rows after a mode switch.
+const { displayRows, viewMode } = toRefs(props)
+// The callback props are stable function references from the parent; capturing
+// them once is fine and keeps template usage terse.
 const formatDateDisplay = props.formatDateDisplay
 const getScoreClass = props.getScoreClass
 const getRankClass = props.getRankClass
 const getRowClass = props.getRowClass
 const isInWatchlist = props.isInWatchlist
-const viewMode = props.viewMode
-const displayRows = props.displayRows
 const scoreHeaderLabel = computed(() => props.sortBy === 'weighted' ? '加权分' : '总分')
 const scoreHeaderTitle = computed(() => (
   props.sortBy === 'weighted'
@@ -240,6 +267,7 @@ function futureReturnTooltip(row, days) {
   overflow: hidden;
   font-size: 14px;
   color: #222;
+  background: #fff;
 }
 
 .table-header {
@@ -284,9 +312,9 @@ function futureReturnTooltip(row, days) {
 .table-row { transition: all 0.3s ease; }
 .table-row:hover { background-color: #f8f9fa; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 
-.top-three { background: linear-gradient(135deg, #fff5f5, #ffebee); border-left: 4px solid #ff5252; }
-.top-ten { background: linear-gradient(135deg, #fff8e1, #fffde7); border-left: 4px solid #ffa726; }
-.top-thirty { background: linear-gradient(135deg, #f1f8e9, #f9fbe7); border-left: 4px solid #66bb6a; }
+.top-three { border-left: 4px solid #ff5252; }
+.top-ten { border-left: 4px solid #ffa726; }
+.top-thirty { border-left: 4px solid #66bb6a; }
 
 .ranking-table td {
   border: 1px solid #e0e0e0;

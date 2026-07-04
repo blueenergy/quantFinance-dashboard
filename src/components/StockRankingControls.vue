@@ -11,7 +11,6 @@
             item-value="value"
             density="compact"
             variant="outlined"
-            @update:modelValue="onLocalViewModeChange"
             :menu-props="{ maxHeight: 320 }"
           />
         </div>
@@ -311,10 +310,6 @@ const internalViewMode = computed({
   get: () => viewMode.value,
   set: v => { emit('change-view-mode', v) }
 })
-function onLocalViewModeChange(val) {
-  try { console.debug('[StockRankingControls] onLocalViewModeChange ->', val) } catch(e) {}
-  emit('change-view-mode', val)
-}
 const internalSelectedDate = computed({
   get: () => selectedDate.value,
   set: v => { emit('change-date', v) }

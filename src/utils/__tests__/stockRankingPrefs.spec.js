@@ -59,6 +59,23 @@ describe('stockRankingPrefs', () => {
     expect(p.perStockStrategies).toEqual({ '000001': 'conservative' })
   })
 
+  it('round-trips all index view modes', () => {
+    mem.user_info = JSON.stringify({ username: 'index-user' })
+    for (const viewMode of ['hs300', 'csi500', 'csi1000', 'csi2000', 'a500', 'star50']) {
+      saveStockRankingPrefs({
+        viewMode,
+        displayLimit: 30,
+        rankingStrategy: 'balanced',
+        sortBy: 'composite',
+        selectedDate: '',
+        selectedDates: [],
+        selectedStocks: [],
+        perStockStrategies: {},
+      })
+      expect(loadStockRankingPrefs()?.viewMode).toBe(viewMode)
+    }
+  })
+
   it('returns null when stored payload has no usable fields', () => {
     mem.user_info = JSON.stringify({ username: 'u' })
     mem[getStockRankingPrefsStorageKey()] = JSON.stringify({

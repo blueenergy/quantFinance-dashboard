@@ -1,6 +1,16 @@
 const PREFS_KEY_PREFIX = 'stockRanking_prefs_v1__'
 
-const VIEW_MODES = new Set(['ranking', 'selected', 'watchlist', 'hs300', 'csi500', 'a500', 'star50'])
+const VIEW_MODES = new Set([
+  'ranking',
+  'selected',
+  'watchlist',
+  'hs300',
+  'csi500',
+  'csi1000',
+  'csi2000',
+  'a500',
+  'star50',
+])
 
 const STRATEGIES = new Set([
   'balanced',
