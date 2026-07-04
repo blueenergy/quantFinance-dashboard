@@ -5,37 +5,37 @@
       <div class="score-detail-content">
         <div class="score-item total-score">
           <span class="score-label">总分</span>
-          <span class="score-value" :style="getScoreStyle(stock?.composite_score)">{{ stock?.composite_score }}</span>
+          <span class="score-value" :style="getScoreStyle(stock?.composite_score)">{{ fmtCompositeScore(stock?.composite_score) }}</span>
         </div>
         <div class="score-breakdown">
           <div class="score-item">
             <span class="score-label">动量评分</span>
-            <span class="score-value cycle">{{ stock?.cycle_score }}</span>
+            <span class="score-value cycle">{{ fmtScore(stock?.cycle_score) }}</span>
             <span class="score-weight">(权重: 25%)</span>
           </div>
           <div class="score-item">
             <span class="score-label">成长评分</span>
-            <span class="score-value growth">{{ stock?.growth_score }}</span>
+            <span class="score-value growth">{{ fmtScore(stock?.growth_score) }}</span>
             <span class="score-weight">(权重: 25%)</span>
           </div>
           <div class="score-item">
             <span class="score-label">基本面评分</span>
-            <span class="score-value fundamental">{{ stock?.fundamental_score }}</span>
+            <span class="score-value fundamental">{{ fmtScore(stock?.fundamental_score) }}</span>
             <span class="score-weight">(权重: 35%)</span>
           </div>
           <div class="score-item">
             <span class="score-label">价值评分</span>
-            <span class="score-value value">{{ stock?.value_score }}</span>
+            <span class="score-value value">{{ fmtScore(stock?.value_score) }}</span>
             <span class="score-weight">(权重: 35%)</span>
           </div>
           <div class="score-item">
             <span class="score-label">技术面评分</span>
-            <span class="score-value technical">{{ stock?.technical_score }}</span>
+            <span class="score-value technical">{{ fmtScore(stock?.technical_score) }}</span>
             <span class="score-weight">(权重: 25%)</span>
           </div>
           <div class="score-item">
             <span class="score-label">资金流评分</span>
-            <span class="score-value money">{{ stock?.money_flow_score }}</span>
+            <span class="score-value money">{{ fmtScore(stock?.money_flow_score) }}</span>
             <span class="score-weight">(权重: 15%)</span>
           </div>
         </div>
@@ -61,6 +61,18 @@
 import { computed } from 'vue'
 
 const props = defineProps({ show: Boolean, stock: Object, getScoreStyle: Function, isInWatchlist: [Function, Boolean] })
+
+// 精简评分模式下被跳过的维度为 NA(null)，统一渲染为「—」。
+function fmtScore(v) {
+  if (v == null || v === '' || Number.isNaN(Number(v))) return '—'
+  return v
+}
+
+function fmtCompositeScore(v) {
+  if (v == null || v === '') return '—'
+  if (typeof v === 'object') return fmtScore(v.balanced)
+  return fmtScore(v)
+}
 
 const inWatchlist = computed(() => {
   if (!props.stock) return false

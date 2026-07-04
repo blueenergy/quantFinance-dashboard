@@ -26,9 +26,11 @@ export function computeDisplayRows({
     const strategyKey = rankingStrategy
     return rv.map(r => ({
       ...r,
+      // 精简评分模式下 composite 为 NA(null)，保持 null 让表格渲染「—」，
+      // 而非退化成 0 造成误导（getCompositeScore 对 NA 返回 0）。
       display_composite_score: sortBy === 'weighted'
         ? displayWeightedScore(r, rankingWeights)
-        : getCompositeScore(r, strategyKey),
+        : (r.composite_score == null ? null : getCompositeScore(r, strategyKey)),
       display_return_since_score_pct: r.return_since_score_pct ?? null,
       display_price_base_trade_date: r.price_base_trade_date ?? null,
       display_price_latest_trade_date: r.price_latest_trade_date ?? null,

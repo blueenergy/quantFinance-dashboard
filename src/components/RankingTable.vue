@@ -68,27 +68,27 @@
         <td class="td-score" @click="onShowScore(row._origin || row)">
           <div class="score-badge-wrapper">
             <span :class="['score-badge', getScoreClass(row.display_composite_score), 'clickable']">
-              {{ row.display_composite_score }}
+              {{ fmtScore(row.display_composite_score) }}
             </span>
           </div>
         </td>
         <td class="td-cycle" @click="emitCategory(row, 'cycle')">
-          <span class="cycle-score clickable" :title="'查看动量评分详情'">{{ row.cycle_score }}</span>
+          <span class="cycle-score clickable" :title="'查看动量评分详情'">{{ fmtScore(row.cycle_score) }}</span>
         </td>
         <td class="td-growth" @click="emitCategory(row, 'growth')">
-          <span class="growth-score clickable" :title="'查看成长评分详情'">{{ row.growth_score }}</span>
+          <span class="growth-score clickable" :title="'查看成长评分详情'">{{ fmtScore(row.growth_score) }}</span>
         </td>
         <td class="td-fundamental" @click="emitCategory(row, 'fundamental')">
-          <span class="fundamental-score clickable" :title="'查看基本面评分详情'">{{ row.fundamental_score }}</span>
+          <span class="fundamental-score clickable" :title="'查看基本面评分详情'">{{ fmtScore(row.fundamental_score) }}</span>
         </td>
         <td class="td-value" @click="emitCategory(row, 'value')">
-          <span class="value-score clickable" :title="'查看价值评分详情'">{{ row.value_score }}</span>
+          <span class="value-score clickable" :title="'查看价值评分详情'">{{ fmtScore(row.value_score) }}</span>
         </td>
         <td class="td-technical" @click="emitCategory(row, 'technical')">
-          <span class="technical-score clickable" :title="'查看技术面评分详情'">{{ row.technical_score }}</span>
+          <span class="technical-score clickable" :title="'查看技术面评分详情'">{{ fmtScore(row.technical_score) }}</span>
         </td>
         <td class="td-money" @click="emitCategory(row, 'money_flow')">
-          <span class="money-score clickable" :title="'查看资金流评分详情'">{{ row.money_flow_score }}</span>
+          <span class="money-score clickable" :title="'查看资金流评分详情'">{{ fmtScore(row.money_flow_score) }}</span>
         </td>
         <td class="td-industry-rs">
           <span class="industry-rs-score" title="行业相对强度(参考)，不参与综合分与组合">{{ row.industry_rs_score ?? '—' }}</span>
@@ -185,6 +185,13 @@ const scoreHeaderTitle = computed(() => (
     ? '按用户输入的维度权重即时计算；仅用于当前金榜排序展示'
     : '综合分仅作概览，由各维度按预设权重粗略加权；选股以「组合研究」中已验证的因子组合为准'
 ))
+
+// 维度/综合分的展示：NA(null/空/非数值) 统一渲染为「—」，
+// 兼容精简评分模式下被跳过维度或 composite 置 NA 的场景。
+function fmtScore(v) {
+  if (v == null || v === '' || Number.isNaN(Number(v))) return '—'
+  return v
+}
 
 function formatReturnSince(v) {
   if (v == null || Number.isNaN(Number(v))) return '—'
