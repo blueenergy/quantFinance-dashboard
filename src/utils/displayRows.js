@@ -35,6 +35,11 @@ export function computeDisplayRows({
       display_prior_3m_return_pct: r.prior_3m_return_pct ?? null,
       display_prior_3m_base_trade_date: r.prior_3m_base_trade_date ?? null,
       display_prior_3m_end_trade_date: r.prior_3m_end_trade_date ?? null,
+      display_future_return_base_trade_date: r.future_return_base_trade_date ?? null,
+      display_future_return_10d_pct: r.future_return_10d_pct ?? null,
+      display_future_return_10d_trade_date: r.future_return_10d_trade_date ?? null,
+      display_future_return_20d_pct: r.future_return_20d_pct ?? null,
+      display_future_return_20d_trade_date: r.future_return_20d_trade_date ?? null,
     }))
   }
 
@@ -68,6 +73,14 @@ export function computeDisplayRows({
         p3 != null && p3.prior_3m_return_pct != null ? p3.prior_3m_return_pct : null
       copy.display_prior_3m_base_trade_date = p3?.prior_3m_base_trade_date ?? null
       copy.display_prior_3m_end_trade_date = p3?.prior_3m_end_trade_date ?? null
+      const fr = r.per_date_future_return && r.per_date_future_return[d]
+      copy.display_future_return_base_trade_date = fr?.future_return_base_trade_date ?? null
+      copy.display_future_return_10d_pct =
+        fr != null && fr.future_return_10d_pct != null ? fr.future_return_10d_pct : null
+      copy.display_future_return_10d_trade_date = fr?.future_return_10d_trade_date ?? null
+      copy.display_future_return_20d_pct =
+        fr != null && fr.future_return_20d_pct != null ? fr.future_return_20d_pct : null
+      copy.display_future_return_20d_trade_date = fr?.future_return_20d_trade_date ?? null
       if (r.per_date_fields && r.per_date_fields[d]) {
         const f = r.per_date_fields[d]
         copy.cycle_score = f.cycle_score ?? copy.cycle_score

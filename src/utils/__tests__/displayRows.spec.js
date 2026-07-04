@@ -47,6 +47,11 @@ describe('computeDisplayRows', () => {
         prior_3m_return_pct: 12.5,
         prior_3m_base_trade_date: '20250620',
         prior_3m_end_trade_date: '20250920',
+        future_return_base_trade_date: '20250920',
+        future_return_10d_pct: 3.5,
+        future_return_10d_trade_date: '20251010',
+        future_return_20d_pct: 6.5,
+        future_return_20d_trade_date: '20251024',
       },
     ]
     const rows = computeDisplayRows({
@@ -62,6 +67,11 @@ describe('computeDisplayRows', () => {
     expect(rows[0].display_prior_3m_return_pct).toBe(12.5)
     expect(rows[0].display_prior_3m_base_trade_date).toBe('20250620')
     expect(rows[0].display_prior_3m_end_trade_date).toBe('20250920')
+    expect(rows[0].display_future_return_base_trade_date).toBe('20250920')
+    expect(rows[0].display_future_return_10d_pct).toBe(3.5)
+    expect(rows[0].display_future_return_10d_trade_date).toBe('20251010')
+    expect(rows[0].display_future_return_20d_pct).toBe(6.5)
+    expect(rows[0].display_future_return_20d_trade_date).toBe('20251024')
   })
 
   it('flattens per_date_return_since price dates in selected mode', () => {
@@ -84,6 +94,15 @@ describe('computeDisplayRows', () => {
             prior_3m_end_trade_date: '20250918',
           },
         },
+        per_date_future_return: {
+          '20250918': {
+            future_return_base_trade_date: '20250918',
+            future_return_10d_pct: 4,
+            future_return_10d_trade_date: '20251009',
+            future_return_20d_pct: 9,
+            future_return_20d_trade_date: '20251023',
+          },
+        },
       },
     ]
     const rows = computeDisplayRows({
@@ -99,5 +118,10 @@ describe('computeDisplayRows', () => {
     expect(rows[0].display_prior_3m_return_pct).toBe(8)
     expect(rows[0].display_prior_3m_base_trade_date).toBe('20250618')
     expect(rows[0].display_prior_3m_end_trade_date).toBe('20250918')
+    expect(rows[0].display_future_return_base_trade_date).toBe('20250918')
+    expect(rows[0].display_future_return_10d_pct).toBe(4)
+    expect(rows[0].display_future_return_10d_trade_date).toBe('20251009')
+    expect(rows[0].display_future_return_20d_pct).toBe(9)
+    expect(rows[0].display_future_return_20d_trade_date).toBe('20251023')
   })
 })

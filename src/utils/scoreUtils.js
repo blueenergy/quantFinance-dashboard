@@ -103,11 +103,14 @@ export function generateCSV(data, selectedDates, getEffectiveStrategyFor, getCom
   if (includePerDate) {
     selectedDates.forEach(d => {
       headers.push(`总分(${formatDateDisplay(d)})`)
+      headers.push(`评分日后10日涨跌(${formatDateDisplay(d)})`)
+      headers.push(`评分日后20日涨跌(${formatDateDisplay(d)})`)
       headers.push(`评分日以来涨跌(${formatDateDisplay(d)})`)
     })
   } else {
     headers = headers.concat([
-      '总分', '动量评分', '成长评分', '基本面评分', '价值评分', '技术面评分', '资金流评分', '评分日以来涨跌',
+      '总分', '动量评分', '成长评分', '基本面评分', '价值评分', '技术面评分', '资金流评分',
+      '评分日后10日涨跌', '评分日后20日涨跌', '评分日以来涨跌',
     ])
   }
 
@@ -118,6 +121,9 @@ export function generateCSV(data, selectedDates, getEffectiveStrategyFor, getCom
         const stockStrat = getEffectiveStrategyFor(stock.symbol)
         const score = stock.per_date_scores?.[d]?.[stockStrat] ?? ''
         base.push(score)
+        const fr = stock.per_date_future_return?.[d]
+        base.push(formatCsvReturnSincePct(fr?.future_return_10d_pct))
+        base.push(formatCsvReturnSincePct(fr?.future_return_20d_pct))
         const pr = stock.per_date_return_since?.[d]
         base.push(formatCsvReturnSincePct(pr?.return_since_score_pct))
       })
@@ -132,6 +138,8 @@ export function generateCSV(data, selectedDates, getEffectiveStrategyFor, getCom
       stock.value_score,
       stock.technical_score,
       stock.money_flow_score,
+      formatCsvReturnSincePct(stock.future_return_10d_pct),
+      formatCsvReturnSincePct(stock.future_return_20d_pct),
       formatCsvReturnSincePct(stock.return_since_score_pct),
     ])
   })

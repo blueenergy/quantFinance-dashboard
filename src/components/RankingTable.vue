@@ -3,11 +3,12 @@
     <thead>
       <tr class="table-header">
         <th class="th-rank">{{ viewMode === 'ranking' ? '排名' : '序号' }}</th>
-        <th class="th-symbol">股票代码</th>
         <th class="th-name">股票名称</th>
         <th class="th-date">日期</th>
-        <th class="th-prior-3m" title="评分日前约 3 个月至评分日；未复权收盘">前3月涨跌</th>
-        <th class="th-return-since" title="未复权收盘；分红送转可能影响长区间">评分日以来涨跌</th>
+        <th class="th-prior-3m" title="评分日前约 3 个月至评分日；未复权收盘">前3月</th>
+        <th class="th-future-return" title="评分日至评分日后第 10 个交易日；后复权收盘">后10日涨跌</th>
+        <th class="th-future-return" title="评分日至评分日后第 20 个交易日；后复权收盘">后20日涨跌</th>
+        <th class="th-return-since" title="评分日至最新日线；后复权收盘">以来涨跌</th>
   <th class="th-score" :title="scoreHeaderTitle">{{ scoreHeaderLabel }}</th>
         <th class="th-cycle">动量</th>
         <th class="th-growth">成长</th>
@@ -26,11 +27,8 @@
             {{ index + 1 }}
           </span>
         </td>
-        <td class="td-symbol">
-          <span class="symbol-text">{{ row.symbol }}</span>
-        </td>
         <td class="td-name">
-          <span class="name-text" :title="row.name">{{ row.name || '-' }}</span>
+          <span class="name-text" :title="stockNameTitle(row)">{{ row.name || '-' }}</span>
         </td>
         <td class="td-date">
           <span>{{ formatDateDisplay(row.display_date || row.score_date) }}</span>
@@ -41,7 +39,22 @@
               :class="returnSinceClass(row.display_prior_3m_return_pct)"
               :title="prior3mTooltip(row)"
             >{{ formatReturnSince(row.display_prior_3m_return_pct) }}</span>
-            <span v-if="prior3mDateLine(row)" class="return-since-dates">{{ prior3mDateLine(row) }}</span>
+          </div>
+        </td>
+        <td class="td-future-return">
+          <div class="return-since-cell">
+            <span
+              :class="returnSinceClass(futureReturnPct(row, 10))"
+              :title="futureReturnTooltip(row, 10)"
+            >{{ formatReturnSince(futureReturnPct(row, 10)) }}</span>
+          </div>
+        </td>
+        <td class="td-future-return">
+          <div class="return-since-cell">
+            <span
+              :class="returnSinceClass(futureReturnPct(row, 20))"
+              :title="futureReturnTooltip(row, 20)"
+            >{{ formatReturnSince(futureReturnPct(row, 20)) }}</span>
           </div>
         </td>
         <td class="td-return-since">
@@ -50,7 +63,6 @@
               :class="returnSinceClass(row.display_return_since_score_pct)"
               :title="returnSinceTooltip(row)"
             >{{ formatReturnSince(row.display_return_since_score_pct) }}</span>
-            <span v-if="returnSinceDateLine(row)" class="return-since-dates">{{ returnSinceDateLine(row) }}</span>
           </div>
         </td>
         <td class="td-score" @click="onShowScore(row._origin || row)">
@@ -126,6 +138,12 @@ function onRemoveStock(symbol) { emit('remove-stock', symbol) }
 function onShowScore(stock) { emit('show-score', stock) }
 function emitCategory(row, category) { emit('show-score-detail', { stock: row, category }) }
 
+function stockNameTitle(row) {
+  const name = row?.name || '-'
+  const symbol = row?.symbol || '-'
+  return `${name} ${symbol}`
+}
+
 // helpers to access props in template
 const formatDateDisplay = props.formatDateDisplay
 const getScoreClass = props.getScoreClass
@@ -156,15 +174,6 @@ function returnSinceClass(v) {
   return 'return-since-flat'
 }
 
-function returnSinceDateLine(row) {
-  const b = row.display_price_base_trade_date
-  const l = row.display_price_latest_trade_date
-  if (!b && !l) return ''
-  const fb = b ? formatDateDisplay(b) : '—'
-  const fl = l ? formatDateDisplay(l) : '—'
-  return `${fb} → ${fl}`
-}
-
 function returnSinceTooltip(row) {
   const v = row.display_return_since_score_pct
   const b = row.display_price_base_trade_date
@@ -178,15 +187,6 @@ function returnSinceTooltip(row) {
   const dateText =
     fb || fl ? `基准交易日 ${fb || '—'}，最新日线 ${fl || '—'}` : '无基准/最新日线日期'
   return `${pctText}。${dateText}。分红送转可能影响长区间对比。`
-}
-
-function prior3mDateLine(row) {
-  const b = row.display_prior_3m_base_trade_date
-  const e = row.display_prior_3m_end_trade_date
-  if (!b && !e) return ''
-  const fb = b ? formatDateDisplay(b) : '—'
-  const fe = e ? formatDateDisplay(e) : '—'
-  return `${fb} → ${fe}`
 }
 
 function prior3mTooltip(row) {
@@ -203,13 +203,36 @@ function prior3mTooltip(row) {
     fb || fe ? `基准交易日 ${fb || '—'}，评分日前交易日 ${fe || '—'}` : '无基准/评分日行情日期'
   return `${pctText}。${dateText}。用于观察上榜前约 3 个月价格表现。`
 }
+
+function futureReturnPct(row, days) {
+  return row[`display_future_return_${days}d_pct`]
+}
+
+function futureReturnTradeDate(row, days) {
+  return row[`display_future_return_${days}d_trade_date`]
+}
+
+function futureReturnTooltip(row, days) {
+  const v = futureReturnPct(row, days)
+  const b = row.display_future_return_base_trade_date
+  const e = futureReturnTradeDate(row, days)
+  const fb = b ? formatDateDisplay(b) : null
+  const fe = e ? formatDateDisplay(e) : null
+  const pctText =
+    v != null && !Number.isNaN(Number(v))
+      ? `评分日后 ${days} 个交易日涨跌幅 ${formatReturnSince(v)}（后复权收盘）`
+      : `暂无有效评分日后 ${days} 个交易日涨跌幅`
+  const dateText =
+    fb || fe ? `基准交易日 ${fb || '—'}，目标交易日 ${fe || '—'}` : '无基准/目标交易日行情日期'
+  return `${pctText}。${dateText}。`
+}
 </script>
 
 <style scoped>
 /* table-specific styles moved from StockRanking.vue */
 .ranking-table {
   width: 100%;
-  min-width: 1130px;
+  min-width: 1020px;
   border-collapse: collapse;
   margin-top: 10px;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -240,10 +263,10 @@ function prior3mTooltip(row) {
   min-width: 40px;
   max-width: 40px;
 }
-.th-symbol { background: linear-gradient(135deg, #3498db, #2980b9); }
 .th-name { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
-.th-prior-3m { background: linear-gradient(135deg, #6d4c41, #4e342e); min-width: 108px; max-width: 132px; }
-.th-return-since { background: linear-gradient(135deg, #546e7a, #37474f); min-width: 108px; max-width: 132px; }
+.th-prior-3m { background: linear-gradient(135deg, #6d4c41, #4e342e); min-width: 74px; max-width: 90px; }
+.th-future-return { background: linear-gradient(135deg, #7e57c2, #5e35b1); min-width: 74px; max-width: 90px; }
+.th-return-since { background: linear-gradient(135deg, #546e7a, #37474f); min-width: 74px; max-width: 90px; }
 .th-score { background: linear-gradient(135deg, #e67e22, #d35400); }
 .th-cycle { background: linear-gradient(135deg, #1abc9c, #16a085); }
 .th-growth { background: linear-gradient(135deg, #43e97b, #38f9d7); }
@@ -251,7 +274,12 @@ function prior3mTooltip(row) {
 .th-value { background: linear-gradient(135deg, #ffd700, #ffb300); }
 .th-technical { background: linear-gradient(135deg, #2ecc71, #27ae60); }
 .th-money { background: linear-gradient(135deg, #e74c3c, #c0392b); }
-.th-action { background: linear-gradient(135deg, #95a5a6, #7f8c8d); }
+.th-action {
+  background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+  position: sticky;
+  right: 0;
+  z-index: 3;
+}
 
 .table-row { transition: all 0.3s ease; }
 .table-row:hover { background-color: #f8f9fa; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -269,22 +297,19 @@ function prior3mTooltip(row) {
   text-shadow: 0 1px 2px rgba(255,255,255,0.15);
 }
 
+.td-action {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: #fff;
+  box-shadow: -4px 0 8px rgba(0,0,0,0.08);
+}
+
 .rank-badge { display: inline-block; min-width: 30px; height: 30px; line-height: 30px; text-align: center; border-radius: 50%; font-weight: bold; }
 .rank-badge.rank-top-three { background: linear-gradient(135deg, #ff6b6b, #ff5252); color:#fff; font-size:16px; text-shadow:1px 1px 2px rgba(0,0,0,0.3); }
 .rank-badge.rank-top-ten { background: linear-gradient(135deg, #ffa726, #ff9800); color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.3); }
 .rank-badge.rank-top-thirty { background: linear-gradient(135deg, #66bb6a, #4caf50); color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.3); }
 .rank-badge.rank-default { background: linear-gradient(135deg, #90a4ae, #78909c); color:#fff; }
-
-.symbol-text {
-  display: inline-block;
-  background: linear-gradient(135deg, #3498db, #2980b9);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-weight: bold;
-  font-family: 'Courier New', monospace;
-  letter-spacing: 1px;
-}
 
 .name-text {
   display: inline-block;
@@ -350,7 +375,7 @@ function prior3mTooltip(row) {
 
 @media (max-width: 768px) {
   .ranking-table { font-size: 12px; }
-  .symbol-text, .name-text { padding: 2px 4px; font-size: 11px; }
+  .name-text { padding: 2px 4px; font-size: 11px; }
   .cycle-score, .fundamental-score, .technical-score, .money-score { padding: 2px 4px; font-size: 11px; }
 }
 </style>
