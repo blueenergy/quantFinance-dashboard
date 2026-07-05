@@ -225,6 +225,39 @@
               </div>
               <div v-else class="muted-block">暂无该股票的资金流数据。</div>
             </article>
+
+            <article class="workbench-card">
+              <div class="card-title-row">
+                <h3>进场风险 / 高位派发</h3>
+                <span
+                  class="entry-risk-badge"
+                  :class="`entry-risk-${entryRiskSeverity}`"
+                >
+                  {{ entryRiskSeverityLabel }}
+                </span>
+              </div>
+              <div v-if="entryRisk.status === 'ok'" class="entry-risk-narrative">
+                <div v-for="metric in entryRiskNarrativeRows" :key="metric.label">
+                  <span>{{ metric.label }}</span>
+                  <strong :class="metric.className">{{ metric.value }}</strong>
+                </div>
+              </div>
+              <div v-else class="muted-block">{{ entryRisk.summary || '暂无足够样本计算进场风险。' }}</div>
+              <p v-if="entryRisk.summary" class="entry-risk-summary">{{ entryRisk.summary }}</p>
+              <div v-if="entryRisk.status === 'ok'" class="entry-risk-explain">
+                <strong>判断逻辑</strong>
+                <p>
+                  `mainflow20` 是近20日主力净流 / 近20日成交额，按成交规模归一；
+                  `派发风险值 = hipos120 × (-mainflow20)`，只在主力净流出时才代表风险。
+                  因此绝对流出金额很大但成交额也很大时，风险值可能仍然不高。
+                </p>
+                <p>
+                  初始参考阈值：派发风险值低于 0.02 通常只作观察；0.02-0.05 需要结合高位和涨幅复核；
+                  大于 0.05 且 hipos120 接近 0.97、mainflow20 为负时，可作为高位派发警觉信号。
+                  后续会用历史候选池分位数和未来20日表现进一步标定。
+                </p>
+              </div>
+            </article>
           </section>
 
           <section class="workbench-card">
@@ -1540,6 +1573,8 @@ const latestMoneyFlow = computed(() => payload.value?.money_flow || null)
 const moneyFlowHistory = computed(() => Array.isArray(payload.value?.money_flow_history) ? payload.value.money_flow_history : [])
 const moneyFlowHistoryByTf = computed(() => payload.value?.money_flow_history_by_tf || {})
 const moneyFlowSummary = computed(() => payload.value?.money_flow_summary || {})
+const entryRisk = computed(() => payload.value?.entry_risk || {})
+const entryRiskMetrics = computed(() => entryRisk.value?.metrics || {})
 const quoteSectionDate = computed(() => dataStatus.value?.sections?.quote?.as_of || latestDailyBasic.value.trade_date || quote.value.trade_date || '')
 const nineTurnDailyRows = computed(() => Array.isArray(payload.value?.nine_turn_daily_quotes) ? payload.value.nine_turn_daily_quotes : [])
 const nineTurnSignals = computed(() => {
@@ -2133,6 +2168,37 @@ const moneyFlowMetrics = computed(() => {
     { label: '中单净额', value: fmtAmount(toNumber(mf.buy_md_amount) - toNumber(mf.sell_md_amount)) },
   ]
 })
+const entryRiskSeverity = computed(() => entryRisk.value?.severity || 'none')
+const entryRiskSeverityLabel = computed(() => ({
+  high: '高风险',
+  medium: '中风险',
+  low: '低风险',
+  none: '正常',
+})[entryRiskSeverity.value] || '正常')
+const entryRiskNarrativeRows = computed(() => {
+  const metrics = entryRiskMetrics.value || {}
+  return [
+    {
+      label: '高位状态',
+      value: `hipos120 ${fmtNumber(metrics.hipos120, 3)}，距离120日高点 ${fmtNumber(metrics.distance_to_120d_high_pct, 1, '%')}`,
+    },
+    {
+      label: '主力20日净流',
+      value: `mainflow20 ${fmtPctFromRatio(metrics.mainflow20)}`,
+      className: valueClass(metrics.mainflow20),
+    },
+    {
+      label: '资金流规模',
+      value: `${fmtWanAmount(metrics.main_net_20d)} / 成交额 ${fmtWanAmount(metrics.amount_20d_wan)}`,
+      className: valueClass(metrics.main_net_20d),
+    },
+    {
+      label: '高位派发',
+      value: `派发风险值 ${fmtNumber(metrics.distrib, 4)}，${entryRiskSeverityLabel.value}`,
+      className: entryRiskSeverity.value === 'none' ? '' : `entry-risk-text-${entryRiskSeverity.value}`,
+    },
+  ]
+})
 const overviewQuoteMetrics = computed(() => [
   { label: '换手率', value: fmtNumber(latestDailyBasic.value.turnover_rate, 2, '%') },
   { label: 'PE TTM', value: fmtNumber(latestDailyBasic.value.pe_ttm ?? latestDailyBasic.value.pe) },
@@ -2410,6 +2476,7 @@ async function loadWorkbenchSection(section, options = {}) {
           '1d': dailyMoneyFlowHistory,
         },
         money_flow_summary: data?.money_flow_summary || {},
+        entry_risk: data?.entry_risk || {},
       })
     } else if (section === 'nine_turn') {
       const data = await getStockWorkbenchNineTurn(symbol)
@@ -3747,6 +3814,70 @@ h1, h2, h3 {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.entry-risk-badge {
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 999px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+}
+.entry-risk-high {
+  background: rgba(239, 68, 68, .14);
+  border-color: rgba(239, 68, 68, .35);
+  color: #fca5a5;
+}
+.entry-risk-medium {
+  background: rgba(234, 179, 8, .14);
+  border-color: rgba(234, 179, 8, .35);
+  color: #fde68a;
+}
+.entry-risk-low {
+  background: rgba(59, 130, 246, .14);
+  border-color: rgba(59, 130, 246, .35);
+  color: #bfdbfe;
+}
+.entry-risk-none {
+  background: rgba(34, 197, 94, .12);
+  border-color: rgba(34, 197, 94, .32);
+  color: #bbf7d0;
+}
+.entry-risk-narrative {
+  display: grid;
+  gap: 10px;
+}
+.entry-risk-narrative div {
+  background: rgba(15, 23, 42, .46);
+  border: 1px solid rgba(148, 163, 184, .14);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.entry-risk-narrative span {
+  color: #94a3b8;
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.entry-risk-narrative strong {
+  color: #f8fafc;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.entry-risk-text-high {
+  color: #fca5a5 !important;
+}
+.entry-risk-text-medium {
+  color: #fde68a !important;
+}
+.entry-risk-text-low {
+  color: #bfdbfe !important;
+}
+.entry-risk-summary {
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 12px 0 0;
 }
 .score-grid {
   display: grid;
