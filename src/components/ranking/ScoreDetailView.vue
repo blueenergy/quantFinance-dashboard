@@ -90,6 +90,19 @@
       </details>
     </template>
 
+    <template v-else-if="isIndustryRs">
+      <div class="score-hero score-hero--compact industry-rs-hero">
+        <div class="score-hero-meta">
+          <div class="hero-total" :style="{ color: scoreColor(industryRsScore) }">
+            {{ industryRsScore != null ? Number(industryRsScore).toFixed(1) : '—' }}
+          </div>
+          <div class="hero-label">{{ categoryLabel }}</div>
+          <div class="hero-strategy reference-badge">仅供参考，不参与综合分与组合选股</div>
+        </div>
+      </div>
+      <IndustryRsBreakdown :details="props.details" />
+    </template>
+
     <template v-else>
       <div class="score-hero score-hero--compact">
         <div ref="gaugeRef" class="gauge-chart gauge-chart--sm" />
@@ -193,7 +206,7 @@
     </template>
 
     <details
-      v-if="!loading && !errorMessage && details && Object.keys(details).length"
+      v-if="!loading && !errorMessage && !isIndustryRs && details && Object.keys(details).length"
       class="raw-section raw-section--json"
     >
       <summary class="raw-section-summary">查看完整 JSON</summary>
@@ -204,6 +217,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import IndustryRsBreakdown from './IndustryRsBreakdown.vue'
 import {
   extractCompositeRawFields,
   extractCompositeTotal,
@@ -233,7 +247,16 @@ let barChart = null
 let resizeObserver = null
 
 const isComposite = computed(() => props.category === 'composite')
+const isIndustryRs = computed(() => props.category === 'industry_rs')
 const categoryLabel = computed(() => translateScoreCategory(props.category))
+
+const industryRsScore = computed(() => {
+  const d = props.details
+  if (!d || typeof d !== 'object') return null
+  const raw = d.score ?? d['行业相对强度']
+  if (raw == null || raw === '' || Number.isNaN(Number(raw))) return null
+  return Number(raw)
+})
 
 const compositeDimensions = computed(() => (
   normalizeComposite(props.dimensions, props.details)
@@ -375,7 +398,7 @@ function buildBarOption(subModules) {
 }
 
 async function renderCharts() {
-  if (props.loading) return
+  if (props.loading || isIndustryRs.value) return
   await nextTick()
   const lib = await ensureEcharts()
 
@@ -494,6 +517,15 @@ onBeforeUnmount(() => {
   font-size: 0.85rem;
   color: #94a3b8;
   margin-top: 6px;
+}
+
+.reference-badge {
+  color: #5c6bc0;
+  font-weight: 500;
+}
+
+.industry-rs-hero {
+  padding-bottom: 4px;
 }
 
 .radar-chart {

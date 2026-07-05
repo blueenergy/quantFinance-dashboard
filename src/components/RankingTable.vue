@@ -16,7 +16,7 @@
         <th class="th-value">价值</th>
         <th class="th-technical">技术</th>
         <th class="th-money">资金</th>
-        <th class="th-industry-rs" title="个股相对所属申万行业指数的多窗口相对强弱(RS)。仅供参考，不参与综合分与组合选股">行业RS</th>
+        <th class="th-industry-rs" title="个股相对所属申万行业指数的多窗口相对强弱(RS)。仅供参考，不参与综合分与组合选股。点击评分详情查看计算方法">行业RS</th>
         <th class="th-action">操作</th>
       </tr>
     </thead>
@@ -90,8 +90,12 @@
         <td class="td-money" @click="emitCategory(row, 'money_flow')">
           <span class="money-score clickable" :title="'查看资金流评分详情'">{{ fmtScore(row.money_flow_score) }}</span>
         </td>
-        <td class="td-industry-rs">
-          <span class="industry-rs-score" title="行业相对强度(参考)，不参与综合分与组合">{{ row.industry_rs_score ?? '—' }}</span>
+        <td class="td-industry-rs" @click="onIndustryRsClick(row)">
+          <span
+            class="industry-rs-score"
+            :class="{ clickable: row.industry_rs_score != null }"
+            :title="row.industry_rs_score != null ? '查看行业相对强度说明' : '行业相对强度(参考)，不参与综合分与组合'"
+          >{{ row.industry_rs_score ?? '—' }}</span>
         </td>
         <td class="td-action">
           <AppLink
@@ -142,6 +146,10 @@ function onToggleWatchlist(symbol) { emit('toggle-watchlist', symbol) }
 function onRemoveStock(symbol) { emit('remove-stock', symbol) }
 function onShowScore(stock) { emit('show-score', stock) }
 function emitCategory(row, category) { emit('show-score-detail', { stock: row, category }) }
+function onIndustryRsClick(row) {
+  if (row.industry_rs_score == null) return
+  emitCategory(row, 'industry_rs')
+}
 
 const INDEX_CODE_LABELS = {
   hs300: '沪深300',
@@ -371,7 +379,10 @@ function futureReturnTooltip(row, days) {
 .score-badge.score-mid { background: linear-gradient(135deg, #2196f3, #1976d2); }
 .score-badge.score-low { background: linear-gradient(135deg, #9e9e9e, #757575); }
 
-.cycle-score, .fundamental-score, .technical-score, .money-score, .growth-score, .value-score { display: inline-block; padding: 4px 6px; border-radius: 5px; font-weight: bold; min-width: 36px; text-align: center; font-size: 14px; color: #fff; text-shadow: 1px 1px 6px rgba(0,0,0,0.18); letter-spacing: 0.3px; }
+.cycle-score, .fundamental-score, .technical-score, .money-score, .growth-score, .value-score, .industry-rs-score { display: inline-block; padding: 4px 6px; border-radius: 5px; font-weight: bold; min-width: 36px; text-align: center; font-size: 14px; color: #fff; text-shadow: 1px 1px 6px rgba(0,0,0,0.18); letter-spacing: 0.3px; }
+.industry-rs-score { background: linear-gradient(135deg, #8e9bff, #5c6bc0); color: #fff; }
+.industry-rs-score.clickable { cursor: pointer; }
+.industry-rs-score.clickable:hover { filter: brightness(1.08); }
 .cycle-score { background: linear-gradient(135deg, #1abc9c, #16a085); color: white; }
 .fundamental-score { background: linear-gradient(135deg, #f39c12, #e67e22); color: white; }
 .technical-score { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; }

@@ -392,6 +392,7 @@ async function fetchScoreDetails(row, category) {
     showScoreDetail.value = false
     await Promise.resolve()
     showScoreDetail.value = true
+
     const params = new URLSearchParams({ symbol: row.symbol, category })
     if (row.score_date) params.append('score_date', row.score_date)
     if (category === 'composite') params.append('strategy', getEffectiveStrategyFor(row.symbol))
@@ -433,7 +434,8 @@ function translateCategory(cat) {
     fundamental: '基本面评分',
     value: '价值评分',
     technical: '技术面评分',
-    money_flow: '资金流评分'
+    money_flow: '资金流评分',
+    industry_rs: '行业相对强度',
   }
   return map[cat] || cat
 }

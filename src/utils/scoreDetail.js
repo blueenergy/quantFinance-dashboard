@@ -8,6 +8,7 @@ const DIMENSION_NAME_MAP = {
   value: '价值评分',
   technical: '技术面评分',
   money_flow: '资金流评分',
+  industry_rs: '行业相对强度',
 }
 
 function isSignalValue(value) {
