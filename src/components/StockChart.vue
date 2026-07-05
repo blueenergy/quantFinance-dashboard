@@ -75,8 +75,6 @@ const props = defineProps({
   nextStock: Function,
   hasPrev: Boolean,
   hasNext: Boolean,
-  watchlist: Array,
-  currentIndex: Number,
   strategyFrom: String,
   presetFrom: String,
   dateFrom: String

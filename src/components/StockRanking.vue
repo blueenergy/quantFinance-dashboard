@@ -109,7 +109,6 @@
           :getRankClass="getRankClass"
           :getRowClass="getRowClass"
           :isInWatchlist="isInWatchlist"
-          @view-chart="viewChart"
           @toggle-watchlist="toggleWatchlist"
           @remove-stock="removeStockFromQuery"
           @show-score="stock => fetchScoreDetails(stock, 'composite')"

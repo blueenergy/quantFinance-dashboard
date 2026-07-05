@@ -94,7 +94,12 @@
           <span class="industry-rs-score" title="行业相对强度(参考)，不参与综合分与组合">{{ row.industry_rs_score ?? '—' }}</span>
         </td>
         <td class="td-action">
-          <button @click="onViewChart(row.symbol)" class="btn-chart" title="查看图表">📊</button>
+          <AppLink
+            tab="chart"
+            :params="{ symbol: row.symbol }"
+            class="btn-chart"
+            title="查看图表"
+          >📊</AppLink>
           <button
             @click="onToggleWatchlist(row.symbol)"
             :class="isInWatchlist ? (isInWatchlist(row.symbol) ? 'btn-watch-active' : 'btn-watch') : 'btn-watch'"
@@ -118,6 +123,7 @@
 
 <script setup>
 import { computed, toRefs } from 'vue'
+import AppLink from './common/AppLink.vue'
 
 const props = defineProps({
   displayRows: { type: Array, required: true },
@@ -130,9 +136,8 @@ const props = defineProps({
   isInWatchlist: { type: Function, required: false }
 })
 
-const emit = defineEmits(['view-chart', 'toggle-watchlist', 'remove-stock', 'show-score', 'show-score-detail'])
+const emit = defineEmits(['toggle-watchlist', 'remove-stock', 'show-score', 'show-score-detail'])
 
-function onViewChart(symbol) { emit('view-chart', symbol) }
 function onToggleWatchlist(symbol) { emit('toggle-watchlist', symbol) }
 function onRemoveStock(symbol) { emit('remove-stock', symbol) }
 function onShowScore(stock) { emit('show-score', stock) }

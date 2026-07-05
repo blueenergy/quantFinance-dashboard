@@ -319,8 +319,6 @@ export function getTabProps(tabId, context) {
       nextStock: context.nextStock,
       hasPrev: context.hasPrev,
       hasNext: context.hasNext,
-      watchlist: context.watchlist,
-      currentIndex: context.currentIndex,
       strategyFrom: context.currentStrategy,
       presetFrom: context.currentPreset,
     }

@@ -218,7 +218,6 @@ const {
 })
 
 const {
-  currentIndex,
   watchlist,
   chartRecords,
   moneyFlowRecords,
@@ -264,7 +263,14 @@ function applyDeepLink({ tab, params = {} }) {
   if (!tab) return false
 
   const visibleIds = adminTabs.value.map((t) => t.id)
-  if (!visibleIds.includes(tab)) return false
+  if (!visibleIds.includes(tab) && tab !== 'chart') return false
+
+  if (tab === 'chart') {
+    const symbol = params.symbol
+    if (!symbol) return false
+    void selectStockForChart(symbol)
+    return true
+  }
 
   if (tab === 'stock-workbench') {
     const symbol = params.symbol
@@ -363,8 +369,6 @@ function getTabProps(tabId) {
     nextStock,
     hasPrev: hasPrev.value,
     hasNext: hasNext.value,
-    watchlist: watchlist.value,
-    currentIndex: currentIndex.value,
     currentStrategy: currentStrategy.value,
     currentPreset: currentPreset.value,
     user: user.value,

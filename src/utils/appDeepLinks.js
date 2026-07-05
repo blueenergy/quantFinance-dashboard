@@ -1,10 +1,11 @@
 /**
  * Deep-link registry and helpers for SPA tabs (query-param based, no Vue Router).
- * URL shape: /?tab=stock-workbench&symbol=600519.SH
+ * URL shape: /?tab=stock-workbench&symbol=600519.SH or /?tab=chart&symbol=600519.SH
  */
 
 /** @type {Record<string, string[]>} */
 export const DEEP_LINK_TABS = {
+  chart: ['symbol'],
   'stock-workbench': ['symbol'],
   // Future: 'etf': ['symbol'], 'history': ['symbol'], ...
 }
@@ -60,8 +61,8 @@ export function parseDeepLinkFromUrl(search = window.location.search) {
     }
   }
 
-  // stock-workbench requires symbol
-  if (tab === 'stock-workbench' && !params.symbol) return null
+  // Stock-specific tabs require a target symbol.
+  if ((tab === 'chart' || tab === 'stock-workbench') && !params.symbol) return null
 
   return { tab, params }
 }

@@ -43,6 +43,7 @@ async function fetchMoneyFlowRecords(symbol) {
 
 export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
   const currentIndex = ref(0)
+  const chartSymbols = ref([])
   const watchlist = ref([])
   const chartRecords = ref([])
   const moneyFlowRecords = ref([])
@@ -52,10 +53,10 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
   const currentPreset = ref('')
   const tradeMarkers = ref([])
   const chartSymbol = computed(() => (
-    watchlist.value.length > 0 ? watchlist.value[currentIndex.value] : ''
+    chartSymbols.value.length > 0 ? chartSymbols.value[currentIndex.value] : ''
   ))
   const hasPrev = computed(() => currentIndex.value > 0)
-  const hasNext = computed(() => currentIndex.value < watchlist.value.length - 1)
+  const hasNext = computed(() => currentIndex.value < chartSymbols.value.length - 1)
 
   let appChartWatchlistInFlight = null
 
@@ -343,7 +344,7 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
       signalDates.value = []
     }
 
-    const index = watchlist.value.indexOf(stockSymbol)
+    const index = chartSymbols.value.indexOf(stockSymbol)
     if (index !== -1) {
       if (currentIndex.value === index) {
         loadStockData(stockSymbol)
@@ -351,8 +352,8 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
         currentIndex.value = index
       }
     } else {
-      watchlist.value.push(stockSymbol)
-      currentIndex.value = watchlist.value.length - 1
+      chartSymbols.value.push(stockSymbol)
+      currentIndex.value = chartSymbols.value.length - 1
     }
 
     if (sourceTab === 'strategy-pool') {
@@ -375,7 +376,7 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
   }
 
   watch(activeTab, (tabId) => {
-    if (tabId === 'chart' || tabId === 'watchlist') {
+    if (tabId === 'watchlist') {
       void loadAppChartWatchlist()
     }
   })
@@ -388,6 +389,7 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
 
   return {
     currentIndex,
+    chartSymbols,
     watchlist,
     chartRecords,
     moneyFlowRecords,

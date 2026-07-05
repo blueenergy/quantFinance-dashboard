@@ -31,7 +31,9 @@ export function useAppStartupFlow({
     }
     const dl = parseDeepLinkFromUrl()
     if (!dl?.tab) return false
-    if (!Array.isArray(visibleTabIds) || !visibleTabIds.includes(dl.tab)) return false
+    const isVisibleTab = Array.isArray(visibleTabIds) && visibleTabIds.includes(dl.tab)
+    const isInternalChartLink = dl.tab === 'chart'
+    if (!isVisibleTab && !isInternalChartLink) return false
     return applyDeepLink(dl)
   }
 
@@ -128,7 +130,7 @@ export function useAppStartupFlow({
     const visibleIds = adminTabs.value.map((tab) => tab.id)
     if (tryApplyDeepLinkFromUrl(visibleIds)) {
       refreshVisibleHomeSummaries()
-      if (activeTab.value === 'chart' || activeTab.value === 'watchlist') {
+      if (activeTab.value === 'watchlist') {
         await loadAppChartWatchlist()
       }
       return
@@ -151,7 +153,7 @@ export function useAppStartupFlow({
 
     refreshVisibleHomeSummaries()
 
-    if (activeTab.value === 'chart' || activeTab.value === 'watchlist') {
+    if (activeTab.value === 'watchlist') {
       await loadAppChartWatchlist()
     }
   })
