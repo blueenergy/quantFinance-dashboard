@@ -282,29 +282,14 @@
           </button>
         </div>
         <div class="score-detail-content">
-          <div v-if="scoreDetailCategory === 'composite'" class="detail-inline-block">
-            <div class="detail-block">
-              <div class="text-bold color-primary-dark mb-sm">总分由以下分项加权计算：</div>
-              <ul class="detail-list compact">
-                <li v-for="(val, key) in scoreDetailData" :key="key" class="flex-row gap-xs">
-                  <strong>{{ key }}:</strong>
-                  <span>{{ formatDetailValue(val) }}</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div v-else class="detail-inline-block">
-            <div v-if="loadingDetail" class="detail-loading">正在加载 {{ translateCategory(scoreDetailCategory) }} 详情...</div>
-            <div v-else-if="scoreDetailData && Object.keys(scoreDetailData).length > 0" class="detail-block">
-              <ul class="detail-list compact">
-                <li v-for="(val, key) in scoreDetailData" :key="key" class="flex-row gap-xs">
-                  <strong>{{ key }}:</strong>
-                  <span>{{ formatDetailValue(val) }}</span>
-                </li>
-              </ul>
-            </div>
-            <div v-else-if="!loadingDetail" class="detail-empty">暂无 {{ translateCategory(scoreDetailCategory) }} 详情</div>
-          </div>
+          <ScoreDetailView
+            :category="scoreDetailCategory"
+            :details="scoreDetailData"
+            :weights="scoreDetailWeights"
+            :dimensions="scoreDetailDimensions"
+            :loading="loadingDetail"
+            :maximized="scoreDetailMaximized"
+          />
           <div class="score-detail-actions">
             <AppLink
               v-if="selectedStock?.symbol"
@@ -329,6 +314,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import AppLink from './common/AppLink.vue'
+import ScoreDetailView from './ranking/ScoreDetailView.vue'
 import StockRankingControls from './StockRankingControls.vue'
 import RankingTable from './RankingTable.vue'
 import axios from 'axios'
@@ -385,6 +371,8 @@ const hasCurrentModeRankings = computed(
 // 评分详情（单类别）
 const scoreDetailCategory = ref(null)
 const scoreDetailData = ref(null)
+const scoreDetailWeights = ref({})
+const scoreDetailDimensions = ref([])
 const loadingDetail = ref(false)
 
 // 获取当前股票有效策略（优先单股票策略，其次全局策略）
@@ -398,6 +386,8 @@ async function fetchScoreDetails(row, category) {
     scoreDetailCategory.value = category
     selectedStock.value = row
     scoreDetailData.value = null
+    scoreDetailWeights.value = {}
+    scoreDetailDimensions.value = []
     // 强制刷新弹窗：隐藏后下一帧显示
     showScoreDetail.value = false
     await Promise.resolve()
@@ -409,6 +399,8 @@ async function fetchScoreDetails(row, category) {
     const json = await res.json()
     if (json && json.success) {
       scoreDetailData.value = json.data.details
+      scoreDetailWeights.value = json.data.weights || {}
+      scoreDetailDimensions.value = json.data.dimensions || []
       if (category === 'composite') {
         const keys = Object.keys(scoreDetailData.value || {})
         const hasWeight = keys.some(k => k.includes('权重'))
@@ -422,9 +414,13 @@ async function fetchScoreDetails(row, category) {
       }
     } else {
       scoreDetailData.value = { 错误: (json && (json.detail || json.message)) || '获取详情失败' }
+      scoreDetailWeights.value = {}
+      scoreDetailDimensions.value = []
     }
   } catch (e) {
     scoreDetailData.value = { 错误: e.message || '请求异常' }
+    scoreDetailWeights.value = {}
+    scoreDetailDimensions.value = []
   } finally {
     loadingDetail.value = false
   }
@@ -440,16 +436,6 @@ function translateCategory(cat) {
     money_flow: '资金流评分'
   }
   return map[cat] || cat
-}
-
-function formatDetailValue(v) {
-  if (v === null || v === undefined) return '-'
-  if (typeof v === 'number') {
-    if (Math.abs(v) > 1000) return v.toFixed(2)
-    return Number.isInteger(v) ? v : v.toFixed(2)
-  }
-  if (typeof v === 'object') return JSON.stringify(v)
-  return v
 }
 
 // Date / multi-date selections
@@ -2447,7 +2433,7 @@ const star50SelectedCount = computed(() => {
 }
 
 .score-detail-modal {
-  max-width: 500px;
+  max-width: 760px;
 }
 
 .score-detail-modal-toolbar {
