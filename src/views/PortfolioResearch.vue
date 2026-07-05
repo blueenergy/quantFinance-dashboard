@@ -117,6 +117,8 @@
         >
           <strong>{{ job.name || job.job_id }}</strong>
           <span>{{ job.status }} · {{ job.universe_index || job.params?.universe_index || '-' }}</span>
+          <small v-if="jobElapsedLabel(job)">{{ jobElapsedLabel(job) }}</small>
+          <small v-if="jobProgressStageLabel(job)" class="progress-stage">{{ jobProgressStageLabel(job) }}</small>
           <small>{{ compactDate(job.start_date) }} → {{ compactDate(job.end_date) }}</small>
           <small v-if="job.best_row">best {{ pct(job.best_row.index_excess_cumulative_return) }} excess</small>
         </button>
@@ -130,6 +132,8 @@
               <h3>{{ selectedJob.name || selectedJob.job_id }}</h3>
               <p class="muted">
                 {{ selectedJob.status }} · {{ selectedJob.job_id }}
+                <span v-if="jobElapsedLabel(selectedJob)"> · {{ jobElapsedLabel(selectedJob) }}</span>
+                <span v-if="jobProgressStageLabel(selectedJob)"> · {{ jobProgressStageLabel(selectedJob) }}</span>
                 <span v-if="selectedJob.error_message"> · {{ selectedJob.error_message }}</span>
               </p>
             </div>
@@ -145,6 +149,14 @@
           </div>
 
           <div class="info-grid">
+            <div>
+              <span>任务耗时</span>
+              <strong>{{ jobElapsedLabel(selectedJob) || '-' }}</strong>
+            </div>
+            <div v-if="selectedJob.status === 'running'">
+              <span>当前阶段</span>
+              <strong>{{ jobProgressStageLabel(selectedJob) || '-' }}</strong>
+            </div>
             <div>
               <span>评分数据水位</span>
               <strong>{{ selectedJob.data_watermark?.stock_scores_max_date || '-' }}</strong>
@@ -373,7 +385,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   createPortfolioResearchJob,
   getPortfolioResearchComboDetail,
@@ -398,6 +410,16 @@ const statusFilter = ref('')
 const message = ref('')
 const errorMessage = ref('')
 const createCollapsed = ref(false)
+const nowMs = ref(Date.now())
+
+let clockTimer = null
+let pollTimer = null
+
+const hasActiveJobs = computed(() =>
+  jobs.value.some((job) => job.status === 'running' || job.status === 'pending')
+    || selectedJob.value?.status === 'running'
+    || selectedJob.value?.status === 'pending',
+)
 
 const comboModalOpen = ref(false)
 const comboLoading = ref(false)
@@ -511,6 +533,106 @@ function compactDate(value) {
   if (text.length === 8) return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
   return text
 }
+
+const PROGRESS_STAGE_LABELS = {
+  loading_scores: '加载评分',
+  building_dataset: '构建数据集',
+  running_sweep: '参数扫描',
+  rendering_report: '生成报告',
+  generating_combo_details: '生成组合明细',
+  writing_result: '写入结果',
+}
+
+function parseJobDate(value) {
+  if (!value) return null
+  const text = String(value).trim()
+  if (!text) return null
+  const normalized = /[zZ]|[+-]\d{2}:\d{2}$/.test(text) ? text : `${text}Z`
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function formatDurationMs(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return '-'
+  const totalSeconds = Math.floor(ms / 1000)
+  if (totalSeconds < 60) return `${totalSeconds} 秒`
+  const totalMinutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (totalMinutes < 60) {
+    return seconds ? `${totalMinutes} 分 ${seconds} 秒` : `${totalMinutes} 分`
+  }
+  const totalHours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (totalHours < 24) {
+    return minutes ? `${totalHours} 小时 ${minutes} 分` : `${totalHours} 小时`
+  }
+  const days = Math.floor(totalHours / 24)
+  const hours = totalHours % 24
+  return hours ? `${days} 天 ${hours} 小时` : `${days} 天`
+}
+
+function jobElapsedLabel(job) {
+  if (!job) return ''
+  const status = job.status
+  const now = nowMs.value
+  if (status === 'completed') {
+    const start = parseJobDate(job.started_at) || parseJobDate(job.created_at)
+    const end = parseJobDate(job.completed_at)
+    if (!start || !end) return ''
+    return `用时 ${formatDurationMs(end.getTime() - start.getTime())}`
+  }
+  if (status === 'running') {
+    const start = parseJobDate(job.started_at) || parseJobDate(job.created_at)
+    if (!start) return ''
+    return `已运行 ${formatDurationMs(now - start.getTime())}`
+  }
+  if (status === 'pending') {
+    const start = parseJobDate(job.created_at)
+    if (!start) return ''
+    return `排队 ${formatDurationMs(now - start.getTime())}`
+  }
+  if (status === 'failed') {
+    const start = parseJobDate(job.started_at) || parseJobDate(job.created_at)
+    const end = parseJobDate(job.completed_at) || parseJobDate(job.updated_at)
+    if (!start || !end) return ''
+    return `失败前运行 ${formatDurationMs(end.getTime() - start.getTime())}`
+  }
+  return ''
+}
+
+function jobProgressStageLabel(job) {
+  if (!job || job.status !== 'running' || !job.progress_stage) return ''
+  return PROGRESS_STAGE_LABELS[job.progress_stage] || job.progress_stage
+}
+
+function startActiveJobTimers() {
+  if (!clockTimer) {
+    clockTimer = setInterval(() => {
+      nowMs.value = Date.now()
+    }, 1000)
+  }
+  if (!pollTimer) {
+    pollTimer = setInterval(() => {
+      refreshAll()
+    }, 30000)
+  }
+}
+
+function stopActiveJobTimers() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+watch(hasActiveJobs, (active) => {
+  if (active) startActiveJobTimers()
+  else stopActiveJobTimers()
+})
 
 function pct(value) {
   const number = Number(value)
@@ -823,7 +945,14 @@ async function refreshAll() {
   if (selectedJobId.value) await selectJob(selectedJobId.value)
 }
 
-onMounted(refreshAll)
+onMounted(async () => {
+  await refreshAll()
+  if (hasActiveJobs.value) startActiveJobTimers()
+})
+
+onUnmounted(() => {
+  stopActiveJobTimers()
+})
 </script>
 
 <style scoped>
@@ -1010,6 +1139,11 @@ button:disabled {
 .job-row small {
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.progress-stage {
+  color: #0f6bdc;
+  font-weight: 600;
 }
 
 .candidate,
