@@ -48,6 +48,46 @@
           </span>
         </div>
       </div>
+
+      <details v-if="compositeDimensions.length" class="raw-section">
+        <summary class="raw-section-summary">维度明细表</summary>
+        <table class="raw-table">
+          <thead>
+            <tr>
+              <th>维度</th>
+              <th>得分</th>
+              <th>权重</th>
+              <th>贡献</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="dim in compositeDimensions" :key="dim.key || dim.name">
+              <td>{{ dim.name }}</td>
+              <td>{{ dim.score?.toFixed?.(1) ?? '—' }}</td>
+              <td>{{ dim.weight != null ? `${(dim.weight * 100).toFixed(1)}%` : '—' }}</td>
+              <td>{{ dim.contribution?.toFixed?.(2) ?? '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </details>
+
+      <details v-if="compositeRawFields.length" class="raw-section">
+        <summary class="raw-section-summary">原始字段</summary>
+        <table class="raw-table">
+          <tbody>
+            <tr v-for="row in compositeRawFields" :key="row.key">
+              <th>{{ row.key }}</th>
+              <td>
+                <ul v-if="row.type === 'array' && row.items?.length" class="raw-array-list">
+                  <li v-for="(item, i) in row.items" :key="i">{{ item }}</li>
+                </ul>
+                <pre v-else-if="row.type === 'object'" class="raw-inline-object">{{ row.display }}</pre>
+                <span v-else class="raw-scalar">{{ row.display }}</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </details>
     </template>
 
     <template v-else>
@@ -58,6 +98,24 @@
             {{ categoryTotal != null ? categoryTotal.toFixed(1) : '—' }}
           </div>
           <div class="hero-label">{{ categoryLabel }}</div>
+        </div>
+      </div>
+
+      <div v-if="categoryParsed.topLevelFields.length" class="top-level-extras">
+        <h5 class="section-title">补充说明</h5>
+        <div
+          v-for="field in categoryParsed.topLevelFields"
+          :key="field.key"
+          class="top-level-item"
+        >
+          <span class="top-level-key">{{ field.key }}</span>
+          <div class="top-level-value">
+            <ul v-if="field.type === 'array' && field.items?.length" class="raw-array-list">
+              <li v-for="(item, i) in field.items" :key="i">{{ item }}</li>
+            </ul>
+            <pre v-else-if="field.type === 'object'" class="raw-inline-object">{{ field.display }}</pre>
+            <span v-else class="raw-scalar">{{ field.display }}</span>
+          </div>
         </div>
       </div>
 
@@ -108,18 +166,46 @@
                 <strong>{{ metric.key }}</strong> {{ metric.value }}
               </span>
             </div>
+            <details v-if="mod.rawFields.length" class="raw-fold">
+              <summary class="raw-fold-summary">
+                全部原始指标 ({{ mod.rawFields.length }})
+              </summary>
+              <table class="raw-table raw-table--compact">
+                <tbody>
+                  <tr v-for="row in mod.rawFields" :key="row.key">
+                    <th>{{ row.key }}</th>
+                    <td>
+                <ul v-if="row.type === 'array' && row.items?.length" class="raw-array-list">
+                  <li v-for="(item, i) in row.items" :key="i">{{ item }}</li>
+                </ul>
+                <pre v-else-if="row.type === 'object'" class="raw-inline-object">{{ row.display }}</pre>
+                <span v-else class="raw-scalar">{{ row.display }}</span>
+              </td>
+                  </tr>
+                </tbody>
+              </table>
+            </details>
           </div>
         </details>
       </div>
 
       <div v-else class="detail-empty">暂无 {{ categoryLabel }} 详情</div>
     </template>
+
+    <details
+      v-if="!loading && !errorMessage && details && Object.keys(details).length"
+      class="raw-section raw-section--json"
+    >
+      <summary class="raw-section-summary">查看完整 JSON</summary>
+      <pre class="raw-json">{{ prettyJson }}</pre>
+    </details>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
+  extractCompositeRawFields,
   extractCompositeTotal,
   normalizeCategoryDetails,
   normalizeComposite,
@@ -163,6 +249,16 @@ const strategyLabel = computed(() => {
 const categoryParsed = computed(() => (
   normalizeCategoryDetails(props.details, props.weights)
 ))
+
+const compositeRawFields = computed(() => extractCompositeRawFields(props.details))
+
+const prettyJson = computed(() => {
+  try {
+    return JSON.stringify(props.details ?? {}, null, 2)
+  } catch {
+    return '{}'
+  }
+})
 
 const categoryTotal = computed(() => categoryParsed.value.total)
 
@@ -560,5 +656,145 @@ onBeforeUnmount(() => {
 .metric-badge strong {
   color: #1e293b;
   margin-right: 4px;
+}
+
+.top-level-extras {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+
+.top-level-item {
+  display: grid;
+  grid-template-columns: minmax(100px, 34%) 1fr;
+  gap: 8px 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed #e2e8f0;
+  font-size: 0.82rem;
+}
+
+.top-level-item:last-child {
+  border-bottom: none;
+}
+
+.top-level-key {
+  font-weight: 700;
+  color: #334155;
+}
+
+.top-level-value {
+  color: #475569;
+  min-width: 0;
+}
+
+.raw-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fafbfc;
+  overflow: hidden;
+}
+
+.raw-section--json {
+  margin-top: 4px;
+}
+
+.raw-section-summary {
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.raw-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.raw-section[open] .raw-section-summary {
+  border-bottom: 1px solid #e2e8f0;
+  background: #f1f5f9;
+}
+
+.raw-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.raw-table th,
+.raw-table td {
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.raw-table thead th {
+  background: #f1f5f9;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.raw-table tbody th {
+  width: 34%;
+  color: #334155;
+  font-weight: 600;
+  background: #f8fafc;
+}
+
+.raw-table--compact th {
+  width: 38%;
+  font-size: 0.78rem;
+}
+
+.raw-fold {
+  margin-top: 4px;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 8px;
+}
+
+.raw-fold-summary {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  list-style: none;
+  margin-bottom: 6px;
+}
+
+.raw-fold-summary::-webkit-details-marker {
+  display: none;
+}
+
+.raw-array-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #475569;
+}
+
+.raw-array-list li {
+  margin: 2px 0;
+}
+
+.raw-inline-object,
+.raw-json {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #334155;
+  background: #fff;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.raw-scalar {
+  color: #1e293b;
+  word-break: break-word;
 }
 </style>

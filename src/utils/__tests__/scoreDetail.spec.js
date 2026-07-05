@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  classifyRawValue,
+  extractCompositeRawFields,
   extractCompositeTotal,
   normalizeCategoryDetails,
   normalizeComposite,
@@ -35,12 +37,55 @@ describe('normalizeCategoryDetails', () => {
       positive: true,
     })
     expect(result.subModules[1].signals[0].positive).toBe(false)
+    expect(result.subModules[0].rawFields).toHaveLength(2)
+  })
+
+  it('captures top-level scalar and array fields', () => {
+    const result = normalizeCategoryDetails({
+      多周期交互分析: '短中长期趋势一致向上',
+      短期周期: { 短期周期得分: 80 },
+      周期综合评分: 75,
+    })
+
+    expect(result.topLevelFields).toHaveLength(1)
+    expect(result.topLevelFields[0]).toMatchObject({
+      key: '多周期交互分析',
+      type: 'scalar',
+      display: '短中长期趋势一致向上',
+    })
+  })
+
+  it('includes array values in submodule rawFields', () => {
+    const result = normalizeCategoryDetails({
+      营收增长分析: {
+        历年营收: ['10.2亿', '12.3亿', '15.1亿'],
+        营收增长得分: 82,
+      },
+      成长性综合评分: 80,
+    })
+
+    const revenue = result.subModules[0]
+    expect(revenue.rawFields).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: '历年营收',
+        type: 'array',
+        items: ['10.2亿', '12.3亿', '15.1亿'],
+      }),
+    ]))
   })
 
   it('returns error payload when details contain 错误', () => {
     const result = normalizeCategoryDetails({ 错误: '技术面评分计算失败' })
     expect(result.error).toBe('技术面评分计算失败')
     expect(result.subModules).toEqual([])
+  })
+})
+
+describe('classifyRawValue', () => {
+  it('formats arrays and objects', () => {
+    expect(classifyRawValue(['a', 'b']).type).toBe('array')
+    expect(classifyRawValue({ x: 1 }).type).toBe('object')
+    expect(classifyRawValue(12.345).display).toBe('12.35')
   })
 })
 
@@ -64,6 +109,18 @@ describe('normalizeComposite', () => {
     expect(dims).toHaveLength(2)
     expect(dims[0].weight).toBeCloseTo(0.25)
     expect(dims[0].contribution).toBe(20)
+  })
+})
+
+describe('extractCompositeRawFields', () => {
+  it('lists all composite detail keys', () => {
+    const rows = extractCompositeRawFields({
+      '动量评分 (权重: 25.0%)': 80,
+      '当前策略': 'balanced',
+      '综合得分(当前策略)': 75,
+    })
+    expect(rows).toHaveLength(3)
+    expect(rows.find((r) => r.key === '当前策略')?.display).toBe('balanced')
   })
 })
 

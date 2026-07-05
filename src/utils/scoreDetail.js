@@ -22,6 +22,32 @@ function signalPositive(text) {
   return null
 }
 
+/**
+ * @param {unknown} value
+ * @returns {{ type: 'null'|'scalar'|'array'|'object', display: string, items: string[] }}
+ */
+export function classifyRawValue(value) {
+  if (value === null || value === undefined) {
+    return { type: 'null', display: '—', items: [] }
+  }
+  if (Array.isArray(value)) {
+    const items = value.map((item) => (item == null ? '—' : String(item)))
+    return { type: 'array', display: items.join(' · '), items }
+  }
+  if (typeof value === 'object') {
+    return { type: 'object', display: JSON.stringify(value, null, 2), items: [] }
+  }
+  if (typeof value === 'number') {
+    const display = Number.isInteger(value) ? String(value) : value.toFixed(2)
+    return { type: 'scalar', display, items: [] }
+  }
+  return { type: 'scalar', display: String(value), items: [] }
+}
+
+export function formatRawValue(value) {
+  return classifyRawValue(value).display
+}
+
 function extractSubmoduleScore(entries) {
   for (const [key, value] of entries) {
     if (SCORE_KEY_RE.test(key) && typeof value === 'number') {
@@ -29,6 +55,15 @@ function extractSubmoduleScore(entries) {
     }
   }
   return null
+}
+
+function buildRawFields(entries) {
+  const rawFields = []
+  for (const [key, value] of entries) {
+    if (SCORE_KEY_RE.test(key)) continue
+    rawFields.push({ key, ...classifyRawValue(value) })
+  }
+  return rawFields
 }
 
 function parseSubmodule(name, raw, weights = {}) {
@@ -39,6 +74,7 @@ function parseSubmodule(name, raw, weights = {}) {
   const entries = Object.entries(raw)
   const metrics = []
   const signals = []
+  const rawFields = buildRawFields(entries)
 
   for (const [key, value] of entries) {
     if (SCORE_KEY_RE.test(key)) continue
@@ -55,6 +91,7 @@ function parseSubmodule(name, raw, weights = {}) {
     weight: typeof weights[name] === 'number' ? weights[name] : null,
     metrics,
     signals,
+    rawFields,
   }
 }
 
@@ -65,15 +102,16 @@ function parseSubmodule(name, raw, weights = {}) {
  */
 export function normalizeCategoryDetails(details, weights = {}) {
   if (!details || typeof details !== 'object') {
-    return { total: null, subModules: [], error: null }
+    return { total: null, subModules: [], topLevelFields: [], error: null }
   }
 
   if ('错误' in details) {
-    return { total: null, subModules: [], error: String(details['错误']) }
+    return { total: null, subModules: [], topLevelFields: [], error: String(details['错误']) }
   }
 
   let total = null
   const subModules = []
+  const topLevelFields = []
 
   for (const [key, value] of Object.entries(details)) {
     if (SCORE_KEY_RE.test(key) && typeof value === 'number') {
@@ -83,10 +121,12 @@ export function normalizeCategoryDetails(details, weights = {}) {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       const mod = parseSubmodule(key, value, weights)
       if (mod) subModules.push(mod)
+      continue
     }
+    topLevelFields.push({ key, ...classifyRawValue(value) })
   }
 
-  return { total, subModules, error: null }
+  return { total, subModules, topLevelFields, error: null }
 }
 
 function parseLegacyCompositeDetails(details) {
@@ -108,6 +148,7 @@ function parseLegacyCompositeDetails(details) {
       score,
       weight,
       contribution,
+      rawKey: key,
     })
   }
   return dimensions
@@ -132,9 +173,22 @@ export function normalizeComposite(dimensions, details) {
           : (typeof item.score === 'number' && typeof item.weight === 'number'
             ? Math.round(item.score * item.weight * 100) / 100
             : null),
+        rawKey: item.rawKey || null,
       }))
   }
   return parseLegacyCompositeDetails(details)
+}
+
+/**
+ * All top-level composite detail fields for raw-data display.
+ * @param {Record<string, unknown>} [details]
+ */
+export function extractCompositeRawFields(details) {
+  if (!details || typeof details !== 'object') return []
+  return Object.entries(details).map(([key, value]) => ({
+    key,
+    ...classifyRawValue(value),
+  }))
 }
 
 export function extractCompositeTotal(details) {

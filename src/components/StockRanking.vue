@@ -1778,9 +1778,21 @@ watch(perStockStrategies, () => {
   }
 }, { deep: true })
 
-// 评分详情：Esc 先退出全屏再关闭弹窗（与全屏阅读一致）
+// 评分详情：Esc 先退出全屏再关闭弹窗；打开时锁定主页面滚动
+function lockPageScroll() {
+  const targets = [document.documentElement, document.body]
+  const vApp = document.querySelector('.v-application')
+  if (vApp) targets.push(vApp)
+  const prev = targets.map((el) => ({ el, overflow: el.style.overflow }))
+  targets.forEach((el) => { el.style.overflow = 'hidden' })
+  return () => {
+    prev.forEach(({ el, overflow }) => { el.style.overflow = overflow })
+  }
+}
+
 watch(showScoreDetail, (open, _prev, onCleanup) => {
   if (!open) return
+  const unlockScroll = lockPageScroll()
   const onKey = (e) => {
     if (e.key !== 'Escape') return
     e.preventDefault()
@@ -1788,7 +1800,10 @@ watch(showScoreDetail, (open, _prev, onCleanup) => {
     else closeScoreDetail()
   }
   window.addEventListener('keydown', onKey)
-  onCleanup(() => window.removeEventListener('keydown', onKey))
+  onCleanup(() => {
+    window.removeEventListener('keydown', onKey)
+    unlockScroll()
+  })
 })
 
 // Load HS300 constituents automatically when user switches quick-select tab to hs300
@@ -2427,6 +2442,11 @@ const star50SelectedCount = computed(() => {
 
 
 /* ✅ 评分详情模态框增强样式 */
+.score-detail-modal-overlay {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
 .score-detail-modal-overlay--raised {
   z-index: 2990;
   background-color: rgba(0, 0, 0, 0.78);
@@ -2434,9 +2454,14 @@ const star50SelectedCount = computed(() => {
 
 .score-detail-modal {
   max-width: 760px;
+  max-height: min(90vh, 920px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .score-detail-modal-toolbar {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -2477,20 +2502,21 @@ const star50SelectedCount = computed(() => {
   border-radius: 10px;
 }
 
-.score-detail-modal--maximized .score-detail-content {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  margin: 12px 0;
-}
-
 .score-detail-modal--maximized .score-detail-close-footer {
   flex-shrink: 0;
   margin-top: 4px;
 }
 
+.score-detail-close-footer {
+  flex-shrink: 0;
+}
+
 .score-detail-content {
-  margin: 20px 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 12px 0;
 }
 
 .score-item {
