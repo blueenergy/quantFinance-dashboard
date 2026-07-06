@@ -17,6 +17,35 @@ function formatApiDetail(detail) {
   return String(detail)
 }
 
+// Summarize per-symbol risk blockers so the toast reflects *why* a publish/topup
+// was rejected, not just the generic top-level message.
+function summarizeRiskBlockers(detail) {
+  const items = detail?.risk_report?.items
+  if (!Array.isArray(items)) return ''
+  const reasons = items.flatMap((item) =>
+    (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`),
+  )
+  const cashBlockers = (detail?.cash_blockers || []).map((blocker) => blockerText(blocker))
+  return [...reasons, ...cashBlockers].slice(0, 8).join('；')
+}
+
+// Build the clearest possible failure text from an axios error: prefer the
+// backend detail, enrich with specific risk blockers, and always fall back to
+// the HTTP status so a bare 500 never surfaces as an opaque axios message.
+function formatApiError(error, fallback) {
+  const response = error?.response
+  const detail = response?.data?.detail
+  const base = formatApiDetail(detail) || formatApiDetail(response?.data?.message)
+  const blockers = summarizeRiskBlockers(detail)
+  const message = [base, blockers].filter(Boolean).join('：')
+  if (message) return message
+  if (response) {
+    const statusText = response.statusText ? ` ${response.statusText}` : ''
+    return `${fallback}（HTTP ${response.status}${statusText}）`
+  }
+  return error?.message || fallback
+}
+
 export function usePlanOps({
   selectedOperationPlanId,
   selectedLiveAccountId,
@@ -78,7 +107,7 @@ export function usePlanOps({
       livePublishPreview.value = res.data || {}
       showPublishModal.value = true
     } catch (error) {
-      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '实盘发布预检失败', true)
+      onMessage(formatApiError(error, '实盘发布预检失败'), true)
     } finally {
       livePublishLoading.value = false
     }
@@ -101,7 +130,7 @@ export function usePlanOps({
     } catch (error) {
       const detail = error.response?.data?.detail
       livePublishPreview.value = detail?.risk_report ? { risk_report: detail.risk_report, blocked: true } : livePublishPreview.value
-      onMessage(formatApiDetail(detail) || error.message || '实盘发布失败', true)
+      onMessage(formatApiError(error, '实盘发布失败'), true)
       showPublishModal.value = true
     } finally {
       livePublishLoading.value = false
@@ -121,7 +150,7 @@ export function usePlanOps({
       })
       remainderPreview.value = res.data || {}
     } catch (error) {
-      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '补缺口预检失败', true)
+      onMessage(formatApiError(error, '补缺口预检失败'), true)
     } finally {
       remainderLoading.value = false
     }
@@ -146,7 +175,7 @@ export function usePlanOps({
       remainderPreview.value = detail?.risk_report
         ? { ...(remainderPreview.value || {}), risk_report: detail.risk_report, blocked: true }
         : remainderPreview.value
-      onMessage(formatApiDetail(detail) || error.message || '补缺口失败', true)
+      onMessage(formatApiError(error, '补缺口失败'), true)
     } finally {
       remainderLoading.value = false
     }
@@ -163,7 +192,7 @@ export function usePlanOps({
       onMessage(`Paper 执行已触发：${status}。`, false)
       await onRefresh()
     } catch (error) {
-      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '执行 Paper 失败', true)
+      onMessage(formatApiError(error, '执行 Paper 失败'), true)
     } finally {
       paperExecuteLoading.value = false
     }
@@ -184,7 +213,7 @@ export function usePlanOps({
       onMessage(`计划 ${planId} 已作废，取消 ${count} 条未成交 live signals。`, false)
       await onRefresh()
     } catch (error) {
-      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '作废计划失败', true)
+      onMessage(formatApiError(error, '作废计划失败'), true)
     } finally {
       cancelPlanLoading.value = false
     }
@@ -200,7 +229,7 @@ export function usePlanOps({
       onMessage(`计划 ${planId} 已批准。`, false)
       await onRefresh()
     } catch (error) {
-      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '批准失败', true)
+      onMessage(formatApiError(error, '批准失败'), true)
     } finally {
       approveSubmitting.value = false
     }
@@ -218,7 +247,7 @@ export function usePlanOps({
       onMessage(`计划 ${planId} 已拒绝。`, false)
       await onRefresh()
     } catch (error) {
-      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '拒绝失败', true)
+      onMessage(formatApiError(error, '拒绝失败'), true)
     } finally {
       rejectSubmitting.value = false
     }
