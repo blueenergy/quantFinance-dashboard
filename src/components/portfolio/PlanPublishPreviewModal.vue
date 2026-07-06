@@ -2,7 +2,18 @@
   <div v-if="visible" class="modal-backdrop" @click.self="$emit('close')">
     <div class="modal-card modal-wide">
       <h3>{{ title }}</h3>
+      <label class="partial-toggle">
+        <input
+          type="checkbox"
+          :checked="allowPartial"
+          @change="$emit('update:allowPartial', $event.target.checked)"
+        >
+        允许部分发布（跳过被拦标的，先发能发的）
+      </label>
       <p v-if="summaryText" class="muted">{{ summaryText }}</p>
+      <p v-if="allowPartial && skippedRows.length" class="watermark-warning">
+        将跳过 {{ skippedRows.length }} 个被拦标的：{{ skippedRows.map((row) => row.symbol).join('、') }}
+      </p>
       <p v-if="capitalUsageText" class="muted">{{ capitalUsageText }}</p>
       <p v-if="stalePriceSymbols.length" class="watermark-warning">
         以下标的按昨收定价（实时未就绪）：{{ stalePriceSymbols.join(', ') }}
@@ -37,7 +48,7 @@
               :key="item.order_id || `${item.symbol}-${item.action}-${item.size}`"
               :class="{ blocked: item.blockers?.length }"
             >
-              <td>{{ item.blockers?.length ? '阻断' : '通过' }}</td>
+              <td>{{ item.blockers?.length ? (allowPartial ? '将跳过' : '阻断') : '通过' }}</td>
               <td>{{ item.symbol || '-' }}</td>
               <td>{{ item.action || '-' }}</td>
               <td>{{ item.size ?? '-' }}</td>
@@ -119,13 +130,20 @@ const props = defineProps({
   confirmLabel: { type: String, default: '确认发布' },
   confirmDisabled: { type: Boolean, default: false },
   blockerMessages: { type: Array, default: () => [] },
+  allowPartial: { type: Boolean, default: false },
 })
 
-defineEmits(['close', 'confirm'])
+defineEmits(['close', 'confirm', 'update:allowPartial'])
+
+const skippedRows = computed(() => props.preview?.skipped_by_risk || [])
 
 const summaryText = computed(() => {
   const preview = props.preview
   if (!preview) return ''
+  if (props.allowPartial) {
+    const publishable = preview.publishable_count ?? preview.new_signals?.length ?? 0
+    return `将发布 ${publishable} 条，跳过 ${skippedRows.value.length} 条，已有 ${preview.existing_count ?? 0} 条`
+  }
   return `待写入 ${preview.new_signals?.length ?? 0} 条，已有 ${preview.existing_count ?? 0} 条，阻断 ${preview.risk_report?.blocked_count ?? 0} 条`
 })
 
@@ -148,7 +166,12 @@ const capitalUsageText = computed(() => {
 const stalePriceSymbols = computed(() => props.preview?.reprice_summary?.stale_price_symbols || [])
 const repriceRows = computed(() => props.preview?.reprice_summary?.items || [])
 const riskRows = computed(() => props.preview?.risk_report?.items || [])
-const signalPreview = computed(() => (props.preview?.new_signals || []).slice(0, 8))
+const signalPreview = computed(() => {
+  const preview = props.preview
+  if (!preview) return []
+  const source = props.allowPartial && preview.publishable_signals ? preview.publishable_signals : preview.new_signals
+  return (source || []).slice(0, 8)
+})
 
 function signalDisplayName(signal) {
   return signal?.name || signal?.stock_name || signal?.symbol || '-'
@@ -191,6 +214,15 @@ function signalDisplayName(signal) {
 .watermark-warning {
   color: #9a6700;
   font-size: 13px;
+}
+
+.partial-toggle {
+  align-items: center;
+  color: #334155;
+  display: flex;
+  font-size: 13px;
+  gap: 6px;
+  margin: 4px 0 8px;
 }
 
 .risk-chip {

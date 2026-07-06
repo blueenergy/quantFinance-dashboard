@@ -59,11 +59,13 @@ export function usePlanOps({
   const livePublishPreview = ref(null)
   const livePublishLoading = ref(false)
   const showPublishModal = ref(false)
+  const allowPartialPublish = ref(false)
   const paperExecuteLoading = ref(false)
   const cancelPlanLoading = ref(false)
   const remainderPreview = ref(null)
   const remainderLoading = ref(false)
   const remainderReason = ref('')
+  const allowPartialRemainder = ref(false)
   const approveSubmitting = ref(false)
   const rejectSubmitting = ref(false)
 
@@ -83,6 +85,22 @@ export function usePlanOps({
 
   const livePublishRiskRows = computed(() => livePublishPreview.value?.risk_report?.items || [])
   const livePublishRepriceRows = computed(() => livePublishPreview.value?.reprice_summary?.items || [])
+  const livePublishSkipped = computed(() => livePublishPreview.value?.skipped_by_risk || [])
+  const livePublishPublishableCount = computed(() => {
+    const preview = livePublishPreview.value
+    if (!preview) return 0
+    if (preview.publishable_count != null) return preview.publishable_count
+    return (preview.new_signals || []).length
+  })
+  // Whether the confirm button is enabled. Under partial mode a publish is OK as
+  // long as something is publishable and there is no hard (account/capital) block;
+  // otherwise any blocker disables confirm (all-or-nothing).
+  const canConfirmLivePublish = computed(() => {
+    if (allowPartialPublish.value) {
+      return !livePublishPreview.value?.blocked && livePublishPublishableCount.value > 0
+    }
+    return livePublishBlockers.value.length === 0
+  })
   const remainderRows = computed(() => remainderPreview.value?.remainder || [])
   const remainderActionableCount = computed(() => remainderPreview.value?.actionable_count || 0)
   const remainderBlockers = computed(() => {
@@ -92,6 +110,22 @@ export function usePlanOps({
     )
     const cashBlockers = (remainderPreview.value?.cash_blockers || []).map((blocker) => blockerText(blocker))
     return [...riskBlockers, ...cashBlockers]
+  })
+  const remainderSkipped = computed(() => remainderPreview.value?.skipped_by_risk || [])
+  const remainderPublishableCount = computed(() => {
+    const preview = remainderPreview.value
+    if (!preview) return 0
+    if (preview.publishable_count != null) return preview.publishable_count
+    return preview.actionable_count || 0
+  })
+  // Cash blockers make the plan budget unreliable, so partial mode cannot rescue
+  // them; otherwise partial confirm is OK as long as something is publishable.
+  const canConfirmRemainder = computed(() => {
+    const preview = remainderPreview.value
+    if (allowPartialRemainder.value) {
+      return !preview?.blocked && remainderPublishableCount.value > 0
+    }
+    return remainderActionableCount.value > 0 && remainderBlockers.value.length === 0
   })
 
   async function previewLivePublish() {
@@ -103,6 +137,7 @@ export function usePlanOps({
       const res = await publishPortfolioPlanLiveSignals(planId, {
         securities_account_id: selectedLiveAccountId.value,
         dry_run: true,
+        allow_partial: allowPartialPublish.value,
       })
       livePublishPreview.value = res.data || {}
       showPublishModal.value = true
@@ -110,6 +145,15 @@ export function usePlanOps({
       onMessage(formatApiError(error, '实盘发布预检失败'), true)
     } finally {
       livePublishLoading.value = false
+    }
+  }
+
+  // Re-run the dry-run preview when the partial toggle flips so the modal shows
+  // the accurate publish/skip partition for the chosen mode.
+  async function setAllowPartialPublish(value) {
+    allowPartialPublish.value = Boolean(value)
+    if (showPublishModal.value) {
+      await previewLivePublish()
     }
   }
 
@@ -122,10 +166,16 @@ export function usePlanOps({
       const res = await publishPortfolioPlanLiveSignals(planId, {
         securities_account_id: selectedLiveAccountId.value,
         dry_run: false,
+        allow_partial: allowPartialPublish.value,
       })
       livePublishPreview.value = res.data || {}
       showPublishModal.value = false
-      onMessage(`已发布 ${res.data?.inserted_count ?? 0} 条 live signals，已有 ${res.data?.existing_count ?? 0} 条。`, false)
+      const skippedCount = (res.data?.skipped_by_risk || []).length
+      const skippedNote = skippedCount ? `，跳过 ${skippedCount} 条被拦标的` : ''
+      onMessage(
+        `已发布 ${res.data?.inserted_count ?? 0} 条 live signals，已有 ${res.data?.existing_count ?? 0} 条${skippedNote}。`,
+        false,
+      )
       await onRefresh()
     } catch (error) {
       const detail = error.response?.data?.detail
@@ -147,12 +197,20 @@ export function usePlanOps({
         securities_account_id: selectedLiveAccountId.value,
         dry_run: true,
         reason: remainderReason.value || '',
+        allow_partial: allowPartialRemainder.value,
       })
       remainderPreview.value = res.data || {}
     } catch (error) {
       onMessage(formatApiError(error, '补缺口预检失败'), true)
     } finally {
       remainderLoading.value = false
+    }
+  }
+
+  async function setAllowPartialRemainder(value) {
+    allowPartialRemainder.value = Boolean(value)
+    if (remainderPreview.value) {
+      await previewRemainder()
     }
   }
 
@@ -166,9 +224,12 @@ export function usePlanOps({
         securities_account_id: selectedLiveAccountId.value,
         dry_run: false,
         reason: remainderReason.value || '',
+        allow_partial: allowPartialRemainder.value,
       })
       remainderPreview.value = res.data || {}
-      onMessage(`已补发 ${res.data?.inserted_count ?? 0} 条 plan_topup 信号。`, false)
+      const skippedCount = (res.data?.skipped_by_risk || []).length
+      const skippedNote = skippedCount ? `，跳过 ${skippedCount} 条被拦标的` : ''
+      onMessage(`已补发 ${res.data?.inserted_count ?? 0} 条 plan_topup 信号${skippedNote}。`, false)
       await onRefresh()
     } catch (error) {
       const detail = error.response?.data?.detail
@@ -258,29 +319,41 @@ export function usePlanOps({
     remainderPreview.value = null
     remainderReason.value = ''
     showPublishModal.value = false
+    allowPartialPublish.value = false
+    allowPartialRemainder.value = false
   }
 
   return {
     livePublishPreview,
     livePublishLoading,
     showPublishModal,
+    allowPartialPublish,
     livePublishBlockers,
     livePublishRiskRows,
     livePublishRepriceRows,
+    livePublishSkipped,
+    livePublishPublishableCount,
+    canConfirmLivePublish,
     paperExecuteLoading,
     cancelPlanLoading,
     remainderPreview,
     remainderLoading,
     remainderReason,
+    allowPartialRemainder,
     remainderRows,
     remainderActionableCount,
     remainderBlockers,
+    remainderSkipped,
+    remainderPublishableCount,
+    canConfirmRemainder,
     approveSubmitting,
     rejectSubmitting,
     previewLivePublish,
     publishLiveSignals,
+    setAllowPartialPublish,
     previewRemainder,
     confirmRemainder,
+    setAllowPartialRemainder,
     executePaperNow,
     cancelCurrentPlan,
     approvePendingPlan,

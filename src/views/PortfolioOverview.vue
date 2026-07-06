@@ -121,6 +121,8 @@
         :has-published-live-signals="selectedPlanHasPublishedLiveSignals"
         :live-publish-loading="livePublishLoading"
         :live-publish-blockers="livePublishBlockers"
+        :can-confirm-publish="canConfirmLivePublish"
+        :allow-partial-publish="allowPartialPublish"
         :can-cancel-current-plan="canCancelCurrentPlan"
         :cancel-plan-ready-text="cancelPlanReadyText"
         :cancel-plan-loading="cancelPlanLoading"
@@ -132,6 +134,10 @@
         :remainder-rows="remainderRows"
         :remainder-actionable-count="remainderActionableCount"
         :remainder-blockers="remainderBlockers"
+        :remainder-skipped="remainderSkipped"
+        :remainder-publishable-count="remainderPublishableCount"
+        :can-confirm-remainder="canConfirmRemainder"
+        :allow-partial-remainder="allowPartialRemainder"
         :remainder-loading="remainderLoading"
         v-model:remainder-reason="remainderReason"
         @copy-plan-id="copyPlanId"
@@ -140,6 +146,7 @@
         @confirm-publish="publishLiveSignals"
         @preview-remainder="previewRemainder"
         @confirm-remainder="confirmRemainder"
+        @update:allow-partial-remainder="setAllowPartialRemainder"
         @cancel-plan="cancelCurrentPlan"
         @rerun-llm-risk="() => rerunPlanLlmRisk(selectedOperationPlanId, 'ops')"
       />
@@ -149,8 +156,10 @@
         :preview="livePublishPreview"
         :loading="livePublishLoading"
         :blocker-messages="livePublishBlockers"
-        :confirm-disabled="Boolean(livePublishBlockers.length)"
+        :allow-partial="allowPartialPublish"
+        :confirm-disabled="!canConfirmLivePublish"
         @close="showPublishModal = false"
+        @update:allow-partial="setAllowPartialPublish"
         @confirm="publishLiveSignals"
       />
 
@@ -630,21 +639,29 @@ const {
   livePublishPreview,
   livePublishLoading,
   showPublishModal,
+  allowPartialPublish,
   livePublishBlockers,
+  canConfirmLivePublish,
   paperExecuteLoading,
   cancelPlanLoading,
   remainderPreview,
   remainderLoading,
   remainderReason,
+  allowPartialRemainder,
   remainderRows,
   remainderActionableCount,
   remainderBlockers,
+  remainderSkipped,
+  remainderPublishableCount,
+  canConfirmRemainder,
   approveSubmitting,
   rejectSubmitting,
   previewLivePublish,
   publishLiveSignals,
+  setAllowPartialPublish,
   previewRemainder,
   confirmRemainder,
+  setAllowPartialRemainder,
   executePaperNow,
   cancelCurrentPlan,
   approvePendingPlan,

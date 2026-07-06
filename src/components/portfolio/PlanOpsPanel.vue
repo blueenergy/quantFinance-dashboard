@@ -56,7 +56,7 @@
         </button>
         <button
           type="button"
-          :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals || livePublishBlockers.length"
+          :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals || !canConfirmPublish"
           @click="$emit('confirm-publish')"
         >
           确认发布
@@ -70,12 +70,20 @@
           placeholder="补单原因（可选）"
           @input="$emit('update:remainderReason', $event.target.value)"
         >
+        <label class="partial-toggle">
+          <input
+            type="checkbox"
+            :checked="allowPartialRemainder"
+            @change="$emit('update:allowPartialRemainder', $event.target.checked)"
+          >
+          允许部分补单
+        </label>
         <button type="button" :disabled="remainderLoading || !selectedLiveAccountId" @click="$emit('preview-remainder')">
           {{ remainderLoading ? '预检中…' : '缺口预检' }}
         </button>
         <button
           type="button"
-          :disabled="remainderLoading || !selectedLiveAccountId || !remainderActionableCount || remainderBlockers.length"
+          :disabled="remainderLoading || !selectedLiveAccountId || !canConfirmRemainder"
           @click="$emit('confirm-remainder')"
         >
           确认补单
@@ -134,6 +142,9 @@
       </p>
       <p v-if="remainderBlockers.length" class="warning-text">
         {{ remainderBlockers.slice(0, 8).join(' / ') }}
+      </p>
+      <p v-if="allowPartialRemainder && remainderSkipped.length" class="warning-text">
+        部分补单：将补 {{ remainderPublishableCount }} 条，跳过 {{ remainderSkipped.length }} 条被拦标的（{{ remainderSkipped.map((row) => row.symbol).join('、') }}）
       </p>
       <div v-if="remainderRows.length" class="table-wrap compact risk-report-table">
         <table>
@@ -204,6 +215,8 @@ const props = defineProps({
   hasPublishedLiveSignals: { type: Boolean, default: false },
   livePublishLoading: { type: Boolean, default: false },
   livePublishBlockers: { type: Array, default: () => [] },
+  canConfirmPublish: { type: Boolean, default: true },
+  allowPartialPublish: { type: Boolean, default: false },
   canCancelCurrentPlan: { type: Boolean, default: false },
   cancelPlanReadyText: { type: String, default: '' },
   cancelPlanLoading: { type: Boolean, default: false },
@@ -215,6 +228,10 @@ const props = defineProps({
   remainderRows: { type: Array, default: () => [] },
   remainderActionableCount: { type: Number, default: 0 },
   remainderBlockers: { type: Array, default: () => [] },
+  remainderSkipped: { type: Array, default: () => [] },
+  remainderPublishableCount: { type: Number, default: 0 },
+  canConfirmRemainder: { type: Boolean, default: false },
+  allowPartialRemainder: { type: Boolean, default: false },
   remainderLoading: { type: Boolean, default: false },
   remainderReason: { type: String, default: '' },
 })
@@ -255,6 +272,7 @@ defineEmits([
   'rerun-llm-risk',
   'update:selectedLiveAccountId',
   'update:remainderReason',
+  'update:allowPartialRemainder',
 ])
 
 function shortPlanId(planId) {
@@ -373,6 +391,15 @@ function llmRiskStatusText(status) {
 
 .reason-input {
   min-width: 220px;
+}
+
+.partial-toggle {
+  align-items: center;
+  color: #334155;
+  display: flex;
+  font-size: 13px;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .cancel-plan-row {
