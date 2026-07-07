@@ -517,6 +517,12 @@ export function useHoldingsOps({
     return submitPaperRebalance(targets, { excludeAfter: shouldExcludeAfter, dryRun })
   }
 
+  function refreshPortfolioInBackground() {
+    void Promise.resolve(onRefresh()).catch((error) => {
+      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '刷新组合详情失败，请手动刷新。', true)
+    })
+  }
+
   async function submitPaperRebalance(targets, { excludeAfter: shouldExcludeAfter = false, dryRun = false } = {}) {
     const planId = selectedLatestPlanId.value
     if (!planId || !Object.keys(targets || {}).length) return null
@@ -581,7 +587,7 @@ export function useHoldingsOps({
       const inserted = data.inserted_count ?? (data.new_signals?.length || 0)
       const label = data.manual_action === 'liquidate' ? '实盘清仓' : '实盘调仓'
       onMessage(`已提交${label}：${count} 只标的、${inserted} 笔委托已下发，交易器盘中执行。`, false)
-      await onRefresh()
+      refreshPortfolioInBackground()
       return data
     } catch (error) {
       onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '实盘下单提交失败', true)
