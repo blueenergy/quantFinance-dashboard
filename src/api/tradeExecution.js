@@ -65,6 +65,7 @@ export async function getAllTradeActivities(params = {}) {
   if (params.start_date) queryParams.append('start_date', params.start_date);
   if (params.end_date) queryParams.append('end_date', params.end_date);
   if (params.status_filter) queryParams.append('status_filter', params.status_filter);
+  if (params.activity_type) queryParams.append('activity_type', params.activity_type);
   
   const res = await fetch(`${API_BASE}/trade-activities/?${queryParams.toString()}`, {
     headers: authHeaders()

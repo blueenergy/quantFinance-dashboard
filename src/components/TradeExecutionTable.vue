@@ -564,22 +564,42 @@ function getStrategyName(strategyKey) {
 // Available strategies from API for name lookup
 const availableStrategies = ref([]);
 
-// Load available strategy metadata for name lookup
-async function loadStrategyMetadata() {
+// Load strategy keys and metadata in one request
+async function loadStrategies() {
   try {
     const token = localStorage.getItem('access_token')
     const response = await fetch(`${API_BASE}/strategy/strategies`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
-    
-    if (!response.ok) throw new Error('Failed to load strategy metadata')
+
+    if (!response.ok) throw new Error('Failed to load strategies')
     const strategiesData = await response.json()
-    availableStrategies.value = strategiesData.strategies || []
-    
-    console.log('策略元数据加载成功:', availableStrategies.value.length, '个策略')
+    const strategyList = strategiesData.strategies || []
+
+    availableStrategies.value = strategyList
+    strategies.value = strategyList.map(s => s.key)
+
+    if (!strategies.value.includes('manual')) {
+      strategies.value.push('manual')
+    }
+
+    console.log('策略列表加载成功:', strategies.value.length, '个策略')
   } catch (error) {
-    console.error('Failed to load strategy metadata:', error);
-    availableStrategies.value = [];
+    console.error('Failed to load strategies from global API, falling back to trade strategies:', error);
+
+    try {
+      const response = await tradeApi.getTradeStrategies();
+      strategies.value = response.strategies || [];
+      availableStrategies.value = strategies.value.map(key => ({ key, name: key }));
+
+      if (!strategies.value.includes('manual')) {
+        strategies.value.push('manual')
+      }
+    } catch (fallbackError) {
+      console.error('Failed to load strategies from both APIs:', fallbackError);
+      strategies.value = [];
+      availableStrategies.value = [];
+    }
   }
 }
 
@@ -711,10 +731,11 @@ async function loadTrades() {
     loading.value = true;
     errorMessage.value = '';
     
-    // 使用新的融合 API
+    // 按 tab 查询单集合; status_filter=all 仅在当前 tab 内生效
     const params = {
       limit: 200,
       skip: 0,
+      activity_type: viewMode.value === 'signals' ? 'signals' : 'executions',
     };
     
     // 添加状态筛选
@@ -792,45 +813,6 @@ async function loadSummary() {
   }
 }
 
-async function loadStrategies() {
-  try {
-    // Load available strategies from the global strategy API
-    const token = localStorage.getItem('access_token')
-    const response = await fetch(`${API_BASE}/strategy/strategies`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    
-    if (!response.ok) throw new Error('Failed to load strategies')
-    const strategiesData = await response.json()
-    
-    // Extract just the strategy keys
-    strategies.value = strategiesData.strategies?.map(s => s.key) || []
-    
-    // Add manual trading option
-    if (!strategies.value.includes('manual')) {
-      strategies.value.push('manual')
-    }
-    
-    console.log('交易执行页面策略列表加载成功:', strategies.value.length, '个策略')
-  } catch (error) {
-    console.error('Failed to load strategies from global API, falling back to trade strategies:', error);
-    
-    // Fallback to original trade strategies API
-    try {
-      const response = await tradeApi.getTradeStrategies();
-      strategies.value = response.strategies || [];
-      
-      // Add manual trading option
-      if (!strategies.value.includes('manual')) {
-        strategies.value.push('manual')
-      }
-    } catch (fallbackError) {
-      console.error('Failed to load strategies from both APIs:', fallbackError);
-      strategies.value = [];
-    }
-  }
-}
-
 function setViewMode(mode) {
   if (viewMode.value === mode) return;
   viewMode.value = mode;
@@ -886,7 +868,7 @@ function onSummaryRowClick(event, row) {
 }
 
 // Watchers
-watch([searchSymbol, selectedStrategy, statusFilter, dateRangeType, selectedDate, startDate, endDate], () => {
+watch([statusFilter, dateRangeType, selectedDate, startDate, endDate], () => {
   currentPage.value = 1;
   if (viewMode.value === 'summary') {
     loadSummary();
@@ -899,7 +881,6 @@ watch([searchSymbol, selectedStrategy, statusFilter, dateRangeType, selectedDate
 onMounted(() => {
   loadTrades();
   loadStrategies();
-  loadStrategyMetadata();
 });
 </script>
 
