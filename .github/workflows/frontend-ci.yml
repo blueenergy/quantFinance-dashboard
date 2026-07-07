@@ -18,9 +18,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20.19.4'
           cache: 'npm'
@@ -31,7 +31,7 @@ jobs:
       - name: Build
         run: npm run build
       - name: Upload dist artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: frontend-dist
           path: dist/
@@ -42,7 +42,7 @@ jobs:
           echo "Date: $(date -u)" >> build_info.txt
           echo "Branch: $GITHUB_REF" >> build_info.txt
       - name: Artifact build info
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: build-info
           path: build_info.txt
@@ -60,20 +60,20 @@ jobs:
             arch: arm64
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Aliyun Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com
           username: ${{ secrets.ALIYUN_USER }}
@@ -81,7 +81,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ghcr.io/blueenergy/quant-dashboard
@@ -91,7 +91,7 @@ jobs:
             type=raw,value=latest-${{ matrix.arch }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.fast
@@ -112,14 +112,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Aliyun Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com
           username: ${{ secrets.ALIYUN_USER }}
@@ -162,7 +162,7 @@ jobs:
         run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout quant-infrastructure
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: blueenergy/quant-infrastructure
           ref: main
