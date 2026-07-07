@@ -185,8 +185,10 @@
           <div class="value">{{ signedMoney(positionSummary.total_realized_pnl) }}</div>
         </div>
         <div class="card">
-          <div class="label">浮动盈亏</div>
-          <div class="value">{{ signedMoney(positionSummary.total_unrealized_pnl) }}</div>
+          <div class="label">总盈亏</div>
+          <div class="value" :title="portfolioPnlTitle(positionSummary)">
+            {{ signedMoney(totalPortfolioPnl(positionSummary)) }}
+          </div>
         </div>
         <div class="card">
           <div class="label">持仓标的数</div>
@@ -997,6 +999,23 @@ function signedMoney(value) {
   if (!Number.isFinite(number)) return '-'
   const formatted = Math.abs(number).toLocaleString('zh-CN', { maximumFractionDigits: 0 })
   return `${number >= 0 ? '+' : '-'}${formatted}`
+}
+
+function numericOrZero(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : 0
+}
+
+function totalPortfolioPnl(summary) {
+  return numericOrZero(summary?.total_realized_pnl) + numericOrZero(summary?.total_unrealized_pnl)
+}
+
+function portfolioPnlTitle(summary) {
+  return [
+    `已实现：${signedMoney(numericOrZero(summary?.total_realized_pnl))}`,
+    `浮动：${signedMoney(numericOrZero(summary?.total_unrealized_pnl))}`,
+    `合计：${signedMoney(totalPortfolioPnl(summary))}`,
+  ].join('\n')
 }
 
 function formatApiDetail(detail) {

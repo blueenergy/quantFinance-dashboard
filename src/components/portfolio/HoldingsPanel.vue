@@ -45,7 +45,7 @@
             <th>均价</th>
             <th>现价</th>
             <th>市值</th>
-            <th>浮动</th>
+            <th>盈亏</th>
             <th>快思考</th>
             <th>明细</th>
             <th>风控</th>
@@ -82,7 +82,9 @@
             <td>{{ num(row.avg_cost) }}</td>
             <td>{{ num(row.last_price) }}</td>
             <td>{{ money(row.market_value) }}</td>
-            <td :class="signClass(row.unrealized_pnl)">{{ signedMoney(row.unrealized_pnl) }}</td>
+            <td :class="signClass(holdingTotalPnl(row))" :title="holdingPnlTitle(row)">
+              {{ signedMoney(holdingTotalPnl(row)) }}
+            </td>
             <td class="fast-actions">
               <button type="button" class="fast-btn fast-btn-swap" @click="$emit('open-swap', row)">换股</button>
               <button type="button" class="fast-btn fast-btn-reduce" @click="$emit('quick-reduce', row, halfTargetShares(row))">减半</button>
@@ -378,6 +380,23 @@ function benchRowRisk(row) {
   const rowRisk = row?.ai_risk || null
   const keyedRisk = symbolRisk(props.benchRiskBySymbol, row?.symbol)
   return mergeRisk(rowRisk, keyedRisk)
+}
+
+function numericOrZero(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : 0
+}
+
+function holdingTotalPnl(row) {
+  return numericOrZero(row?.realized_pnl) + numericOrZero(row?.unrealized_pnl)
+}
+
+function holdingPnlTitle(row) {
+  return [
+    `已实现：${props.signedMoney(numericOrZero(row?.realized_pnl))}`,
+    `浮动：${props.signedMoney(numericOrZero(row?.unrealized_pnl))}`,
+    `合计：${props.signedMoney(holdingTotalPnl(row))}`,
+  ].join('\n')
 }
 
 defineEmits([
