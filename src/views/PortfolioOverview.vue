@@ -182,12 +182,12 @@
         </div>
         <div class="card">
           <div class="label">已实现盈亏</div>
-          <div class="value">{{ signedMoney(positionSummary.total_realized_pnl) }}</div>
+          <div class="value">{{ signedMoney(latestHoldingsPnlSummary.realized) }}</div>
         </div>
         <div class="card">
           <div class="label">总盈亏</div>
-          <div class="value" :title="portfolioPnlTitle(positionSummary)">
-            {{ signedMoney(totalPortfolioPnl(positionSummary)) }}
+          <div class="value" :title="latestHoldingsPnlTitle">
+            {{ signedMoney(latestHoldingsPnlSummary.total) }}
           </div>
         </div>
         <div class="card">
@@ -1006,17 +1006,28 @@ function numericOrZero(value) {
   return Number.isFinite(number) ? number : 0
 }
 
-function totalPortfolioPnl(summary) {
-  return numericOrZero(summary?.total_realized_pnl) + numericOrZero(summary?.total_unrealized_pnl)
-}
+const latestHoldingsPnlSummary = computed(() => {
+  let realized = 0
+  let unrealized = 0
+  for (const row of latestHoldingRows.value || []) {
+    realized += numericOrZero(row?.realized_pnl)
+    unrealized += numericOrZero(row?.unrealized_pnl)
+  }
+  return {
+    realized,
+    unrealized,
+    total: realized + unrealized,
+  }
+})
 
-function portfolioPnlTitle(summary) {
+const latestHoldingsPnlTitle = computed(() => {
+  const summary = latestHoldingsPnlSummary.value
   return [
-    `已实现：${signedMoney(numericOrZero(summary?.total_realized_pnl))}`,
-    `浮动：${signedMoney(numericOrZero(summary?.total_unrealized_pnl))}`,
-    `合计：${signedMoney(totalPortfolioPnl(summary))}`,
+    `当前持仓已实现：${signedMoney(summary.realized)}`,
+    `当前持仓浮动：${signedMoney(summary.unrealized)}`,
+    `当前持仓合计：${signedMoney(summary.total)}`,
   ].join('\n')
-}
+})
 
 function formatApiDetail(detail) {
   if (!detail) return ''
