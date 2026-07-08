@@ -893,7 +893,11 @@ async function rerunPlanLlmRisk(planIdRef, source = 'ops') {
 
 async function submitForceRebalance() {
   const planId = selectedOperationPlanId.value
-  if (!planId) return
+  if (!planId) {
+    message.value = '当前组合没有可操作的计划，无法发起立即调仓。'
+    messageIsError.value = true
+    return
+  }
   if (forceRebalanceBlockReason.value) {
     message.value = forceRebalanceBlockReason.value
     messageIsError.value = true
@@ -917,8 +921,8 @@ async function submitForceRebalance() {
     const detail = formatApiDetail(error.response?.data?.detail) || error.message || '立即调仓提交失败'
     if (detail.includes('任务处理超时')) {
       message.value = taskId
-        ? `任务 ${taskId} 已提交，worker 仍在后台生成计划；请稍后刷新组合总览或到「组合交易计划」查看结果。`
-        : '立即调仓任务已提交，worker 仍在后台生成计划；请稍后刷新查看结果。'
+        ? `任务 ${taskId} 已提交，但 3 分钟内未生成计划。请到「组合交易计划」查看任务状态；若长时间停留在 pending，请确认计划生成服务(quant-portfolio worker)是否在运行。`
+        : '立即调仓任务已提交，但 3 分钟内未生成计划。请稍后刷新查看，若无结果请确认计划生成服务是否在运行。'
       messageIsError.value = false
       await Promise.all([loadPortfolios(), refreshDetail()])
     } else {
