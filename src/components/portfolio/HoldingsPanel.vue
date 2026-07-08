@@ -115,18 +115,22 @@
                 <span v-else class="muted">-</span>
                 <span
                   v-if="holdingRowRisk(row)?.llm"
-                  class="llm-risk-tag"
-                  :class="`risk-${holdingRowRisk(row).llm.severity || 'none'}`"
-                  :title="llmRiskTitle(holdingRowRisk(row))"
+                  class="llm-risk-tag llm-risk-tag--btn"
+                  :class="[`risk-${holdingRowRisk(row).llm.severity || 'none'}`, { 'is-active': llmDetail?.key === llmKey('holding', row) }]"
+                  title="点击查看/放大完整 LLM 风控"
+                  role="button"
+                  tabindex="0"
+                  @click.stop="openLlm(holdingRowRisk(row), row, 'holding')"
+                  @keydown.enter.stop="openLlm(holdingRowRisk(row), row, 'holding')"
                 >LLM</span>
                 <button
                   v-if="holdingRowRisk(row)?.llm"
                   type="button"
                   class="llm-risk-copy"
                   :title="llmCopyTitle(holdingRowRisk(row))"
-                  @click.stop="copyLlmRisk(holdingRowRisk(row), row.symbol)"
+                  @click.stop="copyLlmRisk(holdingRowRisk(row), llmKey('holding', row))"
                 >
-                  {{ copiedLlmRiskSymbol === row.symbol ? '已复制' : '复制' }}
+                  {{ copiedLlmRiskKey === llmKey('holding', row) ? '已复制' : '复制' }}
                 </button>
               </div>
             </td>
@@ -272,18 +276,22 @@
                       <span v-else class="muted">-</span>
                       <span
                         v-if="benchRowRisk(row)?.llm"
-                        class="llm-risk-tag"
-                        :class="`risk-${benchRowRisk(row).llm.severity || 'none'}`"
-                        :title="llmRiskTitle(benchRowRisk(row))"
+                        class="llm-risk-tag llm-risk-tag--btn"
+                        :class="[`risk-${benchRowRisk(row).llm.severity || 'none'}`, { 'is-active': llmDetail?.key === llmKey('bench', row) }]"
+                        title="点击查看/放大完整 LLM 风控"
+                        role="button"
+                        tabindex="0"
+                        @click.stop="openLlm(benchRowRisk(row), row, 'bench')"
+                        @keydown.enter.stop="openLlm(benchRowRisk(row), row, 'bench')"
                       >LLM</span>
                       <button
                         v-if="benchRowRisk(row)?.llm"
                         type="button"
                         class="llm-risk-copy"
                         :title="llmCopyTitle(benchRowRisk(row))"
-                        @click.stop="copyLlmRisk(benchRowRisk(row), row.symbol)"
+                        @click.stop="copyLlmRisk(benchRowRisk(row), llmKey('bench', row))"
                       >
-                        {{ copiedLlmRiskSymbol === row.symbol ? '已复制' : '复制' }}
+                        {{ copiedLlmRiskKey === llmKey('bench', row) ? '已复制' : '复制' }}
                       </button>
                     </div>
                   </td>
@@ -295,12 +303,26 @@
         </template>
       </div>
     </section>
+
+    <LlmRiskDetailPanel
+      :detail="llmDetail"
+      :font-px="llmFontPx"
+      :min="LLM_FONT_MIN"
+      :max="LLM_FONT_MAX"
+      :copied="copiedLlmRiskKey === llmDetail?.key"
+      @inc="incLlmFont"
+      @dec="decLlmFont"
+      @copy="copyLlmRisk(llmDetail.risk, llmDetail.key)"
+      @close="closeLlmDetail"
+    />
   </section>
 </template>
 
 <script setup>
 import { ref } from 'vue'
 import AppLink from '../common/AppLink.vue'
+import LlmRiskDetailPanel from './LlmRiskDetailPanel.vue'
+import { useLlmRiskDetail } from '../../composables/useLlmRiskDetail'
 import {
   formatShareDelta,
   aiRiskTitle,
@@ -312,7 +334,6 @@ import {
   riskSeverityLabel,
   signClass,
 } from '../../composables/usePortfolioPlanFormat'
-import { copyTextToClipboard } from '../../utils/clipboard'
 
 const props = defineProps({
   selectedLatestPlanId: { type: String, default: '' },
@@ -342,21 +363,29 @@ const props = defineProps({
   signedMoney: { type: Function, required: true },
 })
 
-const copiedLlmRiskSymbol = ref('')
+const {
+  detail: llmDetail,
+  copiedKey: copiedLlmRiskKey,
+  fontPx: llmFontPx,
+  LLM_FONT_MIN,
+  LLM_FONT_MAX,
+  incLlmFont,
+  decLlmFont,
+  toggleLlmDetail: openLlmDetail,
+  closeLlmDetail,
+  copyLlmText: copyLlmRisk,
+} = useLlmRiskDetail()
+
+function llmKey(scope, row) {
+  return `${scope}:${row?.symbol || row?.name || 'unknown'}`
+}
+
+function openLlm(risk, row, scope) {
+  openLlmDetail({ key: llmKey(scope, row), symbol: row?.symbol || '', name: row?.name || '', risk })
+}
 
 function llmCopyTitle(risk) {
   return `${llmRiskTitle(risk)}\n\n点击复制完整 LLM 风控文本`
-}
-
-let copiedResetTimer = null
-async function copyLlmRisk(risk, symbol) {
-  const ok = await copyTextToClipboard(llmRiskTitle(risk))
-  if (!ok) return
-  copiedLlmRiskSymbol.value = symbol
-  if (copiedResetTimer) clearTimeout(copiedResetTimer)
-  copiedResetTimer = setTimeout(() => {
-    if (copiedLlmRiskSymbol.value === symbol) copiedLlmRiskSymbol.value = ''
-  }, 2000)
 }
 
 function symbolRisk(map, symbol) {
@@ -576,6 +605,18 @@ tbody tr:hover td {
   font-weight: 700;
   line-height: 1.2;
   padding: 1px 5px;
+}
+
+.llm-risk-tag--btn {
+  cursor: pointer;
+}
+
+.llm-risk-tag--btn:hover {
+  filter: brightness(0.97);
+}
+
+.llm-risk-tag--btn.is-active {
+  box-shadow: 0 0 0 2px #6366f1;
 }
 
 .llm-risk-tag.risk-high {
