@@ -1,26 +1,37 @@
 <template>
-  <div v-if="detail" class="llm-detail-panel">
-    <div class="llm-detail-head">
-      <span class="llm-detail-title">
-        LLM 风控详情<template v-if="detail.symbol"> · {{ detail.name || detail.symbol }}</template>
-      </span>
-      <div class="llm-detail-tools">
-        <span class="llm-font-label">字号</span>
-        <button type="button" class="llm-font-btn" :disabled="fontPx <= min" @click="$emit('dec')">A−</button>
-        <span class="llm-font-size">{{ fontPx }}px</span>
-        <button type="button" class="llm-font-btn" :disabled="fontPx >= max" @click="$emit('inc')">A+</button>
-        <button type="button" class="llm-detail-copy" @click="$emit('copy')">
-          {{ copied ? '已复制 ✓' : '复制全文' }}
-        </button>
-        <button type="button" class="llm-detail-close" @click="$emit('close')">关闭</button>
+  <Teleport to="body">
+    <div v-if="detail" class="llm-popover-backdrop" @click="$emit('close')">
+      <div
+        class="llm-detail-panel"
+        :class="{ 'llm-detail-panel--floating': Boolean(detail.pos) }"
+        :style="panelStyle"
+        @click.stop
+      >
+        <div class="llm-detail-head">
+          <span class="llm-detail-title">
+            LLM 风控详情<template v-if="detail.symbol"> · {{ detail.name || detail.symbol }}</template>
+          </span>
+          <div class="llm-detail-tools">
+            <span class="llm-font-label">字号</span>
+            <button type="button" class="llm-font-btn" :disabled="fontPx <= min" @click="$emit('dec')">A−</button>
+            <span class="llm-font-size">{{ fontPx }}px</span>
+            <button type="button" class="llm-font-btn" :disabled="fontPx >= max" @click="$emit('inc')">A+</button>
+            <button type="button" class="llm-detail-copy" @click="$emit('copy')">
+              {{ copied ? '已复制 ✓' : '复制全文' }}
+            </button>
+            <button type="button" class="llm-detail-close" @click="$emit('close')">关闭</button>
+          </div>
+        </div>
+        <pre class="llm-detail-body" :style="{ fontSize: fontPx + 'px', maxHeight: bodyMaxHeight }">{{ detail.text }}</pre>
       </div>
     </div>
-    <pre class="llm-detail-body" :style="{ fontSize: fontPx + 'px' }">{{ detail.text }}</pre>
-  </div>
+  </Teleport>
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   detail: { type: Object, default: null },
   fontPx: { type: Number, default: 15 },
   min: { type: Number, default: 12 },
@@ -29,15 +40,44 @@ defineProps({
 })
 
 defineEmits(['inc', 'dec', 'copy', 'close'])
+
+const panelStyle = computed(() => {
+  const pos = props.detail?.pos
+  if (!pos) return {}
+  return {
+    top: `${pos.top}px`,
+    left: `${pos.left}px`,
+    width: `${pos.width}px`,
+  }
+})
+
+const bodyMaxHeight = computed(() => {
+  const pos = props.detail?.pos
+  // Leave room for the header (~48px) inside the popover's max height.
+  return pos?.maxHeight ? `${Math.max(120, pos.maxHeight - 56)}px` : '380px'
+})
 </script>
 
 <style scoped>
+.llm-popover-backdrop {
+  background: transparent;
+  inset: 0;
+  position: fixed;
+  z-index: 3000;
+}
+
 .llm-detail-panel {
   background: #f8faff;
   border: 1px solid #818cf8;
   border-radius: 8px;
   margin: 10px;
   padding: 10px 12px;
+}
+
+.llm-detail-panel--floating {
+  box-shadow: 0 12px 32px rgba(30, 41, 59, 0.28);
+  margin: 0;
+  position: fixed;
 }
 
 .llm-detail-head {
@@ -109,7 +149,6 @@ defineEmits(['inc', 'dec', 'copy', 'close'])
   font-family: inherit;
   line-height: 1.65;
   margin: 8px 0 0;
-  max-height: 380px;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;

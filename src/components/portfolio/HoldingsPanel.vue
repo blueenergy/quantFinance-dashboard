@@ -120,8 +120,8 @@
                   title="点击查看/放大完整 LLM 风控"
                   role="button"
                   tabindex="0"
-                  @click.stop="openLlm(holdingRowRisk(row), row, 'holding')"
-                  @keydown.enter.stop="openLlm(holdingRowRisk(row), row, 'holding')"
+                  @click.stop="openLlm(holdingRowRisk(row), row, 'holding', $event)"
+                  @keydown.enter.stop="openLlm(holdingRowRisk(row), row, 'holding', $event)"
                 >LLM</span>
                 <button
                   v-if="holdingRowRisk(row)?.llm"
@@ -281,8 +281,8 @@
                         title="点击查看/放大完整 LLM 风控"
                         role="button"
                         tabindex="0"
-                        @click.stop="openLlm(benchRowRisk(row), row, 'bench')"
-                        @keydown.enter.stop="openLlm(benchRowRisk(row), row, 'bench')"
+                        @click.stop="openLlm(benchRowRisk(row), row, 'bench', $event)"
+                        @keydown.enter.stop="openLlm(benchRowRisk(row), row, 'bench', $event)"
                       >LLM</span>
                       <button
                         v-if="benchRowRisk(row)?.llm"
@@ -380,8 +380,8 @@ function llmKey(scope, row) {
   return `${scope}:${row?.symbol || row?.name || 'unknown'}`
 }
 
-function openLlm(risk, row, scope) {
-  openLlmDetail({ key: llmKey(scope, row), symbol: row?.symbol || '', name: row?.name || '', risk })
+function openLlm(risk, row, scope, event) {
+  openLlmDetail({ key: llmKey(scope, row), symbol: row?.symbol || '', name: row?.name || '', risk, event })
 }
 
 function llmCopyTitle(risk) {

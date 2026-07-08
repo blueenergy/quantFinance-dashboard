@@ -100,8 +100,8 @@
                 :title="'点击查看/放大完整 LLM 风控'"
                 role="button"
                 tabindex="0"
-                @click.stop="toggleLlmDetail(row, 'pending')"
-                @keydown.enter.stop="toggleLlmDetail(row, 'pending')"
+                @click.stop="toggleLlmDetail(row, 'pending', $event)"
+                @keydown.enter.stop="toggleLlmDetail(row, 'pending', $event)"
               >LLM</span>
               <button
                 v-if="row.ai_risk?.llm"
@@ -247,8 +247,8 @@
                 :title="'点击查看/放大完整 LLM 风控'"
                 role="button"
                 tabindex="0"
-                @click.stop="toggleLlmDetail(item, 'detail')"
-                @keydown.enter.stop="toggleLlmDetail(item, 'detail')"
+                @click.stop="toggleLlmDetail(item, 'detail', $event)"
+                @keydown.enter.stop="toggleLlmDetail(item, 'detail', $event)"
               >LLM</span>
               <button
                 v-if="item.ai_risk?.llm"
@@ -338,12 +338,13 @@ const {
   copyLlmText: copyLlmRisk,
 } = useLlmRiskDetail()
 
-function toggleLlmDetail(item, scope) {
+function toggleLlmDetail(item, scope, event) {
   openLlmDetail({
     key: llmCopyKey(item, scope),
     symbol: item?.symbol || '',
     name: item?.name || '',
     risk: item?.ai_risk,
+    event,
   })
 }
 

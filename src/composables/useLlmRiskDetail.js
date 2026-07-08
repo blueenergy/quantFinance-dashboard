@@ -40,13 +40,32 @@ export function useLlmRiskDetail() {
     persistFontPx()
   }
 
-  function toggleLlmDetail({ key, symbol = '', name = '', risk } = {}) {
+  function computePopoverPos(event) {
+    const rect = event?.currentTarget?.getBoundingClientRect?.()
+    if (!rect || typeof window === 'undefined') return null
+    const margin = 12
+    const gap = 6
+    const maxH = 420
+    const width = Math.min(560, window.innerWidth - margin * 2)
+    let left = rect.left
+    if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width
+    if (left < margin) left = margin
+    // Prefer just below the tag; if that would overflow the viewport bottom,
+    // clamp upward so the whole popover stays on screen without scrolling.
+    let top = rect.bottom + gap
+    if (top + maxH > window.innerHeight - margin) {
+      top = Math.max(margin, window.innerHeight - margin - maxH)
+    }
+    return { top, left, width, maxHeight: maxH }
+  }
+
+  function toggleLlmDetail({ key, symbol = '', name = '', risk, event } = {}) {
     if (!key) return
     if (detail.value?.key === key) {
       detail.value = null
       return
     }
-    detail.value = { key, symbol, name, risk, text: llmRiskTitle(risk) }
+    detail.value = { key, symbol, name, risk, text: llmRiskTitle(risk), pos: computePopoverPos(event) }
   }
 
   function closeLlmDetail() {
