@@ -95,9 +95,13 @@
               <span v-else class="muted">-</span>
               <span
                 v-if="row.ai_risk?.llm"
-                class="llm-risk-tag"
-                :class="`risk-${row.ai_risk.llm.severity || 'none'}`"
-                :title="llmRiskTitle(row.ai_risk)"
+                class="llm-risk-tag llm-risk-tag--btn"
+                :class="[`risk-${row.ai_risk.llm.severity || 'none'}`, { 'is-active': llmDetail?.key === llmCopyKey(row, 'pending') }]"
+                :title="'点击查看/放大完整 LLM 风控'"
+                role="button"
+                tabindex="0"
+                @click.stop="toggleLlmDetail(row, 'pending')"
+                @keydown.enter.stop="toggleLlmDetail(row, 'pending')"
               >LLM</span>
               <button
                 v-if="row.ai_risk?.llm"
@@ -238,9 +242,13 @@
               <span v-else>-</span>
               <span
                 v-if="item.ai_risk?.llm"
-                class="llm-risk-tag"
-                :class="`risk-${item.ai_risk.llm.severity || 'none'}`"
-                :title="llmRiskTitle(item.ai_risk)"
+                class="llm-risk-tag llm-risk-tag--btn"
+                :class="[`risk-${item.ai_risk.llm.severity || 'none'}`, { 'is-active': llmDetail?.key === llmCopyKey(item, 'detail') }]"
+                :title="'点击查看/放大完整 LLM 风控'"
+                role="button"
+                tabindex="0"
+                @click.stop="toggleLlmDetail(item, 'detail')"
+                @keydown.enter.stop="toggleLlmDetail(item, 'detail')"
               >LLM</span>
               <button
                 v-if="item.ai_risk?.llm"
@@ -257,6 +265,25 @@
         </tr>
       </tbody>
     </table>
+
+    <div v-if="llmDetail" class="llm-detail-panel">
+      <div class="llm-detail-head">
+        <span class="llm-detail-title">
+          LLM 风控详情<template v-if="llmDetail.symbol"> · {{ llmDetail.name || llmDetail.symbol }}</template>
+        </span>
+        <div class="llm-detail-tools">
+          <span class="llm-font-label">字号</span>
+          <button type="button" class="llm-font-btn" :disabled="llmFontPx <= LLM_FONT_MIN" @click="decLlmFont">A−</button>
+          <span class="llm-font-size">{{ llmFontPx }}px</span>
+          <button type="button" class="llm-font-btn" :disabled="llmFontPx >= LLM_FONT_MAX" @click="incLlmFont">A+</button>
+          <button type="button" class="llm-detail-copy" @click="copyLlmRisk(llmDetail.item.ai_risk, llmDetail.key)">
+            {{ copiedLlmRiskKey === llmDetail.key ? '已复制 ✓' : '复制全文' }}
+          </button>
+          <button type="button" class="llm-detail-close" @click="llmDetail = null">关闭</button>
+        </div>
+      </div>
+      <pre class="llm-detail-body" :style="{ fontSize: llmFontPx + 'px' }">{{ llmDetail.text }}</pre>
+    </div>
   </div>
 </template>
 
@@ -304,6 +331,52 @@ defineEmits(['toggle-reselect', 'reselect'])
 
 const showOverlay = computed(() => Boolean(props.overlay?.enabled !== false))
 const copiedLlmRiskKey = ref('')
+
+const LLM_FONT_MIN = 12
+const LLM_FONT_MAX = 30
+const LLM_FONT_STEP = 2
+const LLM_FONT_STORAGE_KEY = 'planLlmRiskFontPx'
+
+function loadLlmFontPx() {
+  if (typeof localStorage === 'undefined') return 15
+  const raw = Number(localStorage.getItem(LLM_FONT_STORAGE_KEY))
+  if (Number.isFinite(raw) && raw >= LLM_FONT_MIN && raw <= LLM_FONT_MAX) return raw
+  return 15
+}
+
+const llmFontPx = ref(loadLlmFontPx())
+const llmDetail = ref(null)
+
+function persistLlmFontPx() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(LLM_FONT_STORAGE_KEY, String(llmFontPx.value))
+  }
+}
+
+function incLlmFont() {
+  llmFontPx.value = Math.min(LLM_FONT_MAX, llmFontPx.value + LLM_FONT_STEP)
+  persistLlmFontPx()
+}
+
+function decLlmFont() {
+  llmFontPx.value = Math.max(LLM_FONT_MIN, llmFontPx.value - LLM_FONT_STEP)
+  persistLlmFontPx()
+}
+
+function toggleLlmDetail(item, scope) {
+  const key = llmCopyKey(item, scope)
+  if (llmDetail.value?.key === key) {
+    llmDetail.value = null
+    return
+  }
+  llmDetail.value = {
+    key,
+    item,
+    symbol: item?.symbol || '',
+    name: item?.name || '',
+    text: llmRiskTitle(item?.ai_risk),
+  }
+}
 
 function llmCopyKey(item, scope) {
   return `${scope}:${item?.symbol || item?.name || 'unknown'}:${item?.rank ?? ''}`
@@ -533,6 +606,18 @@ function canSelectReselectItem(item) {
   padding: 1px 5px;
 }
 
+.llm-risk-tag--btn {
+  cursor: pointer;
+}
+
+.llm-risk-tag--btn:hover {
+  filter: brightness(0.97);
+}
+
+.llm-risk-tag--btn.is-active {
+  box-shadow: 0 0 0 2px #6366f1;
+}
+
 .llm-risk-tag.risk-high {
   background: #fee2e2;
   border-color: #f87171;
@@ -571,6 +656,89 @@ function canSelectReselectItem(item) {
 
 .llm-risk-copy:hover {
   background: #eef2ff;
+}
+
+.llm-detail-panel {
+  background: #f8faff;
+  border: 1px solid #818cf8;
+  border-radius: 8px;
+  margin: 10px;
+  padding: 10px 12px;
+}
+
+.llm-detail-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.llm-detail-title {
+  color: #3730a3;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.llm-detail-tools {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.llm-font-label {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.llm-font-btn,
+.llm-detail-copy,
+.llm-detail-close {
+  background: #fff;
+  border: 1px solid #c7d2fe;
+  border-radius: 6px;
+  color: #4338ca;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 2px 8px;
+}
+
+.llm-font-btn:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.llm-font-btn:not(:disabled):hover,
+.llm-detail-copy:hover,
+.llm-detail-close:hover {
+  background: #eef2ff;
+}
+
+.llm-detail-close {
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.llm-font-size {
+  color: #334155;
+  font-size: 12px;
+  min-width: 34px;
+  text-align: center;
+}
+
+.llm-detail-body {
+  color: #1f2937;
+  font-family: inherit;
+  line-height: 1.65;
+  margin: 8px 0 0;
+  max-height: 380px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .stock-workbench-link {
