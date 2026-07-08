@@ -3,8 +3,14 @@ export async function copyTextToClipboard(text) {
   if (!value) return false
 
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value)
-    return true
+    try {
+      await navigator.clipboard.writeText(value)
+      return true
+    } catch {
+      // Async Clipboard API can reject in insecure contexts, when the
+      // document is not focused, or when permission is denied. Fall through
+      // to the execCommand fallback below rather than failing outright.
+    }
   }
 
   if (typeof document === 'undefined') return false

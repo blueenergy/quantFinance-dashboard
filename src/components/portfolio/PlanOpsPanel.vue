@@ -11,8 +11,8 @@
         <p class="plan-id-row">
           <span class="label">完整 plan_id</span>
           <code>{{ planId || '-' }}</code>
-          <button type="button" class="link-button" :disabled="!planId" @click="$emit('copy-plan-id', planId)">
-            复制
+          <button type="button" class="link-button" :disabled="!planId" @click="copyPlanId">
+            {{ copyLabel }}
           </button>
         </p>
       </div>
@@ -192,9 +192,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import PlanItemsTable from './PlanItemsTable.vue'
 import { money, remainderReasonText } from '../../composables/usePortfolioPlanFormat'
+import { copyTextToClipboard } from '../../utils/clipboard'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -262,7 +263,6 @@ const remainderCashUsageText = computed(() => {
 })
 
 defineEmits([
-  'copy-plan-id',
   'execute-paper',
   'preview-publish',
   'confirm-publish',
@@ -274,6 +274,22 @@ defineEmits([
   'update:remainderReason',
   'update:allowPartialRemainder',
 ])
+
+const copyState = ref('')
+let copyTimer = null
+const copyLabel = computed(() => {
+  if (copyState.value === 'ok') return '已复制 ✓'
+  if (copyState.value === 'fail') return '复制失败'
+  return '复制'
+})
+
+async function copyPlanId() {
+  if (!props.planId) return
+  const ok = await copyTextToClipboard(props.planId)
+  copyState.value = ok ? 'ok' : 'fail'
+  if (copyTimer) clearTimeout(copyTimer)
+  copyTimer = setTimeout(() => { copyState.value = '' }, 2000)
+}
 
 function shortPlanId(planId) {
   const text = String(planId || '')

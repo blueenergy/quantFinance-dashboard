@@ -10,7 +10,9 @@
         <p class="plan-id-row">
           <span class="label">完整 plan_id</span>
           <code>{{ planId || '-' }}</code>
-          <button type="button" class="link-button" :disabled="!planId" @click="$emit('copy-plan-id', planId)">复制</button>
+          <button type="button" class="link-button" :disabled="!planId" @click="copyPlanId">
+            {{ copyLabel }}
+          </button>
         </p>
       </div>
       <div class="pending-plan-summary">
@@ -64,9 +66,11 @@
 </template>
 
 <script setup>
+import { computed, ref } from 'vue'
 import PlanItemsTable from './PlanItemsTable.vue'
+import { copyTextToClipboard } from '../../utils/clipboard'
 
-defineProps({
+const props = defineProps({
   visible: { type: Boolean, default: false },
   planId: { type: String, default: '' },
   items: { type: Array, default: () => [] },
@@ -81,7 +85,23 @@ defineProps({
   reviewLlmRiskLoading: { type: Boolean, default: false },
 })
 
-defineEmits(['approve', 'reject', 'rerun-ai-risk', 'rerun-llm-risk', 'copy-plan-id'])
+defineEmits(['approve', 'reject', 'rerun-ai-risk', 'rerun-llm-risk'])
+
+const copyState = ref('')
+let copyTimer = null
+const copyLabel = computed(() => {
+  if (copyState.value === 'ok') return '已复制 ✓'
+  if (copyState.value === 'fail') return '复制失败'
+  return '复制'
+})
+
+async function copyPlanId() {
+  if (!props.planId) return
+  const ok = await copyTextToClipboard(props.planId)
+  copyState.value = ok ? 'ok' : 'fail'
+  if (copyTimer) clearTimeout(copyTimer)
+  copyTimer = setTimeout(() => { copyState.value = '' }, 2000)
+}
 
 function shortPlanId(planId) {
   const text = String(planId || '')

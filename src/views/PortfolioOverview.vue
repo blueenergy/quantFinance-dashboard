@@ -99,7 +99,6 @@
         @reject="rejectPendingPlan"
         @rerun-ai-risk="rerunReviewAiRisk"
         @rerun-llm-risk="() => rerunPlanLlmRisk(reviewPlanId, 'review')"
-        @copy-plan-id="copyPlanId"
       />
 
       <PlanOpsPanel
@@ -140,7 +139,6 @@
         :allow-partial-remainder="allowPartialRemainder"
         :remainder-loading="remainderLoading"
         v-model:remainder-reason="remainderReason"
-        @copy-plan-id="copyPlanId"
         @execute-paper="executePaperNow"
         @preview-publish="previewLivePublish"
         @confirm-publish="publishLiveSignals"
@@ -754,19 +752,6 @@ function shortPlanId(planId) {
   if (!text) return '-'
   if (text.length <= 28) return text
   return `${text.slice(0, 18)}…${text.slice(-8)}`
-}
-
-async function copyPlanId(planId) {
-  const text = String(planId || '')
-  if (!text) return
-  try {
-    await navigator.clipboard.writeText(text)
-    message.value = `已复制 plan_id：${text}`
-    messageIsError.value = false
-  } catch {
-    message.value = `无法自动复制，请手动复制 plan_id：${text}`
-    messageIsError.value = true
-  }
 }
 
 function paperExecutionModeLabel(mode) {
