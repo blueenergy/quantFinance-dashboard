@@ -37,12 +37,64 @@
       <span v-if="llmRiskSummary.status === 'completed_with_failures'"> · 部分行业失败，已展示可用结果</span>
     </p>
 
+    <div v-if="canReselectItems" class="reselect-toolbar">
+      <button
+        type="button"
+        class="link-btn"
+        :disabled="actionLoading || reselectBusy"
+        title="点选全部 AI 高风险标的；已全部勾选时再点可取消"
+        @click="$emit('select-high-risk')"
+      >
+        勾选高风险
+      </button>
+      <button
+        type="button"
+        class="link-btn link-btn--primary"
+        :disabled="actionLoading || reselectBusy || !selectedReselectCount"
+        title="一次性排除勾选标的并重算候选池补位"
+        @click="$emit('bulk-reselect')"
+      >
+        批量换股 {{ selectedReselectCount ? `(${selectedReselectCount})` : '' }}
+      </button>
+    </div>
+
+    <p v-if="reselectStatus?.state && reselectStatus.state !== 'idle'" class="reselect-status" :class="`is-${reselectStatus.state}`">
+      <span v-if="reselectStatus.state === 'running'" class="spinner" />
+      {{ reselectStatus.text }}
+    </p>
+    <p v-if="reselectTaskMeta?.taskId" class="reselect-meta">
+      task {{ reselectTaskMeta.taskId }} · {{ reselectTaskMeta.status || '-' }}
+    </p>
+    <p v-if="lastReselectSummary" class="reselect-summary">{{ lastReselectSummary }}</p>
+    <div v-if="canReselectItems && selectedPlanExcluded.length" class="excluded-bar">
+      <span class="excluded-label">已排除：</span>
+      <span v-for="sym in selectedPlanExcluded" :key="sym" class="excluded-chip">
+        {{ sym }}
+        <button
+          type="button"
+          class="link-btn"
+          :disabled="actionLoading || reselectBusy"
+          @click="$emit('reselect', sym, true)"
+        >
+          {{ reselectBusy && pendingReselectSymbol === sym ? '恢复中…' : '恢复' }}
+        </button>
+      </span>
+    </div>
+
     <PlanItemsTable
       v-if="items.length"
       mode="pending"
       :items="items"
       :overlay="overlay"
       compact
+      :can-reselect-items="canReselectItems"
+      :selected-reselect-symbols="selectedReselectSymbols"
+      :selected-plan-excluded="selectedPlanExcluded"
+      :action-loading="actionLoading"
+      :reselect-busy="reselectBusy"
+      :pending-reselect-symbol="pendingReselectSymbol"
+      @toggle-reselect="(symbol, checked) => $emit('toggle-reselect', symbol, checked)"
+      @reselect="(symbol, restore) => $emit('reselect', symbol, restore)"
     />
     <p v-else class="muted plan-review-empty">
       计划明细仍在加载或暂不可用；如已核对 plan_id，可先批准或拒绝，失败原因会由后端返回。
@@ -83,9 +135,28 @@ const props = defineProps({
   rejectSubmitting: { type: Boolean, default: false },
   reviewAiRiskLoading: { type: Boolean, default: false },
   reviewLlmRiskLoading: { type: Boolean, default: false },
+  canReselectItems: { type: Boolean, default: false },
+  selectedReselectSymbols: { type: Object, default: () => new Set() },
+  selectedPlanExcluded: { type: Array, default: () => [] },
+  selectedReselectCount: { type: Number, default: 0 },
+  actionLoading: { type: Boolean, default: false },
+  reselectBusy: { type: Boolean, default: false },
+  pendingReselectSymbol: { type: String, default: '' },
+  reselectStatus: { type: Object, default: () => ({ state: 'idle', text: '' }) },
+  reselectTaskMeta: { type: Object, default: () => ({ taskId: '', status: '' }) },
+  lastReselectSummary: { type: String, default: '' },
 })
 
-defineEmits(['approve', 'reject', 'rerun-ai-risk', 'rerun-llm-risk'])
+defineEmits([
+  'approve',
+  'reject',
+  'rerun-ai-risk',
+  'rerun-llm-risk',
+  'toggle-reselect',
+  'reselect',
+  'bulk-reselect',
+  'select-high-risk',
+])
 
 const copyState = ref('')
 let copyTimer = null
@@ -294,5 +365,128 @@ button:disabled {
   color: #6b7280;
   cursor: not-allowed;
   opacity: 1;
+}
+
+.reselect-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.link-btn {
+  background: transparent;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+}
+
+.link-btn--primary {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.link-btn--primary:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #60a5fa;
+}
+
+.link-btn.danger {
+  border-color: #b91c1c;
+  color: #b91c1c;
+}
+
+.link-btn:disabled {
+  border-color: #9ca3af;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.excluded-bar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.excluded-label {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.excluded-chip {
+  align-items: center;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  padding: 2px 4px 2px 10px;
+}
+
+.excluded-chip .link-btn {
+  border: none;
+  padding: 2px 4px;
+}
+
+.reselect-summary {
+  color: #2563eb;
+  font-size: 12px;
+  margin: 4px 0 8px;
+}
+
+.reselect-meta {
+  color: #6b7280;
+  font-size: 11px;
+  margin: -4px 0 8px;
+}
+
+.reselect-status {
+  align-items: center;
+  border-radius: 4px;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  margin: 4px 0 8px;
+  padding: 4px 8px;
+}
+
+.reselect-status.is-running {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.reselect-status.is-success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.reselect-status.is-error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+  border: 2px solid #c7d2fe;
+  border-radius: 999px;
+  border-top-color: #2563eb;
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

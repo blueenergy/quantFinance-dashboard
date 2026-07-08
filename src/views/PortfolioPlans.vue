@@ -759,16 +759,16 @@
                 <button
                   v-if="canReselectItems"
                   class="link-btn"
-                  :disabled="actionLoading || reselectBusy"
-                  title="勾选当前目标中的 AI 高风险标的"
+                  :disabled="combinedActionLoading || reselectBusy"
+                  title="点选全部 AI 高风险标的；已全部勾选时再点可取消"
                   @click="selectHighRiskReselectItems"
                 >
                   勾选高风险
                 </button>
                 <button
                   v-if="canReselectItems"
-                  class="link-btn danger"
-                  :disabled="actionLoading || reselectBusy || !selectedReselectCount"
+                  class="link-btn link-btn--primary"
+                  :disabled="combinedActionLoading || reselectBusy || !selectedReselectCount"
                   title="一次性排除勾选标的并重算候选池补位"
                   @click="bulkReselectItems"
                 >
@@ -796,7 +796,7 @@
               <span class="excluded-label">已排除：</span>
               <span v-for="sym in selectedPlanExcluded" :key="sym" class="excluded-chip">
                 {{ sym }}
-                <button class="link-btn" :disabled="actionLoading || reselectBusy" @click="reselectItem(sym, true)">
+                <button class="link-btn" :disabled="combinedActionLoading || reselectBusy" @click="reselectItem(sym, true)">
                   {{ reselectBusy && pendingReselect?.symbol === sym ? '恢复中…' : '恢复' }}
                 </button>
               </span>
@@ -810,7 +810,7 @@
               :selected-plan-is-monitor-no-trade="selectedPlanIsMonitorNoTrade"
               :selected-reselect-symbols="selectedReselectSymbols"
               :selected-plan-excluded="selectedPlanExcluded"
-              :action-loading="actionLoading"
+              :action-loading="combinedActionLoading"
               :reselect-busy="reselectBusy"
               :pending-reselect-symbol="pendingReselect?.symbol || ''"
               @toggle-reselect="toggleReselectSelection"
@@ -963,7 +963,6 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   approvePortfolioPlan,
-  bulkRejectPortfolioPlanItems,
   enqueuePortfolioLlmRisk,
   executePortfolioPlanPaper,
   generatePortfolioPlan,
@@ -987,10 +986,8 @@ import {
   listTraderHeartbeats,
   publishPortfolioPlanLiveSignals,
   rejectPortfolioPlan,
-  rejectPortfolioPlanItem,
   replanPortfolioPlanRemainder,
   rerunPortfolioPlanAiRisk,
-  restorePortfolioPlanItem,
 } from '../api/portfolioPlans'
 import { getSecuritiesAccounts } from '../api/trader'
 import PlanItemsTable from '../components/portfolio/PlanItemsTable.vue'
@@ -1002,6 +999,7 @@ import {
   remainderReasonText,
   riskDisplaySeverity,
 } from '../composables/usePortfolioPlanFormat'
+import { useReselectPlanItems } from '../composables/useReselectPlanItems'
 
 const strategies = ref([])
 const parameterPresets = ref([])
@@ -1052,9 +1050,6 @@ const aiRiskRunning = ref(false)
 const llmRiskRunning = ref(false)
 const llmRiskMeta = ref({ runId: '', status: '', summary: '' })
 const currentGenerationTask = ref(null)
-// Tracks an in-flight per-item reselect so we can report the replacement once
-// the regeneration task finishes (which symbol filled the freed slot).
-const pendingReselect = ref(null)
 const generationTasks = ref([])
 const generateFormExpanded = ref(false)
 const generationTasksExpanded = ref(false)
@@ -1073,10 +1068,6 @@ const remainderLoading = ref(false)
 const remainderReason = ref('')
 const message = ref('')
 const reviewComment = ref('')
-const lastReselectSummary = ref('')
-const reselectStatus = ref({ state: 'idle', text: '' })
-const reselectTaskMeta = ref({ taskId: '', status: '' })
-const selectedReselectSymbols = ref(new Set())
 let realtimeTimer = null
 let generationTaskTimer = null
 let aiRiskTimer = null
@@ -1103,8 +1094,58 @@ const selectedPlanIsMonitorNoTrade = computed(() => selectedDetail.value?.plan?.
 const selectedPlanExcluded = computed(() => selectedDetail.value?.plan?.excluded_symbols || [])
 // Only an unpublished, pre-approval plan can be reselected in place.
 const canReselectItems = computed(() => ['needs_review', 'generated', 'draft'].includes(selectedDetail.value?.plan?.status))
-const reselectBusy = computed(() => reselectStatus.value.state === 'running')
-const selectedReselectCount = computed(() => selectedReselectSymbols.value.size)
+
+const {
+  actionLoading: reselectActionLoading,
+  pendingReselect,
+  lastReselectSummary,
+  reselectStatus,
+  reselectTaskMeta,
+  selectedReselectSymbols,
+  reselectBusy,
+  selectedReselectCount,
+  clearReselectUi,
+  toggleReselectSelection,
+  selectHighRiskReselectItems,
+  reselectItem,
+  bulkReselectItems,
+} = useReselectPlanItems({
+  getPlanId: () => selectedPlanId.value,
+  getItems: () => selectedDetail.value?.items || [],
+  getExcluded: () => selectedDetail.value?.plan?.excluded_symbols || [],
+  setMessage: (text) => { message.value = text },
+  onTaskEnqueued: async (task) => {
+    currentGenerationTask.value = task
+    await loadOperationLogs()
+    await loadGenerationTasks()
+  },
+  runTask: async (taskId) => {
+    for (let i = 0; i < 90; i += 1) {
+      const res = await getPortfolioPlanGenerationTask(taskId)
+      const task = res.data || {}
+      currentGenerationTask.value = task
+      if (task.status === 'completed') {
+        await loadPlanGenerationWatermark()
+        await loadWorkerStatus()
+        await loadGenerationTasks()
+        await loadPlans()
+        if (task.plan_id) {
+          selectedPlanId.value = task.plan_id
+          const planRes = await getPortfolioPlan(task.plan_id)
+          selectedDetail.value = planRes.data
+        }
+        return task
+      }
+      if (task.status === 'failed') {
+        throw new Error(task.error_message || '生成计划失败')
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+    }
+    throw new Error('任务处理超时，请稍后刷新查看结果')
+  },
+})
+
+const combinedActionLoading = computed(() => actionLoading.value || reselectActionLoading.value)
 const paperExecutionCount = computed(() => Number(executionStatus.value?.execution_count || 0))
 const hasPaperExecution = computed(() => Boolean(selectedDetail.value?.plan?.paper_executed_at) || paperExecutionCount.value > 0)
 // Plan-detail page uses plan-level data only. Keep paper panels hidden while the
@@ -1831,9 +1872,6 @@ async function pollGenerationTask(taskId) {
   try {
     const res = await getPortfolioPlanGenerationTask(taskId)
     currentGenerationTask.value = res.data
-    if (pendingReselect.value) {
-      reselectTaskMeta.value = { taskId: res.data?.task_id || taskId, status: res.data?.status || '' }
-    }
     if (['completed', 'failed'].includes(res.data?.status)) {
       if (generationTaskTimer) {
         window.clearInterval(generationTaskTimer)
@@ -1845,34 +1883,15 @@ async function pollGenerationTask(taskId) {
       await loadPlans()
       if (res.data.status === 'completed' && res.data.plan_id) {
         await selectPlan(res.data.plan_id)
-        if (pendingReselect.value) {
-          const summary = describeReselectResult(pendingReselect.value)
-          message.value = summary
-          lastReselectSummary.value = summary
-          reselectStatus.value = { state: 'success', text: summary }
-          reselectTaskMeta.value = { taskId: res.data?.task_id || taskId, status: 'completed' }
-          pendingReselect.value = null
-        } else {
-          message.value = `已生成计划 ${res.data.plan_id}`
-        }
+        message.value = `已生成计划 ${res.data.plan_id}`
       } else if (res.data.status === 'failed') {
-        const taskErr = res.data.error_message || '生成计划失败'
-        message.value = taskErr
-        if (pendingReselect.value) {
-          reselectStatus.value = { state: 'error', text: `重选任务失败：${taskErr}` }
-          reselectTaskMeta.value = { taskId: res.data?.task_id || taskId, status: 'failed' }
-        }
-        pendingReselect.value = null
+        message.value = res.data.error_message || '生成计划失败'
       }
     }
   } catch (error) {
     const detailText = formatApiDetail(error.response?.data?.detail)
     const errText = detailText || error.message || '查询生成任务失败'
     message.value = errText
-    if (pendingReselect.value) {
-      reselectStatus.value = { state: 'error', text: `重选任务查询失败：${errText}` }
-      reselectTaskMeta.value = { taskId, status: 'query_failed' }
-    }
   }
 }
 
@@ -1882,10 +1901,7 @@ async function selectPlan(planId) {
   livePublishPreview.value = null
   remainderPreview.value = null
   remainderReason.value = ''
-  selectedReselectSymbols.value = new Set()
-  lastReselectSummary.value = ''
-  reselectStatus.value = { state: 'idle', text: '' }
-  reselectTaskMeta.value = { taskId: '', status: '' }
+  clearReselectUi()
   try {
     const res = await getPortfolioPlan(planId)
     selectedDetail.value = res.data
@@ -2052,10 +2068,6 @@ async function review(decision) {
   }
 }
 
-function canSelectReselectItem(item) {
-  return Boolean(item?.symbol && item.rank != null && !selectedPlanExcluded.value.includes(item.symbol))
-}
-
 function planCadenceBadge(plan) {
   if (!plan) return { text: '-', cls: 'cadence-unknown' }
   // record_kind is the authoritative type stamped by the backend. origin is the
@@ -2096,30 +2108,6 @@ function planCadenceBadge(plan) {
 
 const aiRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_summary || null)
 const llmRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_llm_summary || null)
-
-function toggleReselectSelection(symbol, checked) {
-  if (!symbol) return
-  const next = new Set(selectedReselectSymbols.value)
-  if (checked) {
-    next.add(symbol)
-  } else {
-    next.delete(symbol)
-  }
-  selectedReselectSymbols.value = next
-}
-
-function selectHighRiskReselectItems() {
-  const symbols = (selectedDetail.value?.items || [])
-    .filter((item) => canSelectReselectItem(item) && riskDisplaySeverity(item?.ai_risk) === 'high')
-    .map((item) => item.symbol)
-  if (!symbols.length) {
-    message.value = '当前没有可批量换股的 AI 高风险标的'
-    return
-  }
-  // Merge into the existing selection instead of replacing it, so manual picks
-  // are preserved.
-  selectedReselectSymbols.value = new Set([...selectedReselectSymbols.value, ...symbols])
-}
 
 async function runAiRisk() {
   if (!selectedPlanId.value || aiRiskRunning.value) return
@@ -2238,34 +2226,6 @@ async function pollLlmRiskRun(runId) {
   }
 }
 
-function describeReselectResult(pending) {
-  const items = selectedDetail.value?.items || []
-  const nameOf = (sym) => {
-    const hit = items.find((item) => item.symbol === sym)
-    return hit?.name ? `${sym}(${hit.name})` : sym
-  }
-  const before = new Set(pending.beforeTargets || [])
-  const afterTargets = items.filter((item) => item.rank != null).map((item) => item.symbol)
-  const rejected = new Set(pending.symbols || (pending.symbol ? [pending.symbol] : []))
-  const added = afterTargets.filter((sym) => !before.has(sym) && !rejected.has(sym))
-  if (pending.type === 'bulkReject') {
-    const rejectedText = [...rejected].join('、')
-    if (added.length) {
-      return `已批量排除 ${rejectedText}，补位换为 ${added.map(nameOf).join('、')}`
-    }
-    return `已批量排除 ${rejectedText}，候选池无可补位标的（目标持仓数减少）`
-  }
-  if (pending.type === 'restore') {
-    return afterTargets.includes(pending.symbol)
-      ? `已恢复 ${nameOf(pending.symbol)}，重新纳入目标`
-      : `已恢复 ${pending.symbol}（当前排名未进入目标）`
-  }
-  if (added.length) {
-    return `已排除 ${pending.symbol}，补位换为 ${added.map(nameOf).join('、')}`
-  }
-  return `已排除 ${pending.symbol}，候选池无可补位标的（目标持仓数减少）`
-}
-
 function formatApiDetail(detail) {
   if (!detail) return ''
   if (typeof detail === 'string') return detail
@@ -2274,95 +2234,6 @@ function formatApiDetail(detail) {
     return JSON.stringify(detail)
   } catch {
     return String(detail)
-  }
-}
-
-async function reselectItem(symbol, restore = false) {
-  if (!selectedPlanId.value || !symbol || reselectBusy.value) return
-  if (restore && !selectedPlanExcluded.value.includes(symbol)) {
-    const txt = `无需恢复：${symbol} 当前不在已排除列表中`
-    reselectStatus.value = { state: 'success', text: txt }
-    lastReselectSummary.value = txt
-    return
-  }
-  actionLoading.value = true
-  try {
-    const apiCall = restore ? restorePortfolioPlanItem : rejectPortfolioPlanItem
-    // Snapshot current target names so we can diff after regeneration.
-    const beforeTargets = (selectedDetail.value?.items || [])
-      .filter((item) => item.rank != null)
-      .map((item) => item.symbol)
-    const res = await apiCall(selectedPlanId.value, symbol)
-    const task = res.data?.task
-    if (task?.task_id) {
-      lastReselectSummary.value = ''
-      pendingReselect.value = { type: restore ? 'restore' : 'reject', symbol, beforeTargets }
-      reselectTaskMeta.value = { taskId: task.task_id, status: 'pending' }
-      currentGenerationTask.value = task
-      reselectStatus.value = {
-        state: 'running',
-        text: restore ? `正在恢复 ${symbol}，任务 ${task.task_id} 执行中…` : `正在重选 ${symbol}，任务 ${task.task_id} 执行中…`,
-      }
-      message.value = restore ? `已恢复 ${symbol}，正在重算计划…` : `已排除 ${symbol}，正在重选补位…`
-      await loadOperationLogs()
-      await loadGenerationTasks()
-      startGenerationTaskPolling(task.task_id)
-    } else if (res.data?.operation_log?.status === 'noop') {
-      const noopMsg = res.data?.operation_log?.message || `无需恢复：${symbol}`
-      reselectStatus.value = { state: 'success', text: noopMsg }
-      lastReselectSummary.value = noopMsg
-      await loadOperationLogs()
-    } else {
-      reselectStatus.value = { state: 'error', text: '重选任务创建失败：未返回 task_id' }
-      reselectTaskMeta.value = { taskId: '', status: 'create_failed' }
-    }
-  } catch (error) {
-    const detailText = formatApiDetail(error.response?.data?.detail)
-    const errText = detailText || error.message || '重选失败'
-    reselectStatus.value = { state: 'error', text: `重选失败：${errText}` }
-    reselectTaskMeta.value = { taskId: '', status: 'request_failed' }
-    message.value = errText
-  } finally {
-    actionLoading.value = false
-  }
-}
-
-async function bulkReselectItems() {
-  if (!selectedPlanId.value || reselectBusy.value || !selectedReselectCount.value) return
-  const symbols = [...selectedReselectSymbols.value]
-  actionLoading.value = true
-  try {
-    const beforeTargets = (selectedDetail.value?.items || [])
-      .filter((item) => item.rank != null)
-      .map((item) => item.symbol)
-    const res = await bulkRejectPortfolioPlanItems(selectedPlanId.value, symbols)
-    const task = res.data?.task
-    if (task?.task_id) {
-      lastReselectSummary.value = ''
-      pendingReselect.value = { type: 'bulkReject', symbols, beforeTargets }
-      selectedReselectSymbols.value = new Set()
-      reselectTaskMeta.value = { taskId: task.task_id, status: 'pending' }
-      currentGenerationTask.value = task
-      reselectStatus.value = {
-        state: 'running',
-        text: `正在批量重选 ${symbols.length} 只标的，任务 ${task.task_id} 执行中…`,
-      }
-      message.value = `已排除 ${symbols.join('、')}，正在批量重选补位…`
-      await loadOperationLogs()
-      await loadGenerationTasks()
-      startGenerationTaskPolling(task.task_id)
-    } else {
-      reselectStatus.value = { state: 'error', text: '批量重选任务创建失败：未返回 task_id' }
-      reselectTaskMeta.value = { taskId: '', status: 'create_failed' }
-    }
-  } catch (error) {
-    const detailText = formatApiDetail(error.response?.data?.detail)
-    const errText = detailText || error.message || '批量重选失败'
-    reselectStatus.value = { state: 'error', text: `批量重选失败：${errText}` }
-    reselectTaskMeta.value = { taskId: '', status: 'request_failed' }
-    message.value = errText
-  } finally {
-    actionLoading.value = false
   }
 }
 
@@ -2465,6 +2336,18 @@ button.danger {
   color: #1f2937;
   font-size: 12px;
   padding: 2px 8px;
+}
+
+.link-btn--primary {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.link-btn--primary:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #60a5fa;
 }
 
 .link-btn.danger {

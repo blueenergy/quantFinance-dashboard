@@ -95,10 +95,24 @@
         :reject-submitting="rejectSubmitting"
         :review-ai-risk-loading="reviewAiRiskLoading"
         :review-llm-risk-loading="reviewLlmRiskLoading"
+        :can-reselect-items="canReselectItems"
+        :selected-reselect-symbols="selectedReselectSymbols"
+        :selected-plan-excluded="reselectExcludedSymbols"
+        :selected-reselect-count="selectedReselectCount"
+        :action-loading="reselectActionLoading"
+        :reselect-busy="reselectBusy"
+        :pending-reselect-symbol="pendingReselectSymbol"
+        :reselect-status="reselectStatus"
+        :reselect-task-meta="reselectTaskMeta"
+        :last-reselect-summary="lastReselectSummary"
         @approve="approvePendingPlan"
         @reject="rejectPendingPlan"
         @rerun-ai-risk="rerunReviewAiRisk"
         @rerun-llm-risk="() => rerunPlanLlmRisk(reviewPlanId, 'review')"
+        @toggle-reselect="toggleReselectSelection"
+        @reselect="reselectItem"
+        @bulk-reselect="bulkReselectItems"
+        @select-high-risk="selectHighRiskReselectItems"
       />
 
       <PlanOpsPanel
@@ -339,6 +353,7 @@ import LiquidateModal from '../components/portfolio/LiquidateModal.vue'
 import ExternalManualModal from '../components/portfolio/ExternalManualModal.vue'
 import { useHoldingsOps } from '../composables/useHoldingsOps'
 import { usePlanOps } from '../composables/usePlanOps'
+import { useReselectPlanItems } from '../composables/useReselectPlanItems'
 import {
   formatShareDelta,
 } from '../composables/usePortfolioPlanFormat'
@@ -811,6 +826,53 @@ async function pollGenerationTask(taskId, { attempts = 90, intervalMs = 2000 } =
   throw new Error('任务处理超时，请稍后到「组合交易计划」查看结果')
 }
 
+const {
+  actionLoading: reselectActionLoading,
+  pendingReselect,
+  lastReselectSummary,
+  reselectStatus,
+  reselectTaskMeta,
+  selectedReselectSymbols,
+  reselectBusy,
+  selectedReselectCount,
+  selectedPlanExcluded: reselectExcludedSymbols,
+  clearReselectUi,
+  toggleReselectSelection,
+  selectHighRiskReselectItems,
+  reselectItem,
+  bulkReselectItems,
+} = useReselectPlanItems({
+  getPlanId: () => reviewPlanId.value,
+  getItems: () => latestPlanItems.value,
+  getExcluded: () => latestPlan.value?.excluded_symbols || [],
+  setMessage: (text, isError = false) => {
+    message.value = text
+    messageIsError.value = isError
+  },
+  runTask: async (taskId) => {
+    const task = await pollGenerationTask(taskId)
+    if (task.status === 'failed') {
+      throw new Error(task.error_message || '生成计划失败')
+    }
+    await Promise.all([loadPortfolios(), refreshDetail()])
+    return task
+  },
+})
+
+const canReselectItems = computed(() => (
+  Boolean(reviewPlanId.value)
+  && selectedPlanStatus.value === 'needs_review'
+  && !selectedPlanHasLiveSignals.value
+  && !selectedPlanHasPublishedLiveSignals.value
+  && selectedPlanLiveSignalCount.value === 0
+  && !reviewAiRiskLoading.value
+  && !reviewLlmRiskLoading.value
+  && !approveSubmitting.value
+  && !rejectSubmitting.value
+))
+
+const pendingReselectSymbol = computed(() => pendingReselect.value?.symbol || '')
+
 async function rerunReviewAiRisk() {
   const planId = selectedOperationPlanId.value
   if (!planId) return
@@ -1191,6 +1253,7 @@ watch(selectedPortfolioKey, (key) => {
   resetHoldingsOpsState()
   latestPlanDetail.value = null
   resetPlanOpsState()
+  clearReselectUi()
   if (key) refreshDetail()
   else {
     portfolioSummary.value = null

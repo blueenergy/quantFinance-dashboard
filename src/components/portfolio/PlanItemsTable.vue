@@ -27,6 +27,7 @@
     <table v-else-if="mode === 'pending'" class="plan-items-table">
       <thead>
         <tr>
+          <th v-if="canReselectItems" class="col-select">选</th>
           <th class="col-action-tag">方向</th>
           <th class="col-stock">标的</th>
           <th class="col-ind">行业</th>
@@ -40,10 +41,19 @@
           <th class="col-money">预估金额</th>
           <th class="col-airisk">AI风控</th>
           <th v-if="showOverlay" class="col-risk">提示</th>
+          <th v-if="canReselectItems" class="col-action">操作</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="row in items" :key="row.symbol">
+          <td v-if="canReselectItems" class="col-select">
+            <input
+              type="checkbox"
+              :checked="isReselectSelected(row.symbol)"
+              :disabled="!canSelectReselectItem(row) || actionLoading || reselectBusy"
+              @change="$emit('toggle-reselect', row.symbol, $event.target.checked)"
+            >
+          </td>
           <td class="col-action-tag">
             <span class="action-tag" :class="planItemActionClass(row.action)">
               {{ planItemActionLabel(row.action) }}
@@ -132,6 +142,29 @@
               {{ blockerText(blocker) }}
             </span>
             <span v-if="!(row.warnings || []).length && !(row.blockers || []).length" class="muted">-</span>
+          </td>
+          <td v-if="canReselectItems" class="col-action">
+            <button
+              v-if="selectedPlanExcluded.includes(row.symbol)"
+              class="link-btn"
+              :disabled="actionLoading || reselectBusy"
+              @click="$emit('reselect', row.symbol, true)"
+            >{{ reselectBusy && pendingReselectSymbol === row.symbol ? '恢复中…' : '恢复' }}</button>
+            <button
+              v-else-if="row.rank != null && (row.current_shares ?? 0) > 0"
+              class="link-btn danger"
+              :disabled="actionLoading || reselectBusy"
+              title="移出目标并清仓该持仓，由候选池补一只新标的"
+              @click="$emit('reselect', row.symbol, false)"
+            >{{ reselectBusy && pendingReselectSymbol === row.symbol ? '处理中…' : '清仓' }}</button>
+            <button
+              v-else-if="row.rank != null"
+              class="link-btn"
+              :disabled="actionLoading || reselectBusy"
+              title="拒绝该买入推荐，用候选池下一名替换"
+              @click="$emit('reselect', row.symbol, false)"
+            >{{ reselectBusy && pendingReselectSymbol === row.symbol ? '处理中…' : '换一只' }}</button>
+            <span v-else>-</span>
           </td>
         </tr>
       </tbody>
