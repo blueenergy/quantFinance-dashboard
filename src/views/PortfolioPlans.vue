@@ -755,6 +755,11 @@
                 </span>
                 <span v-if="llmRiskSummary" class="ai-risk-summary">
                   LLM风控：{{ llmRiskSummary.industry_count || 0 }}行业 / {{ llmRiskSummary.symbol_count || 0 }}标的
+                  <template v-if="llmRiskSummary.source === 'ledger'"> · 个股台账</template>
+                </span>
+                <span v-if="riskSnapshot" class="ai-risk-summary risk-snapshot-hint">
+                  决策快照({{ riskSnapshot.decision_point }})：{{ riskSnapshot.summary?.symbol_count || 0 }}标的
+                  · {{ formatSnapshotAt(riskSnapshot.captured_at) }}
                 </span>
                 <button
                   v-if="canReselectItems"
@@ -805,6 +810,7 @@
               mode="plan"
               :items="selectedDetail.items"
               :overlay="liveOverlay"
+              :plan-id="selectedDetail.plan?.plan_id || ''"
               :can-reselect-items="canReselectItems"
               :selected-plan-has-live-signals="selectedPlanHasLiveSignals"
               :selected-plan-is-monitor-no-trade="selectedPlanIsMonitorNoTrade"
@@ -815,6 +821,7 @@
               :pending-reselect-symbol="pendingReselect?.symbol || ''"
               @toggle-reselect="toggleReselectSelection"
               @reselect="(symbol, restore) => reselectItem(symbol, restore)"
+              @risk-changed="reloadSelectedPlan"
             />
           </section>
 
@@ -1895,6 +1902,17 @@ async function pollGenerationTask(taskId) {
   }
 }
 
+async function reloadSelectedPlan() {
+  if (!selectedPlanId.value) return
+  try {
+    const res = await getPortfolioPlan(selectedPlanId.value)
+    selectedDetail.value = res.data
+  } catch (error) {
+    const detailText = formatApiDetail(error.response?.data?.detail)
+    message.value = detailText || error.message || '刷新 plan 风险失败'
+  }
+}
+
 async function selectPlan(planId) {
   selectedPlanId.value = planId
   reviewComment.value = ''
@@ -2108,6 +2126,12 @@ function planCadenceBadge(plan) {
 
 const aiRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_summary || null)
 const llmRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_llm_summary || null)
+const riskSnapshot = computed(() => selectedDetail.value?.risk_snapshot || null)
+
+function formatSnapshotAt(value) {
+  if (!value) return '-'
+  return String(value).slice(0, 19).replace('T', ' ')
+}
 
 async function runAiRisk() {
   if (!selectedPlanId.value || aiRiskRunning.value) return

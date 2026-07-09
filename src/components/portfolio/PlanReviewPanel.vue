@@ -31,8 +31,9 @@
     <p v-if="riskSummary.high" class="warning-text plan-review-risk-warning">
       AI 风控发现 {{ riskSummary.high }} 个高风险标的，批准前请重点确认。
     </p>
-    <p v-if="llmRiskSummary?.run_id" class="llm-risk-summary" :class="`status-${llmRiskSummary.status || 'completed'}`">
-      LLM风控：{{ llmRiskStatusText(llmRiskSummary.status) }}
+    <p v-if="llmRiskSummary" class="llm-risk-summary" :class="`status-${llmRiskSummary.status || 'completed'}`">
+      LLM风控：<template v-if="llmRiskSummary.source === 'ledger'">个股台账</template>
+      <template v-else>{{ llmRiskStatusText(llmRiskSummary.status) }}</template>
       · {{ llmRiskSummary.industry_count || 0 }}行业 / {{ llmRiskSummary.symbol_count || 0 }}标的
       <span v-if="llmRiskSummary.status === 'completed_with_failures'"> · 部分行业失败，已展示可用结果</span>
     </p>

@@ -305,10 +305,14 @@
       :min="LLM_FONT_MIN"
       :max="LLM_FONT_MAX"
       :copied="copiedLlmRiskKey === llmDetail?.key"
+      :action-busy="actionBusy"
       @inc="incLlmFont"
       @dec="decLlmFont"
       @copy="copyLlmRisk(llmDetail.risk, llmDetail.key)"
       @close="closeLlmDetail"
+      @confirm-resolution="confirmResolution"
+      @resolve="resolveFinding"
+      @manual-add="manualAddRisk"
     />
   </div>
 </template>
@@ -352,9 +356,10 @@ const props = defineProps({
   actionLoading: { type: Boolean, default: false },
   reselectBusy: { type: Boolean, default: false },
   pendingReselectSymbol: { type: String, default: '' },
+  planId: { type: String, default: '' },
 })
 
-defineEmits(['toggle-reselect', 'reselect'])
+const emit = defineEmits(['toggle-reselect', 'reselect', 'risk-changed'])
 
 const showOverlay = computed(() => Boolean(props.overlay?.enabled !== false))
 
@@ -369,7 +374,13 @@ const {
   toggleLlmDetail: openLlmDetail,
   closeLlmDetail,
   copyLlmText: copyLlmRisk,
-} = useLlmRiskDetail()
+  actionBusy,
+  confirmResolution,
+  resolveFinding,
+  manualAddRisk,
+} = useLlmRiskDetail({
+  onRiskChanged: () => emit('risk-changed'),
+})
 
 function toggleLlmDetail(item, scope, event) {
   openLlmDetail({
@@ -378,6 +389,7 @@ function toggleLlmDetail(item, scope, event) {
     name: item?.name || '',
     risk: item?.ai_risk,
     event,
+    planId: props.planId,
   })
 }
 

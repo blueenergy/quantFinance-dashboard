@@ -1,6 +1,11 @@
 import { ref } from 'vue'
 import { llmRiskTitle } from './usePortfolioPlanFormat'
 import { copyTextToClipboard } from '../utils/clipboard'
+import {
+  addManualSymbolRisk,
+  confirmSymbolRiskResolution,
+  resolveSymbolRisk,
+} from '../api/symbolRisk'
 
 export const LLM_FONT_MIN = 12
 export const LLM_FONT_MAX = 30
@@ -18,10 +23,11 @@ function loadLlmFontPx() {
 // Shared state/behaviour for the expandable, zoomable LLM event-risk detail
 // panel used across plan/holdings/bench tables. The font size is persisted so
 // the reader's preference carries across panels and sessions.
-export function useLlmRiskDetail() {
+export function useLlmRiskDetail({ onRiskChanged } = {}) {
   const detail = ref(null)
   const copiedKey = ref('')
   const fontPx = ref(loadLlmFontPx())
+  const actionBusy = ref(false)
   let copyTimer = null
 
   function persistFontPx() {
@@ -45,13 +51,11 @@ export function useLlmRiskDetail() {
     if (!rect || typeof window === 'undefined') return null
     const margin = 12
     const gap = 6
-    const maxH = 420
-    const width = Math.min(560, window.innerWidth - margin * 2)
+    const maxH = 520
+    const width = Math.min(620, window.innerWidth - margin * 2)
     let left = rect.left
     if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width
     if (left < margin) left = margin
-    // Prefer just below the tag; if that would overflow the viewport bottom,
-    // clamp upward so the whole popover stays on screen without scrolling.
     let top = rect.bottom + gap
     if (top + maxH > window.innerHeight - margin) {
       top = Math.max(margin, window.innerHeight - margin - maxH)
@@ -59,13 +63,21 @@ export function useLlmRiskDetail() {
     return { top, left, width, maxHeight: maxH }
   }
 
-  function toggleLlmDetail({ key, symbol = '', name = '', risk, event } = {}) {
+  function toggleLlmDetail({ key, symbol = '', name = '', risk, event, planId = '' } = {}) {
     if (!key) return
     if (detail.value?.key === key) {
       detail.value = null
       return
     }
-    detail.value = { key, symbol, name, risk, text: llmRiskTitle(risk), pos: computePopoverPos(event) }
+    detail.value = {
+      key,
+      symbol,
+      name,
+      risk,
+      planId,
+      text: llmRiskTitle(risk),
+      pos: computePopoverPos(event),
+    }
   }
 
   function closeLlmDetail() {
@@ -82,10 +94,69 @@ export function useLlmRiskDetail() {
     }, 2000)
   }
 
+  async function notifyChanged() {
+    if (typeof onRiskChanged === 'function') {
+      await onRiskChanged()
+    }
+  }
+
+  async function confirmResolution(finding) {
+    const symbol = detail.value?.symbol
+    const findingKey = finding?.finding_key
+    if (!symbol || !findingKey || actionBusy.value) return
+    actionBusy.value = true
+    try {
+      await confirmSymbolRiskResolution(symbol, findingKey, {
+        plan_id: detail.value?.planId || undefined,
+        reason: finding?.suggested_resolution?.reason || '',
+      })
+      closeLlmDetail()
+      await notifyChanged()
+    } finally {
+      actionBusy.value = false
+    }
+  }
+
+  async function resolveFinding(finding) {
+    const symbol = detail.value?.symbol
+    const findingKey = finding?.finding_key
+    if (!symbol || !findingKey || actionBusy.value) return
+    actionBusy.value = true
+    try {
+      await resolveSymbolRisk(symbol, findingKey, {
+        plan_id: detail.value?.planId || undefined,
+        reason: 'manual_resolve_from_panel',
+      })
+      closeLlmDetail()
+      await notifyChanged()
+    } finally {
+      actionBusy.value = false
+    }
+  }
+
+  async function manualAddRisk(payload) {
+    const symbol = detail.value?.symbol
+    if (!symbol || actionBusy.value) return
+    actionBusy.value = true
+    try {
+      await addManualSymbolRisk(symbol, {
+        severity: payload?.severity || 'medium',
+        summary: payload?.summary || '',
+        detail: payload?.detail || '',
+        resolution_mode: 'event',
+      })
+      closeLlmDetail()
+      await notifyChanged()
+    } finally {
+      actionBusy.value = false
+    }
+  }
+
   return {
     detail,
     copiedKey,
     fontPx,
+    actionBusy,
     LLM_FONT_MIN,
     LLM_FONT_MAX,
     incLlmFont,
@@ -93,5 +164,8 @@ export function useLlmRiskDetail() {
     toggleLlmDetail,
     closeLlmDetail,
     copyLlmText,
+    confirmResolution,
+    resolveFinding,
+    manualAddRisk,
   }
 }

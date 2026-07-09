@@ -310,10 +310,14 @@
       :min="LLM_FONT_MIN"
       :max="LLM_FONT_MAX"
       :copied="copiedLlmRiskKey === llmDetail?.key"
+      :action-busy="actionBusy"
       @inc="incLlmFont"
       @dec="decLlmFont"
       @copy="copyLlmRisk(llmDetail.risk, llmDetail.key)"
       @close="closeLlmDetail"
+      @confirm-resolution="confirmResolution"
+      @resolve="resolveFinding"
+      @manual-add="manualAddRisk"
     />
   </section>
 </template>
@@ -363,6 +367,20 @@ const props = defineProps({
   signedMoney: { type: Function, required: true },
 })
 
+const emit = defineEmits([
+  'load-risk',
+  'open-manual',
+  'open-liquidate',
+  'open-external-manual',
+  'update-target',
+  'open-swap',
+  'quick-reduce',
+  'toggle-bench',
+  'load-bench-risk',
+  'load-bench-llm-risk',
+  'risk-changed',
+])
+
 const {
   detail: llmDetail,
   copiedKey: copiedLlmRiskKey,
@@ -374,7 +392,13 @@ const {
   toggleLlmDetail: openLlmDetail,
   closeLlmDetail,
   copyLlmText: copyLlmRisk,
-} = useLlmRiskDetail()
+  actionBusy,
+  confirmResolution,
+  resolveFinding,
+  manualAddRisk,
+} = useLlmRiskDetail({
+  onRiskChanged: () => emit('risk-changed'),
+})
 
 function llmKey(scope, row) {
   return `${scope}:${row?.symbol || row?.name || 'unknown'}`
@@ -427,19 +451,6 @@ function holdingPnlTitle(row) {
     `合计：${props.signedMoney(holdingTotalPnl(row))}`,
   ].join('\n')
 }
-
-defineEmits([
-  'load-risk',
-  'open-manual',
-  'open-liquidate',
-  'open-external-manual',
-  'update-target',
-  'open-swap',
-  'quick-reduce',
-  'toggle-bench',
-  'load-bench-risk',
-  'load-bench-llm-risk',
-])
 
 const expandedSymbols = ref(new Set())
 

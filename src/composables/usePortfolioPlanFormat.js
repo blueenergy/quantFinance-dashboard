@@ -112,11 +112,14 @@ export function riskDisplaySeverity(risk) {
 }
 
 function findingLine(finding) {
-  const title = finding?.title || finding?.code || '风险信号'
+  const title = finding?.title || finding?.summary || finding?.subject || finding?.code || finding?.finding_key || '风险信号'
   const detail = finding?.detail || ''
   const sourceBits = [finding?.source_date, finding?.source_title].filter(Boolean)
   const source = sourceBits.length ? `（${sourceBits.join(' ')}）` : ''
-  return `${detail ? `${title}：${detail}` : title}${source}`
+  const suggested = finding?.suggested_resolution?.reason
+    ? ` [LLM建议解除: ${finding.suggested_resolution.reason}]`
+    : ''
+  return `${detail ? `${title}：${detail}` : title}${source}${suggested}`
 }
 
 export function aiRiskTitle(risk) {
