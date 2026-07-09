@@ -9,7 +9,7 @@
       >
         <div class="llm-detail-head">
           <span class="llm-detail-title">
-            LLM 风控详情<template v-if="detail.symbol"> · {{ detail.name || detail.symbol }}</template>
+            {{ isOpportunity ? 'LLM 机会详情' : 'LLM 风控详情' }}<template v-if="detail.symbol"> · {{ detail.name || detail.symbol }}</template>
           </span>
           <div class="llm-detail-tools">
             <span class="llm-font-label">字号</span>
@@ -28,8 +28,8 @@
         <div v-if="findings.length" class="llm-findings">
           <div v-for="finding in findings" :key="finding.finding_key || finding.summary" class="llm-finding-card">
             <div class="llm-finding-head">
-              <span class="llm-finding-sev" :class="`risk-${finding.severity || 'none'}`">
-                {{ severityLabel(finding.severity) }}
+              <span class="llm-finding-sev" :class="isOpportunity ? `opportunity-${finding.strength || 'none'}` : `risk-${finding.severity || 'none'}`">
+                {{ isOpportunity ? strengthLabel(finding.strength) : severityLabel(finding.severity) }}
               </span>
               <span class="llm-finding-cat">{{ finding.category || 'other' }}</span>
               <span v-if="finding.resolution_mode" class="llm-finding-mode">{{ finding.resolution_mode }}</span>
@@ -39,9 +39,30 @@
             <p v-if="finding.suggested_resolution?.reason" class="llm-suggested">
               <strong>LLM 建议解除：</strong>{{ finding.suggested_resolution.reason }}
             </p>
+            <p v-if="finding.suggested_closure?.reason" class="llm-suggested">
+              <strong>LLM 建议关闭：</strong>{{ finding.suggested_closure.reason }}
+            </p>
             <div v-if="finding.finding_key" class="llm-finding-actions">
+              <template v-if="isOpportunity">
+                <button
+                  type="button"
+                  class="llm-action-btn llm-action-btn--primary"
+                  :disabled="actionBusy"
+                  @click="$emit('realize-opportunity', finding)"
+                >
+                  标记兑现
+                </button>
+                <button
+                  type="button"
+                  class="llm-action-btn"
+                  :disabled="actionBusy"
+                  @click="$emit('invalidate-opportunity', finding)"
+                >
+                  标记落空
+                </button>
+              </template>
               <button
-                v-if="finding.suggested_resolution"
+                v-else-if="finding.suggested_resolution"
                 type="button"
                 class="llm-action-btn llm-action-btn--primary"
                 :disabled="actionBusy"
@@ -50,6 +71,7 @@
                 确认解除
               </button>
               <button
+                v-if="!isOpportunity"
                 type="button"
                 class="llm-action-btn"
                 :disabled="actionBusy"
@@ -63,20 +85,20 @@
 
         <div v-if="detail.symbol" class="llm-manual-add">
           <button type="button" class="llm-action-btn" @click="showAddForm = !showAddForm">
-            {{ showAddForm ? '收起' : '手动添加风险' }}
+            {{ showAddForm ? '收起' : (isOpportunity ? '手动添加机会' : '手动添加风险') }}
           </button>
           <form v-if="showAddForm" class="llm-add-form" @submit.prevent="submitManualAdd">
             <label>
-              严重度
+              {{ isOpportunity ? '强度' : '严重度' }}
               <select v-model="addForm.severity">
-                <option value="low">低</option>
+                <option value="low">{{ isOpportunity ? '弱' : '低' }}</option>
                 <option value="medium">中</option>
-                <option value="high">高</option>
+                <option value="high">{{ isOpportunity ? '强' : '高' }}</option>
               </select>
             </label>
             <label>
               摘要
-              <input v-model.trim="addForm.summary" type="text" maxlength="500" required placeholder="简要描述风险">
+              <input v-model.trim="addForm.summary" type="text" maxlength="500" required :placeholder="isOpportunity ? '简要描述机会' : '简要描述风险'">
             </label>
             <label>
               详情
@@ -104,7 +126,17 @@ const props = defineProps({
   actionBusy: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['inc', 'dec', 'copy', 'close', 'confirm-resolution', 'resolve', 'manual-add'])
+const emit = defineEmits([
+  'inc',
+  'dec',
+  'copy',
+  'close',
+  'confirm-resolution',
+  'resolve',
+  'realize-opportunity',
+  'invalidate-opportunity',
+  'manual-add',
+])
 
 const showAddForm = ref(false)
 const addForm = reactive({
@@ -121,9 +153,12 @@ watch(() => props.detail?.key, () => {
 })
 
 const findings = computed(() => {
-  const llm = props.detail?.risk?.llm || props.detail?.risk
+  const source = isOpportunity.value ? props.detail?.opportunity : props.detail?.risk
+  const llm = source?.llm || source
   return Array.isArray(llm?.findings) ? llm.findings : []
 })
+
+const isOpportunity = computed(() => props.detail?.mode === 'opportunity')
 
 const panelStyle = computed(() => {
   const pos = props.detail?.pos
@@ -147,10 +182,18 @@ function severityLabel(severity) {
   return '正常'
 }
 
+function strengthLabel(strength) {
+  if (strength === 'high') return '强'
+  if (strength === 'medium') return '中'
+  if (strength === 'low') return '弱'
+  return '无'
+}
+
 function submitManualAdd() {
   if (!addForm.summary.trim()) return
   emit('manual-add', {
     severity: addForm.severity,
+    strength: addForm.severity,
     summary: addForm.summary.trim(),
     detail: addForm.detail.trim(),
   })
@@ -293,6 +336,10 @@ function submitManualAdd() {
 .llm-finding-sev.risk-medium { background: #ffedd5; color: #c2410c; }
 .llm-finding-sev.risk-low { background: #fef9c3; color: #a16207; }
 .llm-finding-sev.risk-none { background: #f1f5f9; color: #64748b; }
+.llm-finding-sev.opportunity-high { background: #dcfce7; color: #15803d; }
+.llm-finding-sev.opportunity-medium { background: #e0f2fe; color: #0369a1; }
+.llm-finding-sev.opportunity-low { background: #ecfccb; color: #4d7c0f; }
+.llm-finding-sev.opportunity-none { background: #f1f5f9; color: #64748b; }
 
 .llm-finding-cat,
 .llm-finding-mode {

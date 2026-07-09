@@ -122,6 +122,25 @@
               >
                 {{ copiedLlmRiskKey === llmCopyKey(row, 'pending') ? '已复制' : '复制' }}
               </button>
+              <span
+                v-if="row.ai_opportunity?.llm"
+                class="llm-risk-tag llm-risk-tag--btn llm-opportunity-tag"
+                :class="[`opportunity-${row.ai_opportunity.llm.strength || 'none'}`, { 'is-active': llmDetail?.key === llmCopyKey(row, 'pending-opp') }]"
+                :title="'点击查看/放大完整 LLM 机会'"
+                role="button"
+                tabindex="0"
+                @click.stop="toggleLlmDetail(row, 'pending-opp', $event, 'opportunity')"
+                @keydown.enter.stop="toggleLlmDetail(row, 'pending-opp', $event, 'opportunity')"
+              >机会</span>
+              <button
+                v-if="row.ai_opportunity?.llm"
+                type="button"
+                class="llm-risk-copy"
+                :title="llmOpportunityCopyTitle(row.ai_opportunity)"
+                @click.stop="copyLlmRisk(row.ai_opportunity, llmCopyKey(row, 'pending-opp'), 'opportunity')"
+              >
+                {{ copiedLlmRiskKey === llmCopyKey(row, 'pending-opp') ? '已复制' : '复制' }}
+              </button>
             </div>
           </td>
           <td v-if="showOverlay" class="col-risk risk-reasons">
@@ -292,6 +311,25 @@
               >
                 {{ copiedLlmRiskKey === llmCopyKey(item, 'detail') ? '已复制' : '复制' }}
               </button>
+              <span
+                v-if="item.ai_opportunity?.llm"
+                class="llm-risk-tag llm-risk-tag--btn llm-opportunity-tag"
+                :class="[`opportunity-${item.ai_opportunity.llm.strength || 'none'}`, { 'is-active': llmDetail?.key === llmCopyKey(item, 'detail-opp') }]"
+                :title="'点击查看/放大完整 LLM 机会'"
+                role="button"
+                tabindex="0"
+                @click.stop="toggleLlmDetail(item, 'detail-opp', $event, 'opportunity')"
+                @keydown.enter.stop="toggleLlmDetail(item, 'detail-opp', $event, 'opportunity')"
+              >机会</span>
+              <button
+                v-if="item.ai_opportunity?.llm"
+                type="button"
+                class="llm-risk-copy"
+                :title="llmOpportunityCopyTitle(item.ai_opportunity)"
+                @click.stop="copyLlmRisk(item.ai_opportunity, llmCopyKey(item, 'detail-opp'), 'opportunity')"
+              >
+                {{ copiedLlmRiskKey === llmCopyKey(item, 'detail-opp') ? '已复制' : '复制' }}
+              </button>
             </div>
           </td>
           <td class="col-risk" :title="(item.blockers || []).join(', ')">{{ (item.blockers || []).join(', ') || '-' }}</td>
@@ -308,10 +346,12 @@
       :action-busy="actionBusy"
       @inc="incLlmFont"
       @dec="decLlmFont"
-      @copy="copyLlmRisk(llmDetail.risk, llmDetail.key)"
+      @copy="copyLlmRisk(llmDetail.mode === 'opportunity' ? llmDetail.opportunity : llmDetail.risk, llmDetail.key, llmDetail.mode)"
       @close="closeLlmDetail"
       @confirm-resolution="confirmResolution"
       @resolve="resolveFinding"
+      @realize-opportunity="realizeOpportunity"
+      @invalidate-opportunity="invalidateOpportunity"
       @manual-add="manualAddRisk"
     />
   </div>
@@ -330,6 +370,7 @@ import {
   driftBadge,
   formatPriceAsOf,
   formatShareDelta,
+  llmOpportunityTitle,
   llmRiskTitle,
   money,
   num,
@@ -377,17 +418,21 @@ const {
   actionBusy,
   confirmResolution,
   resolveFinding,
+  realizeOpportunity,
+  invalidateOpportunity,
   manualAddRisk,
 } = useLlmRiskDetail({
   onRiskChanged: () => emit('risk-changed'),
 })
 
-function toggleLlmDetail(item, scope, event) {
+function toggleLlmDetail(item, scope, event, mode = 'risk') {
   openLlmDetail({
     key: llmCopyKey(item, scope),
     symbol: item?.symbol || '',
     name: item?.name || '',
     risk: item?.ai_risk,
+    opportunity: item?.ai_opportunity,
+    mode,
     event,
     planId: props.planId,
   })
@@ -399,6 +444,10 @@ function llmCopyKey(item, scope) {
 
 function llmCopyTitle(risk) {
   return `${llmRiskTitle(risk)}\n\n点击复制完整 LLM 风控文本`
+}
+
+function llmOpportunityCopyTitle(opportunity) {
+  return `${llmOpportunityTitle(opportunity)}\n\n点击复制完整 LLM 机会文本`
 }
 
 function isReselectSelected(symbol) {
@@ -644,6 +693,30 @@ function canSelectReselectItem(item) {
   background: #ecfdf5;
   border-color: #34d399;
   color: #047857;
+}
+
+.llm-risk-tag.opportunity-high {
+  background: #dcfce7;
+  border-color: #22c55e;
+  color: #15803d;
+}
+
+.llm-risk-tag.opportunity-medium {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+  color: #0369a1;
+}
+
+.llm-risk-tag.opportunity-low {
+  background: #ecfccb;
+  border-color: #84cc16;
+  color: #4d7c0f;
+}
+
+.llm-risk-tag.opportunity-none {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #64748b;
 }
 
 .llm-risk-copy {

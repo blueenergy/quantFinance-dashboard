@@ -104,6 +104,13 @@ export function riskSeverityLabel(severity) {
 
 const severityRank = { none: 0, low: 1, medium: 2, high: 3 }
 
+export function opportunityStrengthLabel(strength) {
+  if (strength === 'high') return '强'
+  if (strength === 'medium') return '中'
+  if (strength === 'low') return '弱'
+  return '无'
+}
+
 export function riskDisplaySeverity(risk) {
   if (!risk) return 'none'
   const ruleSeverity = risk.severity || 'none'
@@ -118,6 +125,17 @@ function findingLine(finding) {
   const source = sourceBits.length ? `（${sourceBits.join(' ')}）` : ''
   const suggested = finding?.suggested_resolution?.reason
     ? ` [LLM建议解除: ${finding.suggested_resolution.reason}]`
+    : ''
+  return `${detail ? `${title}：${detail}` : title}${source}${suggested}`
+}
+
+function opportunityFindingLine(finding) {
+  const title = finding?.title || finding?.summary || finding?.subject || finding?.code || finding?.finding_key || '机会信号'
+  const detail = finding?.detail || ''
+  const sourceBits = [finding?.source_date, finding?.source_title].filter(Boolean)
+  const source = sourceBits.length ? `（${sourceBits.join(' ')}）` : ''
+  const suggested = finding?.suggested_closure?.reason
+    ? ` [LLM建议关闭: ${finding.suggested_closure.reason}]`
     : ''
   return `${detail ? `${title}：${detail}` : title}${source}${suggested}`
 }
@@ -152,6 +170,17 @@ export function llmRiskTitle(risk) {
   if (llm.model) lines.push(`模型：${llm.model}`)
   if (llm.analyzed_at) lines.push(`分析时间：${String(llm.analyzed_at).slice(0, 19).replace('T', ' ')}`)
   return lines.length ? `LLM 事件风控\n${lines.join('\n')}` : 'LLM 事件风控：未发现明确风险信号'
+}
+
+export function llmOpportunityTitle(opportunity) {
+  const llm = opportunity?.llm || opportunity
+  if (!llm) return '暂无 LLM 机会结果'
+  const lines = []
+  if (llm.summary) lines.push(llm.summary)
+  lines.push(...(llm.findings || []).map(opportunityFindingLine).filter(Boolean))
+  if (llm.model) lines.push(`模型：${llm.model}`)
+  if (llm.analyzed_at) lines.push(`分析时间：${String(llm.analyzed_at).slice(0, 19).replace('T', ' ')}`)
+  return lines.length ? `LLM 机会\n${lines.join('\n')}` : 'LLM 机会：未发现明确机会信号'
 }
 
 export function isKeepItem(item) {
@@ -216,9 +245,11 @@ export function usePortfolioPlanFormat() {
     formatShareDelta,
     signClass,
     riskSeverityLabel,
+    opportunityStrengthLabel,
     riskDisplaySeverity,
     aiRiskTitle,
     llmRiskTitle,
+    llmOpportunityTitle,
     actionBadge,
     driftBadge,
     aiRiskBadge,

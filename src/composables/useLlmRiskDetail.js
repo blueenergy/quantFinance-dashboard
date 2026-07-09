@@ -1,11 +1,16 @@
 import { ref } from 'vue'
-import { llmRiskTitle } from './usePortfolioPlanFormat'
+import { llmOpportunityTitle, llmRiskTitle } from './usePortfolioPlanFormat'
 import { copyTextToClipboard } from '../utils/clipboard'
 import {
   addManualSymbolRisk,
   confirmSymbolRiskResolution,
   resolveSymbolRisk,
 } from '../api/symbolRisk'
+import {
+  addManualSymbolOpportunity,
+  invalidateSymbolOpportunity,
+  realizeSymbolOpportunity,
+} from '../api/symbolOpportunity'
 
 export const LLM_FONT_MIN = 12
 export const LLM_FONT_MAX = 30
@@ -63,19 +68,22 @@ export function useLlmRiskDetail({ onRiskChanged } = {}) {
     return { top, left, width, maxHeight: maxH }
   }
 
-  function toggleLlmDetail({ key, symbol = '', name = '', risk, event, planId = '' } = {}) {
+  function toggleLlmDetail({ key, symbol = '', name = '', risk, opportunity, mode = 'risk', event, planId = '' } = {}) {
     if (!key) return
     if (detail.value?.key === key) {
       detail.value = null
       return
     }
+    const isOpportunity = mode === 'opportunity'
     detail.value = {
       key,
       symbol,
       name,
       risk,
+      opportunity,
+      mode,
       planId,
-      text: llmRiskTitle(risk),
+      text: isOpportunity ? llmOpportunityTitle(opportunity) : llmRiskTitle(risk),
       pos: computePopoverPos(event),
     }
   }
@@ -84,8 +92,8 @@ export function useLlmRiskDetail({ onRiskChanged } = {}) {
     detail.value = null
   }
 
-  async function copyLlmText(risk, key) {
-    const ok = await copyTextToClipboard(llmRiskTitle(risk))
+  async function copyLlmText(payload, key, mode = 'risk') {
+    const ok = await copyTextToClipboard(mode === 'opportunity' ? llmOpportunityTitle(payload) : llmRiskTitle(payload))
     if (!ok) return
     copiedKey.value = key
     if (copyTimer) clearTimeout(copyTimer)
@@ -134,17 +142,61 @@ export function useLlmRiskDetail({ onRiskChanged } = {}) {
     }
   }
 
+  async function realizeOpportunity(finding) {
+    const symbol = detail.value?.symbol
+    const findingKey = finding?.finding_key
+    if (!symbol || !findingKey || actionBusy.value) return
+    actionBusy.value = true
+    try {
+      await realizeSymbolOpportunity(symbol, findingKey, {
+        plan_id: detail.value?.planId || undefined,
+        reason: 'manual_realize_from_panel',
+      })
+      closeLlmDetail()
+      await notifyChanged()
+    } finally {
+      actionBusy.value = false
+    }
+  }
+
+  async function invalidateOpportunity(finding) {
+    const symbol = detail.value?.symbol
+    const findingKey = finding?.finding_key
+    if (!symbol || !findingKey || actionBusy.value) return
+    actionBusy.value = true
+    try {
+      await invalidateSymbolOpportunity(symbol, findingKey, {
+        plan_id: detail.value?.planId || undefined,
+        reason: 'manual_invalidate_from_panel',
+        spawn_risk: false,
+      })
+      closeLlmDetail()
+      await notifyChanged()
+    } finally {
+      actionBusy.value = false
+    }
+  }
+
   async function manualAddRisk(payload) {
     const symbol = detail.value?.symbol
     if (!symbol || actionBusy.value) return
     actionBusy.value = true
     try {
-      await addManualSymbolRisk(symbol, {
-        severity: payload?.severity || 'medium',
-        summary: payload?.summary || '',
-        detail: payload?.detail || '',
-        resolution_mode: 'event',
-      })
+      if (detail.value?.mode === 'opportunity') {
+        await addManualSymbolOpportunity(symbol, {
+          strength: payload?.strength || payload?.severity || 'medium',
+          summary: payload?.summary || '',
+          detail: payload?.detail || '',
+          resolution_mode: 'event',
+        })
+      } else {
+        await addManualSymbolRisk(symbol, {
+          severity: payload?.severity || 'medium',
+          summary: payload?.summary || '',
+          detail: payload?.detail || '',
+          resolution_mode: 'event',
+        })
+      }
       closeLlmDetail()
       await notifyChanged()
     } finally {
@@ -166,6 +218,8 @@ export function useLlmRiskDetail({ onRiskChanged } = {}) {
     copyLlmText,
     confirmResolution,
     resolveFinding,
+    realizeOpportunity,
+    invalidateOpportunity,
     manualAddRisk,
   }
 }
