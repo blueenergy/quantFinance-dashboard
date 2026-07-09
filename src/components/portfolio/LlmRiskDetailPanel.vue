@@ -9,7 +9,7 @@
       >
         <div class="llm-detail-head">
           <span class="llm-detail-title">
-            {{ isOpportunity ? 'LLM 机会详情' : 'LLM 风控详情' }}<template v-if="detail.symbol"> · {{ detail.name || detail.symbol }}</template>
+            {{ isOpportunity ? 'AI 机会详情' : 'AI 风险详情' }}<template v-if="detail.symbol"> · {{ detail.name || detail.symbol }}</template>
           </span>
           <div class="llm-detail-tools">
             <span class="llm-font-label">字号</span>
@@ -33,6 +33,28 @@
               </span>
               <span class="llm-finding-cat">{{ finding.category || 'other' }}</span>
               <span v-if="finding.resolution_mode" class="llm-finding-mode">{{ finding.resolution_mode }}</span>
+            </div>
+            <div v-if="findingMeta(finding).hasMeta" class="llm-finding-meta">
+              <span v-if="findingMeta(finding).sourceText" class="llm-finding-meta-item">
+                来源：{{ findingMeta(finding).sourceText }}
+                <a
+                  v-if="findingMeta(finding).url"
+                  class="llm-finding-link"
+                  :href="findingMeta(finding).url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >链接</a>
+              </span>
+              <span v-if="findingMeta(finding).eventTime" class="llm-finding-meta-item">消息时间：{{ findingMeta(finding).eventTime }}</span>
+              <span v-if="findingMeta(finding).ledgerFirstAt" class="llm-finding-meta-item">首次发现：{{ findingMeta(finding).ledgerFirstAt }}</span>
+              <span
+                v-if="findingMeta(finding).ledgerConfirmedAt && findingMeta(finding).ledgerConfirmedAt !== findingMeta(finding).ledgerFirstAt"
+                class="llm-finding-meta-item"
+              >最近确认：{{ findingMeta(finding).ledgerConfirmedAt }}</span>
+              <span
+                v-if="findingMeta(finding).discoveredBy && !primaryEvidence(finding)"
+                class="llm-finding-meta-item"
+              >录入：{{ findingMeta(finding).discoveredBy }}</span>
             </div>
             <p class="llm-finding-summary">{{ finding.summary || finding.subject || finding.finding_key }}</p>
             <p v-if="finding.detail" class="llm-finding-detail">{{ finding.detail }}</p>
@@ -116,6 +138,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { findingSourceMeta } from '../../composables/usePortfolioPlanFormat'
 
 const props = defineProps({
   detail: { type: Object, default: null },
@@ -187,6 +210,15 @@ function strengthLabel(strength) {
   if (strength === 'medium') return '中'
   if (strength === 'low') return '弱'
   return '无'
+}
+
+function findingMeta(finding) {
+  return findingSourceMeta(finding)
+}
+
+function primaryEvidence(finding) {
+  const rows = Array.isArray(finding?.evidence) ? finding.evidence : []
+  return rows.find((row) => row?.source_title || row?.source_url || row?.source_date || row?.evidence_type) || null
 }
 
 function submitManualAdd() {
@@ -345,6 +377,29 @@ function submitManualAdd() {
 .llm-finding-mode {
   color: #64748b;
   font-size: 11px;
+}
+
+.llm-finding-meta {
+  color: #64748b;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 11px;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.llm-finding-meta-item {
+  line-height: 1.4;
+}
+
+.llm-finding-link {
+  color: #4338ca;
+  margin-left: 4px;
+  text-decoration: none;
+}
+
+.llm-finding-link:hover {
+  text-decoration: underline;
 }
 
 .llm-finding-summary {

@@ -122,12 +122,12 @@
             :disabled="llmRiskLoading || !planId || !pendingItems.length"
             @click="$emit('rerun-llm-risk')"
           >
-            {{ llmRiskLoading ? 'LLM 风控运行中…' : '运行 LLM 风控' }}
+            {{ llmRiskLoading ? 'AI 风险/机会分析运行中…' : '运行 AI 风险/机会分析' }}
           </button>
         </div>
       </div>
       <p v-if="llmRiskSummary" class="llm-risk-summary" :class="`status-${llmRiskSummary.status || 'completed'}`">
-        LLM风控：<template v-if="llmRiskSummary.source === 'ledger'">个股台账</template>
+        AI风险/机会：<template v-if="llmRiskSummary.source === 'ledger'">个股台账</template>
         <template v-else>{{ llmRiskStatusText(llmRiskSummary.status) }}</template>
         · {{ llmRiskSummary.industry_count || 0 }}行业 / {{ llmRiskSummary.symbol_count || 0 }}标的
         <span v-if="llmRiskSummary.status === 'completed_with_failures'"> · 部分行业失败，已展示可用结果</span>

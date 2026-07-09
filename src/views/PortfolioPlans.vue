@@ -749,12 +749,12 @@
               <h4>目标持仓与交易明细</h4>
               <div class="ai-risk-bar">
                 <span v-if="aiRiskSummary" class="ai-risk-summary">
-                  AI风控：<b class="risk-high">{{ aiRiskSummary.high || 0 }}高</b>
+                  规则风控：<b class="risk-high">{{ aiRiskSummary.high || 0 }}高</b>
                   / <b class="risk-medium">{{ aiRiskSummary.medium || 0 }}中</b>
                   / <b class="risk-low">{{ aiRiskSummary.low || 0 }}低</b>
                 </span>
                 <span v-if="llmRiskSummary" class="ai-risk-summary">
-                  LLM风控：{{ llmRiskSummary.industry_count || 0 }}行业 / {{ llmRiskSummary.symbol_count || 0 }}标的
+                  AI风险/机会：{{ llmRiskSummary.industry_count || 0 }}行业 / {{ llmRiskSummary.symbol_count || 0 }}标的
                   <template v-if="llmRiskSummary.source === 'ledger'"> · 个股台账</template>
                 </span>
                 <span v-if="riskSnapshot" class="ai-risk-summary risk-snapshot-hint">
@@ -781,11 +781,11 @@
                 </button>
                 <button class="link-btn" :disabled="aiRiskRunning" @click="runAiRisk">
                   <span v-if="aiRiskRunning" class="spinner" />
-                  {{ aiRiskRunning ? 'AI 风控运行中…' : '运行 AI 风控' }}
+                  {{ aiRiskRunning ? '规则风控运行中…' : '运行规则风控' }}
                 </button>
                 <button class="link-btn" :disabled="llmRiskRunning" @click="runLlmRisk">
                   <span v-if="llmRiskRunning" class="spinner" />
-                  {{ llmRiskRunning ? `LLM 风控 ${llmRiskMeta.summary || '运行中…'}` : '运行 LLM 风控' }}
+                  {{ llmRiskRunning ? `AI 风险/机会分析 ${llmRiskMeta.summary || '运行中…'}` : '运行 AI 风险/机会分析' }}
                 </button>
               </div>
             </div>
@@ -2136,7 +2136,7 @@ function formatSnapshotAt(value) {
 async function runAiRisk() {
   if (!selectedPlanId.value || aiRiskRunning.value) return
   aiRiskRunning.value = true
-  message.value = 'AI 风控审查已提交，正在运行…'
+  message.value = '规则风控审查已提交，正在运行…'
   try {
     const res = await rerunPortfolioPlanAiRisk(selectedPlanId.value)
     const taskId = res.data?.task?.task_id
@@ -2150,7 +2150,7 @@ async function runAiRisk() {
   } catch (error) {
     aiRiskRunning.value = false
     const detailText = formatApiDetail(error.response?.data?.detail)
-    message.value = detailText || error.message || 'AI 风控审查失败'
+    message.value = detailText || error.message || '规则风控审查失败'
   }
 }
 
@@ -2167,9 +2167,9 @@ async function pollAiRiskTask(taskId) {
       await loadOperationLogs()
       if (status === 'completed') {
         await selectPlan(selectedPlanId.value)
-        message.value = 'AI 风控审查完成'
+        message.value = '规则风控审查完成'
       } else {
-        message.value = res.data?.error_message || 'AI 风控审查失败'
+        message.value = res.data?.error_message || '规则风控审查失败'
       }
     }
   } catch (error) {
@@ -2178,7 +2178,7 @@ async function pollAiRiskTask(taskId) {
       aiRiskTimer = null
     }
     aiRiskRunning.value = false
-    message.value = error.message || 'AI 风控任务查询失败'
+    message.value = error.message || '规则风控任务查询失败'
   }
 }
 
@@ -2186,7 +2186,7 @@ async function runLlmRisk() {
   if (!selectedPlanId.value || llmRiskRunning.value) return
   llmRiskRunning.value = true
   llmRiskMeta.value = { runId: '', status: 'pending', summary: '' }
-  message.value = 'LLM 风控审查已提交，正在按行业分桶分析…'
+  message.value = 'AI 风险/机会分析已提交，正在按行业分桶分析…'
   try {
     const res = await enqueuePortfolioLlmRisk(selectedPlanId.value)
     const runId = res.data?.run_id
@@ -2209,7 +2209,7 @@ async function runLlmRisk() {
   } catch (error) {
     llmRiskRunning.value = false
     const detailText = formatApiDetail(error.response?.data?.detail)
-    message.value = detailText || error.message || 'LLM 风控审查失败'
+    message.value = detailText || error.message || 'AI 风险/机会分析失败'
   }
 }
 
@@ -2232,12 +2232,12 @@ async function pollLlmRiskRun(runId) {
       await loadOperationLogs()
       if (status === 'completed') {
         await selectPlan(selectedPlanId.value)
-        message.value = 'LLM 风控审查完成'
+        message.value = 'AI 风险/机会分析完成'
       } else if (status === 'completed_with_failures') {
         await selectPlan(selectedPlanId.value)
-        message.value = `LLM 风控部分完成：${summaryText || '部分行业任务失败，已刷新可用结果'}`
+        message.value = `AI 风险/机会分析部分完成：${summaryText || '部分行业任务失败，已刷新可用结果'}`
       } else {
-        message.value = `LLM 风控审查失败：${summaryText || '所有行业任务均未完成，请稍后重试或检查 worker 日志'}`
+        message.value = `AI 风险/机会分析失败：${summaryText || '所有行业任务均未完成，请稍后重试或检查 worker 日志'}`
       }
     }
   } catch (error) {
@@ -2246,7 +2246,7 @@ async function pollLlmRiskRun(runId) {
       llmRiskTimer = null
     }
     llmRiskRunning.value = false
-    message.value = error.message || 'LLM 风控任务查询失败'
+    message.value = error.message || 'AI 风险/机会分析任务查询失败'
   }
 }
 

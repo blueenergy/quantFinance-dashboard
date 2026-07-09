@@ -5,7 +5,7 @@
         <h3>待审批计划复核</h3>
         <p class="muted">
           最新 plan：<code>{{ shortPlanId(planId) }}</code> · 待审批 ·
-          请先核对下方买/卖/持有方向与 AI 风控，再决定批准或拒绝。
+          请先核对下方买/卖/持有方向与规则风控，再决定批准或拒绝。
         </p>
         <p class="plan-id-row">
           <span class="label">完整 plan_id</span>
@@ -29,10 +29,10 @@
     </p>
 
     <p v-if="riskSummary.high" class="warning-text plan-review-risk-warning">
-      AI 风控发现 {{ riskSummary.high }} 个高风险标的，批准前请重点确认。
+      规则风控发现 {{ riskSummary.high }} 个高风险标的，批准前请重点确认。
     </p>
     <p v-if="llmRiskSummary" class="llm-risk-summary" :class="`status-${llmRiskSummary.status || 'completed'}`">
-      LLM风控：<template v-if="llmRiskSummary.source === 'ledger'">个股台账</template>
+      AI风险/机会：<template v-if="llmRiskSummary.source === 'ledger'">个股台账</template>
       <template v-else>{{ llmRiskStatusText(llmRiskSummary.status) }}</template>
       · {{ llmRiskSummary.industry_count || 0 }}行业 / {{ llmRiskSummary.symbol_count || 0 }}标的
       <span v-if="llmRiskSummary.status === 'completed_with_failures'"> · 部分行业失败，已展示可用结果</span>
@@ -106,10 +106,10 @@
         {{ approveSubmitting ? '审批中…' : '批准计划' }}
       </button>
       <button type="button" class="secondary" :disabled="reviewAiRiskLoading" @click="$emit('rerun-ai-risk')">
-        {{ reviewAiRiskLoading ? 'AI 风控复检中…' : '运行 AI 风控复检' }}
+        {{ reviewAiRiskLoading ? '规则风控复检中…' : '运行规则风控复检' }}
       </button>
       <button type="button" class="secondary" :disabled="reviewLlmRiskLoading || !planId" @click="$emit('rerun-llm-risk')">
-        {{ reviewLlmRiskLoading ? 'LLM 风控运行中…' : '运行 LLM 风控' }}
+        {{ reviewLlmRiskLoading ? 'AI 风险/机会分析运行中…' : '运行 AI 风险/机会分析' }}
       </button>
       <button type="button" class="danger" :disabled="approveSubmitting || rejectSubmitting || !planId" @click="$emit('reject')">
         {{ rejectSubmitting ? '拒绝中…' : '拒绝计划' }}

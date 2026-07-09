@@ -884,9 +884,9 @@ async function rerunReviewAiRisk() {
     const taskId = res.data?.task_id
     if (taskId) await pollGenerationTask(taskId)
     await refreshDetail()
-    message.value = 'AI 风控已复检，标的风险等级已刷新。'
+    message.value = '规则风控已复检，标的风险等级已刷新。'
   } catch (error) {
-    message.value = formatApiDetail(error.response?.data?.detail) || error.message || 'AI 风控复检失败'
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || '规则风控复检失败'
     messageIsError.value = true
   } finally {
     reviewAiRiskLoading.value = false
@@ -900,7 +900,7 @@ async function pollLlmRiskRun(planId, runId, { attempts = 90, intervalMs = 2000 
     if (['completed', 'completed_with_failures', 'failed'].includes(run.status)) return run
     await new Promise((resolve) => setTimeout(resolve, intervalMs))
   }
-  throw new Error('LLM 风控任务处理超时，请稍后刷新查看结果')
+  throw new Error('AI 风险/机会分析任务处理超时，请稍后刷新查看结果')
 }
 
 async function rerunPlanLlmRisk(planIdRef, source = 'ops') {
@@ -918,19 +918,19 @@ async function rerunPlanLlmRisk(planIdRef, source = 'ops') {
       const run = await pollLlmRiskRun(planId, runId)
       const summaryText = run.partial_summary || ''
       if (run.status === 'completed_with_failures') {
-        message.value = `LLM 风控部分完成：${summaryText || '部分行业任务失败，已刷新可用结果'}`
+        message.value = `AI 风险/机会分析部分完成：${summaryText || '部分行业任务失败，已刷新可用结果'}`
       } else if (run.status === 'failed') {
-        message.value = `LLM 风控失败：${summaryText || '所有行业任务均未完成，请稍后重试或检查 worker 日志'}`
+        message.value = `AI 风险/机会分析失败：${summaryText || '所有行业任务均未完成，请稍后重试或检查 worker 日志'}`
         messageIsError.value = true
       } else {
-        message.value = 'LLM 风控已完成，标的事件风险已刷新。'
+        message.value = 'AI 风险/机会分析已完成，标的事件风险已刷新。'
       }
     } else {
-      message.value = 'LLM 风控已提交，但未返回 run_id；请稍后刷新查看任务状态。'
+      message.value = 'AI 风险/机会分析已提交，但未返回 run_id；请稍后刷新查看任务状态。'
     }
     await refreshDetail()
   } catch (error) {
-    message.value = formatApiDetail(error.response?.data?.detail) || error.message || 'LLM 风控失败'
+    message.value = formatApiDetail(error.response?.data?.detail) || error.message || 'AI 风险/机会分析失败'
     messageIsError.value = true
   } finally {
     reviewLlmRiskLoading.value = false

@@ -8,8 +8,7 @@
       </p>
       <div class="bench-risk-bar">
         <span v-if="benchRisk" class="bench-risk-summary">
-          AI风控：<b class="risk-high">{{ benchRisk.high || 0 }}高</b>
-          / <b class="risk-medium">{{ benchRisk.medium || 0 }}中</b>
+          规则风控：<b class="risk-high">{{ benchRisk.high || 0 }}高</b>          / <b class="risk-medium">{{ benchRisk.medium || 0 }}中</b>
           / <b class="risk-low">{{ benchRisk.low || 0 }}低</b>
         </span>
         <span v-else class="muted">未体检；高风险候选上场前会二次确认。</span>
@@ -19,7 +18,7 @@
           :disabled="benchRiskLoading || !benchData?.bench?.length"
           @click="$emit('load-bench-risk')"
         >
-          {{ benchRiskLoading ? 'AI 风控运行中…' : '运行 AI 风控' }}
+          {{ benchRiskLoading ? '规则风控运行中…' : '运行规则风控' }}
         </button>
         <button
           type="button"
@@ -27,7 +26,7 @@
           :disabled="benchLlmRiskLoading || !benchData?.bench?.length"
           @click="$emit('load-bench-llm-risk')"
         >
-          {{ benchLlmRiskLoading ? 'LLM 风控运行中…' : '运行 LLM 风控' }}
+          {{ benchLlmRiskLoading ? 'AI 风险/机会分析运行中…' : '运行 AI 风险/机会分析' }}
         </button>
       </div>
       <div v-if="benchData?.bench?.length" class="table-wrap">
@@ -39,7 +38,7 @@
               <th>名称</th>
               <th>分数</th>
               <th>最新收盘</th>
-              <th>AI风控</th>
+              <th>规则风控</th>
               <th></th>
             </tr>
           </thead>
@@ -66,16 +65,7 @@
                     class="llm-risk-tag"
                     :class="`risk-${benchRowRisk(row).llm.severity || 'none'}`"
                     :title="llmRiskTitle(benchRowRisk(row))"
-                  >LLM</span>
-                  <button
-                    v-if="benchRowRisk(row)?.llm"
-                    type="button"
-                    class="llm-risk-copy"
-                    :title="llmCopyTitle(benchRowRisk(row))"
-                    @click.stop="copyLlmRisk(benchRowRisk(row), row.symbol)"
-                  >
-                    {{ copiedLlmRiskSymbol === row.symbol ? '已复制' : '复制' }}
-                  </button>
+                  >风险</span>
                 </div>
               </td>
               <td>
@@ -97,9 +87,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
 import { aiRiskTitle, llmRiskTitle, num, riskDisplaySeverity, riskSeverityLabel } from '../../composables/usePortfolioPlanFormat'
-import { copyTextToClipboard } from '../../utils/clipboard'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -114,23 +102,6 @@ const props = defineProps({
 })
 
 defineEmits(['close', 'load-bench-risk', 'load-bench-llm-risk', 'preview-swap'])
-
-const copiedLlmRiskSymbol = ref('')
-
-function llmCopyTitle(risk) {
-  return `${llmRiskTitle(risk)}\n\n点击复制完整 LLM 风控文本`
-}
-
-let copiedResetTimer = null
-async function copyLlmRisk(risk, symbol) {
-  const ok = await copyTextToClipboard(llmRiskTitle(risk))
-  if (!ok) return
-  copiedLlmRiskSymbol.value = symbol
-  if (copiedResetTimer) clearTimeout(copiedResetTimer)
-  copiedResetTimer = setTimeout(() => {
-    if (copiedLlmRiskSymbol.value === symbol) copiedLlmRiskSymbol.value = ''
-  }, 2000)
-}
 
 function symbolRisk(map, symbol) {
   const text = String(symbol || '')
@@ -305,22 +276,6 @@ tbody tr:hover td {
   background: #ecfdf5;
   border-color: #34d399;
   color: #047857;
-}
-
-.llm-risk-copy {
-  background: #fff;
-  border: 1px solid #c7d2fe;
-  border-radius: 999px;
-  color: #4338ca;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.2;
-  padding: 1px 5px;
-}
-
-.llm-risk-copy:hover {
-  background: #eef2ff;
 }
 
 .modal-error {

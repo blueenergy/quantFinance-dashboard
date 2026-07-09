@@ -39,7 +39,7 @@
           <th v-if="showOverlay" class="col-num">现价</th>
           <th v-if="showOverlay" class="col-rank">最新排名</th>
           <th class="col-money">预估金额</th>
-          <th class="col-airisk">AI风控</th>
+          <th class="col-airisk">规则风控</th>
           <th v-if="showOverlay" class="col-risk">提示</th>
           <th v-if="canReselectItems" class="col-action">操作</th>
         </tr>
@@ -107,21 +107,12 @@
                 v-if="row.ai_risk?.llm"
                 class="llm-risk-tag llm-risk-tag--btn"
                 :class="[`risk-${row.ai_risk.llm.severity || 'none'}`, { 'is-active': llmDetail?.key === llmCopyKey(row, 'pending') }]"
-                :title="'点击查看/放大完整 LLM 风控'"
+                :title="'点击查看/放大完整风险分析'"
                 role="button"
                 tabindex="0"
                 @click.stop="toggleLlmDetail(row, 'pending', $event)"
                 @keydown.enter.stop="toggleLlmDetail(row, 'pending', $event)"
-              >LLM</span>
-              <button
-                v-if="row.ai_risk?.llm"
-                type="button"
-                class="llm-risk-copy"
-                :title="llmCopyTitle(row.ai_risk)"
-                @click.stop="copyLlmRisk(row.ai_risk, llmCopyKey(row, 'pending'))"
-              >
-                {{ copiedLlmRiskKey === llmCopyKey(row, 'pending') ? '已复制' : '复制' }}
-              </button>
+              >风险</span>
               <span
                 v-if="row.ai_opportunity?.llm"
                 class="llm-risk-tag llm-risk-tag--btn llm-opportunity-tag"
@@ -132,15 +123,6 @@
                 @click.stop="toggleLlmDetail(row, 'pending-opp', $event, 'opportunity')"
                 @keydown.enter.stop="toggleLlmDetail(row, 'pending-opp', $event, 'opportunity')"
               >机会</span>
-              <button
-                v-if="row.ai_opportunity?.llm"
-                type="button"
-                class="llm-risk-copy"
-                :title="llmOpportunityCopyTitle(row.ai_opportunity)"
-                @click.stop="copyLlmRisk(row.ai_opportunity, llmCopyKey(row, 'pending-opp'), 'opportunity')"
-              >
-                {{ copiedLlmRiskKey === llmCopyKey(row, 'pending-opp') ? '已复制' : '复制' }}
-              </button>
             </div>
           </td>
           <td v-if="showOverlay" class="col-risk risk-reasons">
@@ -208,7 +190,7 @@
           <th class="col-narrow">最新排名</th>
           <th class="col-narrow">候选</th>
           <th v-if="canReselectItems" class="col-action">操作</th>
-          <th class="col-airisk">AI风控</th>
+          <th class="col-airisk">规则风控</th>
           <th class="col-risk">风险</th>
         </tr>
       </thead>
@@ -296,21 +278,12 @@
                 v-if="item.ai_risk?.llm"
                 class="llm-risk-tag llm-risk-tag--btn"
                 :class="[`risk-${item.ai_risk.llm.severity || 'none'}`, { 'is-active': llmDetail?.key === llmCopyKey(item, 'detail') }]"
-                :title="'点击查看/放大完整 LLM 风控'"
+                :title="'点击查看/放大完整风险分析'"
                 role="button"
                 tabindex="0"
                 @click.stop="toggleLlmDetail(item, 'detail', $event)"
                 @keydown.enter.stop="toggleLlmDetail(item, 'detail', $event)"
-              >LLM</span>
-              <button
-                v-if="item.ai_risk?.llm"
-                type="button"
-                class="llm-risk-copy"
-                :title="llmCopyTitle(item.ai_risk)"
-                @click.stop="copyLlmRisk(item.ai_risk, llmCopyKey(item, 'detail'))"
-              >
-                {{ copiedLlmRiskKey === llmCopyKey(item, 'detail') ? '已复制' : '复制' }}
-              </button>
+              >风险</span>
               <span
                 v-if="item.ai_opportunity?.llm"
                 class="llm-risk-tag llm-risk-tag--btn llm-opportunity-tag"
@@ -321,15 +294,6 @@
                 @click.stop="toggleLlmDetail(item, 'detail-opp', $event, 'opportunity')"
                 @keydown.enter.stop="toggleLlmDetail(item, 'detail-opp', $event, 'opportunity')"
               >机会</span>
-              <button
-                v-if="item.ai_opportunity?.llm"
-                type="button"
-                class="llm-risk-copy"
-                :title="llmOpportunityCopyTitle(item.ai_opportunity)"
-                @click.stop="copyLlmRisk(item.ai_opportunity, llmCopyKey(item, 'detail-opp'), 'opportunity')"
-              >
-                {{ copiedLlmRiskKey === llmCopyKey(item, 'detail-opp') ? '已复制' : '复制' }}
-              </button>
             </div>
           </td>
           <td class="col-risk" :title="(item.blockers || []).join(', ')">{{ (item.blockers || []).join(', ') || '-' }}</td>
@@ -370,8 +334,6 @@ import {
   driftBadge,
   formatPriceAsOf,
   formatShareDelta,
-  llmOpportunityTitle,
-  llmRiskTitle,
   money,
   num,
   pctSigned,
@@ -440,14 +402,6 @@ function toggleLlmDetail(item, scope, event, mode = 'risk') {
 
 function llmCopyKey(item, scope) {
   return `${scope}:${item?.symbol || item?.name || 'unknown'}:${item?.rank ?? ''}`
-}
-
-function llmCopyTitle(risk) {
-  return `${llmRiskTitle(risk)}\n\n点击复制完整 LLM 风控文本`
-}
-
-function llmOpportunityCopyTitle(opportunity) {
-  return `${llmOpportunityTitle(opportunity)}\n\n点击复制完整 LLM 机会文本`
 }
 
 function isReselectSelected(symbol) {
@@ -717,22 +671,6 @@ function canSelectReselectItem(item) {
   background: #f1f5f9;
   border-color: #cbd5e1;
   color: #64748b;
-}
-
-.llm-risk-copy {
-  background: #fff;
-  border: 1px solid #c7d2fe;
-  border-radius: 999px;
-  color: #4338ca;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.2;
-  padding: 1px 5px;
-}
-
-.llm-risk-copy:hover {
-  background: #eef2ff;
 }
 
 .stock-workbench-link {

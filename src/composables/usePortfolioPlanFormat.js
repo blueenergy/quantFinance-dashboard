@@ -118,11 +118,95 @@ export function riskDisplaySeverity(risk) {
   return (severityRank[llmSeverity] || 0) > (severityRank[ruleSeverity] || 0) ? llmSeverity : ruleSeverity
 }
 
+function primaryEvidence(finding) {
+  const rows = Array.isArray(finding?.evidence) ? finding.evidence : []
+  const nested = rows.find((row) => row?.source_title || row?.source_url || row?.source_date || row?.evidence_type) || rows[0]
+  if (nested?.source_title || nested?.source_url || nested?.source_date || nested?.evidence_type) {
+    return nested
+  }
+  if (finding?.source_title || finding?.source_url || finding?.source_date || finding?.evidence_type) {
+    return {
+      source_title: finding?.source_title || '',
+      source_url: finding?.source_url || '',
+      source_date: finding?.source_date || '',
+      evidence_type: finding?.evidence_type || '',
+    }
+  }
+  return nested || null
+}
+
+export function formatLedgerAsOf(asOf) {
+  if (!asOf) return ''
+  const text = String(asOf).trim()
+  if (/^\d{8}$/.test(text)) {
+    return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
+  }
+  return text.slice(0, 10)
+}
+
+export function formatLedgerAt(at) {
+  if (!at) return ''
+  const text = String(at).trim()
+  if (text.includes('T')) return text.slice(0, 19).replace('T', ' ')
+  return formatLedgerAsOf(text) || text.slice(0, 19)
+}
+
+export function evidenceTypeLabel(type) {
+  const labels = {
+    announcement: '公告',
+    news: '新闻',
+    guba: '股吧',
+    policy: '政策',
+    rules_prior: '规则先验',
+    unverified: '未核验',
+  }
+  return labels[type] || type || ''
+}
+
+export function discoveredByLabel(by) {
+  const labels = {
+    llm: 'AI 分析',
+    manual: '人工录入',
+    opportunity_invalidation: '机会落空转入',
+  }
+  return labels[by] || by || ''
+}
+
+export function findingSourceMeta(finding) {
+  const evidence = primaryEvidence(finding)
+  const typeLabel = evidenceTypeLabel(evidence?.evidence_type)
+  const title = String(evidence?.source_title || '').trim()
+  const url = String(evidence?.source_url || '').trim()
+
+  let sourceText = ''
+  if (typeLabel && title) sourceText = `${typeLabel}：${title}`
+  else if (typeLabel) sourceText = typeLabel
+  else if (title) sourceText = title
+  else if (finding?.discovered_by) sourceText = discoveredByLabel(finding.discovered_by)
+
+  const eventTime = formatLedgerAsOf(evidence?.source_date) || ''
+  const ledgerFirstAt = formatLedgerAsOf(finding?.first_detected_as_of) || formatLedgerAt(finding?.first_detected_at) || ''
+  const ledgerConfirmedAt = formatLedgerAsOf(finding?.last_confirmed_as_of) || formatLedgerAt(finding?.last_confirmed_at) || ''
+  const discoveredBy = discoveredByLabel(finding?.discovered_by)
+  const hasMeta = Boolean(sourceText || eventTime || ledgerFirstAt || ledgerConfirmedAt || discoveredBy)
+
+  return {
+    sourceText,
+    url,
+    eventTime,
+    ledgerFirstAt,
+    ledgerConfirmedAt,
+    discoveredBy,
+    hasMeta,
+  }
+}
+
 function findingLine(finding) {
   const title = finding?.title || finding?.summary || finding?.subject || finding?.code || finding?.finding_key || '风险信号'
   const detail = finding?.detail || ''
-  const sourceBits = [finding?.source_date, finding?.source_title].filter(Boolean)
-  const source = sourceBits.length ? `（${sourceBits.join(' ')}）` : ''
+  const meta = findingSourceMeta(finding)
+  const sourceBits = [meta.eventTime, meta.sourceText].filter(Boolean)
+  const source = sourceBits.length ? `（${sourceBits.join(' · ')}）` : ''
   const suggested = finding?.suggested_resolution?.reason
     ? ` [LLM建议解除: ${finding.suggested_resolution.reason}]`
     : ''
@@ -132,8 +216,9 @@ function findingLine(finding) {
 function opportunityFindingLine(finding) {
   const title = finding?.title || finding?.summary || finding?.subject || finding?.code || finding?.finding_key || '机会信号'
   const detail = finding?.detail || ''
-  const sourceBits = [finding?.source_date, finding?.source_title].filter(Boolean)
-  const source = sourceBits.length ? `（${sourceBits.join(' ')}）` : ''
+  const meta = findingSourceMeta(finding)
+  const sourceBits = [meta.eventTime, meta.sourceText].filter(Boolean)
+  const source = sourceBits.length ? `（${sourceBits.join(' · ')}）` : ''
   const suggested = finding?.suggested_closure?.reason
     ? ` [LLM建议关闭: ${finding.suggested_closure.reason}]`
     : ''
@@ -250,6 +335,11 @@ export function usePortfolioPlanFormat() {
     aiRiskTitle,
     llmRiskTitle,
     llmOpportunityTitle,
+    formatLedgerAsOf,
+    formatLedgerAt,
+    evidenceTypeLabel,
+    discoveredByLabel,
+    findingSourceMeta,
     actionBadge,
     driftBadge,
     aiRiskBadge,

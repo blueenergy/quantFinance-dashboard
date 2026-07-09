@@ -43,7 +43,7 @@ describe('PlanItemsTable LLM risk tag', () => {
     const wrapper = mountTable({ mode: 'plan' })
     const tag = wrapper.find('.llm-risk-tag')
     expect(tag.exists()).toBe(true)
-    expect(tag.text()).toBe('LLM')
+    expect(tag.text()).toBe('风险')
 
     await tag.trigger('click')
     expect(document.body.querySelector('.llm-detail-panel')).not.toBeNull()
@@ -54,7 +54,7 @@ describe('PlanItemsTable LLM risk tag', () => {
     const wrapper = mountTable({ mode: 'pending' })
     const tag = wrapper.find('.llm-risk-tag')
     expect(tag.exists()).toBe(true)
-    expect(tag.text()).toBe('LLM')
+    expect(tag.text()).toBe('风险')
 
     await tag.trigger('click')
     const panel = document.body.querySelector('.llm-detail-panel')

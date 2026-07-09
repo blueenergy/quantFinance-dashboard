@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiRiskTitle, llmRiskTitle, riskDisplaySeverity } from '../usePortfolioPlanFormat'
+import { aiRiskTitle, findingSourceMeta, llmRiskTitle, riskDisplaySeverity } from '../usePortfolioPlanFormat'
 
 describe('portfolio plan risk formatting', () => {
   it('formats rule and llm findings in separate tooltip sections', () => {
@@ -51,5 +51,50 @@ describe('portfolio plan risk formatting', () => {
     expect(title).toContain('测试股份减持公告')
     expect(title).toContain('test-model')
     expect(title).not.toContain('规则风控内容不应展示')
+  })
+
+  it('extracts ledger evidence source and time for finding cards', () => {
+    const meta = findingSourceMeta({
+      discovered_by: 'llm',
+      first_detected_as_of: '20260708',
+      last_confirmed_as_of: '20260709',
+      evidence: [
+        {
+          evidence_type: 'news',
+          source_title: '半导体国产替代政策持续推进',
+          source_date: '20260707',
+          source_url: 'https://example.com/news',
+        },
+      ],
+    })
+
+    expect(meta.sourceText).toBe('新闻：半导体国产替代政策持续推进')
+    expect(meta.eventTime).toBe('2026-07-07')
+    expect(meta.ledgerFirstAt).toBe('2026-07-08')
+    expect(meta.ledgerConfirmedAt).toBe('2026-07-09')
+    expect(meta.url).toBe('https://example.com/news')
+  })
+
+  it('includes nested evidence source in copied llm finding lines', () => {
+    const title = llmRiskTitle({
+      llm: {
+        findings: [
+          {
+            summary: '监管问询',
+            detail: '交易所要求说明收入确认',
+            evidence: [
+              {
+                evidence_type: 'announcement',
+                source_title: '问询函公告',
+                source_date: '20260629',
+              },
+            ],
+          },
+        ],
+      },
+    })
+
+    expect(title).toContain('问询函公告')
+    expect(title).toContain('2026-06-29')
   })
 })

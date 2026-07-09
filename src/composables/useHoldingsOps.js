@@ -311,7 +311,7 @@ export function useHoldingsOps({
     if (riskDisplaySeverity(benchRiskInfo) === 'high') {
       const reasons = aiRiskTitle(benchRiskInfo) || '高风险信号'
       const proceed = window.confirm(
-        `AI 风控提示：替补 ${benchPlayer.symbol}（${benchPlayer.name || '-'}）为高风险——${reasons}。仍要换上吗？`
+        `规则风控提示：替补 ${benchPlayer.symbol}（${benchPlayer.name || '-'}）为高风险——${reasons}。仍要换上吗？`
       )
       if (!proceed) return
     }
@@ -452,7 +452,7 @@ export function useHoldingsOps({
       if (['completed', 'completed_with_failures', 'failed'].includes(run.status)) return run
       await new Promise((resolve) => setTimeout(resolve, intervalMs))
     }
-    throw new Error('LLM 风控任务处理超时，请稍后刷新查看结果')
+    throw new Error('AI 风险/机会分析任务处理超时，请稍后刷新查看结果')
   }
 
   async function loadBenchLlmRisk() {
@@ -475,23 +475,23 @@ export function useHoldingsOps({
         const summaryText = run.partial_summary || ''
         if (run.status === 'failed') {
           onMessage(
-            `替补 LLM 风控失败：${summaryText || '所有行业任务均未完成，请稍后重试或检查 worker 日志'}`,
+            `替补 AI 风险/机会分析失败：${summaryText || '所有行业任务均未完成，请稍后重试或检查 worker 日志'}`,
             true,
           )
           return
         }
         onMessage(
           run.status === 'completed_with_failures'
-            ? `替补 LLM 风控部分完成：${summaryText || '部分行业任务失败，已刷新可用结果'}`
-            : '替补 LLM 风控已完成，候选事件风险已刷新。',
+            ? `替补 AI 风险/机会分析部分完成：${summaryText || '部分行业任务失败，已刷新可用结果'}`
+            : '替补 AI 风险/机会分析已完成，候选事件风险已刷新。',
           run.status === 'completed_with_failures',
         )
       } else {
-        onMessage('替补 LLM 风控已提交，但未返回 run_id；请稍后刷新查看任务状态。', true)
+        onMessage('替补 AI 风险/机会分析已提交，但未返回 run_id；请稍后刷新查看任务状态。', true)
       }
       await loadBench({ resetRisk: false })
     } catch (error) {
-      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '替补 LLM 风控加载失败', true)
+      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '替补 AI 风险/机会分析加载失败', true)
     } finally {
       benchLlmRiskLoading.value = false
     }

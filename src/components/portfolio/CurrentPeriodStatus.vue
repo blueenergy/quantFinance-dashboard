@@ -33,7 +33,7 @@
     <div v-if="timelineData.action_required || latestPlanId" class="cycle-actions">
       <p v-if="pendingActionPlan" class="action-banner">
         待审批计划：<strong>{{ pendingActionPlan.date }}</strong> · {{ pendingActionPlan.today_state }}
-        <span class="muted">请在下方「待审批计划复核」核对标的与 AI 风控后批准/拒绝。</span>
+        <span class="muted">请在下方「待审批计划复核」核对标的与规则风控后批准/拒绝。</span>
       </p>
       <button
         type="button"

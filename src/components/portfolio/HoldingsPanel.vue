@@ -117,21 +117,12 @@
                   v-if="holdingRowRisk(row)?.llm"
                   class="llm-risk-tag llm-risk-tag--btn"
                   :class="[`risk-${holdingRowRisk(row).llm.severity || 'none'}`, { 'is-active': llmDetail?.key === llmKey('holding', row) }]"
-                  title="点击查看/放大完整 LLM 风控"
+                  title="点击查看/放大完整风险分析"
                   role="button"
                   tabindex="0"
                   @click.stop="openLlm(holdingRowRisk(row), row, 'holding', $event)"
                   @keydown.enter.stop="openLlm(holdingRowRisk(row), row, 'holding', $event)"
-                >LLM</span>
-                <button
-                  v-if="holdingRowRisk(row)?.llm"
-                  type="button"
-                  class="llm-risk-copy"
-                  :title="llmCopyTitle(holdingRowRisk(row))"
-                  @click.stop="copyLlmRisk(holdingRowRisk(row), llmKey('holding', row))"
-                >
-                  {{ copiedLlmRiskKey === llmKey('holding', row) ? '已复制' : '复制' }}
-                </button>
+                >风险</span>
                 <span
                   v-if="row.ai_opportunity?.llm"
                   class="llm-risk-tag llm-risk-tag--btn llm-opportunity-tag"
@@ -142,15 +133,6 @@
                   @click.stop="openLlm(row.ai_opportunity, row, 'holding-opp', $event, 'opportunity')"
                   @keydown.enter.stop="openLlm(row.ai_opportunity, row, 'holding-opp', $event, 'opportunity')"
                 >机会</span>
-                <button
-                  v-if="row.ai_opportunity?.llm"
-                  type="button"
-                  class="llm-risk-copy"
-                  :title="llmOpportunityCopyTitle(row.ai_opportunity)"
-                  @click.stop="copyLlmRisk(row.ai_opportunity, llmKey('holding-opp', row), 'opportunity')"
-                >
-                  {{ copiedLlmRiskKey === llmKey('holding-opp', row) ? '已复制' : '复制' }}
-                </button>
               </div>
             </td>
           </tr>
@@ -230,7 +212,7 @@
         <template v-else>
           <div class="bench-risk-bar">
             <span v-if="benchRisk" class="bench-risk-summary">
-              AI风控：<b class="risk-high">{{ benchRisk.high || 0 }}高</b>
+              规则风控：<b class="risk-high">{{ benchRisk.high || 0 }}高</b>
               / <b class="risk-medium">{{ benchRisk.medium || 0 }}中</b>
               / <b class="risk-low">{{ benchRisk.low || 0 }}低</b>
             </span>
@@ -241,7 +223,7 @@
               :disabled="benchRiskLoading || !benchData.bench?.length"
               @click="$emit('load-bench-risk')"
             >
-              {{ benchRiskLoading ? 'AI 风控运行中…' : '运行 AI 风控' }}
+              {{ benchRiskLoading ? '规则风控运行中…' : '运行规则风控' }}
             </button>
             <button
               type="button"
@@ -249,7 +231,7 @@
               :disabled="benchLlmRiskLoading || !benchData.bench?.length"
               @click="$emit('load-bench-llm-risk')"
             >
-              {{ benchLlmRiskLoading ? 'LLM 风控运行中…' : '运行 LLM 风控' }}
+              {{ benchLlmRiskLoading ? 'AI 风险/机会分析运行中…' : '运行 AI 风险/机会分析' }}
             </button>
           </div>
           <div v-if="benchData.bench?.length" class="table-wrap">
@@ -262,7 +244,7 @@
                   <th>行业</th>
                   <th>分数</th>
                   <th>最新收盘</th>
-                  <th>AI风控</th>
+                  <th>规则风控</th>
                 </tr>
               </thead>
               <tbody>
@@ -297,21 +279,12 @@
                         v-if="benchRowRisk(row)?.llm"
                         class="llm-risk-tag llm-risk-tag--btn"
                         :class="[`risk-${benchRowRisk(row).llm.severity || 'none'}`, { 'is-active': llmDetail?.key === llmKey('bench', row) }]"
-                        title="点击查看/放大完整 LLM 风控"
+                        title="点击查看/放大完整风险分析"
                         role="button"
                         tabindex="0"
                         @click.stop="openLlm(benchRowRisk(row), row, 'bench', $event)"
                         @keydown.enter.stop="openLlm(benchRowRisk(row), row, 'bench', $event)"
-                      >LLM</span>
-                      <button
-                        v-if="benchRowRisk(row)?.llm"
-                        type="button"
-                        class="llm-risk-copy"
-                        :title="llmCopyTitle(benchRowRisk(row))"
-                        @click.stop="copyLlmRisk(benchRowRisk(row), llmKey('bench', row))"
-                      >
-                        {{ copiedLlmRiskKey === llmKey('bench', row) ? '已复制' : '复制' }}
-                      </button>
+                      >风险</span>
                       <span
                         v-if="row.ai_opportunity?.llm"
                         class="llm-risk-tag llm-risk-tag--btn llm-opportunity-tag"
@@ -322,15 +295,6 @@
                         @click.stop="openLlm(row.ai_opportunity, row, 'bench-opp', $event, 'opportunity')"
                         @keydown.enter.stop="openLlm(row.ai_opportunity, row, 'bench-opp', $event, 'opportunity')"
                       >机会</span>
-                      <button
-                        v-if="row.ai_opportunity?.llm"
-                        type="button"
-                        class="llm-risk-copy"
-                        :title="llmOpportunityCopyTitle(row.ai_opportunity)"
-                        @click.stop="copyLlmRisk(row.ai_opportunity, llmKey('bench-opp', row), 'opportunity')"
-                      >
-                        {{ copiedLlmRiskKey === llmKey('bench-opp', row) ? '已复制' : '复制' }}
-                      </button>
                     </div>
                   </td>
                 </tr>
@@ -370,8 +334,6 @@ import { useLlmRiskDetail } from '../../composables/useLlmRiskDetail'
 import {
   formatShareDelta,
   aiRiskTitle,
-  llmOpportunityTitle,
-  llmRiskTitle,
   money,
   num,
   pctSigned,
@@ -457,14 +419,6 @@ function openLlm(payload, row, scope, event, mode = 'risk') {
     mode,
     event,
   })
-}
-
-function llmCopyTitle(risk) {
-  return `${llmRiskTitle(risk)}\n\n点击复制完整 LLM 风控文本`
-}
-
-function llmOpportunityCopyTitle(opportunity) {
-  return `${llmOpportunityTitle(opportunity)}\n\n点击复制完整 LLM 机会文本`
 }
 
 function symbolRisk(map, symbol) {
@@ -731,22 +685,6 @@ tbody tr:hover td {
   background: #f1f5f9;
   border-color: #cbd5e1;
   color: #64748b;
-}
-
-.llm-risk-copy {
-  background: #fff;
-  border: 1px solid #c7d2fe;
-  border-radius: 999px;
-  color: #4338ca;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.2;
-  padding: 1px 5px;
-}
-
-.llm-risk-copy:hover {
-  background: #eef2ff;
 }
 
 .risk-row-high {
