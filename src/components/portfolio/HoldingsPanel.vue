@@ -46,6 +46,7 @@
             <th>现价</th>
             <th>市值</th>
             <th>盈亏</th>
+            <th>今日盈亏</th>
             <th>快思考</th>
             <th>明细</th>
             <th>风控</th>
@@ -80,10 +81,13 @@
             </td>
             <td :class="signClass(manualDelta(row))">{{ formatShareDelta(manualDelta(row)) }}</td>
             <td>{{ num(row.avg_cost) }}</td>
-            <td>{{ num(row.last_price) }}</td>
+            <td :title="holdingPriceTitle(row)">{{ num(row.last_price) }}</td>
             <td>{{ money(row.market_value) }}</td>
             <td :class="signClass(holdingTotalPnl(row))" :title="holdingPnlTitle(row)">
               {{ signedMoney(holdingTotalPnl(row)) }}
+            </td>
+            <td :class="signClass(row.day_pnl)" :title="holdingDayPnlTitle(row)">
+              {{ signedMoney(row.day_pnl) }}
             </td>
             <td class="fast-actions">
               <button type="button" class="fast-btn fast-btn-swap" @click="$emit('open-swap', row)">换股</button>
@@ -137,7 +141,7 @@
             </td>
           </tr>
           <tr v-if="isExpanded(row.symbol)" class="detail-row">
-            <td :colspan="13">
+            <td :colspan="14">
               <div class="detail-wrap">
                 <table class="detail-table">
                   <thead>
@@ -181,6 +185,15 @@
           </tr>
           </template>
         </tbody>
+        <tfoot>
+          <tr class="holdings-total-row">
+            <td colspan="8">合计</td>
+            <td>{{ money(holdingsTotals.marketValue) }}</td>
+            <td :class="signClass(holdingsTotals.totalPnl)">{{ signedMoney(holdingsTotals.totalPnl) }}</td>
+            <td :class="signClass(holdingsTotals.dayPnl)">{{ signedMoney(holdingsTotals.hasDayPnl ? holdingsTotals.dayPnl : null) }}</td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
       </table>
       <p v-if="holdingsRiskBySymbolHigh.length" class="muted">
         高风险提示：
@@ -327,7 +340,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import AppLink from '../common/AppLink.vue'
 import LlmRiskDetailPanel from './LlmRiskDetailPanel.vue'
 import { useLlmRiskDetail } from '../../composables/useLlmRiskDetail'
@@ -461,6 +474,48 @@ function holdingPnlTitle(row) {
   ].join('\n')
 }
 
+function sourceLabel(source) {
+  const labels = {
+    realtime: '实时',
+    daily_close: '日线收盘',
+    paper_mark: '纸面快照',
+    market: '行情',
+    avg_cost: '成本价',
+  }
+  return labels[source] || source || '-'
+}
+
+function holdingPriceTitle(row) {
+  return [
+    `现价：${num(row?.last_price)}`,
+    `昨收：${num(row?.previous_close)}`,
+    `来源：${sourceLabel(row?.price_source || row?.last_price_source)}`,
+    `更新：${row?.price_as_of || row?.realtime_doc?.updated_at || row?.realtime_doc?.realtime_trade_time || '-'}`,
+  ].join('\n')
+}
+
+function holdingDayPnlTitle(row) {
+  return [
+    `今日盈亏：${props.signedMoney(row?.day_pnl)}`,
+    `单股涨跌：${props.signedMoney(row?.day_change)}`,
+    `涨跌幅：${pctSigned(row?.day_change_pct)}`,
+    `昨收：${num(row?.previous_close)}`,
+  ].join('\n')
+}
+
+const holdingsTotals = computed(() => (
+  (props.latestHoldingRows || []).reduce((acc, row) => {
+    acc.marketValue += numericOrZero(row?.market_value)
+    acc.totalPnl += holdingTotalPnl(row)
+    const dayPnl = Number(row?.day_pnl)
+    if (Number.isFinite(dayPnl)) {
+      acc.dayPnl += dayPnl
+      acc.hasDayPnl = true
+    }
+    return acc
+  }, { marketValue: 0, totalPnl: 0, dayPnl: 0, hasDayPnl: false })
+))
+
 const expandedSymbols = ref(new Set())
 
 function symbolTrades(symbol) {
@@ -574,6 +629,15 @@ th {
 
 tbody tr:hover td {
   background: #f9fafb;
+}
+
+tfoot td {
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.holdings-total-row td {
+  border-bottom: 0;
 }
 
 .target-input {
