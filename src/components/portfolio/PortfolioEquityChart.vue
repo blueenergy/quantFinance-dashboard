@@ -23,7 +23,7 @@
   </section>
 
   <section class="chart-section">
-    <h3>净值曲线（账户整体权益 · 日频）</h3>
+    <h3>净值曲线（当前血缘权益 · 日频）</h3>
     <div v-if="!equityRowsForChart.length" class="muted">暂无净值数据。</div>
     <div v-else class="equity-chart" aria-label="Lineage equity curve" @mouseleave="onChartLeave">
       <svg
@@ -90,7 +90,7 @@
       </svg>
       <div v-if="hoverPoint" class="equity-tip" :style="hoverPoint.tipStyle">
         <div class="tip-date">{{ hoverPoint.date }}</div>
-        <div class="tip-row"><span>账户总额</span><strong>{{ money(hoverPoint.equity) }}</strong></div>
+        <div class="tip-row"><span>血缘权益</span><strong>{{ money(hoverPoint.equity) }}</strong></div>
         <div class="tip-row">
           <span>当日盈亏</span>
           <strong :class="signClass(hoverPoint.dayPnl)">{{ signedMoney(hoverPoint.dayPnl) }} · {{ signedPct(hoverPoint.dayPct) }}</strong>
