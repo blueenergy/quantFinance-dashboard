@@ -31,6 +31,35 @@ export function formatPriceAsOf(asOf) {
   return String(asOf).slice(0, 19)
 }
 
+export function formatSignalReviewAt(value) {
+  if (!value) return ''
+  return String(value).slice(0, 19).replace('T', ' ')
+}
+
+export function signalReviewStatusText(status) {
+  const labels = {
+    analyzed: '已分析',
+    skipped_unchanged: '无新证据，已跳过 LLM',
+    parse_error: '上次解析失败，将重试',
+    failed: '上次失败',
+  }
+  return labels[status] || status || '未分析'
+}
+
+export function signalReviewTitle(review) {
+  if (!review) return '尚无 AI 风险/机会分析记录'
+  const parts = []
+  const analyzedAt = formatSignalReviewAt(review.analyzed_at || review.reviewed_at)
+  const checkedAt = formatSignalReviewAt(review.checked_at)
+  if (analyzedAt) parts.push(`上次分析：${analyzedAt}`)
+  if (checkedAt && checkedAt !== analyzedAt) parts.push(`上次检查：${checkedAt}`)
+  parts.push(signalReviewStatusText(review.last_run_status))
+  if (review.last_skip_reason) parts.push(`原因：${review.last_skip_reason}`)
+  if (Number.isFinite(Number(review.evidence_count))) parts.push(`证据快照累计 ${Number(review.evidence_count)} 项`)
+  if (review.latest_evidence_at) parts.push(`最新证据：${formatSignalReviewAt(review.latest_evidence_at)}`)
+  return parts.filter(Boolean).join(' · ')
+}
+
 export function blockerText(blocker) {
   const labels = {
     account_binding_missing: '账户绑定不完整',
@@ -323,6 +352,9 @@ export function usePortfolioPlanFormat() {
     priceSourceLabel,
     priceSourceClass,
     formatPriceAsOf,
+    formatSignalReviewAt,
+    signalReviewStatusText,
+    signalReviewTitle,
     blockerText,
     remainderReasonText,
     planItemActionLabel,

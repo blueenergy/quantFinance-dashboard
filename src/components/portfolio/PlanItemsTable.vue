@@ -107,7 +107,7 @@
                 v-if="row.ai_risk?.llm"
                 class="llm-risk-tag llm-risk-tag--btn"
                 :class="[`risk-${row.ai_risk.llm.severity || 'none'}`, { 'is-active': llmDetail?.key === llmCopyKey(row, 'pending') }]"
-                :title="'点击查看/放大完整风险分析'"
+                :title="llmTagTitle(row, 'risk')"
                 role="button"
                 tabindex="0"
                 @click.stop="toggleLlmDetail(row, 'pending', $event)"
@@ -117,7 +117,7 @@
                 v-if="row.ai_opportunity?.llm"
                 class="llm-risk-tag llm-risk-tag--btn llm-opportunity-tag"
                 :class="[`opportunity-${row.ai_opportunity.llm.strength || 'none'}`, { 'is-active': llmDetail?.key === llmCopyKey(row, 'pending-opp') }]"
-                :title="'点击查看/放大完整 LLM 机会'"
+                :title="llmTagTitle(row, 'opportunity')"
                 role="button"
                 tabindex="0"
                 @click.stop="toggleLlmDetail(row, 'pending-opp', $event, 'opportunity')"
@@ -278,7 +278,7 @@
                 v-if="item.ai_risk?.llm"
                 class="llm-risk-tag llm-risk-tag--btn"
                 :class="[`risk-${item.ai_risk.llm.severity || 'none'}`, { 'is-active': llmDetail?.key === llmCopyKey(item, 'detail') }]"
-                :title="'点击查看/放大完整风险分析'"
+                :title="llmTagTitle(item, 'risk')"
                 role="button"
                 tabindex="0"
                 @click.stop="toggleLlmDetail(item, 'detail', $event)"
@@ -288,7 +288,7 @@
                 v-if="item.ai_opportunity?.llm"
                 class="llm-risk-tag llm-risk-tag--btn llm-opportunity-tag"
                 :class="[`opportunity-${item.ai_opportunity.llm.strength || 'none'}`, { 'is-active': llmDetail?.key === llmCopyKey(item, 'detail-opp') }]"
-                :title="'点击查看/放大完整 LLM 机会'"
+                :title="llmTagTitle(item, 'opportunity')"
                 role="button"
                 tabindex="0"
                 @click.stop="toggleLlmDetail(item, 'detail-opp', $event, 'opportunity')"
@@ -343,6 +343,7 @@ import {
   priceSourceLabel,
   riskDisplaySeverity,
   riskSeverityLabel,
+  signalReviewTitle,
   signClass,
 } from '../../composables/usePortfolioPlanFormat'
 
@@ -398,6 +399,12 @@ function toggleLlmDetail(item, scope, event, mode = 'risk') {
     event,
     planId: props.planId,
   })
+}
+
+function llmTagTitle(item, mode = 'risk') {
+  const base = mode === 'opportunity' ? '点击查看/放大完整机会分析' : '点击查看/放大完整风险分析'
+  const review = signalReviewTitle(item?.signal_review)
+  return review ? `${base}\n${review}` : base
 }
 
 function llmCopyKey(item, scope) {

@@ -451,6 +451,9 @@
                   >（已过 {{ selectedDetail.plan.elapsed_trading_days_since_rebalance }} 个交易日）</template>
                 </span>
               </p>
+              <p v-if="signalReviewSummary" class="muted">
+                AI风险/机会最近分析：{{ signalReviewSummary }}
+              </p>
             </div>
             <div v-if="selectedDetail.plan.status === 'needs_review'" class="actions">
               <button :disabled="actionLoading" @click="review('approved')">审核通过</button>
@@ -1005,6 +1008,8 @@ import {
   num,
   remainderReasonText,
   riskDisplaySeverity,
+  formatSignalReviewAt,
+  signalReviewStatusText,
 } from '../composables/usePortfolioPlanFormat'
 import { useReselectPlanItems } from '../composables/useReselectPlanItems'
 
@@ -2127,6 +2132,31 @@ function planCadenceBadge(plan) {
 const aiRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_summary || null)
 const llmRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_llm_summary || null)
 const riskSnapshot = computed(() => selectedDetail.value?.risk_snapshot || null)
+const signalReviewSummary = computed(() => {
+  const reviews = (selectedDetail.value?.items || [])
+    .map((item) => item.signal_review)
+    .filter(Boolean)
+  if (!reviews.length) return ''
+  const analyzedTimes = reviews
+    .map((review) => review.analyzed_at || review.reviewed_at)
+    .filter(Boolean)
+    .sort()
+  const latestAnalyzed = analyzedTimes[analyzedTimes.length - 1]
+  const skipped = reviews.filter((review) => review.last_run_status === 'skipped_unchanged').length
+  const parsed = reviews.filter((review) => review.last_run_status === 'parse_error').length
+  const evidenceCount = reviews.reduce((sum, review) => sum + Number(review.evidence_count || 0), 0)
+  const parts = []
+  if (latestAnalyzed) parts.push(formatSignalReviewAt(latestAnalyzed))
+  parts.push(`${reviews.length} 标的`)
+  if (skipped) parts.push(`${skipped} 个无新证据跳过`)
+  if (parsed) parts.push(`${parsed} 个上次解析失败`)
+  if (evidenceCount) parts.push(`证据快照累计 ${evidenceCount} 项`)
+  const latestStatus = reviews.find((review) => review.analyzed_at === latestAnalyzed || review.reviewed_at === latestAnalyzed)
+  if (latestStatus?.last_run_status && !skipped && !parsed) {
+    parts.push(signalReviewStatusText(latestStatus.last_run_status))
+  }
+  return parts.join(' · ')
+})
 
 function formatSnapshotAt(value) {
   if (!value) return '-'
