@@ -2138,7 +2138,7 @@ const signalReviewSummary = computed(() => {
     .filter(Boolean)
   if (!reviews.length) return ''
   const analyzedTimes = reviews
-    .map((review) => review.analyzed_at || review.reviewed_at)
+    .map((review) => review.analyzed_at)
     .filter(Boolean)
     .sort()
   const latestAnalyzed = analyzedTimes[analyzedTimes.length - 1]
@@ -2151,7 +2151,7 @@ const signalReviewSummary = computed(() => {
   if (skipped) parts.push(`${skipped} 个无新证据跳过`)
   if (parsed) parts.push(`${parsed} 个上次解析失败`)
   if (evidenceCount) parts.push(`证据快照累计 ${evidenceCount} 项`)
-  const latestStatus = reviews.find((review) => review.analyzed_at === latestAnalyzed || review.reviewed_at === latestAnalyzed)
+  const latestStatus = reviews.find((review) => review.analyzed_at === latestAnalyzed)
   if (latestStatus?.last_run_status && !skipped && !parsed) {
     parts.push(signalReviewStatusText(latestStatus.last_run_status))
   }

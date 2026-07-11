@@ -49,12 +49,11 @@ export function signalReviewStatusText(status) {
 export function signalReviewTitle(review) {
   if (!review) return '尚无 AI 风险/机会分析记录'
   const parts = []
-  const analyzedAt = formatSignalReviewAt(review.analyzed_at || review.reviewed_at)
+  const analyzedAt = formatSignalReviewAt(review.analyzed_at)
   const checkedAt = formatSignalReviewAt(review.checked_at)
   if (analyzedAt) parts.push(`上次分析：${analyzedAt}`)
   if (checkedAt && checkedAt !== analyzedAt) parts.push(`上次检查：${checkedAt}`)
   parts.push(signalReviewStatusText(review.last_run_status))
-  if (review.last_skip_reason) parts.push(`原因：${review.last_skip_reason}`)
   if (Number.isFinite(Number(review.evidence_count))) parts.push(`证据快照累计 ${Number(review.evidence_count)} 项`)
   if (review.latest_evidence_at) parts.push(`最新证据：${formatSignalReviewAt(review.latest_evidence_at)}`)
   return parts.filter(Boolean).join(' · ')
