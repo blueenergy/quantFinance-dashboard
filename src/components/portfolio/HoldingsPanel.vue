@@ -128,14 +128,14 @@
                   @keydown.enter.stop="openLlm(holdingRowRisk(row), row, 'holding', $event)"
                 >风险</span>
                 <span
-                  v-if="row.ai_opportunity?.llm"
+                  v-if="holdingRowOpportunity(row)?.llm"
                   class="llm-risk-tag llm-risk-tag--btn llm-opportunity-tag"
-                  :class="[`opportunity-${row.ai_opportunity.llm.strength || 'none'}`, { 'is-active': llmDetail?.key === llmKey('holding-opp', row) }]"
+                  :class="[`opportunity-${holdingRowOpportunity(row).llm.strength || 'none'}`, { 'is-active': llmDetail?.key === llmKey('holding-opp', row) }]"
                   title="点击查看/放大完整 LLM 机会"
                   role="button"
                   tabindex="0"
-                  @click.stop="openLlm(row.ai_opportunity, row, 'holding-opp', $event, 'opportunity')"
-                  @keydown.enter.stop="openLlm(row.ai_opportunity, row, 'holding-opp', $event, 'opportunity')"
+                  @click.stop="openLlm(holdingRowOpportunity(row), row, 'holding-opp', $event, 'opportunity')"
+                  @keydown.enter.stop="openLlm(holdingRowOpportunity(row), row, 'holding-opp', $event, 'opportunity')"
                 >机会</span>
               </div>
             </td>
@@ -367,6 +367,7 @@ const props = defineProps({
   holdingsRisk: { type: Object, default: null },
   holdingsRiskBySymbol: { type: Object, default: () => ({}) },
   holdingPlanRiskBySymbol: { type: Object, default: () => ({}) },
+  holdingPlanOpportunityBySymbol: { type: Object, default: () => ({}) },
   holdingsRiskBySymbolHigh: { type: Array, default: () => [] },
   benchData: { type: Object, default: null },
   benchExpanded: { type: Boolean, default: false },
@@ -449,6 +450,10 @@ function holdingRowRisk(row) {
   const ruleRisk = symbolRisk(props.holdingsRiskBySymbol, row?.symbol)
   const planRisk = symbolRisk(props.holdingPlanRiskBySymbol, row?.symbol)
   return mergeRisk(ruleRisk, planRisk)
+}
+
+function holdingRowOpportunity(row) {
+  return symbolRisk(props.holdingPlanOpportunityBySymbol, row?.symbol) || row?.ai_opportunity || null
 }
 
 function benchRowRisk(row) {
