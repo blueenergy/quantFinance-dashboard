@@ -1238,6 +1238,7 @@
             :name="stockName"
             :swot="swotPayload.swot"
             :signal-review="swotPayload.signal_review"
+            :industry-reference="swotPayload.industry_signal_reference"
             :data-status="swotPayload.data_status"
             :loading="sectionLoading.signals"
             :error="swotError"

@@ -38,4 +38,28 @@ describe('StockWorkbenchSwotPanel collection action', () => {
     expect(wrapper.get('.swot-collect-btn').attributes('disabled')).toBeDefined()
     expect(wrapper.get('.swot-collection-status').text()).toContain('正在搜集分析')
   })
+
+  it('renders industry signals as read-only references', () => {
+    const wrapper = mountPanel({
+      industryReference: {
+        industry: '玻璃',
+        opportunity: {
+          strength: 'low',
+          findings: [
+            {
+              finding_key: 'industry-opp-1',
+              strength: 'low',
+              summary: '玻璃玻纤行业景气修复',
+            },
+          ],
+        },
+        threat: { severity: 'none', findings: [] },
+        data_status: { found: true },
+      },
+    })
+
+    expect(wrapper.get('.industry-reference-head').text()).toContain('玻璃')
+    expect(wrapper.get('.industry-finding-list').text()).toContain('玻璃玻纤行业景气修复')
+    expect(wrapper.text()).toContain('不等同于该股票自身结论')
+  })
 })

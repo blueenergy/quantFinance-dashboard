@@ -96,6 +96,44 @@
       </article>
     </div>
 
+    <section
+      v-if="!error && industryReference.industry"
+      class="industry-reference"
+    >
+      <header class="industry-reference-head">
+        <div>
+          <h4>行业信号引用 · {{ industryReference.industry }}</h4>
+          <p>以下是行业层面的机会与威胁，仅供个股研判参考，不等同于该股票自身结论。</p>
+        </div>
+        <span>{{ industryReference.data_status?.found ? '已覆盖' : '暂无活跃信号' }}</span>
+      </header>
+
+      <div class="industry-reference-grid">
+        <article
+          v-for="card in industryReferenceCards"
+          :key="card.mode"
+          class="industry-reference-card"
+        >
+          <div class="industry-reference-card-head">
+            <strong>{{ card.title }}</strong>
+            <span class="swot-level-badge" :class="card.badgeClass">{{ card.badge }}</span>
+          </div>
+          <p v-if="!card.findings.length" class="swot-placeholder">{{ card.emptyText }}</p>
+          <ul v-else class="industry-finding-list">
+            <li v-for="finding in card.findings" :key="finding.finding_key || finding.summary">
+              <div>
+                <span class="swot-finding-level" :class="levelClass(card.mode, finding)">
+                  {{ levelLabel(card.mode, finding) }}
+                </span>
+                <strong>{{ finding.summary || finding.subject || finding.finding_key }}</strong>
+              </div>
+              <p v-if="finding.detail">{{ finding.detail }}</p>
+            </li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
     <LlmRiskDetailPanel
       :detail="llmDetail"
       :font-px="llmFontPx"
@@ -126,6 +164,7 @@ const props = defineProps({
   name: { type: String, default: '' },
   swot: { type: Object, default: () => ({}) },
   signalReview: { type: Object, default: null },
+  industryReference: { type: Object, default: () => ({}) },
   dataStatus: { type: Object, default: () => ({}) },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
@@ -222,6 +261,29 @@ const hasSwotContract = computed(() => Boolean(
   || props.swot?.opportunity
   || props.swot?.threat
 ))
+
+const industryReferenceCards = computed(() => {
+  const opportunity = props.industryReference?.opportunity || {}
+  const threat = props.industryReference?.threat || {}
+  return [
+    {
+      mode: 'opportunity',
+      title: '行业机会',
+      findings: Array.isArray(opportunity.findings) ? opportunity.findings : [],
+      badge: strengthBadge(opportunity.strength),
+      badgeClass: `opportunity-${opportunity.strength || 'none'}`,
+      emptyText: '暂无活跃行业机会。',
+    },
+    {
+      mode: 'risk',
+      title: '行业威胁',
+      findings: Array.isArray(threat.findings) ? threat.findings : [],
+      badge: severityBadge(threat.severity),
+      badgeClass: `risk-${threat.severity || 'none'}`,
+      emptyText: '暂无活跃行业威胁。',
+    },
+  ]
+})
 
 function severityBadge(severity) {
   if (severity === 'high') return '高'
@@ -512,6 +574,88 @@ function openFinding(mode, event) {
   text-decoration: underline;
 }
 
+.industry-reference {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.industry-reference-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.industry-reference-head h4,
+.industry-reference-head p {
+  margin: 0;
+}
+
+.industry-reference-head p {
+  color: #64748b;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.industry-reference-head > span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.industry-reference-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.industry-reference-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.industry-reference-card-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.industry-finding-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.industry-finding-list li {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+}
+
+.industry-finding-list li > div {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+}
+
+.industry-finding-list strong {
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.industry-finding-list p {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 6px 0 0;
+}
+
 @media (max-width: 900px) {
   .card-title-row {
     flex-direction: column;
@@ -521,7 +665,8 @@ function openFinding(mode, event) {
     align-items: flex-start;
   }
 
-  .swot-grid {
+  .swot-grid,
+  .industry-reference-grid {
     grid-template-columns: 1fr;
   }
 }
