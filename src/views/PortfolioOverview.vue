@@ -357,6 +357,10 @@ import { useReselectPlanItems } from '../composables/useReselectPlanItems'
 import {
   formatShareDelta,
 } from '../composables/usePortfolioPlanFormat'
+import {
+  canExecutePaperNowFromState,
+  paperExecuteReadyTextFromState,
+} from '../utils/paperExecutionEligibility'
 
 const portfolios = ref([])
 const portfolioSummary = ref(null)
@@ -529,13 +533,13 @@ const forceRebalanceBlockReason = computed(() => {
   }
   return ''
 })
-const canExecutePaperNow = computed(() => (
-  isPaperPortfolio.value
-  && selectedPlanStatus.value === 'approved'
-  && !selectedPlanHasLiveSignals.value
-  && !hasPaperExecution.value
-  && executionStatus.value?.open_price_ready !== false
-))
+const canExecutePaperNow = computed(() => canExecutePaperNowFromState({
+  planStatus: selectedPlanStatus.value,
+  hasLiveSignals: selectedPlanHasLiveSignals.value,
+  hasPaperExecution: hasPaperExecution.value,
+  missingExecuteDate: executionStatus.value?.missing_execute_date === true,
+  isPaperPortfolio: isPaperPortfolio.value,
+}))
 const canPublishLiveSignals = computed(() => (
   isLivePortfolio.value
   && selectedPlanStatus.value === 'approved'
@@ -564,19 +568,13 @@ const selectedPlanExecutionModeLabel = computed(() => {
   if (selectedPlanExecutionMode.value === 'paper') return '已执行 Paper'
   return '未执行'
 })
-const paperExecuteReadyText = computed(() => {
-  if (!isPaperPortfolio.value) return '仅纸面组合支持 Paper 执行'
-  if (hasPaperExecution.value) return '该 plan 已执行过 Paper，不能重复执行'
-  if (selectedPlanHasLiveSignals.value) return '该 plan 存在实盘信号历史，不能再执行 Paper'
-  if (selectedPlanStatus.value !== 'approved') return '需要先审核通过 plan'
-  if (executionStatus.value?.missing_execute_date) return '缺少 execute_date，请等待自动执行或先补齐下一交易日 execute_date'
-  if (executionStatus.value?.open_price_ready === false) {
-    const date = executionStatus.value.execute_date || executionStatus.value.effective_execute_date || '-'
-    const count = executionStatus.value.missing_open_price_count ?? 0
-    return `开盘价未就绪：execute_date=${date}，缺失 ${count} 个标的`
-  }
-  return '使用 execute_date 开盘价立即执行 Paper'
-})
+const paperExecuteReadyText = computed(() => paperExecuteReadyTextFromState({
+  hasPaperExecution: hasPaperExecution.value,
+  hasLiveSignals: selectedPlanHasLiveSignals.value,
+  planStatus: selectedPlanStatus.value,
+  executionStatus: executionStatus.value,
+  isPaperPortfolio: isPaperPortfolio.value,
+}))
 const cancelPlanReadyText = computed(() => {
   if (hasPaperExecution.value) return '该 plan 已执行 Paper，不能作废'
   if (selectedPlanStatus.value !== 'approved') return '只有 approved plan 可以作废'

@@ -594,7 +594,7 @@
           <section v-if="showPaperExecutionStatus" class="execution-status">
             <h4>后台执行状态</h4>
             <p v-if="selectedDetail.plan.status === 'approved'" class="muted">
-              已审核，等待后台在开盘价就绪后自动执行；“立即执行 Paper”也使用同一 execute_date 的开盘价。
+              已审核，后台将按模拟成交价自动执行；“立即执行 Paper”使用同一 waterfall：开盘价 → 最近收盘价 → 计划价。
             </p>
             <div class="status-grid">
               <div>
@@ -605,10 +605,13 @@
                 </small>
               </div>
               <div>
-                <span>开盘价是否就绪</span>
-                <strong>{{ executionStatus.open_price_ready ? '已就绪' : '未就绪' }}</strong>
-                <small v-if="!executionStatus.open_price_ready">
-                  缺失 {{ executionStatus.missing_open_price_count ?? 0 }} 个
+                <span>模拟成交价</span>
+                <strong>{{ paperExecutionPriceStatusText(executionStatus) }}</strong>
+                <small v-if="executionStatus.execution_price_fallback_count">
+                  {{ executionStatus.execution_price_fallback_count }} 个将回退收盘价/计划价
+                </small>
+                <small v-else-if="!executionStatus.open_price_ready">
+                  开盘价缺失 {{ executionStatus.missing_open_price_count ?? 0 }} 个（可回退）
                 </small>
               </div>
               <div>
@@ -621,12 +624,14 @@
                 <small v-if="executionStatus.execution_count">累计 {{ executionStatus.execution_count }} 条成交记录</small>
               </div>
             </div>
-            <p v-if="executionStatus.missing_open_price_examples?.length" class="muted">
-              缺失示例：{{ executionStatus.missing_open_price_examples.join(', ') }}
+            <p v-if="executionStatus.execution_price_fallback_examples?.length" class="muted">
+              回退示例：{{ executionStatus.execution_price_fallback_examples.join(', ') }}
+            </p>
+            <p v-if="executionStatus.missing_execution_price_examples?.length" class="muted">
+              无可用价格示例：{{ executionStatus.missing_execution_price_examples.join(', ') }}
             </p>
             <p v-if="selectedDetail.plan.status === 'approved' && executionStatus.open_price_ready === false" class="watermark-warning">
-              Paper 执行依赖 execute_date 的开盘价。当前开盘价未就绪，后台自动执行和“立即执行 Paper”都会等待/失败；
-              待行情同步后刷新本页再执行。
+              execute_date 开盘价尚未全部同步，Paper 执行将回退使用最近收盘价或计划价；仅当标的完全没有任何可用价格时才会 blocked。
             </p>
           </section>
 
@@ -1012,6 +1017,11 @@ import {
   signalReviewStatusText,
 } from '../composables/usePortfolioPlanFormat'
 import { useReselectPlanItems } from '../composables/useReselectPlanItems'
+import {
+  canExecutePaperNowFromState,
+  paperExecuteReadyTextFromState,
+  paperExecutionPriceStatusText,
+} from '../utils/paperExecutionEligibility'
 
 const strategies = ref([])
 const parameterPresets = ref([])
@@ -1169,29 +1179,24 @@ const showPaperSections = computed(() => {
 const showPaperExecutionStatus = computed(() => showPaperSections.value && (
   selectedPlanStatus.value === 'approved' || paperExecutionCount.value > 0
 ))
-const canExecutePaperNow = computed(() => (
-  selectedPlanStatus.value === 'approved'
-  && !selectedPlanHasLiveSignals.value
-  && !hasPaperExecution.value
-  && executionStatus.value?.open_price_ready !== false
-))
+const canExecutePaperNow = computed(() => canExecutePaperNowFromState({
+  planStatus: selectedPlanStatus.value,
+  hasLiveSignals: selectedPlanHasLiveSignals.value,
+  hasPaperExecution: hasPaperExecution.value,
+  missingExecuteDate: executionStatus.value?.missing_execute_date === true,
+}))
 const canPublishLiveSignals = computed(() => (
   selectedPlanStatus.value === 'approved'
   && !selectedPlanHasLiveSignals.value
   && !hasPaperExecution.value
 ))
 
-const paperExecuteReadyText = computed(() => {
-  if (hasPaperExecution.value) return '该 plan 已执行过 Paper，不能重复执行'
-  if (selectedPlanHasLiveSignals.value) return '该 plan 已发布实盘信号，不能再执行 Paper'
-  if (selectedPlanStatus.value !== 'approved') return '需要先审核通过 plan'
-  if (executionStatus.value?.open_price_ready === false) {
-    const date = executionStatus.value.execute_date || executionStatus.value.effective_execute_date || '-'
-    const count = executionStatus.value.missing_open_price_count ?? 0
-    return `开盘价未就绪：execute_date=${date}，缺失 ${count} 个标的`
-  }
-  return '使用 execute_date 开盘价立即执行 Paper'
-})
+const paperExecuteReadyText = computed(() => paperExecuteReadyTextFromState({
+  hasPaperExecution: hasPaperExecution.value,
+  hasLiveSignals: selectedPlanHasLiveSignals.value,
+  planStatus: selectedPlanStatus.value,
+  executionStatus: executionStatus.value,
+}))
 
 const latestExecutionText = computed(() => {
   const latest = executionStatus.value.latest_execution_result
