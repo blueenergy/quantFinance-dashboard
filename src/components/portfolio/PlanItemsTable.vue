@@ -31,13 +31,19 @@
           <th class="col-action-tag">方向</th>
           <th class="col-stock">标的</th>
           <th class="col-ind">行业</th>
-          <th class="col-num">加权分</th>
+          <th class="col-num" :title="scoreContextTitle">
+            <span class="th-label">加权分</span>
+            <small v-if="scoreContextShort" class="th-sub">{{ scoreContextShort }}</small>
+          </th>
           <th class="col-num">当前</th>
           <th class="col-num">目标</th>
           <th class="col-num">变化</th>
           <th class="col-num">预估价</th>
-          <th v-if="showOverlay" class="col-num">现价</th>
-          <th v-if="showOverlay" class="col-rank">最新排名</th>
+          <th v-if="showOverlay" class="col-num col-live-price">现价</th>
+          <th v-if="showOverlay" class="col-rank" :title="latestRankTitle">
+            <span class="th-label">最新排名</span>
+            <small v-if="latestRankShort" class="th-sub">{{ latestRankShort }}</small>
+          </th>
           <th class="col-money">预估金额</th>
           <th class="col-airisk">规则风控</th>
           <th v-if="showOverlay" class="col-risk">提示</th>
@@ -74,20 +80,23 @@
           <td class="col-num">{{ row.target_shares ?? 0 }}</td>
           <td class="col-num" :class="signClass(row.delta_shares)">{{ formatShareDelta(row.delta_shares) }}</td>
           <td class="col-num">{{ num(row.estimated_price) }}</td>
-          <td v-if="showOverlay" class="col-num">
+          <td v-if="showOverlay" class="col-num col-live-price">
             <span :class="priceSourceClass(row.live_price_source)">{{ num(row.live_price) }}</span>
             <small v-if="row.live_price_as_of" class="price-as-of" :title="row.live_price_as_of">
               {{ priceSourceLabel(row.live_price_source) }} {{ formatPriceAsOf(row.live_price_as_of) }}
             </small>
-            <small v-if="row.price_drift_pct != null" class="price-drift">{{ pctSigned(row.price_drift_pct) }}</small>
+            <small v-if="row.price_drift_pct != null" class="price-drift">计划漂移 {{ pctSigned(row.price_drift_pct) }}</small>
+            <small v-if="row.daily_change_pct != null" class="price-drift" :class="signClass(row.daily_change_pct)">
+              日涨跌 {{ pctSigned(row.daily_change_pct) }}
+            </small>
           </td>
           <td v-if="showOverlay" class="col-rank">
             <span>{{ row.latest_rank ?? '-' }}</span>
             <small
-              v-if="row.rank_delta != null"
+              v-if="row.rank_delta != null && row.rank_delta !== 0"
               :class="row.rank_delta > 0 ? 'rank-up' : row.rank_delta < 0 ? 'rank-down' : ''"
             >
-              {{ row.rank_delta > 0 ? `↑${row.rank_delta}` : row.rank_delta < 0 ? `↓${Math.abs(row.rank_delta)}` : '—' }}
+              {{ row.rank_delta > 0 ? `↑${row.rank_delta}` : `↓${Math.abs(row.rank_delta)}` }}
             </small>
             <small v-if="row.dropped_out_of_top_n" class="dropped-flag">掉出TopN</small>
           </td>
@@ -186,8 +195,11 @@
           <th v-if="selectedPlanHasLiveSignals" class="col-num">剩余</th>
           <th v-if="selectedPlanHasLiveSignals" class="col-narrow">实盘状态</th>
           <th class="col-num">预估价</th>
-          <th class="col-num">现价</th>
-          <th class="col-narrow">最新排名</th>
+          <th class="col-num col-live-price">现价</th>
+          <th class="col-narrow" :title="latestRankTitle">
+            <span class="th-label">最新排名</span>
+            <small v-if="latestRankShort" class="th-sub">{{ latestRankShort }}</small>
+          </th>
           <th class="col-narrow">候选</th>
           <th v-if="canReselectItems" class="col-action">操作</th>
           <th class="col-airisk">规则风控</th>
@@ -227,17 +239,20 @@
           <td v-if="selectedPlanHasLiveSignals" class="col-num">{{ item.live_remaining_qty ?? Math.abs(item.delta_shares ?? 0) }}</td>
           <td v-if="selectedPlanHasLiveSignals" class="col-narrow">{{ item.live_status || '-' }}</td>
           <td class="col-num">{{ num(item.estimated_price) }}</td>
-          <td class="col-num">
+          <td class="col-num col-live-price">
             <span :class="priceSourceClass(item.live_price_source)">{{ num(item.live_price) }}</span>
             <small v-if="item.live_price_as_of" class="price-as-of" :title="item.live_price_as_of">
               {{ priceSourceLabel(item.live_price_source) }} {{ formatPriceAsOf(item.live_price_as_of) }}
             </small>
-            <small v-if="item.price_drift_pct != null" class="price-drift">{{ pctSigned(item.price_drift_pct) }}</small>
+            <small v-if="item.price_drift_pct != null" class="price-drift">计划漂移 {{ pctSigned(item.price_drift_pct) }}</small>
+            <small v-if="item.daily_change_pct != null" class="price-drift" :class="signClass(item.daily_change_pct)">
+              日涨跌 {{ pctSigned(item.daily_change_pct) }}
+            </small>
           </td>
           <td class="col-narrow">
             <span>{{ item.latest_rank ?? '-' }}</span>
-            <small v-if="item.rank_delta != null" :class="item.rank_delta > 0 ? 'rank-up' : item.rank_delta < 0 ? 'rank-down' : ''">
-              {{ item.rank_delta > 0 ? `↑${item.rank_delta}` : item.rank_delta < 0 ? `↓${Math.abs(item.rank_delta)}` : '—' }}
+            <small v-if="item.rank_delta != null && item.rank_delta !== 0" :class="item.rank_delta > 0 ? 'rank-up' : 'rank-down'">
+              {{ item.rank_delta > 0 ? `↑${item.rank_delta}` : `↓${Math.abs(item.rank_delta)}` }}
             </small>
             <small v-if="item.dropped_out_of_top_n" class="dropped-flag">掉出TopN</small>
           </td>
@@ -366,6 +381,19 @@ const props = defineProps({
 const emit = defineEmits(['toggle-reselect', 'reselect', 'risk-changed'])
 
 const showOverlay = computed(() => Boolean(props.overlay?.enabled !== false))
+const scoreContext = computed(() => props.overlay?.score_context || {})
+const scoreContextShort = computed(() => {
+  const date = props.overlay?.score_snapshot_date
+  const weights = scoreWeightsText(scoreContext.value)
+  return [date, weights].filter(Boolean).join(' · ')
+})
+const latestRankShort = computed(() => {
+  const date = props.overlay?.latest_score_date
+  const weights = scoreWeightsText(scoreContext.value)
+  return [date, weights].filter(Boolean).join(' · ')
+})
+const scoreContextTitle = computed(() => scoreContextTitleFor(props.overlay?.score_snapshot_date))
+const latestRankTitle = computed(() => scoreContextTitleFor(props.overlay?.latest_score_date, '最新排名'))
 
 const {
   detail: llmDetail,
@@ -409,6 +437,34 @@ function llmTagTitle(item, mode = 'risk') {
 
 function llmCopyKey(item, scope) {
   return `${scope}:${item?.symbol || item?.name || 'unknown'}:${item?.rank ?? ''}`
+}
+
+function pctWeight(value) {
+  const numValue = Number(value)
+  if (!Number.isFinite(numValue)) return ''
+  return `${Math.round(numValue * 100)}%`
+}
+
+function scoreWeightsText(context) {
+  if (!context || context.score_type === 'growth_cycle_weighted' || !context.score_type) {
+    const growth = pctWeight(context?.growth_weight ?? 0.3)
+    const cycle = pctWeight(context?.cycle_weight ?? 0.7)
+    return growth && cycle ? `成长${growth}/周期${cycle}` : ''
+  }
+  if (context.score_column) return String(context.score_column)
+  return String(context.score_type || '')
+}
+
+function scoreContextTitleFor(date, label = '加权分') {
+  const context = scoreContext.value
+  const parts = [
+    `${label}日期：${date || '-'}`,
+    `股票池：${context.universe_index || '-'}`,
+    `排序口径：${context.score_type || 'growth_cycle_weighted'}`,
+    `权重：${scoreWeightsText(context) || '-'}`,
+    context.top_n ? `TopN：${context.top_n}` : '',
+  ].filter(Boolean)
+  return parts.join('\n')
 }
 
 function isReselectSelected(symbol) {
@@ -455,6 +511,18 @@ function canSelectReselectItem(item) {
   font-weight: 600;
 }
 
+.th-label,
+.th-sub {
+  display: block;
+}
+
+.th-sub {
+  color: var(--muted, #6b7280);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
 .plan-items-table tbody tr:hover td {
   background: #f9fafb;
 }
@@ -493,11 +561,15 @@ function canSelectReselectItem(item) {
 }
 
 .plan-items-table .col-stock {
-  width: 138px;
+  width: 86px;
 }
 
 .plan-items-table .pending-stock-cell {
-  padding-left: 16px;
+  padding-left: 5px;
+}
+
+.plan-items-table .col-live-price {
+  width: 82px;
 }
 
 .plan-items-table .col-ind {
@@ -715,6 +787,7 @@ function canSelectReselectItem(item) {
 
 .pending-stock-link__name {
   overflow: visible;
+  padding-left: 8px;
   text-overflow: clip;
 }
 

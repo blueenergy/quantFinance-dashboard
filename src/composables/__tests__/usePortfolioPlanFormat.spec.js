@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiRiskTitle, findingSourceMeta, llmRiskTitle, riskDisplaySeverity } from '../usePortfolioPlanFormat'
+import { aiRiskTitle, blockerText, findingSourceMeta, llmRiskTitle, riskDisplaySeverity } from '../usePortfolioPlanFormat'
 
 describe('portfolio plan risk formatting', () => {
   it('formats rule and llm findings in separate tooltip sections', () => {
@@ -96,5 +96,10 @@ describe('portfolio plan risk formatting', () => {
 
     expect(title).toContain('问询函公告')
     expect(title).toContain('2026-06-29')
+  })
+
+  it('labels board-lot blockers in Chinese', () => {
+    expect(blockerText('below_star_min_order')).toBe('低于科创板单笔 200 股下单门槛')
+    expect(blockerText('below_lot_size')).toBe('低于一手交易单位')
   })
 })

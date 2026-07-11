@@ -102,3 +102,77 @@ describe('PlanItemsTable LLM risk tag', () => {
     wrapper.unmount()
   })
 })
+
+describe('PlanItemsTable rank delta display', () => {
+  it('does not append a neutral dash when latest rank is unchanged in plan mode', () => {
+    const wrapper = mountTable({
+      mode: 'plan',
+      overlay: { enabled: true },
+      items: [makeItem({ latest_rank: 1, rank_delta: 0 })],
+    })
+
+    expect(wrapper.text()).not.toContain('1—')
+    expect(wrapper.find('.rank-up').exists()).toBe(false)
+    expect(wrapper.find('.rank-down').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('does not append a neutral dash when latest rank is unchanged in pending mode', () => {
+    const wrapper = mountTable({
+      mode: 'pending',
+      overlay: { enabled: true },
+      items: [makeItem({ latest_rank: 1, rank_delta: 0 })],
+    })
+
+    expect(wrapper.find('td.col-rank').text()).toBe('1')
+    wrapper.unmount()
+  })
+})
+
+describe('PlanItemsTable score context display', () => {
+  it('shows score date and weights in the pending table header', () => {
+    const wrapper = mountTable({
+      mode: 'pending',
+      overlay: {
+        enabled: true,
+        score_snapshot_date: '20260710',
+        latest_score_date: '20260711',
+        score_context: {
+          score_type: 'growth_cycle_weighted',
+          universe_index: 'csi500',
+          growth_weight: 0.3,
+          cycle_weight: 0.7,
+          top_n: 10,
+        },
+      },
+      items: [makeItem({ latest_rank: 1, rank_delta: 0, score_value: 93.325 })],
+    })
+
+    expect(wrapper.text()).toContain('20260710 · 成长30%/周期70%')
+    const scoreHeader = wrapper.findAll('th').find((cell) => cell.text().includes('加权分'))
+    expect(scoreHeader.attributes('title')).toContain('股票池：csi500')
+    expect(scoreHeader.attributes('title')).toContain('权重：成长30%/周期70%')
+    wrapper.unmount()
+  })
+
+  it('labels plan price drift separately from daily price change', () => {
+    const wrapper = mountTable({
+      mode: 'pending',
+      overlay: { enabled: true },
+      items: [
+        makeItem({
+          latest_rank: 1,
+          rank_delta: 0,
+          live_price: 11,
+          live_price_source: 'daily_close',
+          price_drift_pct: 1.23,
+          daily_change_pct: -3.45,
+        }),
+      ],
+    })
+
+    expect(wrapper.text()).toContain('计划漂移 +1.23%')
+    expect(wrapper.text()).toContain('日涨跌 -3.45%')
+    wrapper.unmount()
+  })
+})
