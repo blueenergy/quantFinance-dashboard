@@ -127,6 +127,7 @@
         <v-tab value="financial">财务业绩</v-tab>
         <v-tab value="valuation">估值模型</v-tab>
         <v-tab value="shareholders">股东筹码</v-tab>
+        <v-tab value="swot">SWOT</v-tab>
         <v-tab value="analysis">深度分析</v-tab>
       </v-tabs>
 
@@ -1231,6 +1232,20 @@
           </section>
         </v-window-item>
 
+        <v-window-item value="swot">
+          <StockWorkbenchSwotPanel
+            :symbol="stockSymbol"
+            :name="stockName"
+            :swot="swotPayload.swot"
+            :signal-review="swotPayload.signal_review"
+            :data-status="swotPayload.data_status"
+            :loading="sectionLoading.signals"
+            :error="swotError"
+            @changed="refreshSwotSection"
+            @retry="refreshSwotSection"
+          />
+        </v-window-item>
+
         <v-window-item value="analysis">
           <section class="workbench-card">
             <div class="card-title-row">
@@ -1448,6 +1463,7 @@ import {
   getStockWorkbenchQuote,
   getStockWorkbenchScores,
   getStockWorkbenchShareholders,
+  getStockWorkbenchSignals,
   getStockWorkbenchTrading,
   getStockWorkbenchValuation,
 } from '../api/stock'
@@ -1456,6 +1472,7 @@ import GrowthChart from '../components/GrowthChart.vue'
 import MoneyFlowPanel from '../components/MoneyFlowPanel.vue'
 import StockKLineChart from '../components/StockKLineChart.vue'
 import StockSearchInput from '../components/StockSearchInput.vue'
+import StockWorkbenchSwotPanel from '../components/stock/StockWorkbenchSwotPanel.vue'
 
 const props = defineProps({
   pendingNavigation: {
@@ -1494,9 +1511,11 @@ const financialMode = ref('quarterly')
 const quoteKlineTf = ref('1d')
 const quoteKlineLoading = ref({ '1d': false, '1w': false, '1m': false })
 const moneyFlowLoading = ref({ '1d': false, '1w': false, '1m': false })
-const sectionLoading = ref({ quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false })
-const sectionLoaded = ref({ quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false })
+const sectionLoading = ref({ quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false, signals: false })
+const sectionLoaded = ref({ quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false, signals: false })
 const shareholderData = ref({})
+const swotData = ref({})
+const swotError = ref('')
 const holderNumberTableExpanded = ref(false)
 const shareholderTradesExpanded = ref(false)
 const shareFloatExpanded = ref(false)
@@ -1582,6 +1601,7 @@ const nineTurnSignals = computed(() => {
   return [...rows].sort((a, b) => String(b.trade_date || '').localeCompare(String(a.trade_date || '')))
 })
 const latestNineTurnSignal = computed(() => payload.value?.latest_nine_turn_signal || nineTurnSignals.value[0] || null)
+const swotPayload = computed(() => swotData.value || {})
 const nineTurnStatus = computed(() => dataStatus.value?.sections?.nine_turn || {})
 const nineTurnMarkers = computed(() => nineTurnSignals.value.map((signal) => ({
   trade_date: signal.trade_date,
@@ -1875,6 +1895,7 @@ const sectionStatusItems = computed(() => {
     { key: 'financials', label: '财务业绩', panel: 'financial' },
     { key: 'valuation', label: '估值模型', panel: 'valuation' },
     { key: 'shareholders', label: '股东筹码', panel: 'shareholders' },
+    { key: 'signals', label: 'SWOT', panel: 'swot' },
     { key: 'ai', label: 'AI 分析', panel: 'analysis' },
     { key: 'trading', label: '交易状态', panel: 'analysis' },
   ]
@@ -1887,6 +1908,7 @@ const sectionStatusItems = computed(() => {
       financials: Boolean(incomeRows.value.length || indicatorRows.value.length),
       valuation: Boolean(valuationData.value?.data_status?.found),
       shareholders: Boolean(shHolderNumbers.value.length || shHkHold.value.length),
+      signals: Boolean(swotPayload.value?.data_status?.found),
       ai: dataStatus.value.deep_analysis_found,
       trading: Boolean(watchlistContext.value.in_watchlist || tradingPositions.value.length || recentTradeSignals.value.length),
     }[def.key]
@@ -2232,6 +2254,8 @@ watch(activePanel, async (panel) => {
     await loadWorkbenchSection('valuation')
   } else if (panel === 'shareholders') {
     await loadWorkbenchSection('shareholders')
+  } else if (panel === 'swot') {
+    await loadWorkbenchSection('signals')
   } else if (panel === 'analysis') {
     await Promise.all([
       loadWorkbenchSection('ai'),
@@ -2253,6 +2277,9 @@ watch(
     const symbol = detail?.symbol
     if (!symbol) return
     directSymbol.value = symbol
+    if (detail?.panel) {
+      activePanel.value = detail.panel
+    }
     await loadSymbol(symbol)
   },
   { immediate: true }
@@ -2282,8 +2309,9 @@ async function loadSymbol(symbol) {
     clearAnalysisPolling()
     analysisSubmitStatus.value = ''
     analysisSubmitError.value = ''
-    sectionLoaded.value = { quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false }
-    sectionLoading.value = { quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false }
+    sectionLoaded.value = { quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false, signals: false }
+    sectionLoading.value = { quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false, signals: false }
+    swotError.value = ''
     quoteKlineLoading.value = { '1d': false, '1w': false, '1m': false }
     moneyFlowLoading.value = { '1d': false, '1w': false, '1m': false }
     holderNumberTableExpanded.value = false
@@ -2316,6 +2344,7 @@ async function loadSymbol(symbol) {
       ai: Boolean(workbench?.deep_analysis),
       trading: false,
       shareholders: false,
+      signals: false,
     }
     incomeRows.value = []
     indicatorRows.value = []
@@ -2325,6 +2354,7 @@ async function loadSymbol(symbol) {
     tradingContext.value = {}
     valuationData.value = {}
     shareholderData.value = {}
+    swotData.value = {}
     disposeShareholderCharts()
     queueInitialSectionLoads({ deferQuote: true })
     await nextTick()
@@ -2386,6 +2416,8 @@ function queueInitialSectionLoads(options = {}) {
     tasks.push(loadWorkbenchSection('valuation', { force: true }))
   } else if (activePanel.value === 'shareholders') {
     tasks.push(loadWorkbenchSection('shareholders', { force: true }))
+  } else if (activePanel.value === 'swot') {
+    tasks.push(loadWorkbenchSection('signals', { force: true }))
   } else if (activePanel.value === 'analysis') {
     tasks.push(loadWorkbenchSection('ai', { force: true }))
     tasks.push(loadWorkbenchSection('trading', { force: true }))
@@ -2460,6 +2492,7 @@ async function loadWorkbenchSection(section, options = {}) {
   if (!force && sectionLoaded.value[section]) return
 
   sectionLoading.value = { ...sectionLoading.value, [section]: true }
+  if (section === 'signals') swotError.value = ''
   try {
     if (section === 'quote') {
       const data = await getStockWorkbenchQuote(symbol)
@@ -2533,10 +2566,18 @@ async function loadWorkbenchSection(section, options = {}) {
       mergeWorkbenchSection('shareholders', data, {})
       await nextTick()
       renderShareholderCharts()
+    } else if (section === 'signals') {
+      const data = await getStockWorkbenchSignals(symbol)
+      if (!isCurrentWorkbenchSymbol(symbol)) return
+      swotData.value = data || {}
+      mergeWorkbenchSection('signals', data, {})
     }
     sectionLoaded.value = { ...sectionLoaded.value, [section]: true }
   } catch (e) {
     console.warn(`load stock workbench section ${section} failed`, e)
+    if (section === 'signals' && isCurrentWorkbenchSymbol(symbol)) {
+      swotError.value = 'SWOT 数据加载失败，请稍后重试。'
+    }
   } finally {
     sectionLoading.value = { ...sectionLoading.value, [section]: false }
   }
@@ -2545,6 +2586,12 @@ async function loadWorkbenchSection(section, options = {}) {
 function refreshValuationSection() {
   loadWorkbenchSection('valuation', { force: true }).catch((e) => {
     console.warn('refresh valuation section failed', e)
+  })
+}
+
+function refreshSwotSection() {
+  loadWorkbenchSection('signals', { force: true }).catch((e) => {
+    console.warn('refresh swot section failed', e)
   })
 }
 

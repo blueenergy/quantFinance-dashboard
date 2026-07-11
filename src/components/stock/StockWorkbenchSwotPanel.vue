@@ -1,0 +1,457 @@
+<template>
+  <section class="swot-panel">
+    <div class="card-title-row">
+      <div>
+        <h3>台账 SWOT</h3>
+        <p class="muted">个股信号台账的正宗阅读面；组合计划与持仓中的标签均引用此处数据。</p>
+      </div>
+      <span class="muted">
+        <template v-if="loading">刷新中…</template>
+        <template v-else-if="dataStatus.as_of">更新于 {{ dataStatus.as_of }}</template>
+        <template v-else>进入页签后按需加载</template>
+      </span>
+    </div>
+
+    <div v-if="signalReview" class="signal-review-banner">
+      <span>最近 AI 信号复核</span>
+      <strong>{{ signalReview.last_run_status || '已分析' }}</strong>
+      <small v-if="signalReview.analyzed_at">分析 {{ signalReview.analyzed_at }}</small>
+      <small v-if="signalReview.evidence_count != null">证据 {{ signalReview.evidence_count }} 条</small>
+    </div>
+
+    <div v-if="error" class="swot-error" role="alert">
+      <span>{{ error }}</span>
+      <button type="button" @click="$emit('retry')">重试</button>
+    </div>
+    <div v-else-if="loading && !hasSwotContract" class="swot-loading">
+      正在加载 SWOT 信号台账…
+    </div>
+    <div v-else class="swot-grid">
+      <article
+        v-for="quadrant in quadrants"
+        :key="quadrant.key"
+        class="swot-quadrant"
+        :class="[`swot-quadrant--${quadrant.key}`, { 'is-planned': quadrant.planned }]"
+      >
+        <header class="swot-quadrant-head">
+          <h4>{{ quadrant.title }}</h4>
+          <span v-if="quadrant.planned" class="swot-planned-badge">Phase 2</span>
+          <span v-else-if="quadrant.badge" class="swot-level-badge" :class="quadrant.badgeClass">
+            {{ quadrant.badge }}
+          </span>
+        </header>
+
+        <p v-if="quadrant.planned" class="swot-placeholder">
+          {{ quadrant.placeholder }}
+        </p>
+        <p v-else-if="!quadrant.findings.length" class="swot-placeholder">
+          {{ quadrant.emptyText }}
+        </p>
+        <p v-else class="swot-summary">{{ quadrant.summary }}</p>
+
+        <ul v-if="!quadrant.planned && quadrant.findings.length" class="swot-finding-list">
+          <li
+            v-for="finding in quadrant.findings"
+            :key="finding.finding_key || finding.summary"
+            class="swot-finding-item"
+            role="button"
+            tabindex="0"
+            @click="openFinding(quadrant.mode, $event)"
+            @keydown.enter.stop="openFinding(quadrant.mode, $event)"
+          >
+            <span class="swot-finding-level" :class="levelClass(quadrant.mode, finding)">
+              {{ levelLabel(quadrant.mode, finding) }}
+            </span>
+            <span class="swot-finding-text">{{ finding.summary || finding.subject || finding.finding_key }}</span>
+          </li>
+        </ul>
+
+        <button
+          v-if="!quadrant.planned && quadrant.findings.length"
+          type="button"
+          class="swot-detail-btn"
+          @click="openFinding(quadrant.mode, $event)"
+        >
+          查看完整{{ quadrant.mode === 'opportunity' ? '机会' : '风险' }}分析
+        </button>
+      </article>
+    </div>
+
+    <LlmRiskDetailPanel
+      :detail="llmDetail"
+      :font-px="llmFontPx"
+      :min="LLM_FONT_MIN"
+      :max="LLM_FONT_MAX"
+      :copied="copiedLlmRiskKey === llmDetail?.key"
+      :action-busy="actionBusy"
+      @inc="incLlmFont"
+      @dec="decLlmFont"
+      @copy="copyLlmRisk(llmDetail?.mode === 'opportunity' ? llmDetail?.opportunity : llmDetail?.risk, llmDetail?.key, llmDetail?.mode)"
+      @close="closeLlmDetail"
+      @confirm-resolution="confirmResolution"
+      @resolve="resolveFinding"
+      @realize-opportunity="realizeOpportunity"
+      @invalidate-opportunity="invalidateOpportunity"
+      @manual-add="manualAddRisk"
+    />
+  </section>
+</template>
+
+<script setup>
+import { computed } from 'vue'
+import LlmRiskDetailPanel from '../portfolio/LlmRiskDetailPanel.vue'
+import { useLlmRiskDetail } from '../../composables/useLlmRiskDetail'
+
+const props = defineProps({
+  symbol: { type: String, default: '' },
+  name: { type: String, default: '' },
+  swot: { type: Object, default: () => ({}) },
+  signalReview: { type: Object, default: null },
+  dataStatus: { type: Object, default: () => ({}) },
+  loading: { type: Boolean, default: false },
+  error: { type: String, default: '' },
+})
+
+const emit = defineEmits(['changed', 'retry'])
+
+const {
+  detail: llmDetail,
+  copiedKey: copiedLlmRiskKey,
+  fontPx: llmFontPx,
+  LLM_FONT_MIN,
+  LLM_FONT_MAX,
+  incLlmFont,
+  decLlmFont,
+  toggleLlmDetail,
+  closeLlmDetail,
+  copyLlmText: copyLlmRisk,
+  actionBusy,
+  confirmResolution,
+  resolveFinding,
+  realizeOpportunity,
+  invalidateOpportunity,
+  manualAddRisk,
+} = useLlmRiskDetail({
+  onRiskChanged: () => emit('changed'),
+})
+
+const quadrants = computed(() => {
+  const swot = props.swot || {}
+  const threat = swot.threat || {}
+  const opportunity = swot.opportunity || {}
+  const strength = swot.strength || {}
+  const weakness = swot.weakness || {}
+
+  return [
+    {
+      key: 'strength',
+      title: '优势 Strength',
+      planned: strength.status === 'planned',
+      placeholder: '优势维度尚未接入，后续将从量化评分与基本面提炼。',
+      mode: 'risk',
+      findings: [],
+      summary: '',
+      badge: '',
+      badgeClass: '',
+      emptyText: '',
+    },
+    {
+      key: 'weakness',
+      title: '劣势 Weakness',
+      planned: weakness.status === 'planned',
+      placeholder: '劣势维度尚未接入，后续将从财务弱点与估值压力提炼。',
+      mode: 'risk',
+      findings: [],
+      summary: '',
+      badge: '',
+      badgeClass: '',
+      emptyText: '',
+    },
+    {
+      key: 'opportunity',
+      title: '机会 Opportunity',
+      planned: false,
+      placeholder: '',
+      mode: 'opportunity',
+      findings: Array.isArray(opportunity.findings) ? opportunity.findings : [],
+      summary: opportunity.summary || '未发现明确 LLM 机会',
+      badge: strengthBadge(opportunity.strength),
+      badgeClass: `opportunity-${opportunity.strength || 'none'}`,
+      emptyText: '暂无活跃机会信号。',
+    },
+    {
+      key: 'threat',
+      title: '威胁 Threat',
+      planned: false,
+      placeholder: '',
+      mode: 'risk',
+      findings: Array.isArray(threat.findings) ? threat.findings : [],
+      summary: threat.summary || '未发现明确 LLM 事件风险',
+      badge: severityBadge(threat.severity),
+      badgeClass: `risk-${threat.severity || 'none'}`,
+      emptyText: '暂无活跃威胁信号。',
+    },
+  ]
+})
+
+const hasSwotContract = computed(() => Boolean(
+  props.swot?.strength
+  || props.swot?.weakness
+  || props.swot?.opportunity
+  || props.swot?.threat
+))
+
+function severityBadge(severity) {
+  if (severity === 'high') return '高'
+  if (severity === 'medium') return '中'
+  if (severity === 'low') return '低'
+  return '正常'
+}
+
+function strengthBadge(strength) {
+  if (strength === 'high') return '强'
+  if (strength === 'medium') return '中'
+  if (strength === 'low') return '弱'
+  return '无'
+}
+
+function levelLabel(mode, finding) {
+  if (mode === 'opportunity') return strengthBadge(finding.strength)
+  return severityBadge(finding.severity)
+}
+
+function levelClass(mode, finding) {
+  if (mode === 'opportunity') return `opportunity-${finding.strength || 'none'}`
+  return `risk-${finding.severity || 'none'}`
+}
+
+function openFinding(mode, event) {
+  const swot = props.swot || {}
+  const payload = mode === 'opportunity' ? (swot.opportunity || {}) : (swot.threat || {})
+  toggleLlmDetail({
+    key: `swot:${props.symbol}:${mode}`,
+    symbol: props.symbol,
+    name: props.name,
+    risk: mode === 'risk' ? payload : undefined,
+    opportunity: mode === 'opportunity' ? payload : undefined,
+    mode,
+    event,
+  })
+}
+</script>
+
+<style scoped>
+.swot-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card-title-row {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.card-title-row h3 {
+  margin: 0;
+}
+
+.card-title-row p {
+  margin: 4px 0 0;
+}
+
+.signal-review-banner {
+  align-items: center;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 12px;
+}
+
+.signal-review-banner span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.signal-review-banner strong {
+  color: #3730a3;
+}
+
+.signal-review-banner small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.swot-error,
+.swot-loading {
+  align-items: center;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.swot-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.swot-error button {
+  background: #fff;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  color: #b91c1c;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 12px;
+}
+
+.swot-loading {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+}
+
+.swot-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.swot-quadrant {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 180px;
+  padding: 14px;
+}
+
+.swot-quadrant--strength { border-top: 3px solid #16a34a; }
+.swot-quadrant--weakness { border-top: 3px solid #ea580c; }
+.swot-quadrant--opportunity { border-top: 3px solid #0284c7; }
+.swot-quadrant--threat { border-top: 3px solid #dc2626; }
+
+.swot-quadrant.is-planned {
+  background: #f8fafc;
+}
+
+.swot-quadrant-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.swot-quadrant-head h4 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.swot-planned-badge,
+.swot-level-badge {
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
+.swot-planned-badge {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.swot-level-badge.risk-high { background: #fee2e2; color: #b91c1c; }
+.swot-level-badge.risk-medium { background: #ffedd5; color: #c2410c; }
+.swot-level-badge.risk-low { background: #fef9c3; color: #a16207; }
+.swot-level-badge.risk-none { background: #f1f5f9; color: #64748b; }
+.swot-level-badge.opportunity-high { background: #dcfce7; color: #15803d; }
+.swot-level-badge.opportunity-medium { background: #e0f2fe; color: #0369a1; }
+.swot-level-badge.opportunity-low { background: #ecfccb; color: #4d7c0f; }
+.swot-level-badge.opportunity-none { background: #f1f5f9; color: #64748b; }
+
+.swot-placeholder,
+.swot-summary {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.swot-finding-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.swot-finding-item {
+  align-items: flex-start;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.swot-finding-item:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+.swot-finding-level {
+  border-radius: 4px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+}
+
+.swot-finding-level.risk-high { background: #fee2e2; color: #b91c1c; }
+.swot-finding-level.risk-medium { background: #ffedd5; color: #c2410c; }
+.swot-finding-level.risk-low { background: #fef9c3; color: #a16207; }
+.swot-finding-level.risk-none { background: #f1f5f9; color: #64748b; }
+.swot-finding-level.opportunity-high { background: #dcfce7; color: #15803d; }
+.swot-finding-level.opportunity-medium { background: #e0f2fe; color: #0369a1; }
+.swot-finding-level.opportunity-low { background: #ecfccb; color: #4d7c0f; }
+.swot-finding-level.opportunity-none { background: #f1f5f9; color: #64748b; }
+
+.swot-finding-text {
+  color: #1e293b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.swot-detail-btn {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: #4338ca;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+}
+
+.swot-detail-btn:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .swot-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
