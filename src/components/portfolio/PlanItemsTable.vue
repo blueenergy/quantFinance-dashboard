@@ -40,7 +40,7 @@
           <th class="col-num">变化</th>
           <th class="col-num">预估价</th>
           <th v-if="showOverlay" class="col-num col-live-price">现价</th>
-          <th v-if="showOverlay" class="col-rank" :title="latestRankTitle">
+          <th v-if="showOverlay" class="col-rank" :title="latestRankHeaderTitle(overlay)">
             <span class="th-label">最新排名</span>
             <small v-if="latestRankShort" class="th-sub">{{ latestRankShort }}</small>
           </th>
@@ -90,7 +90,7 @@
               日涨跌 {{ pctSigned(row.daily_change_pct) }}
             </small>
           </td>
-          <td v-if="showOverlay" class="col-rank">
+          <td v-if="showOverlay" class="col-rank" :title="latestRankCellTitle(row, overlay)">
             <span>{{ row.latest_rank ?? '-' }}</span>
             <small
               v-if="row.rank_delta != null && row.rank_delta !== 0"
@@ -98,7 +98,10 @@
             >
               {{ row.rank_delta > 0 ? `↑${row.rank_delta}` : `↓${Math.abs(row.rank_delta)}` }}
             </small>
-            <small v-if="row.dropped_out_of_top_n" class="dropped-flag">掉出TopN</small>
+            <small v-if="row.selection_exclusion_reason" class="dropped-flag">
+              {{ selectionExclusionShort(row.selection_exclusion_reason) }}
+            </small>
+            <small v-else-if="row.dropped_out_of_top_n" class="dropped-flag">掉出TopN</small>
           </td>
           <td class="col-money">{{ money(row.estimated_amount) }}</td>
           <td class="col-airisk">
@@ -196,7 +199,7 @@
           <th v-if="selectedPlanHasLiveSignals" class="col-narrow">实盘状态</th>
           <th class="col-num">预估价</th>
           <th class="col-num col-live-price">现价</th>
-          <th class="col-narrow" :title="latestRankTitle">
+          <th class="col-narrow" :title="latestRankHeaderTitle(overlay)">
             <span class="th-label">最新排名</span>
             <small v-if="latestRankShort" class="th-sub">{{ latestRankShort }}</small>
           </th>
@@ -249,12 +252,15 @@
               日涨跌 {{ pctSigned(item.daily_change_pct) }}
             </small>
           </td>
-          <td class="col-narrow">
+          <td class="col-narrow" :title="latestRankCellTitle(item, overlay)">
             <span>{{ item.latest_rank ?? '-' }}</span>
             <small v-if="item.rank_delta != null && item.rank_delta !== 0" :class="item.rank_delta > 0 ? 'rank-up' : 'rank-down'">
               {{ item.rank_delta > 0 ? `↑${item.rank_delta}` : `↓${Math.abs(item.rank_delta)}` }}
             </small>
-            <small v-if="item.dropped_out_of_top_n" class="dropped-flag">掉出TopN</small>
+            <small v-if="item.selection_exclusion_reason" class="dropped-flag">
+              {{ selectionExclusionShort(item.selection_exclusion_reason) }}
+            </small>
+            <small v-else-if="item.dropped_out_of_top_n" class="dropped-flag">掉出TopN</small>
           </td>
           <td class="col-narrow">{{ item.candidate_appearances ?? 0 }}</td>
           <td v-if="canReselectItems" class="col-action">
@@ -359,6 +365,9 @@ import {
   riskDisplaySeverity,
   riskSeverityLabel,
   signalReviewTitle,
+  selectionExclusionShort,
+  latestRankHeaderTitle,
+  latestRankCellTitle,
   signClass,
 } from '../../composables/usePortfolioPlanFormat'
 
@@ -393,7 +402,6 @@ const latestRankShort = computed(() => {
   return [date, weights].filter(Boolean).join(' · ')
 })
 const scoreContextTitle = computed(() => scoreContextTitleFor(props.overlay?.score_snapshot_date))
-const latestRankTitle = computed(() => scoreContextTitleFor(props.overlay?.latest_score_date, '最新排名'))
 
 const {
   detail: llmDetail,

@@ -59,6 +59,60 @@ export function signalReviewTitle(review) {
   return parts.filter(Boolean).join(' · ')
 }
 
+export function selectionExclusionShort(reason) {
+  const labels = {
+    missing_price: '无价',
+    over_slot_budget: '超预算',
+    dropped_from_target_pool: '掉出目标池',
+  }
+  return labels[reason] || ''
+}
+
+export function selectionExclusionLabel(reason) {
+  const labels = {
+    missing_price: '未入选：生成计划时缺少有效价格',
+    over_slot_budget: '未入选：1 手金额超过单槽预算',
+    dropped_from_target_pool: '未入选：掉出本次目标组合',
+  }
+  return labels[reason] || ''
+}
+
+export function latestRankHeaderTitle(overlay) {
+  const snapDate = overlay?.score_snapshot_date || '-'
+  const latestDate = overlay?.latest_score_date || '-'
+  const slot = Number(overlay?.target_slot_amount)
+  const slotText = Number.isFinite(slot) && slot > 0 ? `${Math.round(slot)} 元/槽` : '-'
+  return [
+    '全市场 universe 排名（非组合序号）',
+    `计划快照日：${snapDate}`,
+    `最新记分日：${latestDate}`,
+    `单槽预算约：${slotText}`,
+    '悬停单元格可查看快照排名 vs 最新排名',
+  ].join('\n')
+}
+
+export function latestRankCellTitle(item, overlay) {
+  const snapDate = overlay?.score_snapshot_date || '-'
+  const latestDate = overlay?.latest_score_date || '-'
+  const parts = [
+    `计划快照日（${snapDate}）全市场排名：${item?.snapshot_rank ?? '未入榜/无分'}`,
+    `最新记分日（${latestDate}）全市场排名：${item?.latest_rank ?? '未入榜/无分'}`,
+  ]
+  if (item?.rank_delta != null && item.rank_delta !== 0) {
+    const dir = item.rank_delta > 0 ? `上升 ${item.rank_delta} 名` : `下降 ${Math.abs(item.rank_delta)} 名`
+    parts.push(`较计划快照：${dir}`)
+  } else if (item?.snapshot_rank != null && item?.latest_rank != null) {
+    parts.push('较计划快照：排名未变')
+  }
+  if (item?.rank != null) {
+    parts.push(`本计划目标组合序号：#${item.rank}`)
+  }
+  const exclusion = selectionExclusionLabel(item?.selection_exclusion_reason)
+  if (exclusion) parts.push(exclusion)
+  if (item?.dropped_out_of_top_n) parts.push('最新记分日已掉出 TopN')
+  return parts.join('\n')
+}
+
 export function blockerText(blocker) {
   const labels = {
     account_binding_missing: '账户绑定不完整',
@@ -357,6 +411,10 @@ export function usePortfolioPlanFormat() {
     formatSignalReviewAt,
     signalReviewStatusText,
     signalReviewTitle,
+    selectionExclusionShort,
+    selectionExclusionLabel,
+    latestRankHeaderTitle,
+    latestRankCellTitle,
     blockerText,
     remainderReasonText,
     planItemActionLabel,

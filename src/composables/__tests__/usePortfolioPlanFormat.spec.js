@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiRiskTitle, blockerText, findingSourceMeta, llmRiskTitle, riskDisplaySeverity } from '../usePortfolioPlanFormat'
+import { aiRiskTitle, blockerText, findingSourceMeta, latestRankCellTitle, latestRankHeaderTitle, llmRiskTitle, riskDisplaySeverity, selectionExclusionLabel } from '../usePortfolioPlanFormat'
 
 describe('portfolio plan risk formatting', () => {
   it('formats rule and llm findings in separate tooltip sections', () => {
@@ -101,5 +101,38 @@ describe('portfolio plan risk formatting', () => {
   it('labels board-lot blockers in Chinese', () => {
     expect(blockerText('below_star_min_order')).toBe('低于科创板单笔 200 股下单门槛')
     expect(blockerText('below_lot_size')).toBe('低于一手交易单位')
+  })
+
+  it('formats latest rank tooltip with snapshot vs latest dates', () => {
+    const title = latestRankCellTitle(
+      {
+        snapshot_rank: 13,
+        latest_rank: 13,
+        rank_delta: 0,
+        rank: 1,
+      },
+      { score_snapshot_date: '20260710', latest_score_date: '20260710' },
+    )
+    expect(title).toContain('计划快照日（20260710）全市场排名：13')
+    expect(title).toContain('最新记分日（20260710）全市场排名：13')
+    expect(title).toContain('本计划目标组合序号：#1')
+  })
+
+  it('includes selection exclusion reason in rank tooltip', () => {
+    const title = latestRankCellTitle(
+      { selection_exclusion_reason: 'dropped_from_target_pool', latest_rank: 73 },
+      { score_snapshot_date: '20260710', latest_score_date: '20260710' },
+    )
+    expect(title).toContain(selectionExclusionLabel('dropped_from_target_pool'))
+  })
+
+  it('describes latest rank column header context', () => {
+    const title = latestRankHeaderTitle({
+      score_snapshot_date: '20260710',
+      latest_score_date: '20260710',
+      target_slot_amount: 4499.68,
+    })
+    expect(title).toContain('全市场 universe 排名')
+    expect(title).toContain('单槽预算约：4500 元/槽')
   })
 })
