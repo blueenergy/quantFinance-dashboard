@@ -361,6 +361,7 @@ import {
   canExecutePaperNowFromState,
   paperExecuteReadyTextFromState,
 } from '../utils/paperExecutionEligibility'
+import { isSubmittingForKey } from '../utils/scopedSubmitting'
 
 const portfolios = ref([])
 const portfolioSummary = ref(null)
@@ -382,7 +383,11 @@ const expandedTimelinePlanId = ref(null)
 const reviewAiRiskLoading = ref(false)
 const reviewLlmRiskLoading = ref(false)
 const opsLlmRiskLoading = ref(false)
-const forceRebalanceSubmitting = ref(false)
+const forceRebalanceSubmittingKey = ref('')
+
+const forceRebalanceSubmitting = computed(() => (
+  isSubmittingForKey(forceRebalanceSubmittingKey.value, selectedPortfolioKey.value)
+))
 const securitiesAccounts = ref([])
 const selectedLiveAccountId = ref('')
 
@@ -948,7 +953,8 @@ async function submitForceRebalance() {
     messageIsError.value = true
     return
   }
-  forceRebalanceSubmitting.value = true
+  const submitKey = selectedPortfolioKey.value
+  forceRebalanceSubmittingKey.value = submitKey
   message.value = ''
   messageIsError.value = false
   let taskId = ''
@@ -975,7 +981,9 @@ async function submitForceRebalance() {
       messageIsError.value = true
     }
   } finally {
-    forceRebalanceSubmitting.value = false
+    if (forceRebalanceSubmittingKey.value === submitKey) {
+      forceRebalanceSubmittingKey.value = ''
+    }
   }
 }
 
