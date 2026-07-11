@@ -1241,8 +1241,12 @@
             :data-status="swotPayload.data_status"
             :loading="sectionLoading.signals"
             :error="swotError"
+            :collecting="signalCollecting"
+            :collection-message="signalCollectionMessage"
+            :collection-error="signalCollectionError"
             @changed="refreshSwotSection"
             @retry="refreshSwotSection"
+            @collect="collectSwotSignals"
           />
         </v-window-item>
 
@@ -1454,6 +1458,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
 import {
+  collectStockWorkbenchSignals,
+  getStockWorkbenchSignalTask,
   getStockWorkbench,
   getStockWorkbenchAi,
   getStockWorkbenchFinancials,
@@ -1516,6 +1522,9 @@ const sectionLoaded = ref({ quote: false, nine_turn: false, scores: false, finan
 const shareholderData = ref({})
 const swotData = ref({})
 const swotError = ref('')
+const signalCollecting = ref(false)
+const signalCollectionMessage = ref('')
+const signalCollectionError = ref(false)
 const holderNumberTableExpanded = ref(false)
 const shareholderTradesExpanded = ref(false)
 const shareFloatExpanded = ref(false)
@@ -1528,6 +1537,8 @@ let radarChart = null
 let holderNumberChart = null
 let hkHoldChart = null
 let analysisPollTimer = null
+let signalCollectionTimer = null
+let signalCollectionPollCount = 0
 
 const RECENT_SYMBOLS_KEY = 'stock-workbench:recent-symbols'
 
@@ -2307,8 +2318,11 @@ async function loadSymbol(symbol) {
   error.value = ''
   try {
     clearAnalysisPolling()
+    clearSignalCollectionPolling()
     analysisSubmitStatus.value = ''
     analysisSubmitError.value = ''
+    signalCollectionMessage.value = ''
+    signalCollectionError.value = false
     sectionLoaded.value = { quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false, signals: false }
     sectionLoading.value = { quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false, signals: false }
     swotError.value = ''
@@ -2593,6 +2607,82 @@ function refreshSwotSection() {
   loadWorkbenchSection('signals', { force: true }).catch((e) => {
     console.warn('refresh swot section failed', e)
   })
+}
+
+function clearSignalCollectionPolling() {
+  if (signalCollectionTimer) {
+    window.clearTimeout(signalCollectionTimer)
+    signalCollectionTimer = null
+  }
+  signalCollectionPollCount = 0
+  signalCollecting.value = false
+}
+
+async function collectSwotSignals() {
+  const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
+  if (!symbol || signalCollecting.value) return
+  clearSignalCollectionPolling()
+  signalCollecting.value = true
+  signalCollectionError.value = false
+  signalCollectionMessage.value = '已提交机会与风险证据搜集，等待分析任务处理…'
+  try {
+    const task = await collectStockWorkbenchSignals(symbol)
+    if (!task?.task_id) throw new Error('分析任务未返回 task_id')
+    signalCollectionMessage.value = task.reused
+      ? '已有该股票的搜集分析任务正在运行…'
+      : '正在搜集公告、新闻等证据并分析机会与风险…'
+    await pollSwotSignalTask(task.task_id, symbol)
+  } catch (e) {
+    clearSignalCollectionPolling()
+    signalCollectionError.value = true
+    signalCollectionMessage.value = e?.message || '机会与风险搜集分析提交失败'
+  }
+}
+
+async function pollSwotSignalTask(taskId, symbol) {
+  try {
+    const response = await getStockWorkbenchSignalTask(taskId)
+    if (!isCurrentWorkbenchSymbol(symbol)) {
+      clearSignalCollectionPolling()
+      return
+    }
+    const status = response?.task_meta?.status || ''
+    const resultStatus = response?.base_result?.summary?.status || ''
+    if (status === 'failed') {
+      clearSignalCollectionPolling()
+      signalCollectionError.value = true
+      signalCollectionMessage.value = response?.task_meta?.error || '机会与风险搜集分析失败'
+      return
+    }
+    if (status === 'completed' || status === 'completed_with_parse_error') {
+      clearSignalCollectionPolling()
+      if (resultStatus === 'skipped_unchanged') {
+        signalCollectionMessage.value = '证据没有变化，已保留当前机会与风险判断。'
+      } else {
+        signalCollectionMessage.value = status === 'completed_with_parse_error'
+          ? '分析已完成，但部分结果解析失败；已刷新可用信号。'
+          : '机会与风险分析完成，SWOT 已刷新。'
+      }
+      signalCollectionError.value = status === 'completed_with_parse_error'
+      await loadWorkbenchSection('signals', { force: true })
+      return
+    }
+    signalCollectionPollCount += 1
+    if (signalCollectionPollCount >= 90) {
+      clearSignalCollectionPolling()
+      signalCollectionError.value = true
+      signalCollectionMessage.value = '分析任务处理时间较长，请稍后重新进入 SWOT 查看结果。'
+      return
+    }
+    signalCollectionTimer = window.setTimeout(
+      () => pollSwotSignalTask(taskId, symbol),
+      2000,
+    )
+  } catch (e) {
+    clearSignalCollectionPolling()
+    signalCollectionError.value = true
+    signalCollectionMessage.value = e?.message || '机会与风险分析任务查询失败'
+  }
 }
 
 async function refreshQuoteSection() {
@@ -3336,6 +3426,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('stock-workbench:set-symbol', onOpenWorkbench)
   clearAnalysisPolling()
+  clearSignalCollectionPolling()
   if (radarChart) {
     radarChart.dispose()
     radarChart = null

@@ -5,11 +5,30 @@
         <h3>台账 SWOT</h3>
         <p class="muted">个股信号台账的正宗阅读面；组合计划与持仓中的标签均引用此处数据。</p>
       </div>
-      <span class="muted">
-        <template v-if="loading">刷新中…</template>
-        <template v-else-if="dataStatus.as_of">更新于 {{ dataStatus.as_of }}</template>
-        <template v-else>进入页签后按需加载</template>
-      </span>
+      <div class="swot-tools">
+        <span class="muted">
+          <template v-if="loading">刷新中…</template>
+          <template v-else-if="dataStatus.as_of">更新于 {{ dataStatus.as_of }}</template>
+          <template v-else>进入页签后按需加载</template>
+        </span>
+        <button
+          type="button"
+          class="swot-collect-btn"
+          :disabled="collecting || loading"
+          @click="$emit('collect')"
+        >
+          {{ collecting ? '正在搜集分析…' : '搜集分析机会与风险' }}
+        </button>
+      </div>
+    </div>
+
+    <div
+      v-if="collectionMessage"
+      class="swot-collection-status"
+      :class="{ 'is-error': collectionError }"
+      role="status"
+    >
+      {{ collectionMessage }}
     </div>
 
     <div v-if="signalReview" class="signal-review-banner">
@@ -110,9 +129,12 @@ const props = defineProps({
   dataStatus: { type: Object, default: () => ({}) },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
+  collecting: { type: Boolean, default: false },
+  collectionMessage: { type: String, default: '' },
+  collectionError: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['changed', 'retry'])
+const emit = defineEmits(['changed', 'retry', 'collect'])
 
 const {
   detail: llmDetail,
@@ -260,6 +282,47 @@ function openFinding(mode, event) {
 
 .card-title-row p {
   margin: 4px 0 0;
+}
+
+.swot-tools {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.swot-collect-btn {
+  background: #4338ca;
+  border: 1px solid #4338ca;
+  border-radius: 7px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 14px;
+}
+
+.swot-collect-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.swot-collect-btn:not(:disabled):hover {
+  background: #3730a3;
+}
+
+.swot-collection-status {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1d4ed8;
+  padding: 10px 12px;
+}
+
+.swot-collection-status.is-error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
 }
 
 .signal-review-banner {
@@ -450,6 +513,14 @@ function openFinding(mode, event) {
 }
 
 @media (max-width: 900px) {
+  .card-title-row {
+    flex-direction: column;
+  }
+
+  .swot-tools {
+    align-items: flex-start;
+  }
+
   .swot-grid {
     grid-template-columns: 1fr;
   }

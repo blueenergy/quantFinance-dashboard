@@ -260,6 +260,35 @@ export async function getStockWorkbenchSignals(symbol) {
 }
 
 /**
+ * 触发单只股票的机会与风险证据搜集分析
+ */
+export async function collectStockWorkbenchSignals(symbol) {
+    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/signals/collect`;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: authHeaders()
+    });
+
+    if (!res.ok) throw new Error(`Failed to collect stock workbench signals: ${res.status}`);
+    const result = await res.json();
+    return result.data;
+}
+
+/**
+ * 获取机会与风险搜集任务状态
+ */
+export async function getStockWorkbenchSignalTask(taskId) {
+    const url = `${API_BASE}/analysis-tasks/${encodeURIComponent(taskId)}`;
+    const res = await fetch(url, {
+        method: 'GET',
+        headers: authHeaders()
+    });
+
+    if (!res.ok) throw new Error(`Failed to get stock workbench signal task: ${res.status}`);
+    return res.json();
+}
+
+/**
  * 获取股票财务报表数据
  * @param {string} symbol - 股票代码
  * @param {string} statement - income|balance|cashflow|indicator|daily_basic
