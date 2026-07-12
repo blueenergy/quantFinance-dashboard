@@ -86,12 +86,13 @@
         </ul>
 
         <button
-          v-if="!quadrant.planned && quadrant.findings.length"
+          v-if="!quadrant.planned && (quadrant.findings.length || quadrant.mode === 'risk')"
           type="button"
           class="swot-detail-btn"
           @click="openFinding(quadrant.mode, $event)"
         >
-          查看完整{{ quadrant.mode === 'opportunity' ? '机会' : '风险' }}分析
+          <template v-if="quadrant.mode === 'risk' && !quadrant.findings.length">手动添加风险</template>
+          <template v-else>查看完整{{ quadrant.mode === 'opportunity' ? '机会' : '风险' }}分析</template>
         </button>
       </article>
     </div>

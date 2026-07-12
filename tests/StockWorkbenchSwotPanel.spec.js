@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import StockWorkbenchSwotPanel from '../src/components/stock/StockWorkbenchSwotPanel.vue'
 
@@ -18,6 +18,12 @@ function mountPanel(overrides = {}) {
     },
   })
 }
+
+beforeEach(() => {
+  document.body
+    .querySelectorAll('.llm-detail-panel, .llm-popover-backdrop')
+    .forEach((el) => el.remove())
+})
 
 
 describe('StockWorkbenchSwotPanel collection action', () => {
@@ -61,5 +67,23 @@ describe('StockWorkbenchSwotPanel collection action', () => {
     expect(wrapper.get('.industry-reference-head').text()).toContain('玻璃')
     expect(wrapper.get('.industry-finding-list').text()).toContain('玻璃玻纤行业景气修复')
     expect(wrapper.text()).toContain('不等同于该股票自身结论')
+  })
+})
+
+
+describe('StockWorkbenchSwotPanel empty threat action', () => {
+  it('opens the existing detail panel for manually adding the first risk', async () => {
+    const wrapper = mountPanel()
+    const button = wrapper.get('.swot-quadrant--threat .swot-detail-btn')
+
+    expect(button.text()).toBe('手动添加风险')
+
+    await button.trigger('click')
+
+    const panel = document.body.querySelector('.llm-detail-panel')
+    expect(panel).not.toBeNull()
+    expect(panel.querySelector('.llm-detail-title').textContent).toContain('平安银行')
+    expect(panel.querySelector('.llm-manual-add button').textContent).toContain('手动添加风险')
+    wrapper.unmount()
   })
 })
