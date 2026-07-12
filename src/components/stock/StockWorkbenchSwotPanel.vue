@@ -14,7 +14,7 @@
         <button
           type="button"
           class="swot-collect-btn"
-          :disabled="collecting || internalRefreshing || loading"
+          :disabled="collecting || loading"
           @click="$emit('collect')"
         >
           {{ collecting ? '正在搜集分析…' : '搜集分析机会与风险' }}
@@ -22,7 +22,7 @@
         <button
           type="button"
           class="swot-internal-btn"
-          :disabled="collecting || internalRefreshing || loading || dataStatus.internal_signal_enabled === false"
+          :disabled="internalRefreshing || loading || dataStatus.internal_signal_enabled === false"
           @click="$emit('refresh-internal')"
         >
           {{ internalRefreshing ? '正在分析财务信号…' : '刷新优势与劣势' }}
@@ -33,12 +33,12 @@
             type="url"
             class="swot-url-input"
             placeholder="粘贴新闻链接"
-            :disabled="collecting || internalRefreshing || loading"
+            :disabled="collecting || loading"
           >
           <button
             type="submit"
             class="swot-url-btn"
-            :disabled="collecting || internalRefreshing || loading || !newsUrlInput"
+            :disabled="collecting || loading || !newsUrlInput"
           >
             {{ collecting ? '分析中…' : '分析链接' }}
           </button>
@@ -239,7 +239,7 @@ function isValidHttpUrl(value) {
 
 function submitNewsUrl() {
   const url = newsUrlInput.value.trim()
-  if (!url || props.collecting || props.internalRefreshing || props.loading) return
+  if (!url || props.collecting || props.loading) return
   if (!isValidHttpUrl(url)) {
     window.alert('请输入有效的 http/https 新闻链接')
     return
@@ -249,7 +249,7 @@ function submitNewsUrl() {
 
 function submitFindingNewsUrl({ findingKey, url } = {}) {
   const trimmed = String(url || '').trim()
-  if (!trimmed || !findingKey || props.collecting || props.internalRefreshing || props.loading) return
+  if (!trimmed || !findingKey || props.collecting || props.loading) return
   if (!isValidHttpUrl(trimmed)) {
     window.alert('请输入有效的 http/https 新闻链接')
     return

@@ -53,6 +53,22 @@ describe('StockWorkbenchSwotPanel collection action', () => {
     expect(wrapper.emitted('refresh-internal')).toHaveLength(1)
   })
 
+  it('keeps collection and S/W refresh buttons independent', async () => {
+    const collecting = mountPanel({ collecting: true })
+    expect(collecting.get('.swot-collect-btn').attributes('disabled')).toBeDefined()
+    // 搜集机会与风险进行中，不应禁用刷新优势与劣势
+    expect(collecting.get('.swot-internal-btn').attributes('disabled')).toBeUndefined()
+    await collecting.get('.swot-internal-btn').trigger('click')
+    expect(collecting.emitted('refresh-internal')).toHaveLength(1)
+
+    const refreshing = mountPanel({ internalRefreshing: true })
+    expect(refreshing.get('.swot-internal-btn').attributes('disabled')).toBeDefined()
+    // 刷新优势与劣势进行中，不应禁用搜集机会与风险
+    expect(refreshing.get('.swot-collect-btn').attributes('disabled')).toBeUndefined()
+    await refreshing.get('.swot-collect-btn').trigger('click')
+    expect(refreshing.emitted('collect')).toHaveLength(1)
+  })
+
   it('renders industry signals as read-only references', () => {
     const wrapper = mountPanel({
       industryReference: {

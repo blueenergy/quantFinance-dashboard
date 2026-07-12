@@ -1552,6 +1552,8 @@ let analysisPollTimer = null
 let signalCollectionTimer = null
 let signalCollectionPollCount = 0
 const signalCollectionMode = ref('')
+let internalSignalTimer = null
+let internalSignalPollCount = 0
 
 const RECENT_SYMBOLS_KEY = 'stock-workbench:recent-symbols'
 
@@ -2624,15 +2626,30 @@ function refreshSwotSection() {
   })
 }
 
-function clearSignalCollectionPolling() {
+function clearCollectPolling() {
   if (signalCollectionTimer) {
     window.clearTimeout(signalCollectionTimer)
     signalCollectionTimer = null
   }
   signalCollectionPollCount = 0
   signalCollecting.value = false
-  internalSignalRefreshing.value = false
   signalCollectionMode.value = ''
+}
+
+function clearInternalPolling() {
+  if (internalSignalTimer) {
+    window.clearTimeout(internalSignalTimer)
+    internalSignalTimer = null
+  }
+  internalSignalPollCount = 0
+  internalSignalRefreshing.value = false
+}
+
+// 机会/风险搜集与优势/劣势刷新是两条独立的轮询链路，
+// 该函数仅用于离开页面/切换标的等需要同时清理的场景。
+function clearSignalCollectionPolling() {
+  clearCollectPolling()
+  clearInternalPolling()
 }
 
 function friendlyNewsUrlError(rawError = '') {
@@ -2687,8 +2704,8 @@ function formatNewsUrlTaskMessage(summary = {}, status = 'completed') {
 
 async function collectSwotSignals() {
   const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
-  if (!symbol || signalCollecting.value || internalSignalRefreshing.value) return
-  clearSignalCollectionPolling()
+  if (!symbol || signalCollecting.value) return
+  clearCollectPolling()
   signalCollecting.value = true
   signalCollectionMode.value = 'collect'
   signalCollectionError.value = false
@@ -2699,9 +2716,9 @@ async function collectSwotSignals() {
     signalCollectionMessage.value = task.reused
       ? '已有该股票的搜集分析任务正在运行…'
       : '正在搜集公告、新闻等证据并分析机会与风险…'
-    await pollSwotSignalTask(task.task_id, symbol)
+    await pollSwotSignalTask(task.task_id, symbol, 'collect')
   } catch (e) {
-    clearSignalCollectionPolling()
+    clearCollectPolling()
     signalCollectionError.value = true
     signalCollectionMessage.value = e?.message || '机会与风险搜集分析提交失败'
   }
@@ -2709,10 +2726,9 @@ async function collectSwotSignals() {
 
 async function refreshInternalSwotSignals() {
   const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
-  if (!symbol || signalCollecting.value || internalSignalRefreshing.value) return
-  clearSignalCollectionPolling()
+  if (!symbol || internalSignalRefreshing.value) return
+  clearInternalPolling()
   internalSignalRefreshing.value = true
-  signalCollectionMode.value = 'internal'
   internalSignalRefreshError.value = false
   internalSignalRefreshMessage.value = '已提交优势与劣势规则评估，等待任务处理…'
   try {
@@ -2721,9 +2737,9 @@ async function refreshInternalSwotSignals() {
     internalSignalRefreshMessage.value = task.reused
       ? '已有该股票的优势与劣势评估任务正在运行…'
       : '正在读取财务指标并评估优势与劣势…'
-    await pollSwotSignalTask(task.task_id, symbol)
+    await pollSwotSignalTask(task.task_id, symbol, 'internal')
   } catch (e) {
-    clearSignalCollectionPolling()
+    clearInternalPolling()
     internalSignalRefreshError.value = true
     internalSignalRefreshMessage.value = e?.message || '优势与劣势规则评估提交失败'
   }
@@ -2733,8 +2749,8 @@ async function analyzeSwotNewsUrl(payload) {
   const url = typeof payload === 'string' ? payload : payload?.url
   const findingKey = typeof payload === 'string' ? '' : (payload?.findingKey || '')
   const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
-  if (!symbol || signalCollecting.value || internalSignalRefreshing.value || !url) return
-  clearSignalCollectionPolling()
+  if (!symbol || signalCollecting.value || !url) return
+  clearCollectPolling()
   signalCollecting.value = true
   signalCollectionMode.value = 'news-url'
   signalCollectionError.value = false
@@ -2747,82 +2763,92 @@ async function analyzeSwotNewsUrl(payload) {
     signalCollectionMessage.value = task.reused
       ? '已有该新闻链接分析任务正在运行…'
       : '正在抓取新闻正文并由 LLM 研判机会与风险…'
-    await pollSwotSignalTask(task.task_id, symbol)
+    await pollSwotSignalTask(task.task_id, symbol, 'collect')
   } catch (e) {
-    clearSignalCollectionPolling()
+    clearCollectPolling()
     signalCollectionError.value = true
     signalCollectionMessage.value = e?.message || '新闻链接分析提交失败'
   }
 }
 
-async function pollSwotSignalTask(taskId, symbol) {
+async function pollSwotSignalTask(taskId, symbol, track = 'collect') {
+  const isInternal = track === 'internal'
+  const clearThis = isInternal ? clearInternalPolling : clearCollectPolling
   try {
     const response = await getStockWorkbenchSignalTask(taskId)
     if (!isCurrentWorkbenchSymbol(symbol)) {
-      clearSignalCollectionPolling()
+      clearThis()
       return
     }
     const status = response?.task_meta?.status || ''
     const resultStatus = response?.base_result?.summary?.status || response?.base_result?.status || ''
+    const mode = signalCollectionMode.value
     if (status === 'failed') {
-      const mode = signalCollectionMode.value
-      clearSignalCollectionPolling()
-      signalCollectionError.value = true
-      if (mode === 'news-url') {
-        signalCollectionMessage.value = friendlyNewsUrlError(response?.task_meta?.error)
-      } else if (mode === 'internal') {
-        signalCollectionError.value = false
+      clearThis()
+      if (isInternal) {
         internalSignalRefreshError.value = true
         internalSignalRefreshMessage.value = response?.task_meta?.error || '优势与劣势规则评估失败'
+      } else if (mode === 'news-url') {
+        signalCollectionError.value = true
+        signalCollectionMessage.value = friendlyNewsUrlError(response?.task_meta?.error)
       } else {
+        signalCollectionError.value = true
         signalCollectionMessage.value = response?.task_meta?.error || '机会与风险搜集分析失败'
       }
       return
     }
     if (status === 'completed' || status === 'completed_with_parse_error') {
-      const mode = signalCollectionMode.value
-      clearSignalCollectionPolling()
+      clearThis()
       const summary = response?.base_result?.summary || {}
-      if (mode === 'news-url') {
-        signalCollectionMessage.value = formatNewsUrlTaskMessage(summary, status)
-      } else if (mode === 'internal') {
+      if (isInternal) {
         const counts = response?.base_result?.result_counts || {}
         internalSignalRefreshMessage.value = resultStatus === 'skipped_unchanged'
           ? '内部财务证据没有变化，已保留当前优势与劣势判断。'
           : `优势与劣势评估完成：${Number(counts.strength || 0)} 条优势、${Number(counts.weakness || 0)} 条劣势。`
         internalSignalRefreshError.value = false
-      } else if (resultStatus === 'skipped_unchanged') {
-        signalCollectionMessage.value = '证据没有变化，已保留当前机会与风险判断。'
       } else {
-        signalCollectionMessage.value = status === 'completed_with_parse_error'
-          ? '分析已完成，但部分结果解析失败；已刷新可用信号。'
-          : '机会与风险分析完成，SWOT 已刷新。'
+        if (mode === 'news-url') {
+          signalCollectionMessage.value = formatNewsUrlTaskMessage(summary, status)
+        } else if (resultStatus === 'skipped_unchanged') {
+          signalCollectionMessage.value = '证据没有变化，已保留当前机会与风险判断。'
+        } else {
+          signalCollectionMessage.value = status === 'completed_with_parse_error'
+            ? '分析已完成，但部分结果解析失败；已刷新可用信号。'
+            : '机会与风险分析完成，SWOT 已刷新。'
+        }
+        signalCollectionError.value = status === 'completed_with_parse_error'
       }
-      signalCollectionError.value = status === 'completed_with_parse_error'
       await loadWorkbenchSection('signals', { force: true })
       return
     }
-    signalCollectionPollCount += 1
-    if (signalCollectionPollCount >= 90) {
-      const mode = signalCollectionMode.value
-      clearSignalCollectionPolling()
-      if (mode === 'internal') {
+    if (isInternal) {
+      internalSignalPollCount += 1
+      if (internalSignalPollCount >= 90) {
+        clearThis()
         internalSignalRefreshError.value = true
         internalSignalRefreshMessage.value = '规则评估任务处理时间较长，请稍后重新进入 SWOT 查看结果。'
-      } else {
+        return
+      }
+      internalSignalTimer = window.setTimeout(
+        () => pollSwotSignalTask(taskId, symbol, track),
+        2000,
+      )
+    } else {
+      signalCollectionPollCount += 1
+      if (signalCollectionPollCount >= 90) {
+        clearThis()
         signalCollectionError.value = true
         signalCollectionMessage.value = '分析任务处理时间较长，请稍后重新进入 SWOT 查看结果。'
+        return
       }
-      return
+      signalCollectionTimer = window.setTimeout(
+        () => pollSwotSignalTask(taskId, symbol, track),
+        2000,
+      )
     }
-    signalCollectionTimer = window.setTimeout(
-      () => pollSwotSignalTask(taskId, symbol),
-      2000,
-    )
   } catch (e) {
-    const mode = signalCollectionMode.value
-    clearSignalCollectionPolling()
-    if (mode === 'internal') {
+    clearThis()
+    if (isInternal) {
       internalSignalRefreshError.value = true
       internalSignalRefreshMessage.value = e?.message || '优势与劣势任务查询失败'
     } else {
