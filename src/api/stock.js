@@ -275,6 +275,25 @@ export async function collectStockWorkbenchSignals(symbol) {
 }
 
 /**
+ * 提交新闻链接，触发后台抓取与 LLM 风险/机会分析
+ */
+export async function analyzeStockWorkbenchNewsUrl(symbol, { url }) {
+    const endpoint = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/signals/analyze-url`;
+    const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            ...authHeaders(),
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url }),
+    });
+
+    if (!res.ok) throw new Error(`Failed to analyze stock workbench news url: ${res.status}`);
+    const result = await res.json();
+    return result.data;
+}
+
+/**
  * 获取机会与风险搜集任务状态
  */
 export async function getStockWorkbenchSignalTask(taskId) {

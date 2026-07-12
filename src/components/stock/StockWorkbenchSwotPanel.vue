@@ -19,6 +19,22 @@
         >
           {{ collecting ? '正在搜集分析…' : '搜集分析机会与风险' }}
         </button>
+        <form class="swot-url-form" @submit.prevent="submitNewsUrl">
+          <input
+            v-model.trim="newsUrlInput"
+            type="url"
+            class="swot-url-input"
+            placeholder="粘贴新闻链接"
+            :disabled="collecting || loading"
+          >
+          <button
+            type="submit"
+            class="swot-url-btn"
+            :disabled="collecting || loading || !newsUrlInput"
+          >
+            {{ collecting ? '分析中…' : '分析链接' }}
+          </button>
+        </form>
       </div>
     </div>
 
@@ -156,7 +172,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import LlmRiskDetailPanel from '../portfolio/LlmRiskDetailPanel.vue'
 import { useLlmRiskDetail } from '../../composables/useLlmRiskDetail'
 
@@ -174,7 +190,28 @@ const props = defineProps({
   collectionError: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['changed', 'retry', 'collect'])
+const emit = defineEmits(['changed', 'retry', 'collect', 'analyze-url'])
+
+const newsUrlInput = ref('')
+
+function isValidHttpUrl(value) {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function submitNewsUrl() {
+  const url = newsUrlInput.value.trim()
+  if (!url || props.collecting || props.loading) return
+  if (!isValidHttpUrl(url)) {
+    window.alert('请输入有效的 http/https 新闻链接')
+    return
+  }
+  emit('analyze-url', url)
+}
 
 const {
   detail: llmDetail,
@@ -372,6 +409,60 @@ function openFinding(mode, event) {
 
 .swot-collect-btn:not(:disabled):hover {
   background: #3730a3;
+}
+
+.swot-url-form {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  width: min(100%, 420px);
+}
+
+.swot-url-input {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  color: #1e293b;
+  flex: 1 1 auto;
+  font-size: 13px;
+  min-width: 0;
+  padding: 7px 10px;
+}
+
+.swot-url-input::placeholder {
+  color: #94a3b8;
+}
+
+.swot-url-input:focus {
+  border-color: #4338ca;
+  outline: none;
+}
+
+.swot-url-input:disabled {
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.swot-url-btn {
+  background: #fff;
+  border: 1px solid #4338ca;
+  border-radius: 7px;
+  color: #4338ca;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 12px;
+}
+
+.swot-url-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.swot-url-btn:not(:disabled):hover {
+  background: #eef2ff;
 }
 
 .swot-collection-status {

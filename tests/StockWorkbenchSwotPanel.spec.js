@@ -87,3 +87,24 @@ describe('StockWorkbenchSwotPanel empty threat action', () => {
     wrapper.unmount()
   })
 })
+
+
+describe('StockWorkbenchSwotPanel news url action', () => {
+  it('emits analyze-url for a valid http link', async () => {
+    const wrapper = mountPanel()
+    await wrapper.get('.swot-url-input').setValue('https://finance.example.com/news/123')
+    await wrapper.get('.swot-url-form').trigger('submit.prevent')
+
+    expect(wrapper.emitted('analyze-url')).toEqual([['https://finance.example.com/news/123']])
+    wrapper.unmount()
+  })
+
+  it('disables analyze controls while collecting', () => {
+    const wrapper = mountPanel({ collecting: true })
+
+    expect(wrapper.get('.swot-url-input').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.swot-url-btn').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.swot-url-btn').text()).toContain('分析中')
+    wrapper.unmount()
+  })
+})

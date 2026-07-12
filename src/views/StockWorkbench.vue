@@ -1248,6 +1248,7 @@
             @changed="refreshSwotSection"
             @retry="refreshSwotSection"
             @collect="collectSwotSignals"
+            @analyze-url="analyzeSwotNewsUrl"
           />
         </v-window-item>
 
@@ -1460,6 +1461,7 @@ import axios from 'axios'
 import * as echarts from 'echarts'
 import {
   collectStockWorkbenchSignals,
+  analyzeStockWorkbenchNewsUrl,
   getStockWorkbenchSignalTask,
   getStockWorkbench,
   getStockWorkbenchAi,
@@ -1540,6 +1542,7 @@ let hkHoldChart = null
 let analysisPollTimer = null
 let signalCollectionTimer = null
 let signalCollectionPollCount = 0
+const signalCollectionMode = ref('')
 
 const RECENT_SYMBOLS_KEY = 'stock-workbench:recent-symbols'
 
@@ -2617,6 +2620,25 @@ function clearSignalCollectionPolling() {
   }
   signalCollectionPollCount = 0
   signalCollecting.value = false
+  signalCollectionMode.value = ''
+}
+
+function formatNewsUrlTaskMessage(summary = {}, status = 'completed') {
+  if (summary.status === 'no_material_impact') {
+    return '未发现对该股票的实质影响。'
+  }
+  const riskCount = Number(summary.risk_finding_count || 0)
+  const oppCount = Number(summary.opportunity_finding_count || 0)
+  if (riskCount || oppCount) {
+    const parts = []
+    if (riskCount) parts.push(`${riskCount} 条风险`)
+    if (oppCount) parts.push(`${oppCount} 条机会`)
+    return `新闻分析完成，已写入 ${parts.join('、')}，SWOT 已刷新。`
+  }
+  if (status === 'completed_with_parse_error') {
+    return '新闻分析已完成，但部分结果解析失败；已刷新可用信号。'
+  }
+  return '新闻分析完成，SWOT 已刷新。'
 }
 
 async function collectSwotSignals() {
@@ -2624,6 +2646,7 @@ async function collectSwotSignals() {
   if (!symbol || signalCollecting.value) return
   clearSignalCollectionPolling()
   signalCollecting.value = true
+  signalCollectionMode.value = 'collect'
   signalCollectionError.value = false
   signalCollectionMessage.value = '已提交机会与风险证据搜集，等待分析任务处理…'
   try {
@@ -2640,6 +2663,28 @@ async function collectSwotSignals() {
   }
 }
 
+async function analyzeSwotNewsUrl(url) {
+  const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
+  if (!symbol || signalCollecting.value || !url) return
+  clearSignalCollectionPolling()
+  signalCollecting.value = true
+  signalCollectionMode.value = 'news-url'
+  signalCollectionError.value = false
+  signalCollectionMessage.value = '已提交新闻链接分析，正在抓取正文…'
+  try {
+    const task = await analyzeStockWorkbenchNewsUrl(symbol, { url })
+    if (!task?.task_id) throw new Error('分析任务未返回 task_id')
+    signalCollectionMessage.value = task.reused
+      ? '已有该新闻链接分析任务正在运行…'
+      : '正在抓取新闻正文并由 LLM 研判机会与风险…'
+    await pollSwotSignalTask(task.task_id, symbol)
+  } catch (e) {
+    clearSignalCollectionPolling()
+    signalCollectionError.value = true
+    signalCollectionMessage.value = e?.message || '新闻链接分析提交失败'
+  }
+}
+
 async function pollSwotSignalTask(taskId, symbol) {
   try {
     const response = await getStockWorkbenchSignalTask(taskId)
@@ -2650,14 +2695,20 @@ async function pollSwotSignalTask(taskId, symbol) {
     const status = response?.task_meta?.status || ''
     const resultStatus = response?.base_result?.summary?.status || ''
     if (status === 'failed') {
+      const mode = signalCollectionMode.value
       clearSignalCollectionPolling()
       signalCollectionError.value = true
-      signalCollectionMessage.value = response?.task_meta?.error || '机会与风险搜集分析失败'
+      signalCollectionMessage.value = response?.task_meta?.error
+        || (mode === 'news-url' ? '新闻链接分析失败' : '机会与风险搜集分析失败')
       return
     }
     if (status === 'completed' || status === 'completed_with_parse_error') {
+      const mode = signalCollectionMode.value
       clearSignalCollectionPolling()
-      if (resultStatus === 'skipped_unchanged') {
+      const summary = response?.base_result?.summary || {}
+      if (mode === 'news-url') {
+        signalCollectionMessage.value = formatNewsUrlTaskMessage(summary, status)
+      } else if (resultStatus === 'skipped_unchanged') {
         signalCollectionMessage.value = '证据没有变化，已保留当前机会与风险判断。'
       } else {
         signalCollectionMessage.value = status === 'completed_with_parse_error'
