@@ -2623,6 +2623,30 @@ function clearSignalCollectionPolling() {
   signalCollectionMode.value = ''
 }
 
+function friendlyNewsUrlError(rawError = '') {
+  const text = String(rawError || '').toLowerCase()
+  if (!text) return '新闻链接分析失败，请稍后重试'
+  if (text.includes('too short') || text.includes('empty')) {
+    return '无法从该链接提取正文（可能需要登录或由脚本动态渲染），请换一个正文可直接访问的新闻链接'
+  }
+  if (text.includes('unsupported content type')) {
+    return '该链接不是网页文章（可能是 PDF 或其它类型），暂不支持分析'
+  }
+  if (text.includes('blocked') || text.includes('resolve') || text.includes('not allowed')) {
+    return '该链接指向的地址不可访问或被拦截，请确认是公开可访问的新闻链接'
+  }
+  if (text.includes('too large')) {
+    return '页面内容过大，无法分析，请更换链接'
+  }
+  if (text.includes('status') || text.includes('redirect') || text.includes('fetch')) {
+    return '抓取新闻失败（目标站点返回错误或拒绝访问），请稍后重试或更换链接'
+  }
+  if (text.includes('json') || text.includes('parse')) {
+    return '分析结果解析失败，请稍后重试'
+  }
+  return '新闻链接分析失败，请稍后重试'
+}
+
 function formatNewsUrlTaskMessage(summary = {}, status = 'completed') {
   if (summary.status === 'no_material_impact') {
     return '未发现对该股票的实质影响。'
@@ -2698,8 +2722,11 @@ async function pollSwotSignalTask(taskId, symbol) {
       const mode = signalCollectionMode.value
       clearSignalCollectionPolling()
       signalCollectionError.value = true
-      signalCollectionMessage.value = response?.task_meta?.error
-        || (mode === 'news-url' ? '新闻链接分析失败' : '机会与风险搜集分析失败')
+      if (mode === 'news-url') {
+        signalCollectionMessage.value = friendlyNewsUrlError(response?.task_meta?.error)
+      } else {
+        signalCollectionMessage.value = response?.task_meta?.error || '机会与风险搜集分析失败'
+      }
       return
     }
     if (status === 'completed' || status === 'completed_with_parse_error') {
