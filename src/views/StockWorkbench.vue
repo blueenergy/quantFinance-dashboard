@@ -1238,6 +1238,7 @@
             :name="stockName"
             :swot="swotPayload.swot"
             :signal-review="swotPayload.signal_review"
+            :internal-signal-review="swotPayload.internal_signal_review"
             :industry-reference="swotPayload.industry_signal_reference"
             :data-status="swotPayload.data_status"
             :loading="sectionLoading.signals"
@@ -1245,9 +1246,13 @@
             :collecting="signalCollecting"
             :collection-message="signalCollectionMessage"
             :collection-error="signalCollectionError"
+            :internal-refreshing="internalSignalRefreshing"
+            :internal-refresh-message="internalSignalRefreshMessage"
+            :internal-refresh-error="internalSignalRefreshError"
             @changed="refreshSwotSection"
             @retry="refreshSwotSection"
             @collect="collectSwotSignals"
+            @refresh-internal="refreshInternalSwotSignals"
             @analyze-url="analyzeSwotNewsUrl"
           />
         </v-window-item>
@@ -1475,6 +1480,7 @@ import {
   getStockWorkbenchSignals,
   getStockWorkbenchTrading,
   getStockWorkbenchValuation,
+  refreshStockWorkbenchInternalSignals,
 } from '../api/stock'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
 import GrowthChart from '../components/GrowthChart.vue'
@@ -1528,6 +1534,9 @@ const swotError = ref('')
 const signalCollecting = ref(false)
 const signalCollectionMessage = ref('')
 const signalCollectionError = ref(false)
+const internalSignalRefreshing = ref(false)
+const internalSignalRefreshMessage = ref('')
+const internalSignalRefreshError = ref(false)
 const holderNumberTableExpanded = ref(false)
 const shareholderTradesExpanded = ref(false)
 const shareFloatExpanded = ref(false)
@@ -2327,6 +2336,8 @@ async function loadSymbol(symbol) {
     analysisSubmitError.value = ''
     signalCollectionMessage.value = ''
     signalCollectionError.value = false
+    internalSignalRefreshMessage.value = ''
+    internalSignalRefreshError.value = false
     sectionLoaded.value = { quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false, signals: false }
     sectionLoading.value = { quote: false, nine_turn: false, scores: false, financials: false, valuation: false, ai: false, trading: false, shareholders: false, signals: false }
     swotError.value = ''
@@ -2620,6 +2631,7 @@ function clearSignalCollectionPolling() {
   }
   signalCollectionPollCount = 0
   signalCollecting.value = false
+  internalSignalRefreshing.value = false
   signalCollectionMode.value = ''
 }
 
@@ -2675,7 +2687,7 @@ function formatNewsUrlTaskMessage(summary = {}, status = 'completed') {
 
 async function collectSwotSignals() {
   const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
-  if (!symbol || signalCollecting.value) return
+  if (!symbol || signalCollecting.value || internalSignalRefreshing.value) return
   clearSignalCollectionPolling()
   signalCollecting.value = true
   signalCollectionMode.value = 'collect'
@@ -2695,11 +2707,33 @@ async function collectSwotSignals() {
   }
 }
 
+async function refreshInternalSwotSignals() {
+  const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
+  if (!symbol || signalCollecting.value || internalSignalRefreshing.value) return
+  clearSignalCollectionPolling()
+  internalSignalRefreshing.value = true
+  signalCollectionMode.value = 'internal'
+  internalSignalRefreshError.value = false
+  internalSignalRefreshMessage.value = '已提交优势与劣势规则评估，等待任务处理…'
+  try {
+    const task = await refreshStockWorkbenchInternalSignals(symbol)
+    if (!task?.task_id) throw new Error('分析任务未返回 task_id')
+    internalSignalRefreshMessage.value = task.reused
+      ? '已有该股票的优势与劣势评估任务正在运行…'
+      : '正在读取财务指标并评估优势与劣势…'
+    await pollSwotSignalTask(task.task_id, symbol)
+  } catch (e) {
+    clearSignalCollectionPolling()
+    internalSignalRefreshError.value = true
+    internalSignalRefreshMessage.value = e?.message || '优势与劣势规则评估提交失败'
+  }
+}
+
 async function analyzeSwotNewsUrl(payload) {
   const url = typeof payload === 'string' ? payload : payload?.url
   const findingKey = typeof payload === 'string' ? '' : (payload?.findingKey || '')
   const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
-  if (!symbol || signalCollecting.value || !url) return
+  if (!symbol || signalCollecting.value || internalSignalRefreshing.value || !url) return
   clearSignalCollectionPolling()
   signalCollecting.value = true
   signalCollectionMode.value = 'news-url'
@@ -2729,13 +2763,17 @@ async function pollSwotSignalTask(taskId, symbol) {
       return
     }
     const status = response?.task_meta?.status || ''
-    const resultStatus = response?.base_result?.summary?.status || ''
+    const resultStatus = response?.base_result?.summary?.status || response?.base_result?.status || ''
     if (status === 'failed') {
       const mode = signalCollectionMode.value
       clearSignalCollectionPolling()
       signalCollectionError.value = true
       if (mode === 'news-url') {
         signalCollectionMessage.value = friendlyNewsUrlError(response?.task_meta?.error)
+      } else if (mode === 'internal') {
+        signalCollectionError.value = false
+        internalSignalRefreshError.value = true
+        internalSignalRefreshMessage.value = response?.task_meta?.error || '优势与劣势规则评估失败'
       } else {
         signalCollectionMessage.value = response?.task_meta?.error || '机会与风险搜集分析失败'
       }
@@ -2747,6 +2785,12 @@ async function pollSwotSignalTask(taskId, symbol) {
       const summary = response?.base_result?.summary || {}
       if (mode === 'news-url') {
         signalCollectionMessage.value = formatNewsUrlTaskMessage(summary, status)
+      } else if (mode === 'internal') {
+        const counts = response?.base_result?.result_counts || {}
+        internalSignalRefreshMessage.value = resultStatus === 'skipped_unchanged'
+          ? '内部财务证据没有变化，已保留当前优势与劣势判断。'
+          : `优势与劣势评估完成：${Number(counts.strength || 0)} 条优势、${Number(counts.weakness || 0)} 条劣势。`
+        internalSignalRefreshError.value = false
       } else if (resultStatus === 'skipped_unchanged') {
         signalCollectionMessage.value = '证据没有变化，已保留当前机会与风险判断。'
       } else {
@@ -2760,9 +2804,15 @@ async function pollSwotSignalTask(taskId, symbol) {
     }
     signalCollectionPollCount += 1
     if (signalCollectionPollCount >= 90) {
+      const mode = signalCollectionMode.value
       clearSignalCollectionPolling()
-      signalCollectionError.value = true
-      signalCollectionMessage.value = '分析任务处理时间较长，请稍后重新进入 SWOT 查看结果。'
+      if (mode === 'internal') {
+        internalSignalRefreshError.value = true
+        internalSignalRefreshMessage.value = '规则评估任务处理时间较长，请稍后重新进入 SWOT 查看结果。'
+      } else {
+        signalCollectionError.value = true
+        signalCollectionMessage.value = '分析任务处理时间较长，请稍后重新进入 SWOT 查看结果。'
+      }
       return
     }
     signalCollectionTimer = window.setTimeout(
@@ -2770,9 +2820,15 @@ async function pollSwotSignalTask(taskId, symbol) {
       2000,
     )
   } catch (e) {
+    const mode = signalCollectionMode.value
     clearSignalCollectionPolling()
-    signalCollectionError.value = true
-    signalCollectionMessage.value = e?.message || '机会与风险分析任务查询失败'
+    if (mode === 'internal') {
+      internalSignalRefreshError.value = true
+      internalSignalRefreshMessage.value = e?.message || '优势与劣势任务查询失败'
+    } else {
+      signalCollectionError.value = true
+      signalCollectionMessage.value = e?.message || '机会与风险分析任务查询失败'
+    }
   }
 }
 

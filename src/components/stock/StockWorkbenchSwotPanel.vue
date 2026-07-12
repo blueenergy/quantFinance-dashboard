@@ -14,10 +14,18 @@
         <button
           type="button"
           class="swot-collect-btn"
-          :disabled="collecting || loading"
+          :disabled="collecting || internalRefreshing || loading"
           @click="$emit('collect')"
         >
           {{ collecting ? '正在搜集分析…' : '搜集分析机会与风险' }}
+        </button>
+        <button
+          type="button"
+          class="swot-internal-btn"
+          :disabled="collecting || internalRefreshing || loading || dataStatus.internal_signal_enabled === false"
+          @click="$emit('refresh-internal')"
+        >
+          {{ internalRefreshing ? '正在分析财务信号…' : '刷新优势与劣势' }}
         </button>
         <form class="swot-url-form" @submit.prevent="submitNewsUrl">
           <input
@@ -25,12 +33,12 @@
             type="url"
             class="swot-url-input"
             placeholder="粘贴新闻链接"
-            :disabled="collecting || loading"
+            :disabled="collecting || internalRefreshing || loading"
           >
           <button
             type="submit"
             class="swot-url-btn"
-            :disabled="collecting || loading || !newsUrlInput"
+            :disabled="collecting || internalRefreshing || loading || !newsUrlInput"
           >
             {{ collecting ? '分析中…' : '分析链接' }}
           </button>
@@ -46,12 +54,27 @@
     >
       {{ collectionMessage }}
     </div>
+    <div
+      v-if="internalRefreshMessage"
+      class="swot-collection-status"
+      :class="{ 'is-error': internalRefreshError }"
+      role="status"
+    >
+      {{ internalRefreshMessage }}
+    </div>
 
     <div v-if="signalReview" class="signal-review-banner">
       <span>最近 AI 信号复核</span>
       <strong>{{ signalReview.last_run_status || '已分析' }}</strong>
       <small v-if="signalReview.analyzed_at">分析 {{ signalReview.analyzed_at }}</small>
       <small v-if="signalReview.evidence_count != null">证据 {{ signalReview.evidence_count }} 条</small>
+    </div>
+    <div v-if="internalSignalReview" class="signal-review-banner internal-review-banner">
+      <span>最近 S/W 规则评估</span>
+      <strong>{{ internalSignalReview.last_run_status || '已分析' }}</strong>
+      <small v-if="internalSignalReview.analyzed_at">分析 {{ internalSignalReview.analyzed_at }}</small>
+      <small v-if="internalSignalReview.engine_version">引擎 {{ internalSignalReview.engine_version }}</small>
+      <small>输入 {{ completenessLabel(internalSignalReview.input_completeness) }}</small>
     </div>
 
     <div v-if="error" class="swot-error" role="alert">
@@ -89,20 +112,25 @@
             v-for="finding in quadrant.findings"
             :key="finding.finding_key || finding.summary"
             class="swot-finding-item"
-            role="button"
-            tabindex="0"
-            @click="openFinding(quadrant.mode, $event)"
-            @keydown.enter.stop="openFinding(quadrant.mode, $event)"
+            :class="{ 'is-interactive': quadrant.interactive }"
+            :role="quadrant.interactive ? 'button' : undefined"
+            :tabindex="quadrant.interactive ? 0 : undefined"
+            @click="quadrant.interactive && openFinding(quadrant.mode, $event)"
+            @keydown.enter.stop="quadrant.interactive && openFinding(quadrant.mode, $event)"
           >
             <span class="swot-finding-level" :class="levelClass(quadrant.mode, finding)">
               {{ levelLabel(quadrant.mode, finding) }}
             </span>
-            <span class="swot-finding-text">{{ finding.summary || finding.subject || finding.finding_key }}</span>
+            <span class="swot-finding-content">
+              <span class="swot-finding-text">{{ finding.summary || finding.subject || finding.finding_key }}</span>
+              <small v-if="finding.detail">{{ finding.detail }}</small>
+              <small v-if="finding.evidence_version">证据版本 {{ finding.evidence_version }}</small>
+            </span>
           </li>
         </ul>
 
         <button
-          v-if="!quadrant.planned && (quadrant.findings.length || quadrant.mode === 'risk')"
+          v-if="quadrant.interactive && (quadrant.findings.length || quadrant.mode === 'risk')"
           type="button"
           class="swot-detail-btn"
           @click="openFinding(quadrant.mode, $event)"
@@ -183,6 +211,7 @@ const props = defineProps({
   name: { type: String, default: '' },
   swot: { type: Object, default: () => ({}) },
   signalReview: { type: Object, default: null },
+  internalSignalReview: { type: Object, default: null },
   industryReference: { type: Object, default: () => ({}) },
   dataStatus: { type: Object, default: () => ({}) },
   loading: { type: Boolean, default: false },
@@ -190,9 +219,12 @@ const props = defineProps({
   collecting: { type: Boolean, default: false },
   collectionMessage: { type: String, default: '' },
   collectionError: { type: Boolean, default: false },
+  internalRefreshing: { type: Boolean, default: false },
+  internalRefreshMessage: { type: String, default: '' },
+  internalRefreshError: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['changed', 'retry', 'collect', 'analyze-url'])
+const emit = defineEmits(['changed', 'retry', 'collect', 'refresh-internal', 'analyze-url'])
 
 const newsUrlInput = ref('')
 
@@ -207,7 +239,7 @@ function isValidHttpUrl(value) {
 
 function submitNewsUrl() {
   const url = newsUrlInput.value.trim()
-  if (!url || props.collecting || props.loading) return
+  if (!url || props.collecting || props.internalRefreshing || props.loading) return
   if (!isValidHttpUrl(url)) {
     window.alert('请输入有效的 http/https 新闻链接')
     return
@@ -217,7 +249,7 @@ function submitNewsUrl() {
 
 function submitFindingNewsUrl({ findingKey, url } = {}) {
   const trimmed = String(url || '').trim()
-  if (!trimmed || !findingKey || props.collecting || props.loading) return
+  if (!trimmed || !findingKey || props.collecting || props.internalRefreshing || props.loading) return
   if (!isValidHttpUrl(trimmed)) {
     window.alert('请输入有效的 http/https 新闻链接')
     return
@@ -260,24 +292,30 @@ const quadrants = computed(() => {
       title: '优势 Strength',
       planned: strength.status === 'planned',
       placeholder: '优势维度尚未接入，后续将从量化评分与基本面提炼。',
-      mode: 'risk',
-      findings: [],
-      summary: '',
-      badge: '',
-      badgeClass: '',
-      emptyText: '',
+      mode: 'strength',
+      interactive: false,
+      findings: Array.isArray(strength.findings) ? strength.findings : [],
+      summary: strength.summary || '',
+      badge: strengthBadge(strength.strength),
+      badgeClass: `opportunity-${strength.strength || 'none'}`,
+      emptyText: strength.status === 'not_analyzed'
+        ? '尚未执行优势规则评估。'
+        : '已评估，暂无活跃优势信号。',
     },
     {
       key: 'weakness',
       title: '劣势 Weakness',
       planned: weakness.status === 'planned',
       placeholder: '劣势维度尚未接入，后续将从财务弱点与估值压力提炼。',
-      mode: 'risk',
-      findings: [],
-      summary: '',
-      badge: '',
-      badgeClass: '',
-      emptyText: '',
+      mode: 'weakness',
+      interactive: false,
+      findings: Array.isArray(weakness.findings) ? weakness.findings : [],
+      summary: weakness.summary || '',
+      badge: severityBadge(weakness.severity),
+      badgeClass: `risk-${weakness.severity || 'none'}`,
+      emptyText: weakness.status === 'not_analyzed'
+        ? '尚未执行劣势规则评估。'
+        : '已评估，暂无活跃劣势信号。',
     },
     {
       key: 'opportunity',
@@ -285,6 +323,7 @@ const quadrants = computed(() => {
       planned: false,
       placeholder: '',
       mode: 'opportunity',
+      interactive: true,
       findings: Array.isArray(opportunity.findings) ? opportunity.findings : [],
       summary: opportunity.summary || '未发现明确 LLM 机会',
       badge: strengthBadge(opportunity.strength),
@@ -297,6 +336,7 @@ const quadrants = computed(() => {
       planned: false,
       placeholder: '',
       mode: 'risk',
+      interactive: true,
       findings: Array.isArray(threat.findings) ? threat.findings : [],
       summary: threat.summary || '未发现明确 LLM 事件风险',
       badge: severityBadge(threat.severity),
@@ -351,13 +391,20 @@ function strengthBadge(strength) {
 }
 
 function levelLabel(mode, finding) {
-  if (mode === 'opportunity') return strengthBadge(finding.strength)
+  if (mode === 'opportunity' || mode === 'strength') return strengthBadge(finding.strength)
   return severityBadge(finding.severity)
 }
 
 function levelClass(mode, finding) {
-  if (mode === 'opportunity') return `opportunity-${finding.strength || 'none'}`
+  if (mode === 'opportunity' || mode === 'strength') return `opportunity-${finding.strength || 'none'}`
   return `risk-${finding.severity || 'none'}`
+}
+
+function completenessLabel(value) {
+  if (value === 'complete') return '完整'
+  if (value === 'partial') return '部分完整'
+  if (value === 'insufficient') return '不足'
+  return '未知'
 }
 
 function openFinding(mode, event) {
@@ -404,7 +451,8 @@ function openFinding(mode, event) {
   gap: 8px;
 }
 
-.swot-collect-btn {
+.swot-collect-btn,
+.swot-internal-btn {
   background: #4338ca;
   border: 1px solid #4338ca;
   border-radius: 7px;
@@ -415,13 +463,23 @@ function openFinding(mode, event) {
   padding: 7px 14px;
 }
 
-.swot-collect-btn:disabled {
+.swot-internal-btn {
+  background: #fff;
+  color: #4338ca;
+}
+
+.swot-collect-btn:disabled,
+.swot-internal-btn:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
 
 .swot-collect-btn:not(:disabled):hover {
   background: #3730a3;
+}
+
+.swot-internal-btn:not(:disabled):hover {
+  background: #eef2ff;
 }
 
 .swot-url-form {
@@ -630,13 +688,17 @@ function openFinding(mode, event) {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
-  cursor: pointer;
+  cursor: default;
   display: flex;
   gap: 8px;
   padding: 8px 10px;
 }
 
-.swot-finding-item:hover {
+.swot-finding-item.is-interactive {
+  cursor: pointer;
+}
+
+.swot-finding-item.is-interactive:hover {
   background: #eef2ff;
   border-color: #c7d2fe;
 }
@@ -662,6 +724,18 @@ function openFinding(mode, event) {
   color: #1e293b;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.swot-finding-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.swot-finding-content small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .swot-detail-btn {

@@ -243,7 +243,7 @@ export async function getStockWorkbenchShareholders(symbol) {
 }
 
 /**
- * 获取股票工作台 SWOT 信号分区（台账 O/T；S/W 预留）
+ * 获取股票工作台 SWOT 信号分区
  * @param {string} symbol - 股票代码
  */
 export async function getStockWorkbenchSignals(symbol) {
@@ -270,6 +270,25 @@ export async function collectStockWorkbenchSignals(symbol) {
     });
 
     if (!res.ok) throw new Error(`Failed to collect stock workbench signals: ${res.status}`);
+    const result = await res.json();
+    return result.data;
+}
+
+/**
+ * 刷新单只股票的规则型优势与劣势信号
+ */
+export async function refreshStockWorkbenchInternalSignals(symbol, { force = false } = {}) {
+    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/signals/refresh-internal`;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+            ...authHeaders(),
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ force }),
+    });
+
+    if (!res.ok) throw new Error(`Failed to refresh internal stock signals: ${res.status}`);
     const result = await res.json();
     return result.data;
 }

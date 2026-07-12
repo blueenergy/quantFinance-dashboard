@@ -45,6 +45,14 @@ describe('StockWorkbenchSwotPanel collection action', () => {
     expect(wrapper.get('.swot-collection-status').text()).toContain('正在搜集分析')
   })
 
+  it('emits refresh-internal from the S/W analysis button', async () => {
+    const wrapper = mountPanel()
+
+    await wrapper.get('.swot-internal-btn').trigger('click')
+
+    expect(wrapper.emitted('refresh-internal')).toHaveLength(1)
+  })
+
   it('renders industry signals as read-only references', () => {
     const wrapper = mountPanel({
       industryReference: {
@@ -67,6 +75,57 @@ describe('StockWorkbenchSwotPanel collection action', () => {
     expect(wrapper.get('.industry-reference-head').text()).toContain('玻璃')
     expect(wrapper.get('.industry-finding-list').text()).toContain('玻璃玻纤行业景气修复')
     expect(wrapper.text()).toContain('不等同于该股票自身结论')
+  })
+})
+
+
+describe('StockWorkbenchSwotPanel internal S/W findings', () => {
+  it('renders active rule findings and internal review metadata', () => {
+    const wrapper = mountPanel({
+      swot: {
+        strength: {
+          status: 'completed',
+          strength: 'high',
+          summary: 'ROE 水平较高且处于行业前列',
+          findings: [
+            {
+              finding_key: 'profitability.roe_high',
+              strength: 'high',
+              summary: 'ROE 水平较高且处于行业前列',
+              detail: 'roe_level=18 percent；行业百分位=90（样本 20）',
+              evidence_version: '20260331:abc',
+            },
+          ],
+        },
+        weakness: {
+          status: 'completed',
+          severity: 'medium',
+          findings: [
+            {
+              finding_key: 'leverage.debt_elevated',
+              severity: 'medium',
+              summary: '资产负债率较高且处于行业高位',
+            },
+          ],
+        },
+        opportunity: { strength: 'none', findings: [] },
+        threat: { severity: 'none', findings: [] },
+      },
+      internalSignalReview: {
+        last_run_status: 'analyzed',
+        engine_version: 'sw-mvp-v1',
+        input_completeness: 'complete',
+      },
+    })
+
+    expect(wrapper.get('.swot-quadrant--strength').text()).toContain('ROE 水平较高')
+    expect(wrapper.get('.swot-quadrant--strength').text()).toContain('证据版本')
+    expect(wrapper.get('.swot-quadrant--weakness').text()).toContain('资产负债率较高')
+    expect(wrapper.get('.internal-review-banner').text()).toContain('sw-mvp-v1')
+    expect(wrapper.get('.internal-review-banner').text()).toContain('输入 完整')
+    expect(
+      wrapper.get('.swot-quadrant--strength .swot-finding-item').attributes('role'),
+    ).toBeUndefined()
   })
 })
 
