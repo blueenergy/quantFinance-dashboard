@@ -2648,6 +2648,14 @@ function friendlyNewsUrlError(rawError = '') {
 }
 
 function formatNewsUrlTaskMessage(summary = {}, status = 'completed') {
+  if (summary.status === 'unrelated_to_tracked_risk') {
+    return summary.relation_reason
+      ? `该新闻与所跟踪风险无直接关联，未更新：${summary.relation_reason}`
+      : '该新闻与所跟踪风险无直接关联，未更新。'
+  }
+  if (summary.status === 'follow_up_updated') {
+    return '已更新所跟踪风险的最新进展，SWOT 已刷新。'
+  }
   if (summary.status === 'no_material_impact') {
     return '未发现对该股票的实质影响。'
   }
@@ -2687,16 +2695,20 @@ async function collectSwotSignals() {
   }
 }
 
-async function analyzeSwotNewsUrl(url) {
+async function analyzeSwotNewsUrl(payload) {
+  const url = typeof payload === 'string' ? payload : payload?.url
+  const findingKey = typeof payload === 'string' ? '' : (payload?.findingKey || '')
   const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
   if (!symbol || signalCollecting.value || !url) return
   clearSignalCollectionPolling()
   signalCollecting.value = true
   signalCollectionMode.value = 'news-url'
   signalCollectionError.value = false
-  signalCollectionMessage.value = '已提交新闻链接分析，正在抓取正文…'
+  signalCollectionMessage.value = findingKey
+    ? '已提交后续新闻，正在核对与所跟踪风险的关联…'
+    : '已提交新闻链接分析，正在抓取正文…'
   try {
-    const task = await analyzeStockWorkbenchNewsUrl(symbol, { url })
+    const task = await analyzeStockWorkbenchNewsUrl(symbol, { url, findingKey })
     if (!task?.task_id) throw new Error('分析任务未返回 task_id')
     signalCollectionMessage.value = task.reused
       ? '已有该新闻链接分析任务正在运行…'

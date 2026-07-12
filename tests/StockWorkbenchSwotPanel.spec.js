@@ -107,4 +107,50 @@ describe('StockWorkbenchSwotPanel news url action', () => {
     expect(wrapper.get('.swot-url-btn').text()).toContain('分析中')
     wrapper.unmount()
   })
+
+  it('emits analyze-url with finding_key when submitting a follow-up news link', async () => {
+    const wrapper = mountPanel({
+      swot: {
+        strength: { status: 'planned', findings: [] },
+        weakness: { status: 'planned', findings: [] },
+        opportunity: { strength: 'none', findings: [] },
+        threat: {
+          severity: 'medium',
+          summary: '存在诉讼风险',
+          findings: [
+            {
+              finding_key: 'legal_compliance:诉讼案件尚未开庭',
+              severity: 'medium',
+              summary: '诉讼案件尚未开庭，结果存在不确定性',
+              detail: '涉案金额超3.3亿元。',
+            },
+          ],
+        },
+      },
+    })
+
+    await wrapper.get('.swot-quadrant--threat .swot-detail-btn').trigger('click')
+    const panel = document.body.querySelector('.llm-detail-panel')
+    expect(panel).not.toBeNull()
+
+    const followUpBtn = Array.from(panel.querySelectorAll('.llm-action-btn'))
+      .find((btn) => btn.textContent.includes('补充后续新闻'))
+    expect(followUpBtn).toBeTruthy()
+    followUpBtn.click()
+    await wrapper.vm.$nextTick()
+
+    const input = panel.querySelector('.llm-followup-input')
+    expect(input).not.toBeNull()
+    input.value = 'https://finance.example.com/news/verdict'
+    input.dispatchEvent(new Event('input'))
+    await wrapper.vm.$nextTick()
+
+    panel.querySelector('.llm-followup-form').dispatchEvent(new Event('submit'))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('analyze-url')).toEqual([
+      [{ url: 'https://finance.example.com/news/verdict', findingKey: 'legal_compliance:诉讼案件尚未开庭' }],
+    ])
+    wrapper.unmount()
+  })
 })

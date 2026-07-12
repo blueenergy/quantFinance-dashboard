@@ -277,15 +277,17 @@ export async function collectStockWorkbenchSignals(symbol) {
 /**
  * 提交新闻链接，触发后台抓取与 LLM 风险/机会分析
  */
-export async function analyzeStockWorkbenchNewsUrl(symbol, { url }) {
+export async function analyzeStockWorkbenchNewsUrl(symbol, { url, findingKey } = {}) {
     const endpoint = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/signals/analyze-url`;
+    const body = { url };
+    if (findingKey) body.finding_key = findingKey;
     const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
             ...authHeaders(),
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify(body),
     });
 
     if (!res.ok) throw new Error(`Failed to analyze stock workbench news url: ${res.status}`);

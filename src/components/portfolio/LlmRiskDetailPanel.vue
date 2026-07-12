@@ -101,7 +101,38 @@
               >
                 手动解除
               </button>
+              <button
+                v-if="allowNewsFollowUp && !isOpportunity"
+                type="button"
+                class="llm-action-btn"
+                :disabled="actionBusy"
+                @click="toggleFollowUp(finding.finding_key)"
+              >
+                {{ followUpKey === finding.finding_key ? '收起' : '补充后续新闻' }}
+              </button>
             </div>
+            <form
+              v-if="allowNewsFollowUp && !isOpportunity && finding.finding_key && followUpKey === finding.finding_key"
+              class="llm-followup-form"
+              @submit.prevent="submitFollowUp(finding.finding_key)"
+            >
+              <p class="llm-followup-hint">粘贴该风险的后续新闻链接；仅当与本风险相关时才会更新，不相关不会强行挂载。</p>
+              <div class="llm-followup-row">
+                <input
+                  v-model.trim="followUpUrl"
+                  type="url"
+                  class="llm-followup-input"
+                  placeholder="粘贴后续新闻链接"
+                >
+                <button
+                  type="submit"
+                  class="llm-action-btn llm-action-btn--primary"
+                  :disabled="actionBusy || !followUpUrl"
+                >
+                  分析
+                </button>
+              </div>
+            </form>
           </div>
         </div>
 
@@ -147,6 +178,7 @@ const props = defineProps({
   max: { type: Number, default: 30 },
   copied: { type: Boolean, default: false },
   actionBusy: { type: Boolean, default: false },
+  allowNewsFollowUp: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
@@ -159,6 +191,7 @@ const emit = defineEmits([
   'realize-opportunity',
   'invalidate-opportunity',
   'manual-add',
+  'analyze-finding-url',
 ])
 
 const showAddForm = ref(false)
@@ -167,13 +200,31 @@ const addForm = reactive({
   summary: '',
   detail: '',
 })
+const followUpKey = ref('')
+const followUpUrl = ref('')
 
 watch(() => props.detail?.key, () => {
   showAddForm.value = false
   addForm.severity = 'medium'
   addForm.summary = ''
   addForm.detail = ''
+  followUpKey.value = ''
+  followUpUrl.value = ''
 })
+
+function toggleFollowUp(findingKey) {
+  if (!findingKey) return
+  followUpKey.value = followUpKey.value === findingKey ? '' : findingKey
+  followUpUrl.value = ''
+}
+
+function submitFollowUp(findingKey) {
+  const url = followUpUrl.value.trim()
+  if (!url || !findingKey) return
+  emit('analyze-finding-url', { findingKey, url })
+  followUpKey.value = ''
+  followUpUrl.value = ''
+}
 
 const findings = computed(() => {
   const source = isOpportunity.value ? props.detail?.opportunity : props.detail?.risk
@@ -456,5 +507,38 @@ function submitManualAdd() {
   border-radius: 4px;
   font-size: 12px;
   padding: 4px 6px;
+}
+
+.llm-followup-form {
+  margin-top: 8px;
+}
+
+.llm-followup-hint {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0 0 6px;
+}
+
+.llm-followup-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.llm-followup-input {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #1e293b;
+  flex: 1 1 auto;
+  font-size: 12px;
+  min-width: 0;
+  padding: 4px 6px;
+}
+
+.llm-followup-input:focus {
+  border-color: #4338ca;
+  outline: none;
 }
 </style>

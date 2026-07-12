@@ -158,6 +158,7 @@
       :max="LLM_FONT_MAX"
       :copied="copiedLlmRiskKey === llmDetail?.key"
       :action-busy="actionBusy"
+      :allow-news-follow-up="true"
       @inc="incLlmFont"
       @dec="decLlmFont"
       @copy="copyLlmRisk(llmDetail?.mode === 'opportunity' ? llmDetail?.opportunity : llmDetail?.risk, llmDetail?.key, llmDetail?.mode)"
@@ -167,6 +168,7 @@
       @realize-opportunity="realizeOpportunity"
       @invalidate-opportunity="invalidateOpportunity"
       @manual-add="manualAddRisk"
+      @analyze-finding-url="submitFindingNewsUrl"
     />
   </section>
 </template>
@@ -211,6 +213,17 @@ function submitNewsUrl() {
     return
   }
   emit('analyze-url', url)
+}
+
+function submitFindingNewsUrl({ findingKey, url } = {}) {
+  const trimmed = String(url || '').trim()
+  if (!trimmed || !findingKey || props.collecting || props.loading) return
+  if (!isValidHttpUrl(trimmed)) {
+    window.alert('请输入有效的 http/https 新闻链接')
+    return
+  }
+  closeLlmDetail()
+  emit('analyze-url', { url: trimmed, findingKey })
 }
 
 const {
