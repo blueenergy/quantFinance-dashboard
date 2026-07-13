@@ -221,6 +221,7 @@
         :holdings-risk-by-symbol="holdingsRiskBySymbol"
         :holding-plan-risk-by-symbol="holdingPlanRiskBySymbol"
         :holding-plan-opportunity-by-symbol="holdingPlanOpportunityBySymbol"
+        :holding-plan-internal-swot-by-symbol="holdingPlanInternalSwotBySymbol"
         :holdings-risk-by-symbol-high="holdingsRiskBySymbolHigh"
         :bench-data="benchData"
         :bench-expanded="benchExpanded"
@@ -628,6 +629,16 @@ const holdingPlanOpportunityBySymbol = computed(() => {
     map[row.symbol] = row.ai_opportunity
     const bareSymbol = String(row.symbol).split('.')[0]
     if (bareSymbol) map[bareSymbol] = row.ai_opportunity
+  }
+  return map
+})
+const holdingPlanInternalSwotBySymbol = computed(() => {
+  const map = {}
+  for (const row of planTargetRows.value) {
+    if (!row?.symbol || !row.internal_swot) continue
+    map[row.symbol] = row.internal_swot
+    const bareSymbol = String(row.symbol).split('.')[0]
+    if (bareSymbol) map[bareSymbol] = row.internal_swot
   }
   return map
 })

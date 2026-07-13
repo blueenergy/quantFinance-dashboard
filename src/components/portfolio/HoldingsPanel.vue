@@ -137,6 +137,22 @@
                   @click.stop="openLlm(holdingRowOpportunity(row), row, 'holding-opp', $event, 'opportunity')"
                   @keydown.enter.stop="openLlm(holdingRowOpportunity(row), row, 'holding-opp', $event, 'opportunity')"
                 >机会</span>
+                <AppLink
+                  v-for="finding in internalSwotFindings(row, 'strength')"
+                  :key="`holding-strength-${finding.finding_key}`"
+                  class="internal-swot-tag internal-swot-tag--strength"
+                  :href="internalSwotHref(row.symbol, 'strength', finding.finding_key)"
+                  :title="finding.summary || finding.finding_key"
+                  @click.stop
+                >优势</AppLink>
+                <AppLink
+                  v-for="finding in internalSwotFindings(row, 'weakness')"
+                  :key="`holding-weakness-${finding.finding_key}`"
+                  class="internal-swot-tag internal-swot-tag--weakness"
+                  :href="internalSwotHref(row.symbol, 'weakness', finding.finding_key)"
+                  :title="finding.summary || finding.finding_key"
+                  @click.stop
+                >劣势</AppLink>
               </div>
             </td>
           </tr>
@@ -344,6 +360,7 @@ import { computed, ref } from 'vue'
 import AppLink from '../common/AppLink.vue'
 import LlmRiskDetailPanel from './LlmRiskDetailPanel.vue'
 import { useLlmRiskDetail } from '../../composables/useLlmRiskDetail'
+import { buildDeepLinkHref } from '../../utils/appDeepLinks.js'
 import {
   formatShareDelta,
   aiRiskTitle,
@@ -368,6 +385,7 @@ const props = defineProps({
   holdingsRiskBySymbol: { type: Object, default: () => ({}) },
   holdingPlanRiskBySymbol: { type: Object, default: () => ({}) },
   holdingPlanOpportunityBySymbol: { type: Object, default: () => ({}) },
+  holdingPlanInternalSwotBySymbol: { type: Object, default: () => ({}) },
   holdingsRiskBySymbolHigh: { type: Array, default: () => [] },
   benchData: { type: Object, default: null },
   benchExpanded: { type: Boolean, default: false },
@@ -454,6 +472,24 @@ function holdingRowRisk(row) {
 
 function holdingRowOpportunity(row) {
   return symbolRisk(props.holdingPlanOpportunityBySymbol, row?.symbol) || row?.ai_opportunity || null
+}
+
+function holdingInternalSwot(row) {
+  return symbolRisk(props.holdingPlanInternalSwotBySymbol, row?.symbol) || row?.internal_swot || null
+}
+
+function internalSwotFindings(row, dimension) {
+  const findings = holdingInternalSwot(row)?.[dimension]?.findings
+  return Array.isArray(findings) ? findings : []
+}
+
+function internalSwotHref(symbol, dimension, findingKey) {
+  return buildDeepLinkHref('stock-workbench', {
+    symbol,
+    panel: 'swot',
+    dimension,
+    findingKey,
+  })
 }
 
 function benchRowRisk(row) {
@@ -754,6 +790,29 @@ tfoot td {
   background: #f1f5f9;
   border-color: #cbd5e1;
   color: #64748b;
+}
+
+.internal-swot-tag {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 8px;
+  text-decoration: none;
+}
+
+.internal-swot-tag--strength {
+  background: #eef2ff;
+  border-color: #818cf8;
+  color: #4338ca;
+}
+
+.internal-swot-tag--weakness {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #c2410c;
 }
 
 .risk-row-high {

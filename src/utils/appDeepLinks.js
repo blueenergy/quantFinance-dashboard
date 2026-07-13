@@ -6,7 +6,7 @@
 /** @type {Record<string, string[]>} */
 export const DEEP_LINK_TABS = {
   chart: ['symbol'],
-  'stock-workbench': ['symbol'],
+  'stock-workbench': ['symbol', 'panel', 'dimension', 'findingKey'],
   // Future: 'etf': ['symbol'], 'history': ['symbol'], ...
 }
 

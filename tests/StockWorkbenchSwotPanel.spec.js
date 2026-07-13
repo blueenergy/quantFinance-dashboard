@@ -141,7 +141,7 @@ describe('StockWorkbenchSwotPanel internal S/W findings', () => {
     expect(wrapper.get('.internal-review-banner').text()).toContain('输入 完整')
     expect(
       wrapper.get('.swot-quadrant--strength .swot-finding-item').attributes('role'),
-    ).toBeUndefined()
+    ).toBe('button')
   })
 })
 
@@ -226,6 +226,53 @@ describe('StockWorkbenchSwotPanel news url action', () => {
     expect(wrapper.emitted('analyze-url')).toEqual([
       [{ url: 'https://finance.example.com/news/verdict', findingKey: 'legal_compliance:诉讼案件尚未开庭' }],
     ])
+    wrapper.unmount()
+  })
+})
+
+describe('StockWorkbenchSwotPanel internal findings', () => {
+  it('opens internal detail panel for strength findings', async () => {
+    const wrapper = mountPanel({
+      swot: {
+        strength: {
+          status: 'completed',
+          strength: 'high',
+          findings: [
+            {
+              finding_key: 'profitability.roe_high',
+              summary: 'ROE 较高',
+              rule_condition: { metric: 'roe_level', operator: 'gte', threshold: 15 },
+              evidence: [{ metric: 'roe_level', value: 18, unit: 'percent' }],
+            },
+          ],
+        },
+        weakness: { status: 'not_analyzed', findings: [] },
+        opportunity: { strength: 'none', findings: [] },
+        threat: { severity: 'none', findings: [] },
+      },
+    })
+
+    await wrapper.get('.swot-quadrant--strength .swot-finding-item').trigger('click')
+    expect(document.body.querySelector('.internal-detail-panel')).not.toBeNull()
+    wrapper.unmount()
+  })
+
+  it('shows missing message when pending finding is absent', async () => {
+    const wrapper = mountPanel({
+      pendingFinding: {
+        findingKey: 'missing.rule',
+        dimension: 'strength',
+      },
+      swot: {
+        strength: { status: 'completed', findings: [] },
+        weakness: { status: 'not_analyzed', findings: [] },
+        opportunity: { strength: 'none', findings: [] },
+        threat: { severity: 'none', findings: [] },
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('已关闭或不存在')
     wrapper.unmount()
   })
 })

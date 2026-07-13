@@ -63,6 +63,14 @@
       {{ internalRefreshMessage }}
     </div>
 
+    <div
+      v-if="internalMissingMessage"
+      class="swot-collection-status is-error"
+      role="status"
+    >
+      {{ internalMissingMessage }}
+    </div>
+
     <div v-if="signalReview" class="signal-review-banner">
       <span>最近 AI 信号复核</span>
       <strong>{{ signalReview.last_run_status || '已分析' }}</strong>
@@ -115,8 +123,8 @@
             :class="{ 'is-interactive': quadrant.interactive }"
             :role="quadrant.interactive ? 'button' : undefined"
             :tabindex="quadrant.interactive ? 0 : undefined"
-            @click="quadrant.interactive && openFinding(quadrant.mode, $event)"
-            @keydown.enter.stop="quadrant.interactive && openFinding(quadrant.mode, $event)"
+            @click="quadrant.interactive && openInternalFinding(finding, quadrant.mode, $event)"
+            @keydown.enter.stop="quadrant.interactive && openInternalFinding(finding, quadrant.mode, $event)"
           >
             <span class="swot-finding-level" :class="levelClass(quadrant.mode, finding)">
               {{ levelLabel(quadrant.mode, finding) }}
@@ -179,6 +187,11 @@
       </div>
     </section>
 
+    <InternalSignalDetailPanel
+      :detail="internalDetail"
+      @close="closeInternalDetail"
+    />
+
     <LlmRiskDetailPanel
       :detail="llmDetail"
       :font-px="llmFontPx"
@@ -202,7 +215,8 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import InternalSignalDetailPanel from './InternalSignalDetailPanel.vue'
 import LlmRiskDetailPanel from '../portfolio/LlmRiskDetailPanel.vue'
 import { useLlmRiskDetail } from '../../composables/useLlmRiskDetail'
 
@@ -222,11 +236,14 @@ const props = defineProps({
   internalRefreshing: { type: Boolean, default: false },
   internalRefreshMessage: { type: String, default: '' },
   internalRefreshError: { type: Boolean, default: false },
+  pendingFinding: { type: Object, default: null },
 })
 
 const emit = defineEmits(['changed', 'retry', 'collect', 'refresh-internal', 'analyze-url'])
 
 const newsUrlInput = ref('')
+const internalDetail = ref(null)
+const internalMissingMessage = ref('')
 
 function isValidHttpUrl(value) {
   try {
@@ -293,7 +310,7 @@ const quadrants = computed(() => {
       planned: strength.status === 'planned',
       placeholder: '优势维度尚未接入，后续将从量化评分与基本面提炼。',
       mode: 'strength',
-      interactive: false,
+      interactive: true,
       findings: Array.isArray(strength.findings) ? strength.findings : [],
       summary: strength.summary || '',
       badge: strengthBadge(strength.strength),
@@ -308,7 +325,7 @@ const quadrants = computed(() => {
       planned: weakness.status === 'planned',
       placeholder: '劣势维度尚未接入，后续将从财务弱点与估值压力提炼。',
       mode: 'weakness',
-      interactive: false,
+      interactive: true,
       findings: Array.isArray(weakness.findings) ? weakness.findings : [],
       summary: weakness.summary || '',
       badge: severityBadge(weakness.severity),
@@ -420,6 +437,46 @@ function openFinding(mode, event) {
     event,
   })
 }
+
+function openInternalFinding(finding, dimension, event) {
+  if (!finding) return
+  if (event?.target?.closest('.swot-detail-btn')) return
+  internalMissingMessage.value = ''
+  internalDetail.value = {
+    symbol: props.symbol,
+    name: props.name,
+    dimension,
+    finding,
+  }
+}
+
+function closeInternalDetail() {
+  internalDetail.value = null
+}
+
+function tryOpenPendingFinding() {
+  const pending = props.pendingFinding
+  if (!pending?.findingKey) return
+  const dimension = pending.dimension === 'weakness' ? 'weakness' : 'strength'
+  const quadrant = (props.swot || {})[dimension] || {}
+  const finding = (quadrant.findings || []).find(
+    (row) => row.finding_key === pending.findingKey,
+  )
+  if (finding) {
+    openInternalFinding(finding, dimension)
+    return
+  }
+  internalMissingMessage.value = '该优势/劣势信号已关闭或不存在，仍停留在 SWOT 面板。'
+}
+
+watch(
+  () => [props.pendingFinding, props.swot, props.loading],
+  () => {
+    if (props.loading) return
+    tryOpenPendingFinding()
+  },
+  { deep: true, immediate: true },
+)
 </script>
 
 <style scoped>

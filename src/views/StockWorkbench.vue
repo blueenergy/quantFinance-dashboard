@@ -1249,6 +1249,7 @@
             :internal-refreshing="internalSignalRefreshing"
             :internal-refresh-message="internalSignalRefreshMessage"
             :internal-refresh-error="internalSignalRefreshError"
+            :pending-finding="pendingSwotFinding"
             @changed="refreshSwotSection"
             @retry="refreshSwotSection"
             @collect="collectSwotSignals"
@@ -1628,6 +1629,15 @@ const nineTurnSignals = computed(() => {
 })
 const latestNineTurnSignal = computed(() => payload.value?.latest_nine_turn_signal || nineTurnSignals.value[0] || null)
 const swotPayload = computed(() => swotData.value || {})
+
+const pendingSwotFinding = computed(() => {
+  const nav = props.pendingNavigation
+  if (!nav?.findingKey) return null
+  return {
+    findingKey: nav.findingKey,
+    dimension: nav.dimension || 'strength',
+  }
+})
 const nineTurnStatus = computed(() => dataStatus.value?.sections?.nine_turn || {})
 const nineTurnMarkers = computed(() => nineTurnSignals.value.map((signal) => ({
   trade_date: signal.trade_date,
