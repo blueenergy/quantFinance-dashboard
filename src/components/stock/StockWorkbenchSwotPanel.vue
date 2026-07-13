@@ -120,11 +120,11 @@
             v-for="finding in quadrant.findings"
             :key="finding.finding_key || finding.summary"
             class="swot-finding-item"
-            :class="{ 'is-interactive': quadrant.interactive }"
-            :role="quadrant.interactive ? 'button' : undefined"
-            :tabindex="quadrant.interactive ? 0 : undefined"
-            @click="quadrant.interactive && openInternalFinding(finding, quadrant.mode, $event)"
-            @keydown.enter.stop="quadrant.interactive && openInternalFinding(finding, quadrant.mode, $event)"
+            :class="{ 'is-interactive': quadrant.findingInteractive || quadrant.llmInteractive }"
+            :role="(quadrant.findingInteractive || quadrant.llmInteractive) ? 'button' : undefined"
+            :tabindex="(quadrant.findingInteractive || quadrant.llmInteractive) ? 0 : undefined"
+            @click="onFindingClick(quadrant, finding, $event)"
+            @keydown.enter.stop="onFindingClick(quadrant, finding, $event)"
           >
             <span class="swot-finding-level" :class="levelClass(quadrant.mode, finding)">
               {{ levelLabel(quadrant.mode, finding) }}
@@ -138,7 +138,7 @@
         </ul>
 
         <button
-          v-if="quadrant.interactive && (quadrant.findings.length || quadrant.mode === 'risk')"
+          v-if="quadrant.llmInteractive && (quadrant.findings.length || quadrant.mode === 'risk')"
           type="button"
           class="swot-detail-btn"
           @click="openFinding(quadrant.mode, $event)"
@@ -310,7 +310,8 @@ const quadrants = computed(() => {
       planned: strength.status === 'planned',
       placeholder: '优势维度尚未接入，后续将从量化评分与基本面提炼。',
       mode: 'strength',
-      interactive: true,
+      findingInteractive: true,
+      llmInteractive: false,
       findings: Array.isArray(strength.findings) ? strength.findings : [],
       summary: strength.summary || '',
       badge: strengthBadge(strength.strength),
@@ -325,7 +326,8 @@ const quadrants = computed(() => {
       planned: weakness.status === 'planned',
       placeholder: '劣势维度尚未接入，后续将从财务弱点与估值压力提炼。',
       mode: 'weakness',
-      interactive: true,
+      findingInteractive: true,
+      llmInteractive: false,
       findings: Array.isArray(weakness.findings) ? weakness.findings : [],
       summary: weakness.summary || '',
       badge: severityBadge(weakness.severity),
@@ -340,7 +342,8 @@ const quadrants = computed(() => {
       planned: false,
       placeholder: '',
       mode: 'opportunity',
-      interactive: true,
+      findingInteractive: false,
+      llmInteractive: true,
       findings: Array.isArray(opportunity.findings) ? opportunity.findings : [],
       summary: opportunity.summary || '未发现明确 LLM 机会',
       badge: strengthBadge(opportunity.strength),
@@ -353,7 +356,8 @@ const quadrants = computed(() => {
       planned: false,
       placeholder: '',
       mode: 'risk',
-      interactive: true,
+      findingInteractive: false,
+      llmInteractive: true,
       findings: Array.isArray(threat.findings) ? threat.findings : [],
       summary: threat.summary || '未发现明确 LLM 事件风险',
       badge: severityBadge(threat.severity),
@@ -436,6 +440,17 @@ function openFinding(mode, event) {
     mode,
     event,
   })
+}
+
+function onFindingClick(quadrant, finding, event) {
+  if (event?.target?.closest('.swot-detail-btn')) return
+  if (quadrant.findingInteractive) {
+    openInternalFinding(finding, quadrant.mode, event)
+    return
+  }
+  if (quadrant.llmInteractive) {
+    openFinding(quadrant.mode, event)
+  }
 }
 
 function openInternalFinding(finding, dimension, event) {

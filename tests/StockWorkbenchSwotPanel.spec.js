@@ -142,6 +142,8 @@ describe('StockWorkbenchSwotPanel internal S/W findings', () => {
     expect(
       wrapper.get('.swot-quadrant--strength .swot-finding-item').attributes('role'),
     ).toBe('button')
+    expect(wrapper.find('.swot-quadrant--strength .swot-detail-btn').exists()).toBe(false)
+    expect(wrapper.find('.swot-quadrant--weakness .swot-detail-btn').exists()).toBe(false)
   })
 })
 
