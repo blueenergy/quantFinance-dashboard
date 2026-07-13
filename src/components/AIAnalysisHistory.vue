@@ -186,6 +186,15 @@
           {{ item.analysis.technical_analysis.substring(0, 100) }}...
         </div>
       </div>
+      <div v-if="hasMoreHistory" class="history-load-more">
+        <button
+          class="btn-base btn-sm btn-outline"
+          :disabled="loadingMore"
+          @click="loadMoreHistory"
+        >
+          {{ loadingMore ? '加载中...' : '加载更多' }}
+        </button>
+      </div>
     </div>
 
       </div><!-- end v-show historyExpanded -->
@@ -194,6 +203,11 @@
     <!-- 详情对话框 -->
     <div v-if="selectedItem" class="modal-overlay" @click="closeDetails">
       <div class="modal-content analysis-detail-modal" :class="{ 'analysis-detail-modal--maximized': detailMaximized }" @click.stop>
+        <div v-if="detailLoading" class="detail-loading">
+          <div class="spinner"></div>
+          <p>正在加载分析详情...</p>
+        </div>
+        <template v-else>
         <div class="modal-header gradient-purple flex-row-center flex-center-between">
           <h4 class="modal-title">
             {{ selectedItem.stock_code }}
@@ -354,6 +368,7 @@
             <p class="eval-meta">评估时间: {{ formatTime(evaluationResult.evaluated_at) }}</p>
           </div>
         </div>
+        </template>
       </div>
     </div>
   </div>
@@ -370,8 +385,14 @@ const adviceLabels = { buy: '买入', hold: '持有', sell: '卖出' }
 const riskLabels = { low: '低风险', medium: '中风险', high: '高风险' }
 
 const loading = ref(false)
+const loadingMore = ref(false)
+const detailLoading = ref(false)
 const error = ref('')
 const historyList = ref([])
+const historyPage = ref(1)
+const historyTotal = ref(0)
+const hasMoreHistory = ref(false)
+const HISTORY_PAGE_SIZE = 50
 const selectedItem = ref(null)
 const detailMaximized = ref(false)
 const evalBadges = ref({}) // { [history_id]: { outcome_accuracy, reasoning_quality } }
@@ -1032,14 +1053,59 @@ function modeClass(mode) {
   return mode === 'multi_expert_v1' ? 'multi-expert' : 'classic'
 }
 
+function mapHistoryItem(item) {
+  const analysisResult = item.analysis_result || {}
+  const analysis = analysisResult.analysis || item.analysis || {}
+  const analysisMode = item.analysis_mode || analysisResult.analysis_mode || analysis.analysis_mode || 'classic'
+  return {
+    id: item.id || item._id,
+    stock_code: item.symbol || '未知',
+    stock_name: item.stock_name || analysis.stock_name || item.symbol,
+    provider: item.provider || analysisResult.provider || 'unknown',
+    model: item.model || analysisResult.model || 'unknown',
+    created_at: item.created_at || item.timestamp || new Date().toISOString(),
+    analysis_mode: analysisMode,
+    analysis: {
+      ...analysis,
+      analysis_mode: analysisMode,
+      key_points: analysis.key_points || [],
+    },
+    analysis_result: analysisResult,
+  }
+}
+
+async function fetchHistoryDetail(item) {
+  const token = localStorage.getItem('access_token')
+  if (!token || !item?.id) return item
+  const res = await axios.get(`/api/analysis-history/${item.id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const row = res.data?.data
+  return row ? mapHistoryItem(row) : item
+}
+
 function viewDetails(item) {
-  selectedItem.value = item
+  if (!item?.id) return
+  selectedItem.value = { ...item }
   detailMaximized.value = false
   stopPolling()
   evaluationLoading.value = false
   evaluationResult.value = null
   evaluationError.value = ''
-  loadExistingEvaluation(item.id)
+  detailLoading.value = true
+  fetchHistoryDetail(item)
+    .then((full) => {
+      if (selectedItem.value?.id === item.id) {
+        selectedItem.value = full
+      }
+      loadExistingEvaluation(full.id)
+    })
+    .catch((e) => {
+      evaluationError.value = e.response?.data?.detail || e.message || '加载详情失败'
+    })
+    .finally(() => {
+      detailLoading.value = false
+    })
 }
 
 function closeDetails() {
@@ -1091,62 +1157,62 @@ async function loadEvalBadges(ids) {
   }
 }
 
-async function loadHistory() {
-  loading.value = true
+async function loadHistory({ reset = true } = {}) {
+  if (reset) {
+    loading.value = true
+    historyPage.value = 1
+  } else {
+    loadingMore.value = true
+  }
   error.value = ''
   try {
     const token = localStorage.getItem('access_token')
     if (!token) {
       throw new Error('未登录，无法加载历史记录')
     }
-    
-    // 从后端加载所有分析历史，添加分页参数绕过客户端验证
+
+    const page = reset ? 1 : historyPage.value + 1
     const response = await axios.get('/api/analysis-history', {
       headers: { Authorization: `Bearer ${token}` },
       params: {
-        page: 1,
-        limit: 1000  // 获取最近1000条记录
-      }
+        page,
+        limit: HISTORY_PAGE_SIZE,
+      },
     })
-    
+
     const rawData = response.data?.data || []
-    console.log('加载的历史记录:', rawData)
-    
-    // 解析数据结构
-    historyList.value = rawData.map((item) => {
-      const analysisResult = item.analysis_result || {}
-      const analysis = analysisResult.analysis || item.analysis || {}
-      const analysisMode = item.analysis_mode || analysisResult.analysis_mode || analysis.analysis_mode || 'classic'
-      
-      return {
-        id: item.id || item._id,
-        stock_code: item.symbol || '未知',
-        stock_name: item.stock_name || analysis.stock_name || item.symbol,
-        provider: item.provider || analysisResult.provider || 'unknown',
-        model: item.model || analysisResult.model || 'unknown',
-        created_at: item.created_at || item.timestamp || new Date().toISOString(),
-        analysis_mode: analysisMode,
-        analysis: {
-          ...analysis,
-          analysis_mode: analysisMode,
-          key_points: analysis.key_points || []
-        }
-      }
-    })
-    
-    // 按时间降序排列
-    historyList.value.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    const mapped = rawData.map(mapHistoryItem)
 
-    // 批量加载评估徽章
-    await loadEvalBadges(historyList.value.map(i => i.id).filter(Boolean))
+    if (reset) {
+      historyList.value = mapped
+    } else {
+      historyList.value = [...historyList.value, ...mapped]
+    }
 
+    historyPage.value = page
+    historyTotal.value = response.data?.total ?? historyList.value.length
+    hasMoreHistory.value = Boolean(
+      response.data?.has_more ?? (historyList.value.length < historyTotal.value),
+    )
+
+    if (reset) {
+      await loadEvalBadges(historyList.value.map(i => i.id).filter(Boolean))
+    } else {
+      await loadEvalBadges(mapped.map(i => i.id).filter(Boolean))
+    }
   } catch (e) {
     console.error('加载历史记录失败:', e)
     error.value = e.message || '加载AI分析回溯记录失败'
-    historyList.value = []
+    if (reset) historyList.value = []
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
+}
+
+function loadMoreHistory() {
+  if (loadingMore.value || !hasMoreHistory.value) return
+  loadHistory({ reset: false })
 }
 
 function onShenwanOpenDeepAnalysis (e) {
@@ -1154,22 +1220,22 @@ function onShenwanOpenDeepAnalysis (e) {
   if (sym) inputSymbol.value = sym
 }
 
+function onAnalysisUpdated() {
+  loadHistory({ reset: true })
+}
+
 onMounted(() => {
-  loadHistory()
+  loadHistory({ reset: true })
   window.addEventListener('deep-analysis:set-symbol', onShenwanOpenDeepAnalysis)
+  window.addEventListener('ai-analysis:updated', onAnalysisUpdated)
 })
 
 onUnmounted(() => {
   window.removeEventListener('deep-analysis:set-symbol', onShenwanOpenDeepAnalysis)
+  window.removeEventListener('ai-analysis:updated', onAnalysisUpdated)
   clearInterval(livePollTimer)
   clearInterval(evalPollTimer)
 })
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('ai-analysis:updated', () => {
-    loadHistory()
-  })
-}
 </script>
 
 <style scoped>
@@ -1277,6 +1343,8 @@ if (typeof window !== 'undefined') {
 
 /* 历史折叠 */
 .history-section { margin-top:8px; }
+.history-load-more { display:flex; justify-content:center; padding:16px 0 4px; }
+.detail-loading { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:240px; gap:12px; color:#6c757d; }
 .history-toggle-row { margin-bottom:10px; }
 .history-toggle-btn {
   background:none; border:none; cursor:pointer;

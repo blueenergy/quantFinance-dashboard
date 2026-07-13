@@ -79,8 +79,9 @@ function writeActiveTabCache(tab, username) {
 }
 
 export function useNavigationShell({ user, isAuthenticated }) {
-  const activeTab = ref(readActiveTabCache() ?? '')
-  const mountedTabs = ref(new Set())
+  const cachedActiveTab = readActiveTabCache() ?? ''
+  const activeTab = ref(cachedActiveTab)
+  const mountedTabs = ref(cachedActiveTab ? new Set([cachedActiveTab]) : new Set())
   const cachedNavIds = readNavCacheRaw()
   const serverVisibleTabIds = ref(cachedNavIds)
   const navPolicyResolved = ref(!!cachedNavIds)
@@ -184,13 +185,26 @@ export function useNavigationShell({ user, isAuthenticated }) {
     }
   }
 
-  function switchTab(tabId) {
+  function activateTab(tabId) {
+    if (!tabId) {
+      activeTab.value = ''
+      return
+    }
+    mountedTabs.value.add(tabId)
+    activeTab.value = tabId
+  }
+
+  function toggleTab(tabId) {
     if (activeTab.value === tabId) {
       activeTab.value = ''
       return
     }
-    if (tabId) mountedTabs.value.add(tabId)
-    activeTab.value = tabId
+    activateTab(tabId)
+  }
+
+  function switchTab(tabId, { toggle = false } = {}) {
+    if (toggle) toggleTab(tabId)
+    else activateTab(tabId)
   }
 
   function applyResolvedNavigationTabs(ids, username) {
@@ -235,6 +249,8 @@ export function useNavigationShell({ user, isAuthenticated }) {
     tabsShellReady,
     adminTabs,
     loadNavigationTabs,
+    activateTab,
+    toggleTab,
     switchTab,
     applyResolvedNavigationTabs,
     resetNavigationShell,

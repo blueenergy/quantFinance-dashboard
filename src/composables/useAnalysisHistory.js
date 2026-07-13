@@ -20,7 +20,7 @@ export function useAnalysisHistory() {
         const token = localStorage.getItem('access_token')
         const resp = await axios.get('/api/analysis-history', {
           headers: { Authorization: `Bearer ${token}` },
-          params: { symbol }
+          params: { symbol, include_full: true },
         })
         console.log(`[loadHistory] API 响应:`, resp.data)
         const raw = resp.data?.data || []

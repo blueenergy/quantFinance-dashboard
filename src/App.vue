@@ -145,7 +145,7 @@ import UserAvatar from './components/UserAvatar.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
 import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
-import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted, nextTick, provide } from 'vue'
 import { getRenderableTabViews, getTabProps as buildTabProps, getTabListeners as buildTabListeners } from './utils/tabViews.js'
 import { parseDeepLinkFromUrl, buildDeepLinkHref, isModifiedClick } from './utils/appDeepLinks.js'
 import { useAppStartupFlow } from './composables/useAppStartupFlow.js'
@@ -208,6 +208,7 @@ const {
   tabsShellReady,
   adminTabs,
   loadNavigationTabs,
+  activateTab,
   switchTab,
   applyResolvedNavigationTabs,
   resetNavigationShell,
@@ -216,6 +217,8 @@ const {
   user,
   isAuthenticated,
 })
+
+provide('shellActiveTab', activeTab)
 
 const {
   watchlist,
@@ -283,7 +286,9 @@ function applyDeepLink({ tab, params = {} }) {
   }
 
   if (activeTab.value !== tab) {
-    switchTab(tab)
+    activateTab(tab)
+  } else {
+    mountedTabs.value.add(tab)
   }
   return true
 }
@@ -297,7 +302,7 @@ function onTabButtonClick(event, tabId) {
   if (isModifiedClick(event)) return
   event.preventDefault()
   // Preserve existing toggle behavior on plain left click.
-  switchTab(tabId)
+  switchTab(tabId, { toggle: true })
 }
 
 const {
@@ -317,7 +322,7 @@ const {
   validateToken,
   logout,
   loadNavigationTabs,
-  switchTab,
+  activateTab,
   applyResolvedNavigationTabs,
   resetNavigationShell,
   readSavedActiveTab,

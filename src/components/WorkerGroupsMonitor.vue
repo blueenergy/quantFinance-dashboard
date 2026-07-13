@@ -100,8 +100,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, inject } from 'vue'
 import request from '../utils/request'
+import { useVisibilityAwarePolling } from '../composables/useVisibilityAwarePolling.js'
 
 const loading = ref(false)
 const groups = ref([])
@@ -178,12 +179,9 @@ const refreshData = async () => {
   }
 }
 
-onMounted(() => {
-  refreshData()
-  // Auto-refresh every 30 seconds
-  const interval = setInterval(refreshData, 30000)
-  return () => clearInterval(interval)
-})
+const shellActiveTab = inject('shellActiveTab', null)
+const isAdminTabActive = computed(() => shellActiveTab?.value === 'admin')
+useVisibilityAwarePolling(refreshData, 30000, isAdminTabActive)
 </script>
 
 <style scoped>

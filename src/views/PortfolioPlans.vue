@@ -1696,18 +1696,16 @@ async function refreshAll() {
     generateForm.value.strategy_template_id = availableStrategies.value[0].strategy_template_id
   }
   syncGenerateParamsFromStrategy()
-  const planResults = await Promise.allSettled([
+  const restResults = await Promise.allSettled([
     loadParameterPresets(),
     loadWorkerStatus(),
     loadGenerationTasks(),
     loadPlans(),
-  ])
-  reportFirstRejected(planResults, '部分组合计划数据加载失败')
-  applyDefaultPreset()
-  await Promise.allSettled([
     loadPlanGenerationWatermark(),
     loadLiveOps(),
   ])
+  reportFirstRejected(restResults, '部分组合计划数据加载失败')
+  applyDefaultPreset()
 }
 
 function reportFirstRejected(results, fallback) {

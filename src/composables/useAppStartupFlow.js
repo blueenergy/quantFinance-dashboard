@@ -10,7 +10,7 @@ export function useAppStartupFlow({
   validateToken,
   logout,
   loadNavigationTabs,
-  switchTab,
+  activateTab,
   applyResolvedNavigationTabs,
   resetNavigationShell,
   readSavedActiveTab,
@@ -70,10 +70,10 @@ export function useAppStartupFlow({
     }
 
     if (savedTab && visibleIds.includes(savedTab)) {
-      switchTab(savedTab)
+      activateTab(savedTab)
       console.log('登录后恢复上次浏览的页面:', savedTab)
     } else if (user.value?.is_admin) {
-      switchTab('admin')
+      activateTab('admin')
       console.log('管理员登录，跳转到系统管理页面')
     } else {
       activeTab.value = ''
@@ -141,11 +141,11 @@ export function useAppStartupFlow({
         activeTab.value = ''
         console.log('非管理员用户尝试访问管理后台，已清空无权限标签页')
       } else {
-        switchTab(savedTab)
+        activateTab(savedTab)
         console.log('恢复上次浏览的页面:', savedTab)
       }
     } else if (user.value?.is_admin) {
-      switchTab('admin')
+      activateTab('admin')
       console.log('管理员自动跳转到系统管理页面')
     } else {
       activeTab.value = ''

@@ -157,7 +157,7 @@ const props = defineProps({
 /** 与 .env 的 VITE_API_BASE 一致时，可直连后端便于排查；默认 /api 走 Vite 代理到 localhost:3001 */
 const etfApiBase = (import.meta.env.VITE_API_BASE || '/api').toString().replace(/\/$/, '') || '/api'
 
-const PAGE_SIZE = 2000
+const PAGE_SIZE = 50
 
 const etfList = ref([])
 const loading = ref(true)

@@ -374,11 +374,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, ref, watch } from 'vue'
 import axios from 'axios'
 import SectorContributorsPanel from './SectorContributorsPanel.vue'
 import LimitUpReasoningDialog from './LimitUpReasoningDialog.vue'
 import { useLimitUpReasoningDialog } from '../composables/useLimitUpReasoningDialog'
+import { useCancellableRequest } from '../composables/useCancellableRequest.js'
 
 const today = new Date().toISOString().slice(0, 10)
 const tradeDate = ref(today)
@@ -388,6 +389,10 @@ const eventSeverity = ref('')
 const minConfidence = ref('')
 const sectorLevel = ref('L2')
 const loading = ref(false)
+const { beginRequest } = useCancellableRequest()
+const shellActiveTab = inject('shellActiveTab', null)
+const isInsightsTabActive = computed(() => shellActiveTab?.value === 'market-insights')
+const secondaryPanelsLoaded = ref(false)
 const error = ref('')
 const message = ref('')
 const overview = ref(null)
@@ -652,18 +657,38 @@ async function loadQuality() {
   qualityItems.value = res.data?.data || []
 }
 
+async function loadSecondaryPanels() {
+  if (secondaryPanelsLoaded.value || !isInsightsTabActive.value) return
+  secondaryPanelsLoaded.value = true
+  await Promise.allSettled([
+    loadEventTypes(),
+    loadFocus(),
+    loadSectorStrength(),
+    loadQuality(),
+  ])
+}
+
 async function loadAll() {
+  const { isCurrent } = beginRequest()
+  secondaryPanelsLoaded.value = false
   loading.value = true
   error.value = ''
   message.value = ''
   try {
-    await Promise.all([loadEventTypes(), loadOverview(), loadFocus(), loadEvents(), loadSectorStrength(), loadQuality()])
+    await Promise.all([loadOverview(), loadEvents()])
+    if (!isCurrent()) return
+    void loadSecondaryPanels()
   } catch (err) {
+    if (!isCurrent()) return
     setError(err, '加载火眼金睛数据失败')
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
+
+watch(isInsightsTabActive, (active) => {
+  if (active) void loadSecondaryPanels()
+})
 
 async function generateEvents() {
   loading.value = true

@@ -3025,11 +3025,23 @@ function clearAnalysisPolling() {
   }
 }
 
-function selectAnalysisHistory(item) {
-  if (!item) return
-  payload.value = {
-    ...(payload.value || {}),
-    deep_analysis: item,
+async function selectAnalysisHistory(item) {
+  if (!item?.id) return
+  try {
+    const token = localStorage.getItem('access_token')
+    const res = await axios.get(`/api/analysis-history/${item.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const full = res.data?.data || item
+    payload.value = {
+      ...(payload.value || {}),
+      deep_analysis: full,
+    }
+  } catch (_) {
+    payload.value = {
+      ...(payload.value || {}),
+      deep_analysis: item,
+    }
   }
 }
 
