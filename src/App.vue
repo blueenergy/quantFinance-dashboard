@@ -136,6 +136,9 @@
         <p v-else class="nav-policy-loading">主导航策略加载中…</p>
       </div>
     </div>
+
+    <!-- ICP 备案号：全站底部悬挂，链至工信部 -->
+    <SiteIcpFooter />
   </v-app>
 </template>
 
@@ -145,6 +148,7 @@ import UserAvatar from './components/UserAvatar.vue'
 import NotificationCenter from './components/NotificationCenter.vue'
 import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
+import SiteIcpFooter from './components/common/SiteIcpFooter.vue'
 import { computed, ref, watch, onMounted, onUnmounted, nextTick, provide } from 'vue'
 import { getRenderableTabViews, getTabProps as buildTabProps, getTabListeners as buildTabListeners } from './utils/tabViews.js'
 import { parseDeepLinkFromUrl, buildDeepLinkHref, isModifiedClick } from './utils/appDeepLinks.js'
@@ -468,6 +472,8 @@ onUnmounted(() => {
 <style scoped>
 #app {
   min-height: 100vh;
+  /* 为固定 ICP 页脚留出空间，避免遮挡内容 */
+  padding-bottom: 36px;
   background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #2d1b69 100%);
 }
 

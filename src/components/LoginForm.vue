@@ -326,6 +326,9 @@ export default {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 20px;
+  /* 为固定 ICP 页脚留出空间 */
+  box-sizing: border-box;
+  padding-bottom: 48px;
 }
 
 .login-form {
