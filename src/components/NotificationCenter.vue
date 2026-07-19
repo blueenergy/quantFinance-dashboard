@@ -1,13 +1,13 @@
 <template>
-  <div class="notification-center">
+  <div class="notification-center" data-testid="notification-center">
     <!-- Notification Bell Icon -->
-    <div class="notification-bell" @click="togglePanel">
+    <div class="notification-bell" data-testid="notification-bell" @click="togglePanel">
       <span class="bell-icon">🔔</span>
-      <span v-if="unreadCount > 0" class="badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+      <span v-if="unreadCount > 0" class="badge" data-testid="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
     </div>
 
     <!-- Notification Panel -->
-    <div v-if="showPanel" class="notification-panel">
+    <div v-if="showPanel" class="notification-panel" data-testid="notification-panel">
       <div class="panel-header">
         <h4>📬 通知中心</h4>
         <div class="header-actions">

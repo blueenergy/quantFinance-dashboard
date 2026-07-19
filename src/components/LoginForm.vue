@@ -1,5 +1,5 @@
 <template>
-  <div class="login-container">
+  <div class="login-container" data-testid="login-page">
     <div class="login-form">
       <h2>{{ isLogin ? '用户登录' : '用户注册' }}</h2>
       
@@ -52,6 +52,7 @@
             type="text"
             required
             placeholder="请输入用户名"
+            data-testid="login-username"
           />
         </div>
 
@@ -84,6 +85,7 @@
             type="password"
             required
             placeholder="请输入密码"
+            data-testid="login-password"
           />
         </div>
 
@@ -106,7 +108,7 @@
           {{ error }}
         </div>
 
-        <button type="submit" :disabled="loading" class="submit-btn">
+        <button type="submit" :disabled="loading" class="submit-btn" data-testid="login-submit">
           {{ loading ? '处理中...' : (isLogin ? '登录' : '注册') }}
         </button>
       </form>

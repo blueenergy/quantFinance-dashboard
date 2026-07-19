@@ -19,10 +19,10 @@
     />
     
     <!-- 已登录时显示主应用 -->
-    <div v-else class="container">
-      <header class="header">
+    <div v-else class="container" data-testid="app-shell">
+      <header class="header" data-testid="app-header">
         <div class="header-left">
-          <h1 v-if="isAuthenticated">🔥 悟空量化金融智能助手</h1>
+          <h1 v-if="isAuthenticated" data-testid="app-title">🔥 悟空量化金融智能助手</h1>
         </div>
         <div class="header-right">
           <NotificationCenter />
@@ -102,6 +102,7 @@
             :key="tab.id"
             :href="tabHref(tab.id)"
             :class="['tab-button', { active: activeTab === tab.id }]"
+            :data-testid="`nav-tab-${tab.id}`"
             @click="onTabButtonClick($event, tab.id)"
           >
             {{ tab.name }}
