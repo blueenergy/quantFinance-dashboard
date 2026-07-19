@@ -1,0 +1,1042 @@
+/* PortfolioPlans shared shell and panel styles. */
+.portfolio-plans{
+  background: #fff;
+  box-sizing: border-box;
+  color: #111827;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  line-height: 1.5;
+  margin: 0 auto;
+  max-width: 1440px;
+  padding: 24px;
+  width: 100%;
+}
+
+:where(.portfolio-plans) .page-header,
+:where(.portfolio-plans) .toolbar,
+:where(.portfolio-plans) .detail-header,
+:where(.portfolio-plans) .metrics,
+:where(.portfolio-plans) .layout{
+  display: flex;
+  gap: 12px;
+}
+
+:where(.portfolio-plans) .page-header,
+:where(.portfolio-plans) .detail-header{
+  align-items: center;
+  justify-content: space-between;
+}
+
+:where(.portfolio-plans) .eyebrow,
+:where(.portfolio-plans) .muted{
+  color: #374151;
+  font-size: 13px;
+}
+
+:where(.portfolio-plans) .subtitle{
+  color: #111827;
+  margin-top: 4px;
+}
+
+:where(.portfolio-plans) h2,
+:where(.portfolio-plans) h3,
+:where(.portfolio-plans) h4,
+:where(.portfolio-plans) p{
+  margin: 0;
+}
+
+:where(.portfolio-plans) button,
+:where(.portfolio-plans) input,
+:where(.portfolio-plans) select,
+:where(.portfolio-plans) textarea{
+  background: #fff;
+  border: 1px solid #111827;
+  border-radius: 4px;
+  color: #111827;
+  padding: 8px 10px;
+}
+
+:where(.portfolio-plans) button{
+  background: #fff;
+  color: #111827;
+  cursor: pointer;
+}
+
+:where(.portfolio-plans) button:disabled{
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+:where(.portfolio-plans) button.danger{
+  border-color: #111827;
+  color: #111827;
+}
+
+:where(.portfolio-plans) .link-btn{
+  background: transparent;
+  border: 1px solid #c7ccd6;
+  border-radius: 3px;
+  color: #1f2937;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+:where(.portfolio-plans) .link-btn--primary{
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+:where(.portfolio-plans) .link-btn--primary:hover:not(:disabled){
+  background: #dbeafe;
+  border-color: #60a5fa;
+}
+
+:where(.portfolio-plans) .link-btn.danger{
+  border-color: #b91c1c;
+  color: #b91c1c;
+}
+
+:where(.portfolio-plans) .excluded-bar{
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+:where(.portfolio-plans) .reselect-summary{
+  color: #2563eb;
+  font-size: 12px;
+  margin: 4px 0 8px;
+}
+
+:where(.portfolio-plans) .reselect-meta{
+  color: #6b7280;
+  font-size: 11px;
+  margin: -4px 0 8px;
+}
+
+:where(.portfolio-plans) .operation-log-panel{
+  margin-bottom: 12px;
+}
+
+:where(.portfolio-plans) .operation-log-table td,
+:where(.portfolio-plans) .operation-log-table th{
+  white-space: nowrap;
+}
+
+:where(.portfolio-plans) .reselect-meta{
+  color: #6b7280;
+  font-size: 11px;
+  margin: -4px 0 8px;
+}
+
+:where(.portfolio-plans) .reselect-status{
+  align-items: center;
+  border-radius: 4px;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  margin: 4px 0 8px;
+  padding: 4px 8px;
+}
+
+:where(.portfolio-plans) .reselect-status.is-running{
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+:where(.portfolio-plans) .reselect-status.is-success{
+  background: #ecfdf5;
+  color: #047857;
+}
+
+:where(.portfolio-plans) .reselect-status.is-error{
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+:where(.portfolio-plans) .spinner{
+  animation: spin 0.8s linear infinite;
+  border: 2px solid #c7d2fe;
+  border-radius: 999px;
+  border-top-color: #2563eb;
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+}
+
+@keyframes spin{
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+:where(.portfolio-plans) .excluded-label{
+  color: #6b7280;
+  font-size: 12px;
+}
+
+:where(.portfolio-plans) .excluded-chip{
+  align-items: center;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  padding: 2px 4px 2px 10px;
+}
+
+:where(.portfolio-plans) .excluded-chip .link-btn{
+  border: none;
+  color: #2563eb;
+  padding: 0 4px;
+}
+
+:where(.portfolio-plans) .plan-items-table{
+  table-layout: fixed;
+  width: 100%;
+}
+
+:where(.portfolio-plans) .plan-items-table th,
+:where(.portfolio-plans) .plan-items-table td{
+  font-size: 12px;
+  overflow: hidden;
+  padding: 3px 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:where(.portfolio-plans) .plan-items-table .col-num{
+  text-align: right;
+  width: 54px;
+}
+
+:where(.portfolio-plans) .plan-items-table .col-narrow{
+  width: 44px;
+}
+
+:where(.portfolio-plans) .plan-items-table .col-select{
+  text-align: center;
+  width: 32px;
+}
+
+:where(.portfolio-plans) .plan-items-table .col-stock{
+  width: 138px;
+}
+
+:where(.portfolio-plans) .plan-items-table .col-ind{
+  width: 62px;
+}
+
+:where(.portfolio-plans) .plan-items-table .col-action{
+  overflow: visible;
+  width: 60px;
+}
+
+:where(.portfolio-plans) .plan-items-table .col-action .link-btn{
+  padding: 1px 6px;
+}
+
+:where(.portfolio-plans) .plan-items-table .col-risk{
+  width: 84px;
+}
+
+:where(.portfolio-plans) .plan-items-table .col-airisk{
+  width: 52px;
+  text-align: center;
+}
+
+:where(.portfolio-plans) .ai-risk-tag{
+  border-radius: 3px;
+  color: #fff;
+  cursor: help;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  min-width: 22px;
+  padding: 0 4px;
+  text-align: center;
+}
+
+:where(.portfolio-plans) .price-source-realtime{
+  color: #1f9d55;
+}
+
+:where(.portfolio-plans) .price-source-daily{
+  color: #b8860b;
+}
+
+:where(.portfolio-plans) .price-source-none{
+  color: #d12b2b;
+}
+
+:where(.portfolio-plans) .price-as-of,
+:where(.portfolio-plans) .price-drift,
+:where(.portfolio-plans) .dropped-flag{
+  color: var(--muted, #888);
+  display: block;
+  font-size: 11px;
+}
+
+:where(.portfolio-plans) .rank-up{
+  color: #1f9d55;
+}
+
+:where(.portfolio-plans) .rank-down{
+  color: #d12b2b;
+}
+
+:where(.portfolio-plans) .risk-chip.warn{
+  background: #fff7e6;
+  border-color: #e08e0b;
+  color: #9a6700;
+}
+
+/* A股配色：风险越高越红 */
+:where(.portfolio-plans) .ai-risk-tag.risk-high{
+  background: #d12b2b;
+}
+
+:where(.portfolio-plans) .ai-risk-tag.risk-medium{
+  background: #e08e0b;
+}
+
+:where(.portfolio-plans) .ai-risk-tag.risk-low{
+  background: #b8860b;
+}
+
+:where(.portfolio-plans) .ai-risk-tag.risk-none{
+  background: #1f9d55;
+}
+
+:where(.portfolio-plans) .section-head{
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+:where(.portfolio-plans) .ai-risk-bar{
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+:where(.portfolio-plans) .ai-risk-summary{
+  font-size: 12px;
+}
+
+:where(.portfolio-plans) .ai-risk-summary .risk-high{
+  color: #d12b2b;
+}
+
+:where(.portfolio-plans) .ai-risk-summary .risk-medium{
+  color: #e08e0b;
+}
+
+:where(.portfolio-plans) .ai-risk-summary .risk-low{
+  color: #b8860b;
+}
+
+:where(.portfolio-plans) .plan-items-table .link-btn{
+  white-space: nowrap;
+}
+
+:where(.portfolio-plans) .stock-workbench-link{
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #1d4ed8;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+
+:where(.portfolio-plans) .stock-workbench-link:hover .stock-workbench-link__name,
+:where(.portfolio-plans) .stock-workbench-link:hover .stock-workbench-link__symbol{
+  text-decoration: underline;
+}
+
+:where(.portfolio-plans) .stock-workbench-link__name{
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:where(.portfolio-plans) .stock-workbench-link__symbol{
+  color: #6b7280;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+:where(.portfolio-plans) .action-tag{
+  border-radius: 3px;
+  color: #fff;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 14px;
+  margin-right: 4px;
+  text-align: center;
+  width: 14px;
+}
+
+:where(.portfolio-plans) .cadence-tag{
+  border-radius: 3px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  padding: 0 6px;
+  vertical-align: middle;
+}
+
+:where(.portfolio-plans) .cadence-tag.cadence-rebalance{
+  background: #1d4ed8;
+  color: #fff;
+}
+
+:where(.portfolio-plans) .cadence-tag.cadence-rebalance-pending{
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+:where(.portfolio-plans) .cadence-tag.cadence-manual{
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+:where(.portfolio-plans) .cadence-tag.cadence-manual-pending{
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+:where(.portfolio-plans) .cadence-tag.cadence-not-due{
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+:where(.portfolio-plans) .cadence-tag.cadence-monitor-readonly{
+  background: #e5e7eb;
+  color: #374151;
+}
+
+:where(.portfolio-plans) .cadence-tag.cadence-monitor-trade{
+  background: #b45309;
+  color: #fff;
+}
+
+:where(.portfolio-plans) .cadence-tag.cadence-unknown{
+  background: #c7ccd6;
+  color: #111827;
+}
+
+:where(.portfolio-plans) .relation-tag{
+  border-radius: 3px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  margin-left: 4px;
+  padding: 0 6px;
+}
+
+:where(.portfolio-plans) .relation-tag.relation-upstream{
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+:where(.portfolio-plans) .relation-tag.relation-downstream{
+  background: #dcfce7;
+  color: #047857;
+}
+
+:where(.portfolio-plans) .monitor-note{
+  background: #f3f4f6;
+  border: 1px solid #9ca3af;
+  border-radius: 4px;
+  color: #374151;
+  font-size: 13px;
+  margin: 0 0 12px;
+  padding: 10px;
+}
+
+:where(.portfolio-plans) .lineage-panel{
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin: 0 0 12px;
+}
+
+:where(.portfolio-plans) .lineage-panel div{
+  border: 1px solid #111827;
+  border-radius: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+:where(.portfolio-plans) .lineage-panel span,
+:where(.portfolio-plans) .lineage-panel small{
+  color: #374151;
+  display: block;
+  font-size: 12px;
+}
+
+:where(.portfolio-plans) .lineage-panel strong{
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:where(.portfolio-plans) .lineage-link{
+  background: transparent;
+  border: 0;
+  color: #1d4ed8;
+  font-weight: 700;
+  padding: 0;
+  text-align: left;
+}
+
+:where(.portfolio-plans) .lineage-link:hover{
+  text-decoration: underline;
+}
+
+:where(.portfolio-plans) .drift-cell.drift-buy{
+  color: #d12b2b;
+}
+
+:where(.portfolio-plans) .drift-cell.drift-sell{
+  color: #1f9d55;
+}
+
+:where(.portfolio-plans) .drift-cell.drift-flat{
+  color: #6b7280;
+}
+
+/* A股配色：买入=红，卖出=绿 */
+:where(.portfolio-plans) .action-tag.tag-buy{
+  background: #d12b2b;
+}
+
+:where(.portfolio-plans) .action-tag.tag-keep{
+  background: #b91c1c;
+}
+
+:where(.portfolio-plans) .action-tag.tag-sell{
+  background: #1f9d55;
+}
+
+:where(.portfolio-plans) .action-tag.tag-hold{
+  background: #6b7280;
+}
+
+:where(.portfolio-plans) .action-tag.tag-skip{
+  background: #c7ccd6;
+}
+
+:where(.portfolio-plans) .card{
+  background: #fff;
+  border: 1px solid #111827;
+  border-radius: 4px;
+  color: #111827;
+  padding: 14px;
+}
+
+:where(.portfolio-plans) .generate-card{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+:where(.portfolio-plans) .generate-form-body{
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1.2fr) minmax(160px, 0.7fr) minmax(140px, 0.6fr) auto auto;
+}
+
+:where(.portfolio-plans) .generate-form-body label,
+:where(.portfolio-plans) .toolbar label{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+:where(.portfolio-plans) .generate-form-body .inline-check{
+  align-items: center;
+  flex-direction: row;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+:where(.portfolio-plans) .strategy-param-card{
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  grid-column: 1 / -1;
+  padding: 12px;
+}
+
+:where(.portfolio-plans) .strategy-param-header{
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+:where(.portfolio-plans) .strategy-param-header p{
+  margin: 4px 0 0;
+}
+
+:where(.portfolio-plans) .editable-badge{
+  border: 1px solid #111827;
+  border-radius: 999px;
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 3px 8px;
+}
+
+:where(.portfolio-plans) .strategy-param-grid{
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+:where(.portfolio-plans) .strategy-param-grid div{
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  min-width: 0;
+  padding: 8px;
+}
+
+:where(.portfolio-plans) .strategy-param-grid.editable label{
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+}
+
+:where(.portfolio-plans) .strategy-param-grid span{
+  color: #6b7280;
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+:where(.portfolio-plans) .preset-evidence{
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 8px 0 10px;
+}
+
+:where(.portfolio-plans) .preset-evidence span{
+  color: #4b5563;
+  font-size: 12px;
+}
+
+:where(.portfolio-plans) .preset-evidence-list{
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+}
+
+:where(.portfolio-plans) .preset-evidence-list strong{
+  display: block;
+  margin-bottom: 6px;
+}
+
+:where(.portfolio-plans) .preset-evidence-list p{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 4px 0;
+}
+
+:where(.portfolio-plans) .preset-evidence-list span{
+  color: #4b5563;
+  font-size: 12px;
+}
+
+:where(.portfolio-plans) .strategy-param-grid strong{
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+:where(.portfolio-plans) .task-status{
+  grid-column: 1 / -1;
+}
+
+:where(.portfolio-plans) .task-list-card{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+:where(.portfolio-plans) .task-list-header{
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+:where(.portfolio-plans) .task-list-actions{
+  display: flex;
+  gap: 8px;
+}
+
+:where(.portfolio-plans) .generation-task-table tbody tr{
+  cursor: pointer;
+}
+
+:where(.portfolio-plans) .generation-task-table tbody tr.active{
+  background: #f3f4f6;
+}
+
+:where(.portfolio-plans) .truncate{
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:where(.portfolio-plans) .worker-status-card{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+:where(.portfolio-plans) .live-ops-card{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+:where(.portfolio-plans) .live-ops-grid{
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+:where(.portfolio-plans) .ops-line{
+  border: 1px solid #111827;
+  border-radius: 4px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 90px 1fr;
+  margin-top: 6px;
+  padding: 8px;
+}
+
+:where(.portfolio-plans) .ops-line small{
+  color: #374151;
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
+
+:where(.portfolio-plans) .watermark-card{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+:where(.portfolio-plans) .watermark-grid{
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+:where(.portfolio-plans) .watermark-grid div{
+  border: 1px solid #111827;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+}
+
+:where(.portfolio-plans) .watermark-grid span,
+:where(.portfolio-plans) .watermark-grid small{
+  color: #374151;
+}
+
+:where(.portfolio-plans) .watermark-warning{
+  background: #f3f4f6;
+  border: 1px solid #111827;
+  border-radius: 4px;
+  padding: 10px;
+}
+
+:where(.portfolio-plans) .worker-status-grid{
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+:where(.portfolio-plans) .worker-status-row{
+  border: 1px solid #111827;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+}
+
+:where(.portfolio-plans) .worker-status-row span,
+:where(.portfolio-plans) .worker-status-row small{
+  color: #374151;
+  overflow-wrap: anywhere;
+}
+
+:where(.portfolio-plans) .plan-list{
+  flex: 0 0 340px;
+}
+
+:where(.portfolio-plans) .detail{
+  flex: 1;
+  overflow: hidden;
+}
+
+:where(.portfolio-plans) .plan-row{
+  background: #fff;
+  border: 1px solid #111827;
+  color: #111827;
+  display: block;
+  margin-top: 8px;
+  text-align: left;
+  width: 100%;
+}
+
+:where(.portfolio-plans) .plan-row.active{
+  background: #f3f4f6;
+  border-color: #111827;
+}
+
+:where(.portfolio-plans) .plan-row.upstream{
+  background: #eff6ff;
+  border-left: 4px solid #1d4ed8;
+}
+
+:where(.portfolio-plans) .plan-row.downstream{
+  background: #ecfdf5;
+  border-left: 4px solid #047857;
+}
+
+:where(.portfolio-plans) .plan-row.active.upstream,
+:where(.portfolio-plans) .plan-row.active.downstream{
+  background: #f3f4f6;
+  border-left-color: #111827;
+}
+
+:where(.portfolio-plans) .plan-row span,
+:where(.portfolio-plans) .plan-row small,
+:where(.portfolio-plans) .plan-row em{
+  display: block;
+}
+
+:where(.portfolio-plans) .plan-row small,
+:where(.portfolio-plans) .plan-row em{
+  color: #111827;
+  font-style: normal;
+}
+
+:where(.portfolio-plans) .plan-row-baseline{
+  display: block;
+  margin-top: 2px;
+  color: #4b5563;
+  font-size: 11px;
+}
+
+:where(.portfolio-plans) .metrics{
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+
+:where(.portfolio-plans) .metrics div{
+  background: #fff;
+  border: 1px solid #111827;
+  border-radius: 4px;
+  color: #111827;
+  padding: 10px 12px;
+}
+
+:where(.portfolio-plans) .metrics span{
+  color: #111827;
+  display: block;
+  font-size: 12px;
+}
+
+:where(.portfolio-plans) .capital-basis{
+  margin: 14px 0;
+}
+
+:where(.portfolio-plans) .capital-basis .metrics{
+  margin: 8px 0 0;
+}
+
+:where(.portfolio-plans) .execution-status{
+  margin-bottom: 14px;
+}
+
+:where(.portfolio-plans) .status-grid{
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 8px;
+}
+
+:where(.portfolio-plans) .status-grid div{
+  border: 1px solid #111827;
+  border-radius: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  word-break: break-word;
+}
+
+:where(.portfolio-plans) .status-grid span,
+:where(.portfolio-plans) .status-grid small{
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+:where(.portfolio-plans) .status-grid strong{
+  display: block;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+:where(.portfolio-plans) .message{
+  color: #111827;
+}
+
+:where(.portfolio-plans) .table-wrap{
+  overflow: auto;
+}
+
+:where(.portfolio-plans) table{
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 980px;
+  width: 100%;
+}
+
+:where(.portfolio-plans) th,
+:where(.portfolio-plans) td{
+  border: 1px solid #111827;
+  color: #111827;
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+:where(.portfolio-plans) th{
+  background: #f3f4f6;
+  color: #111827;
+  font-weight: 700;
+}
+
+:where(.portfolio-plans) .col-date{
+  max-width: 86px;
+  width: 86px;
+}
+
+:where(.portfolio-plans) .col-symbol{
+  max-width: 92px;
+  width: 92px;
+}
+
+:where(.portfolio-plans) .col-name{
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 90px;
+}
+
+:where(.portfolio-plans) .equity-summary,
+:where(.portfolio-plans) .realtime-equity{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+:where(.portfolio-plans) .equity-summary div,
+:where(.portfolio-plans) .realtime-equity div{
+  background: #fff;
+  border: 1px solid #111827;
+  border-radius: 4px;
+  color: #111827;
+  padding: 8px 10px;
+}
+
+:where(.portfolio-plans) .equity-summary span,
+:where(.portfolio-plans) .realtime-equity span{
+  display: block;
+  font-size: 12px;
+}
+
+:where(.portfolio-plans) .equity-chart{
+  border: 1px solid #111827;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+:where(.portfolio-plans) .equity-chart svg{
+  background: #fff;
+  display: block;
+  height: 260px;
+  width: 100%;
+}
+
+:where(.portfolio-plans) .equity-chart line{
+  stroke: #111827;
+  stroke-width: 1;
+}
+
+:where(.portfolio-plans) .equity-chart polyline{
+  fill: none;
+  stroke: #111827;
+  stroke-width: 3;
+}
+
+:where(.portfolio-plans) .equity-chart circle{
+  fill: #111827;
+}
+
+:where(.portfolio-plans) .equity-chart text{
+  fill: #111827;
+  font-size: 12px;
+}
+
+:where(.portfolio-plans) .table-wrap.compact table{
+  min-width: 720px;
+}
+
+@media (max-width: 768px){
+  .portfolio-plans{
+    padding: 12px;
+  }
+}

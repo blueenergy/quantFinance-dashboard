@@ -53,548 +53,193 @@
       </div>
     </section>
 
-    <section v-if="opsWorkbenchExpanded" class="card generate-card">
-      <div class="task-list-header">
-        <div>
-          <h3>生成交易计划</h3>
-          <p class="muted">从当前可用 strategy 生成新的 plan，生成后仍需人工审核。</p>
-        </div>
-        <button @click="generateFormExpanded = !generateFormExpanded">
-          {{ generateFormExpanded ? '折叠' : '展开' }}
-        </button>
-      </div>
-      <div v-if="generateFormExpanded" class="generate-form-body">
-        <label>
-          策略
-          <select v-model="generateForm.strategy_template_id" @change="onGenerateStrategyChange">
-            <option value="">请选择 strategy</option>
-            <option v-for="strategy in availableStrategies" :key="strategy.strategy_template_id" :value="strategy.strategy_template_id">
-              {{ strategyOptionLabel(strategy) }}
-            </option>
-          </select>
-        </label>
-        <label>
-          base_date
-          <input v-model="generateForm.base_date" type="date" @change="loadPlanGenerationWatermark" />
-        </label>
-        <label>
-          mode
-          <select v-model="generateForm.mode">
-            <option value="auto">auto</option>
-            <option value="monitor">monitor</option>
-            <option value="rebalance">rebalance</option>
-          </select>
-        </label>
-        <label class="inline-check">
-          <input v-model="generateForm.force" type="checkbox" />
-          force
-        </label>
-        <div v-if="selectedGenerateStrategy" class="strategy-param-card">
-        <div class="strategy-param-header">
-          <div>
-            <strong>本次 plan 参数</strong>
-            <p class="muted">先选择策略模板和参数预设，再按本次计划需要调整参数；系统会把最终参数快照写入 plan。</p>
-          </div>
-          <span class="editable-badge">内部唯一键：params_hash</span>
-        </div>
-        <label>
-          参数预设
-          <select v-model="generateForm.preset_id" @change="applySelectedPreset">
-            <option v-for="preset in parameterPresets" :key="preset.preset_id" :value="preset.preset_id">
-              {{ presetLabel(preset) }}
-            </option>
-          </select>
-        </label>
-        <div v-if="selectedPreset" class="preset-evidence">
-          <strong>推荐依据</strong>
-          <span>evidence：{{ selectedPreset.evidence_count ?? presetEvidenceRows.length }} 条</span>
-          <span>区间：{{ selectedPreset.data_window?.start_date || '-' }} → {{ selectedPreset.data_window?.end_date || '-' }}</span>
-          <span>超额：{{ pct(selectedPreset.backtest_summary?.index_excess_cumulative_return) }}</span>
-          <span>Sharpe：{{ num(selectedPreset.backtest_summary?.sharpe) }}</span>
-          <span>回撤：{{ pct(selectedPreset.backtest_summary?.max_drawdown) }}</span>
-        </div>
-        <div v-if="presetEvidenceRows.length" class="preset-evidence-list">
-          <strong>Evidence 明细</strong>
-          <p v-for="evidence in presetEvidenceRows" :key="evidence.research_result_id || evidence.research_job_id">
-            <span>{{ evidence.data_window?.start_date || '-' }} → {{ evidence.data_window?.end_date || '-' }}</span>
-            <span>超额 {{ pct(evidence.best_row?.index_excess_cumulative_return) }}</span>
-            <span>Sharpe {{ num(evidence.best_row?.sharpe) }}</span>
-            <span>回撤 {{ pct(evidence.best_row?.max_drawdown) }}</span>
-          </p>
-        </div>
-        <div class="strategy-param-grid editable">
-          <label>
-            universe
-            <select v-model="generateForm.params.universe_index">
-              <option v-for="universe in universeOptions" :key="universe.value" :value="universe.value">
-                {{ universe.label }}
-              </option>
-            </select>
-          </label>
-          <label>
-            top_n
-            <input v-model.number="generateForm.params.top_n" type="number" min="1" />
-          </label>
-          <label>
-            rebalance_days
-            <input v-model.number="generateForm.params.rebalance_days" type="number" min="1" />
-          </label>
-          <label>
-            construction_mode
-            <select v-model="generateForm.params.construction_mode">
-              <option value="top_n">top_n</option>
-              <option value="industry_capped">industry_capped</option>
-              <option value="industry_neutral">industry_neutral</option>
-            </select>
-          </label>
-          <label>
-            growth_weight
-            <input
-              :value="generateForm.params.growth_weight"
-              type="number"
-              min="0"
-              max="1"
-              step="0.05"
-              @input="setGrowthWeight($event.target.value)"
-            />
-          </label>
-          <label>
-            cycle_weight
-            <input
-              :value="generateForm.params.cycle_weight"
-              type="number"
-              min="0"
-              max="1"
-              step="0.05"
-              @input="setCycleWeight($event.target.value)"
-            />
-          </label>
-          <label>
-            industry cap
-            <input v-model.number="generateForm.params.max_industry_weight" type="number" min="0" max="1" step="0.05" />
-          </label>
-          <label>
-            cash_buffer
-            <input v-model.number="generateForm.params.cash_buffer" type="number" min="0" max="1" step="0.01" />
-          </label>
-          <label>
-            浮动止盈
-            <input v-model.number="generateForm.params.trailing_stop_pct" type="number" min="0" max="1" step="0.01" placeholder="0.15" />
-            <small class="field-hint">峰值回撤比例，0 或留空关闭；回测已支持，实盘监控二期</small>
-          </label>
-          <label>
-            buy commission
-            <input v-model.number="generateForm.params.buy_commission_rate" type="number" min="0" step="0.00001" />
-          </label>
-          <label>
-            sell commission
-            <input v-model.number="generateForm.params.sell_commission_rate" type="number" min="0" step="0.00001" />
-          </label>
-          <label>
-            min commission
-            <input v-model.number="generateForm.params.min_commission" type="number" min="0" step="0.1" />
-          </label>
-          <label>
-            stamp tax
-            <input v-model.number="generateForm.params.stamp_tax_rate" type="number" min="0" step="0.00001" />
-          </label>
-          <label>
-            initial_capital
-            <input v-model.number="generateForm.params.initial_capital" type="number" min="1" step="10000" />
-          </label>
-        </div>
-        </div>
-        <button :disabled="generateLoading || !generateForm.strategy_template_id || !generateForm.base_date" @click="generatePlan">
-          {{ generateLoading ? '提交中...' : '生成 plan' }}
-        </button>
-        <p v-if="currentGenerationTask" class="task-status">
-          任务 {{ currentGenerationTask.task_id }}：{{ currentGenerationTask.status }}
-          <span v-if="currentGenerationTask.plan_id"> / plan {{ currentGenerationTask.plan_id }}</span>
-          <span v-if="currentGenerationTask.error_message"> / {{ currentGenerationTask.error_message }}</span>
-        </p>
-      </div>
-    </section>
+    <PlanGenerationPanel
+      v-if="opsWorkbenchExpanded"
+      :expanded="generateFormExpanded"
+      :form="generateForm"
+      :strategies="availableStrategies"
+      :selected-strategy="selectedGenerateStrategy"
+      :presets="parameterPresets"
+      :selected-preset="selectedPreset"
+      :evidence-rows="presetEvidenceRows"
+      :universe-options="universeOptions"
+      :loading="generateLoading"
+      :task="currentGenerationTask"
+      :strategy-label="strategyOptionLabel"
+      @toggle="generateFormExpanded = !generateFormExpanded"
+      @strategy-change="setGenerateStrategy"
+      @field-change="setGenerateField"
+      @preset-change="setGeneratePreset"
+      @param-change="setGenerateParam"
+      @growth-change="setGrowthWeight"
+      @cycle-change="setCycleWeight"
+      @watermark-refresh="loadPlanGenerationWatermark"
+      @generate="generatePlan"
+    />
 
     <p v-if="message" class="message">{{ message }}</p>
 
-    <section v-if="opsWorkbenchExpanded" class="card watermark-card">
-      <div class="task-list-header">
-        <div>
-          <h3>Plan 生成数据水位</h3>
-          <p class="muted">确认当前 base_date 对应评分数据是否可用于生成 plan。</p>
-        </div>
-        <button :disabled="watermarkLoading || !generateForm.strategy_template_id" @click="loadPlanGenerationWatermark">
-          刷新水位
-        </button>
-      </div>
-      <p v-if="watermarkLoading" class="muted">正在加载数据水位...</p>
-      <p v-else-if="!planGenerationWatermark" class="muted">请选择 strategy 后查看评分水位。</p>
-      <template v-else>
-        <div class="watermark-grid">
-          <div>
-            <span>universe</span>
-            <strong>{{ planGenerationWatermark.universe_index || '-' }}</strong>
-          </div>
-          <div>
-            <span>base_date 评分</span>
-            <strong>{{ targetScoringRunText }}</strong>
-            <small v-if="planGenerationWatermark.target_scoring_run?.updated_at">
-              updated {{ planGenerationWatermark.target_scoring_run.updated_at }}
-            </small>
-          </div>
-          <div>
-            <span>最近完成评分</span>
-            <strong>{{ latestCompletedScoringText }}</strong>
-          </div>
-          <div>
-            <span>最新可用评分数据</span>
-            <strong>{{ latestAvailableScoreText }}</strong>
-            <small>{{ latestAvailableScoreMeta }}</small>
-          </div>
-          <div>
-            <span>最近评分 run</span>
-            <strong>{{ latestScoringRunText }}</strong>
-          </div>
-        </div>
-        <p v-if="planGenerationWatermark.target_is_running" class="watermark-warning">
-          当前 base_date 的评分仍在运行，plan generation worker 会等待，避免使用半成品评分。
-        </p>
-      </template>
-    </section>
+    <PlanGenerationWatermarkPanel
+      v-if="opsWorkbenchExpanded"
+      :watermark="planGenerationWatermark"
+      :loading="watermarkLoading"
+      :disabled="!generateForm.strategy_template_id"
+      :target-scoring-run-text="targetScoringRunText"
+      :latest-completed-scoring-text="latestCompletedScoringText"
+      :latest-available-score-text="latestAvailableScoreText"
+      :latest-available-score-meta="latestAvailableScoreMeta"
+      :latest-scoring-run-text="latestScoringRunText"
+      @refresh="loadPlanGenerationWatermark"
+    />
 
-    <section v-if="opsWorkbenchExpanded" class="card worker-status-card">
-      <div class="task-list-header">
-        <div>
-          <h3>Plan 生成 Worker</h3>
-          <p class="muted">展示 quant-scorer 最近一次 heartbeat，辅助判断任务是否有人消费。</p>
-        </div>
-        <button :disabled="workerStatusLoading" @click="loadWorkerStatus">刷新 worker</button>
-      </div>
-      <p v-if="workerStatusLoading" class="muted">正在加载 worker 状态...</p>
-      <p v-else-if="!workerStatuses.length" class="muted">暂无 worker heartbeat。</p>
-      <div v-else class="worker-status-grid">
-        <div v-for="worker in workerStatuses" :key="worker.worker_id" class="worker-status-row">
-          <span>{{ worker.worker_id }}</span>
-          <strong>{{ worker.status }}</strong>
-          <small>last_seen: {{ worker.last_seen_at || '-' }}</small>
-          <small v-if="worker.current_task_id">current_task: {{ worker.current_task_id }}</small>
-          <small v-else-if="worker.last_task_id">last_task: {{ worker.last_task_id }}</small>
-          <small v-if="worker.last_message">{{ worker.last_message }}</small>
-        </div>
-      </div>
-    </section>
+    <PlanWorkerStatusPanel v-if="opsWorkbenchExpanded" :workers="workerStatuses" :loading="workerStatusLoading" @refresh="loadWorkerStatus" />
 
-    <section class="card live-ops-card">
-      <div class="task-list-header">
-        <div>
-          <h3>实盘执行监控</h3>
-          <p class="muted">
-            <span v-if="selectedPlanId">当前 plan：{{ selectedPlanId }} · </span>
-            signals {{ formatSummary(liveSignalStatusSummary) }} · executions {{ formatSummary(liveExecutionStatusSummary) }}
-            <span v-if="latestTraderHeartbeat"> · quantTrader {{ latestTraderHeartbeat.status }} / {{ latestTraderHeartbeat.last_seen_at || '-' }}</span>
-          </p>
-        </div>
-        <div class="task-list-actions">
-          <select v-model="selectedLiveAccountId" @change="loadLiveOps">
-            <option value="">全部账户</option>
-            <option v-for="account in liveAccountOptions" :key="account.id" :value="account.id">
-              {{ account.label }}
-            </option>
-          </select>
-          <button :disabled="liveOpsLoading" @click="loadLiveOps">刷新实盘状态</button>
-          <button @click="liveOpsExpanded = !liveOpsExpanded">
-            {{ liveOpsExpanded ? '收起详情' : '展开详情' }}
-          </button>
-        </div>
-      </div>
-      <p v-if="liveOpsLoading && liveOpsExpanded" class="muted">正在加载实盘状态...</p>
-      <div v-else-if="liveOpsExpanded" class="live-ops-grid">
-        <div>
-          <h4>quantTrader heartbeat</h4>
-          <p v-if="!traderHeartbeats.length" class="muted">暂无 heartbeat。</p>
-          <p v-for="heartbeat in traderHeartbeats" :key="heartbeat.worker_id" class="ops-line">
-            <strong>{{ heartbeat.status }}</strong>
-            <span>{{ heartbeat.worker_id }}</span>
-            <small>{{ heartbeat.last_seen_at || '-' }}</small>
-          </p>
-        </div>
-        <div>
-          <h4>Live signals</h4>
-          <p v-if="!liveSignals.length" class="muted">暂无 live signals。</p>
-          <p v-for="signal in liveSignals.slice(0, 20)" :key="signal.order_id" class="ops-line">
-            <strong>{{ signal.status }}</strong>
-            <span>{{ signal.action }} {{ signalDisplayName(signal) }} x {{ signal.size }}</span>
-            <small>{{ signal.execution_time || signal.created_at || signal.timestamp || '-' }}</small>
-          </p>
-        </div>
-        <div>
-          <h4>Executions</h4>
-          <p v-if="!liveExecutions.length" class="muted">暂无 execution。</p>
-          <p v-for="execution in liveExecutions.slice(0, 5)" :key="`${execution.order_id}-${execution.status}-${execution.timestamp}`" class="ops-line">
-            <strong>{{ execution.status }}</strong>
-            <span>{{ execution.action }} {{ execution.symbol }} filled {{ execution.filled_size ?? '-' }}</span>
-            <small>{{ execution.execution_time || execution.timestamp || '-' }}</small>
-          </p>
-        </div>
-      </div>
-    </section>
+    <LiveOpsMonitorPanel
+      v-model:account-id="monitorAccountId"
+      :plan-id="selectedPlanId"
+      :signal-summary="formatSummary(liveSignalStatusSummary)"
+      :execution-summary="formatSummary(liveExecutionStatusSummary)"
+      :latest-heartbeat="latestTraderHeartbeat"
+      :account-options="liveAccountOptions"
+      :loading="liveOpsLoading"
+      :expanded="liveOpsExpanded"
+      :heartbeats="traderHeartbeats"
+      :signals="liveSignals"
+      :executions="liveExecutions"
+      @refresh="loadLiveOps"
+      @toggle="liveOpsExpanded = !liveOpsExpanded"
+    />
 
-    <section class="card task-list-card">
-      <div class="task-list-header">
-        <div>
-          <h3>最近生成任务</h3>
-          <p class="muted">
-            {{ generationTasks.length }} 条最近任务
-            <span v-if="latestGenerationTask">
-              · 最新 {{ latestGenerationTask.status }} / {{ latestGenerationTask.strategy_template_id }} / {{ latestGenerationTask.base_date }}
-            </span>
-          </p>
-        </div>
-        <div class="task-list-actions">
-          <button @click="generationTasksExpanded = !generationTasksExpanded">
-            {{ generationTasksExpanded ? '折叠' : '展开' }}
-          </button>
-          <button :disabled="tasksLoading" @click="loadGenerationTasks">刷新任务</button>
-        </div>
-      </div>
-      <template v-if="generationTasksExpanded">
-        <p v-if="tasksLoading" class="muted">正在加载任务...</p>
-        <p v-else-if="!generationTasks.length" class="muted">暂无生成任务。</p>
-        <div v-else class="table-wrap compact generation-task-table">
-          <table>
-            <thead>
-              <tr>
-                <th>created_at</th>
-                <th>status</th>
-                <th>strategy</th>
-                <th>base_date</th>
-                <th>mode</th>
-                <th>attempts</th>
-                <th>worker</th>
-                <th>plan/error</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="task in generationTasks"
-                :key="task.task_id"
-                :class="{ active: currentGenerationTask?.task_id === task.task_id }"
-                @click="currentGenerationTask = task"
-              >
-                <td>{{ task.created_at || '-' }}</td>
-                <td>{{ task.status || '-' }}</td>
-                <td class="truncate" :title="task.strategy_template_id">{{ task.strategy_template_id || '-' }}</td>
-                <td>{{ task.base_date || '-' }}</td>
-                <td>{{ task.mode || '-' }}</td>
-                <td>{{ task.attempts ?? 0 }}</td>
-                <td class="truncate" :title="task.worker_id">{{ task.worker_id || '-' }}</td>
-                <td class="truncate" :title="task.plan_id || task.error_message || task.task_id">
-                  {{ task.plan_id || task.error_message || task.task_id }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </template>
-    </section>
+    <PlanTaskHistoryPanel
+      :tasks="generationTasks"
+      :latest-task="latestGenerationTask"
+      :current-task-id="currentGenerationTask?.task_id || ''"
+      :expanded="generationTasksExpanded"
+      :loading="tasksLoading"
+      @toggle="generationTasksExpanded = !generationTasksExpanded"
+      @refresh="loadGenerationTasks"
+      @select="currentGenerationTask = $event"
+    />
 
     <div class="layout">
-      <aside class="card plan-list">
-        <h3>计划列表</h3>
-        <p v-if="loading" class="muted">正在加载...</p>
-        <button
-          v-for="plan in displayPlans"
-          :key="plan.plan_id"
-          class="plan-row"
-          :class="planRowClass(plan)"
-          @click="selectPlan(plan.plan_id)"
-        >
-          <span>
-            <strong>{{ plan.base_date }}</strong>
-            <small>{{ planDisplayTitle(plan) }} · {{ planParamSummary(plan) }}</small>
-            <small v-if="planBaselineEquity(plan) != null" class="plan-row-baseline">
-              基准 {{ capitalBasisLabel(plan) }} · {{ money(planBaselineEquity(plan)) }}
-            </small>
-          </span>
-          <em>
-            <span class="cadence-tag" :class="planCadenceBadge(plan).cls">{{ planCadenceBadge(plan).text }}</span>
-            <span v-if="planRelationBadge(plan)" class="relation-tag" :class="planRelationBadge(plan).cls">
-              {{ planRelationBadge(plan).text }}
-            </span>
-            {{ plan.status }}
-          </em>
-        </button>
-        <p v-if="!loading && !displayPlans.length" class="muted">
-          {{ showOnlyActionRequired ? '暂无需要处理的计划。' : '暂无计划。' }}
-        </p>
-      </aside>
+      <PortfolioPlanList
+        :plans="displayPlans"
+        :all-plans="plans"
+        :selected-plan-id="selectedPlanId"
+        :selected-detail="selectedDetail"
+        :loading="loading"
+        :only-action-required="showOnlyActionRequired"
+        :display-title="planDisplayTitle"
+        @select="selectPlan"
+      />
 
       <main class="card detail">
         <template v-if="selectedDetail">
-          <div class="detail-header">
-            <div>
-              <h3>
-                {{ planDisplayTitle(selectedDetail.plan) }}
-                <span class="cadence-tag" :class="planCadenceBadge(selectedDetail.plan).cls">
-                  {{ planCadenceBadge(selectedDetail.plan).text }}
-                </span>
-              </h3>
-              <p class="muted">
-                {{ selectedDetail.plan.base_date }} → {{ selectedDetail.plan.execute_date || '-' }}
-                · {{ selectedDetail.plan.status }}
-                · {{ planParamSummary(selectedDetail.plan) }}
-                · initial capital {{ money(effectiveInitialCapital(selectedDetail.plan)) }}
-                <span v-if="selectedDetail.plan.previous_rebalance_date">
-                  · 上次调仓 {{ selectedDetail.plan.previous_rebalance_date }}
-                </span>
-                <span v-if="selectedDetail.plan.rebalance_days">
-                  · 周期 {{ selectedDetail.plan.rebalance_days }} 个交易日
-                </span>
-                <span v-if="selectedDetail.plan.next_rebalance_date">
-                  · 下次调仓 {{ selectedDetail.plan.next_rebalance_date }}<template
-                    v-if="selectedDetail.plan.record_kind === 'observation' && selectedDetail.plan.elapsed_trading_days_since_rebalance != null"
-                  >（已过 {{ selectedDetail.plan.elapsed_trading_days_since_rebalance }} 个交易日）</template>
-                </span>
-              </p>
-              <p v-if="signalReviewSummary" class="muted">
-                AI风险/机会最近分析：{{ signalReviewSummary }}
-              </p>
-            </div>
-            <div v-if="selectedDetail.plan.status === 'needs_review'" class="actions">
-              <button :disabled="actionLoading" @click="review('approved')">审核通过</button>
-              <button class="danger" :disabled="actionLoading" @click="review('rejected')">驳回</button>
-            </div>
-          </div>
+          <PortfolioPlanDetailHeader
+            :detail="selectedDetail"
+            :display-title="planDisplayTitle"
+            :signal-review-summary="signalReviewSummary"
+            :monitor-no-trade="selectedPlanIsMonitorNoTrade"
+            :score-snapshot-stale="scoreSnapshotStale"
+            :overlay="liveOverlay"
+          />
 
-          <p v-if="selectedPlanIsMonitorNoTrade" class="monitor-note">
-            观察日（未到调仓周期）：本计划仅展示组合漂移，不产生交易。下方“漂移”列为若调仓应执行的股数。
-            调仓周期按 <strong>交易日</strong> 计（自动跳过周末与节假日）：每 {{ selectedDetail.plan.rebalance_days || 'N' }} 个交易日调仓一次。
-            <template v-if="selectedDetail.plan.next_rebalance_date">
-              预计下次调仓日：<strong>{{ selectedDetail.plan.next_rebalance_date }}</strong>（可通过 monitor_can_trade 参数放开观察日交易）。
-            </template>
-            <template v-else>
-              到期后才会生成可执行的调仓计划（可通过 monitor_can_trade 参数放开观察日交易）。
-            </template>
-          </p>
+          <PlanReviewPanel
+            :visible="needsReviewPlan && Boolean(selectedDetail)"
+            :plan-id="reviewPlanId"
+            :items="planTargetRows"
+            :overlay="liveOverlay"
+            :score-snapshot-stale="scoreSnapshotStale"
+            :summary="planReviewSummary"
+            :risk-summary="planReviewRiskSummary"
+            :llm-risk-summary="llmRiskSummary"
+            :approve-submitting="approveSubmitting"
+            :reject-submitting="rejectSubmitting"
+            :review-ai-risk-loading="aiRiskRunning"
+            :review-llm-risk-loading="llmRiskRunning"
+            :can-reselect-items="canReselectItems"
+            :selected-reselect-symbols="selectedReselectSymbols"
+            :selected-plan-excluded="selectedPlanExcluded"
+            :selected-reselect-count="selectedReselectCount"
+            :action-loading="reselectActionLoading"
+            :reselect-busy="reselectBusy"
+            :pending-reselect-symbol="pendingReselect?.symbol || ''"
+            :reselect-status="reselectStatus"
+            :reselect-task-meta="reselectTaskMeta"
+            :last-reselect-summary="lastReselectSummary"
+            @approve="approvePendingPlan"
+            @reject="rejectPendingPlan"
+            @rerun-ai-risk="runAiRisk"
+            @rerun-llm-risk="runLlmRisk"
+            @toggle-reselect="toggleReselectSelection"
+            @reselect="reselectItem"
+            @bulk-reselect="bulkReselectItems"
+            @select-high-risk="selectHighRiskReselectItems"
+          />
 
-          <p v-if="scoreSnapshotStale" class="watermark-warning">
-            评分快照 {{ liveOverlay?.score_snapshot_date || '-' }}，最新评分 {{ liveOverlay?.latest_score_date || '-' }}
-            <template v-if="liveOverlay?.score_snapshot_age_days != null">（已过期 {{ liveOverlay.score_snapshot_age_days }} 天）</template>
-            · 排名与价格可能已变化，发布时将按最新价重算股数
-          </p>
+          <PlanOpsPanel
+            :visible="showPlanOpsPanel"
+            :plan-id="selectedOperationPlanId"
+            :plan-status="selectedPlanStatus"
+            :execution-mode-label="selectedPlanExecutionModeLabel"
+            :execution-venue="executionVenue"
+            :execution-venue-label="executionVenueLabel"
+            :overlay="liveOverlay"
+            :score-snapshot-stale="scoreSnapshotStale"
+            :is-paper="isPaperPortfolio"
+            :can-execute-paper-now="canExecutePaperNow"
+            :paper-execute-ready-text="paperExecuteReadyText"
+            :paper-execute-loading="paperExecuteLoading"
+            v-model:selected-live-account-id="operationAccountId"
+            :live-account-options="liveAccountOptions"
+            :can-publish-live-signals="canPublishLiveSignals"
+            :has-published-live-signals="selectedPlanHasPublishedLiveSignals"
+            :live-publish-loading="livePublishLoading"
+            :live-publish-blockers="livePublishBlockers"
+            :can-confirm-publish="canConfirmLivePublish"
+            :allow-partial-publish="allowPartialPublish"
+            :can-cancel-current-plan="canCancelCurrentPlan"
+            :cancel-plan-ready-text="cancelPlanReadyText"
+            :cancel-plan-loading="cancelPlanLoading"
+            :llm-risk-summary="llmRiskSummary"
+            :llm-risk-loading="llmRiskRunning"
+            :remainder-preview="remainderPreview"
+            :remainder-rows="remainderRows"
+            :remainder-actionable-count="remainderActionableCount"
+            :remainder-blockers="remainderBlockers"
+            :remainder-skipped="remainderSkipped"
+            :remainder-publishable-count="remainderPublishableCount"
+            :can-confirm-remainder="canConfirmRemainder"
+            :allow-partial-remainder="allowPartialRemainder"
+            :remainder-loading="remainderLoading"
+            v-model:remainder-reason="remainderReason"
+            @execute-paper="executePaperNow"
+            @preview-publish="previewLivePublish"
+            @confirm-publish="publishLiveSignals"
+            @preview-remainder="previewRemainder"
+            @confirm-remainder="confirmRemainder"
+            @update:allow-partial-remainder="setAllowPartialRemainder"
+            @cancel-plan="cancelCurrentPlan"
+            @rerun-llm-risk="runLlmRisk"
+          />
 
-          <section v-if="planLineage(selectedDetail.plan).show" class="lineage-panel">
-            <div>
-              <span>当前 plan</span>
-              <strong :title="selectedDetail.plan.plan_id">{{ shortPlanId(selectedDetail.plan.plan_id) }}</strong>
-              <small>{{ selectedDetail.plan.base_date || '-' }} · {{ planCadenceBadge(selectedDetail.plan).text }}</small>
-            </div>
-            <div>
-              <span>组合血缘</span>
-              <strong :title="selectedDetail.plan.params_hash || '-'">{{ selectedDetail.plan.params_hash || '-' }}</strong>
-              <small>{{ planParamSummary(selectedDetail.plan) }}</small>
-            </div>
-            <div>
-              <span>继承自上次调仓</span>
-              <button
-                v-if="planLineage(selectedDetail.plan).previousPlanId"
-                type="button"
-                class="lineage-link"
-                :title="planLineage(selectedDetail.plan).previousPlanId"
-                @click="selectPlan(planLineage(selectedDetail.plan).previousPlanId)"
-              >
-                {{ shortPlanId(planLineage(selectedDetail.plan).previousPlanId) }}
-              </button>
-              <strong v-else>{{ planLineage(selectedDetail.plan).previousDate || '-' }}</strong>
-              <small>
-                {{ planLineage(selectedDetail.plan).previousDate ? `base_date ${planLineage(selectedDetail.plan).previousDate}` : '首次调仓，无上一期' }}
-              </small>
-            </div>
-          </section>
+          <PlanPublishPreviewModal
+            :visible="showPublishModal"
+            :preview="livePublishPreview"
+            :loading="livePublishLoading"
+            :blocker-messages="livePublishBlockers"
+            :allow-partial="allowPartialPublish"
+            :confirm-disabled="!canConfirmLivePublish"
+            @close="showPublishModal = false"
+            @update:allow-partial="setAllowPartialPublish"
+            @confirm="publishLiveSignals"
+          />
 
-          <div class="metrics">
-            <div><span>买入</span><strong>{{ selectedDetail.plan.summary?.buy_count ?? 0 }}</strong></div>
-            <div><span>卖出</span><strong>{{ selectedDetail.plan.summary?.sell_count ?? 0 }}</strong></div>
-            <div><span>持有</span><strong>{{ selectedDetail.plan.summary?.hold_count ?? 0 }}</strong></div>
-            <div><span>跳过</span><strong>{{ selectedDetail.plan.summary?.skip_count ?? 0 }}</strong></div>
-            <div><span>目标 TopN</span><strong>{{ effectiveTopN(selectedDetail.plan) }}</strong></div>
-            <div><span>换手</span><strong>{{ pct(selectedDetail.plan.summary?.estimated_turnover) }}</strong></div>
-            <div><span>权益</span><strong>{{ money(selectedDetail.plan.summary?.equity) }}</strong></div>
-          </div>
+          <PortfolioPlanLineageSummary :plan="selectedDetail.plan" :plans="plans" @select="selectPlan" />
 
-          <section class="capital-basis" v-if="selectedDetail.plan.summary">
-            <div class="task-list-header">
-              <div>
-                <h4>资金基准</h4>
-                <p class="muted">下一期调仓的目标仓位以此基准权益规划（实盘默认按账户成交滚动复利）。</p>
-              </div>
-            </div>
-            <div class="metrics">
-              <div><span>基准模式</span><strong>{{ capitalBasisLabel(selectedDetail.plan) }}</strong></div>
-              <div><span>基准来源</span><strong>{{ baselineSourceLabel(selectedDetail.plan) }}</strong></div>
-              <div>
-                <span>基准权益</span>
-                <strong>{{ money(selectedDetail.plan.summary?.baseline_equity ?? selectedDetail.plan.summary?.equity) }}</strong>
-              </div>
-              <div>
-                <span>可用现金</span>
-                <strong>{{ money(selectedDetail.plan.summary?.baseline_cash ?? selectedDetail.plan.summary?.cash) }}</strong>
-              </div>
-              <div v-if="selectedDetail.plan.summary?.baseline_securities_account_id">
-                <span>证券账户</span>
-                <strong :title="selectedDetail.plan.summary.baseline_securities_account_id">
-                  {{ shortPlanId(selectedDetail.plan.summary.baseline_securities_account_id) }}
-                </strong>
-              </div>
-              <div v-if="selectedDetail.plan.summary?.baseline_synced_at">
-                <span>账户同步</span>
-                <strong>{{ baselineSyncedLabel(selectedDetail.plan) }}</strong>
-              </div>
-            </div>
-          </section>
+          <PortfolioPlanCapitalBasis :plan="selectedDetail.plan" />
 
-          <label class="review-comment" v-if="selectedDetail.plan.status === 'needs_review'">
-            审核备注
-            <textarea v-model="reviewComment" rows="2" placeholder="记录审核意见或风险确认" />
-          </label>
-
-          <section class="operation-log-panel">
-            <div class="task-list-header">
-              <div>
-                <h4>操作日志</h4>
-                <p class="muted">保留 reject/restore 与重生成任务的入队与完成记录。</p>
-              </div>
-              <div class="task-list-actions">
-                <button :disabled="operationLogsLoading || !selectedPlanId" @click="loadOperationLogs">刷新日志</button>
-              </div>
-            </div>
-            <p v-if="operationLogsLoading" class="muted">正在加载日志...</p>
-            <p v-else-if="!operationLogs.length" class="muted">暂无操作日志。</p>
-            <div v-else class="table-wrap compact operation-log-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>time</th>
-                    <th>operation</th>
-                    <th>symbol</th>
-                    <th>status</th>
-                    <th>task</th>
-                    <th>message</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="log in operationLogs" :key="log.log_id">
-                    <td>{{ log.created_at || '-' }}</td>
-                    <td>{{ log.operation_type || '-' }}</td>
-                    <td>{{ log.operation_symbol || '-' }}</td>
-                    <td>{{ log.status || '-' }}</td>
-                    <td class="truncate" :title="log.task_id || '-'">{{ log.task_id || '-' }}</td>
-                    <td class="truncate" :title="log.message || '-'">{{ log.message || '-' }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <PlanOperationLogsPanel :logs="operationLogs" :loading="operationLogsLoading" :disabled="!selectedPlanId" @refresh="loadOperationLogs" />
 
           <section v-if="showPaperExecutionStatus" class="execution-status">
             <h4>后台执行状态</h4>
@@ -640,338 +285,47 @@
             </p>
           </section>
 
-          <section v-if="selectedDetail.plan.status === 'approved' && !selectedPlanHasLiveSignals" class="live-publish-panel">
-            <div class="task-list-header">
-              <div>
-                <h4>发布到实盘</h4>
-                <p v-if="canPublishLiveSignals" class="muted">先 dry-run 生成 risk report，确认后才写入 executable live signals。</p>
-                <p v-else class="muted">该 plan 已执行 Paper；为避免同一份计划同时走 paper 和实盘，不能再发布 live signals。</p>
-              </div>
-              <div class="task-list-actions">
-                <button
-                  :disabled="paperExecuteLoading || livePublishLoading || !canExecutePaperNow"
-                  :title="paperExecuteReadyText"
-                  @click="executePaperNow"
-                >
-                  立即执行 Paper
-                </button>
-                <select v-model="selectedLiveAccountId">
-                  <option value="">请选择账户</option>
-                  <option v-for="account in liveAccountOptions" :key="account.id" :value="account.id">
-                    {{ account.label }}
-                  </option>
-                </select>
-                <button :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals" @click="previewLivePublish">实盘预检</button>
-                <button :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals || livePublishBlockers.length" @click="publishLiveSignals">
-                  确认发布
-                </button>
-              </div>
-            </div>
-            <PlanPublishPreviewModal
-              :visible="showPublishModal"
-              :preview="livePublishPreview"
-              :loading="livePublishLoading"
-              :blocker-messages="livePublishBlockers"
-              :confirm-disabled="Boolean(livePublishBlockers.length)"
-              @close="showPublishModal = false"
-              @confirm="publishLiveSignals"
-            />
-          </section>
+          <PortfolioPlanItemsPanel
+            :visible="!needsReviewPlan"
+            :items="selectedDetail.items"
+            :overlay="liveOverlay"
+            :plan-id="selectedDetail.plan?.plan_id || ''"
+            :ai-risk-summary="aiRiskSummary"
+            :llm-risk-summary="llmRiskSummary"
+            :risk-snapshot="riskSnapshot"
+            :ai-risk-running="aiRiskRunning"
+            :llm-risk-running="llmRiskRunning"
+            :llm-risk-meta="llmRiskMeta"
+            :can-reselect-items="canReselectItems"
+            :selected-reselect-count="selectedReselectCount"
+            :action-loading="combinedActionLoading"
+            :reselect-busy="reselectBusy"
+            :reselect-status="reselectStatus"
+            :reselect-task-meta="reselectTaskMeta"
+            :last-reselect-summary="lastReselectSummary"
+            :excluded-symbols="selectedPlanExcluded"
+            :pending-reselect-symbol="pendingReselect?.symbol || ''"
+            :selected-reselect-symbols="selectedReselectSymbols"
+            :has-live-signals="selectedPlanHasLiveSignals"
+            :monitor-no-trade="selectedPlanIsMonitorNoTrade"
+            @select-high-risk="selectHighRiskReselectItems"
+            @bulk-reselect="bulkReselectItems"
+            @run-ai-risk="runAiRisk"
+            @run-llm-risk="runLlmRisk"
+            @toggle-reselect="toggleReselectSelection"
+            @reselect="reselectItem"
+            @risk-changed="reloadSelectedPlan"
+          />
 
-          <section v-if="selectedDetail.plan.status === 'approved' && selectedPlanHasLiveSignals" class="live-publish-panel">
-            <div class="task-list-header">
-              <div>
-                <h4>实盘补缺口</h4>
-                <p class="muted">
-                  基于实盘账户持仓与可用现金，补足该计划未成交/被撤的差额（买单按预算+现金封顶，不重新选股）。
-                  先缺口预检，确认后写入 plan_topup 信号。
-                </p>
-              </div>
-              <div class="task-list-actions">
-                <select v-model="selectedLiveAccountId">
-                  <option value="">请选择账户</option>
-                  <option v-for="account in liveAccountOptions" :key="account.id" :value="account.id">
-                    {{ account.label }}
-                  </option>
-                </select>
-                <input v-model="remainderReason" class="reason-input" type="text" placeholder="补单原因（可选）" />
-                <button :disabled="remainderLoading || !selectedLiveAccountId" @click="previewRemainder">缺口预检</button>
-                <button
-                  :disabled="remainderLoading || !selectedLiveAccountId || !remainderActionableCount || remainderBlockers.length"
-                  @click="confirmRemainder"
-                >
-                  确认补单
-                </button>
-              </div>
-            </div>
-            <div v-if="remainderPreview" class="risk-report">
-              <p v-if="remainderCashUsageText" class="muted">{{ remainderCashUsageText }}</p>
-              <p>
-                可补 {{ remainderActionableCount }} 项，阻断 {{ remainderPreview.risk_report?.blocked_count ?? 0 }} 条
-                <span v-if="remainderPreview.account_synced === false" class="watermark-warning">账户未同步持仓，无法补单</span>
-              </p>
-              <p v-if="remainderBlockers.length" class="watermark-warning">
-                {{ remainderBlockers.slice(0, 8).join(' / ') }}
-              </p>
-              <div v-if="remainderRows.length" class="table-wrap compact risk-report-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>股票</th>
-                      <th>方向</th>
-                      <th>目标</th>
-                      <th>计划持仓</th>
-                      <th>缺口</th>
-                      <th>补单量</th>
-                      <th>预估金额</th>
-                      <th>说明</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in remainderRows" :key="row.symbol" :class="{ blocked: !row.actionable }">
-                      <td>{{ row.name || row.symbol }}</td>
-                      <td>{{ row.action || '-' }}</td>
-                      <td>{{ row.target_shares ?? '-' }}</td>
-                      <td :title="`账户聚合持仓：${row.account_current_shares ?? '-'}`">
-                        {{ row.baseline_current_shares ?? row.account_current_shares ?? '-' }}
-                      </td>
-                      <td>{{ row.gap_shares ?? 0 }}</td>
-                      <td>{{ row.topup_shares ?? 0 }}</td>
-                      <td>{{ money(row.estimated_amount) }}</td>
-                      <td class="risk-reasons">
-                        <span v-if="!row.reasons?.length">-</span>
-                        <span
-                          v-for="reason in row.reasons"
-                          v-else
-                          :key="`${row.symbol}-${reason}`"
-                          class="risk-chip"
-                          :title="reason"
-                        >
-                          {{ remainderReasonText(reason) }}
-                        </span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
+          <PortfolioPlanEquityPanel
+            v-if="selectedPlanHasLiveSignals || showPaperSections"
+            :live="selectedPlanHasLiveSignals"
+            :realtime-equity="realtimeEquity"
+            :rows="equityRows"
+            :chart="equityChart"
+          />
 
-          <section>
-            <div class="section-head">
-              <h4>目标持仓与交易明细</h4>
-              <div class="ai-risk-bar">
-                <span v-if="aiRiskSummary" class="ai-risk-summary">
-                  规则风控：<b class="risk-high">{{ aiRiskSummary.high || 0 }}高</b>
-                  / <b class="risk-medium">{{ aiRiskSummary.medium || 0 }}中</b>
-                  / <b class="risk-low">{{ aiRiskSummary.low || 0 }}低</b>
-                </span>
-                <span v-if="llmRiskSummary" class="ai-risk-summary">
-                  AI风险/机会：{{ llmRiskSummary.industry_count || 0 }}行业 / {{ llmRiskSummary.symbol_count || 0 }}标的
-                  <template v-if="llmRiskSummary.source === 'ledger'"> · 个股台账</template>
-                </span>
-                <span v-if="riskSnapshot" class="ai-risk-summary risk-snapshot-hint">
-                  决策快照({{ riskSnapshot.decision_point }})：{{ riskSnapshot.summary?.symbol_count || 0 }}标的
-                  · {{ formatSnapshotAt(riskSnapshot.captured_at) }}
-                </span>
-                <button
-                  v-if="canReselectItems"
-                  class="link-btn"
-                  :disabled="combinedActionLoading || reselectBusy"
-                  title="点选全部 AI 高风险标的；已全部勾选时再点可取消"
-                  @click="selectHighRiskReselectItems"
-                >
-                  勾选高风险
-                </button>
-                <button
-                  v-if="canReselectItems"
-                  class="link-btn link-btn--primary"
-                  :disabled="combinedActionLoading || reselectBusy || !selectedReselectCount"
-                  title="一次性排除勾选标的并重算候选池补位"
-                  @click="bulkReselectItems"
-                >
-                  批量换股 {{ selectedReselectCount ? `(${selectedReselectCount})` : '' }}
-                </button>
-                <button class="link-btn" :disabled="aiRiskRunning" @click="runAiRisk">
-                  <span v-if="aiRiskRunning" class="spinner" />
-                  {{ aiRiskRunning ? '规则风控运行中…' : '运行规则风控' }}
-                </button>
-                <button class="link-btn" :disabled="llmRiskRunning" @click="runLlmRisk">
-                  <span v-if="llmRiskRunning" class="spinner" />
-                  {{ llmRiskRunning ? `AI 风险/机会分析 ${llmRiskMeta.summary || '运行中…'}` : '运行 AI 风险/机会分析' }}
-                </button>
-              </div>
-            </div>
-            <p v-if="reselectStatus.state !== 'idle'" class="reselect-status" :class="`is-${reselectStatus.state}`">
-              <span v-if="reselectStatus.state === 'running'" class="spinner" />
-              {{ reselectStatus.text }}
-            </p>
-            <p v-if="reselectTaskMeta.taskId" class="reselect-meta">
-              task {{ reselectTaskMeta.taskId }} · {{ reselectTaskMeta.status || '-' }}
-            </p>
-            <p v-if="lastReselectSummary" class="reselect-summary">{{ lastReselectSummary }}</p>
-            <div v-if="canReselectItems && selectedPlanExcluded.length" class="excluded-bar">
-              <span class="excluded-label">已排除：</span>
-              <span v-for="sym in selectedPlanExcluded" :key="sym" class="excluded-chip">
-                {{ sym }}
-                <button class="link-btn" :disabled="combinedActionLoading || reselectBusy" @click="reselectItem(sym, true)">
-                  {{ reselectBusy && pendingReselect?.symbol === sym ? '恢复中…' : '恢复' }}
-                </button>
-              </span>
-            </div>
-            <PlanItemsTable
-              mode="plan"
-              :items="selectedDetail.items"
-              :overlay="liveOverlay"
-              :plan-id="selectedDetail.plan?.plan_id || ''"
-              :can-reselect-items="canReselectItems"
-              :selected-plan-has-live-signals="selectedPlanHasLiveSignals"
-              :selected-plan-is-monitor-no-trade="selectedPlanIsMonitorNoTrade"
-              :selected-reselect-symbols="selectedReselectSymbols"
-              :selected-plan-excluded="selectedPlanExcluded"
-              :action-loading="combinedActionLoading"
-              :reselect-busy="reselectBusy"
-              :pending-reselect-symbol="pendingReselect?.symbol || ''"
-              @toggle-reselect="toggleReselectSelection"
-              @reselect="(symbol, restore) => reselectItem(symbol, restore)"
-              @risk-changed="reloadSelectedPlan"
-            />
-          </section>
-
-          <section v-if="selectedPlanHasLiveSignals || showPaperSections">
-            <h4>{{ selectedPlanHasLiveSignals ? '实盘资金曲线' : '组合血缘 Paper 净值' }}</h4>
-            <div v-if="realtimeEquity" class="realtime-equity">
-              <div>
-                <span>{{ selectedPlanHasLiveSignals ? '实盘实时估算权益' : '实时估算权益' }}</span>
-                <strong>{{ money(realtimeEquity.equity) }}</strong>
-              </div>
-              <div>
-                <span>较最新落库净值</span>
-                <strong>{{ signedMoney(realtimeEquity.change) }} / {{ signedPct(realtimeEquity.change_pct) }}</strong>
-              </div>
-              <div>
-                <span>实时市值</span>
-                <strong>{{ money(realtimeEquity.market_value) }}</strong>
-              </div>
-              <div>
-                <span>现金</span>
-                <strong>{{ money(realtimeEquity.cash) }}</strong>
-              </div>
-              <div>
-                <span>更新时间</span>
-                <strong>{{ realtimeEquity.latest_update || '-' }}</strong>
-              </div>
-            </div>
-            <p v-if="!equityRows.length" class="muted">
-              {{ selectedPlanHasLiveSignals ? '暂无实盘资金曲线，盘后任务落库后显示。' : '暂无组合血缘 paper 净值。' }}
-            </p>
-            <template v-else>
-              <div class="equity-summary">
-                <div>
-                  <span>最新权益</span>
-                  <strong>{{ money(equityRows[equityRows.length - 1]?.equity) }}</strong>
-                </div>
-                <div>
-                  <span>累计收益</span>
-                  <strong>{{ signedPct(equityChart.latestReturn) }}</strong>
-                </div>
-                <div>
-                  <span>最近变化</span>
-                  <strong>{{ signedMoney(equityRows[equityRows.length - 1]?.change) }}</strong>
-                </div>
-              </div>
-              <div class="equity-chart" :aria-label="selectedPlanHasLiveSignals ? 'Live equity curve' : 'Paper equity curve'">
-                <svg viewBox="0 0 640 220" role="img">
-                  <line x1="28" y1="28" x2="28" y2="192" />
-                  <line x1="28" y1="192" x2="612" y2="192" />
-                  <polyline :points="equityChart.points" />
-                  <circle
-                    v-for="point in equityChart.points.split(' ')"
-                    :key="point"
-                    :cx="point.split(',')[0]"
-                    :cy="point.split(',')[1]"
-                    r="3"
-                  />
-                  <text x="36" y="22">{{ money(equityChart.max) }}</text>
-                  <text x="36" y="186">{{ money(equityChart.min) }}</text>
-                  <text
-                    v-for="label in equityChart.labels"
-                    :key="label.text"
-                    :x="label.x"
-                    :y="label.y"
-                    :text-anchor="label.anchor"
-                  >
-                    {{ label.text }}
-                  </text>
-                </svg>
-              </div>
-              <div class="table-wrap compact">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>日期</th>
-                      <th v-if="!selectedPlanHasLiveSignals">来源 plan</th>
-                      <th>权益</th>
-                      <th>日变化</th>
-                      <th>日变化率</th>
-                      <th>现金</th>
-                      <th>市值</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="point in equityRows.slice().reverse()" :key="point.date">
-                      <td>{{ point.date }}</td>
-                      <td v-if="!selectedPlanHasLiveSignals" class="truncate" :title="point.plan_id || '-'">
-                        {{ shortPlanId(point.plan_id) }}
-                      </td>
-                      <td>{{ money(point.equity) }}</td>
-                      <td>{{ signedMoney(point.change) }}</td>
-                      <td>{{ signedPct(point.changePct) }}</td>
-                      <td>{{ money(point.cash) }}</td>
-                      <td>{{ money(point.market_value) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </template>
-          </section>
-
-          <section v-if="showPaperSections">
-            <h4>Paper 成交</h4>
-            <p v-if="!executions.length" class="muted">暂无 paper 成交。</p>
-            <div v-else class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th class="col-date">日期</th>
-                    <th class="col-symbol">代码</th>
-                    <th class="col-name">名称</th>
-                    <th>动作</th>
-                    <th>数量</th>
-                    <th>买入价格</th>
-                    <th>当前价格</th>
-                    <th>涨跌幅</th>
-                    <th>金额</th>
-                    <th>阻塞原因</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="execution in executions" :key="execution.execution_id">
-                    <td class="col-date">{{ execution.execute_date || '-' }}</td>
-                    <td class="col-symbol">{{ execution.symbol || '-' }}</td>
-                    <td class="col-name">{{ execution.name || '-' }}</td>
-                    <td>{{ execution.action || '-' }}</td>
-                    <td>{{ execution.quantity ?? 0 }}</td>
-                    <td>{{ num(execution.price) }}</td>
-                    <td>{{ num(currentPriceForExecution(execution)) }}</td>
-                    <td>{{ executionReturnPct(execution) }}</td>
-                    <td>{{ money(execution.amount) }}</td>
-                    <td>{{ execution.blocker || '-' }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <PortfolioPlanPaperFillsPanel v-if="showPaperSections" :executions="executions" :realtime-prices="realtimePriceBySymbol" />
         </template>
         <p v-else class="muted">请选择一份计划。</p>
       </main>
@@ -980,47 +334,21 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
+import { getPortfolioPlanGenerationTask } from '../api/portfolioPlans'
+import PortfolioPlanList from '../components/portfolio/PortfolioPlanList.vue'
 import {
-  approvePortfolioPlan,
-  enqueuePortfolioLlmRisk,
-  executePortfolioPlanPaper,
-  generatePortfolioPlan,
-  getPortfolioLlmRiskRun,
-  getPortfolioPlan,
-  getPortfolioPlanOperationLogs,
-  getPortfolioPlanExecutions,
-  getPortfolioPlanLiveEquity,
-  getPortfolioPlanLiveExecutions,
-  getPortfolioPlanLiveRealtimeEquity,
-  getPortfolioPlanLineageEquity,
-  getPortfolioPlanGenerationTask,
-  getPortfolioPlanGenerationWatermark,
-  listPortfolioParameterPresets,
-  listLiveTradeExecutions,
-  listLiveTradeSignals,
-  listPortfolioPlanGenerationTasks,
-  listPortfolioPlans,
-  listPortfolioStrategies,
-  listPortfolioWorkerStatus,
-  listTraderHeartbeats,
-  publishPortfolioPlanLiveSignals,
-  rejectPortfolioPlan,
-  replanPortfolioPlanRemainder,
-  rerunPortfolioPlanAiRisk,
-} from '../api/portfolioPlans'
-import { getSecuritiesAccounts } from '../api/trader'
-import PlanItemsTable from '../components/portfolio/PlanItemsTable.vue'
-import PlanPublishPreviewModal from '../components/portfolio/PlanPublishPreviewModal.vue'
-import {
-  blockerText,
-  money,
-  num,
-  remainderReasonText,
-  riskDisplaySeverity,
+  buildEquityChart,
+  buildEquityRows,
+  formatSummary,
   formatSignalReviewAt,
+  scoringRunText,
   signalReviewStatusText,
+  summarizeByStatus,
 } from '../composables/usePortfolioPlanFormat'
+import { usePlanOps } from '../composables/usePlanOps'
+import { usePortfolioPlanGeneration } from '../composables/usePortfolioPlanGeneration'
+import { usePortfolioPlansWorkbench } from '../composables/usePortfolioPlansWorkbench'
 import { useReselectPlanItems } from '../composables/useReselectPlanItems'
 import {
   canExecutePaperNowFromState,
@@ -1028,95 +356,130 @@ import {
   paperExecutionPriceStatusText,
 } from '../utils/paperExecutionEligibility'
 
-const strategies = ref([])
-const parameterPresets = ref([])
-const plans = ref([])
-const ACTION_REQUIRED_STATUSES = new Set(['needs_review', 'approved', 'partially_executed'])
+const PlanGenerationPanel = defineAsyncComponent(() => import('../components/portfolio/PlanGenerationPanel.vue'))
+const PlanGenerationWatermarkPanel = defineAsyncComponent(() => import('../components/portfolio/PlanGenerationWatermarkPanel.vue'))
+const PlanWorkerStatusPanel = defineAsyncComponent(() => import('../components/portfolio/PlanWorkerStatusPanel.vue'))
+const PlanTaskHistoryPanel = defineAsyncComponent(() => import('../components/portfolio/PlanTaskHistoryPanel.vue'))
+const LiveOpsMonitorPanel = defineAsyncComponent(() => import('../components/portfolio/LiveOpsMonitorPanel.vue'))
+const PlanReviewPanel = defineAsyncComponent(() => import('../components/portfolio/PlanReviewPanel.vue')); const PlanOpsPanel = defineAsyncComponent(() => import('../components/portfolio/PlanOpsPanel.vue'))
+const PlanPublishPreviewModal = defineAsyncComponent(() => import('../components/portfolio/PlanPublishPreviewModal.vue')); const PortfolioPlanDetailHeader = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanDetailHeader.vue'))
+const PortfolioPlanLineageSummary = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanLineageSummary.vue')); const PortfolioPlanCapitalBasis = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanCapitalBasis.vue'))
+const PlanOperationLogsPanel = defineAsyncComponent(() => import('../components/portfolio/PlanOperationLogsPanel.vue')); const PortfolioPlanItemsPanel = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanItemsPanel.vue'))
+const PortfolioPlanEquityPanel = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanEquityPanel.vue')); const PortfolioPlanPaperFillsPanel = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanPaperFillsPanel.vue'))
 
-const displayPlans = computed(() => (
-  plans.value.filter((plan) => {
-    if (
-      hideMonitorPlans.value
-      && plan.record_kind === 'observation'
-      && plan.executable === false
-      && plan.non_executable_reason === 'monitor_no_trade'
-    ) {
-      return false
-    }
-    if (showOnlyActionRequired.value) {
-      const needsAction = ACTION_REQUIRED_STATUSES.has(plan.status)
-        || (plan.executable && ['needs_review', 'approved'].includes(plan.status))
-      if (!needsAction) return false
-    }
-    return true
-  })
-))
-
-const selectedStrategyId = ref('')
-const statusFilter = ref('')
-const showOnlyActionRequired = ref(true)
-const hideMonitorPlans = ref(true)
 const opsWorkbenchExpanded = ref(false)
-const selectedPlanId = ref('')
-const selectedDetail = ref(null)
-const equity = ref([])
-const realtimeEquity = ref(null)
-const executions = ref([])
-const operationLogs = ref([])
-const loading = ref(false)
-const actionLoading = ref(false)
-const generateLoading = ref(false)
-const tasksLoading = ref(false)
-const watermarkLoading = ref(false)
-const workerStatusLoading = ref(false)
-const liveOpsLoading = ref(false)
-const livePublishLoading = ref(false)
-const paperExecuteLoading = ref(false)
-const operationLogsLoading = ref(false)
-const aiRiskRunning = ref(false)
-const llmRiskRunning = ref(false)
-const llmRiskMeta = ref({ runId: '', status: '', summary: '' })
-const currentGenerationTask = ref(null)
-const generationTasks = ref([])
 const generateFormExpanded = ref(false)
 const generationTasksExpanded = ref(false)
-const planGenerationWatermark = ref(null)
-const workerStatuses = ref([])
-const traderHeartbeats = ref([])
-const liveSignals = ref([])
-const liveExecutions = ref([])
 const liveOpsExpanded = ref(false)
-const securitiesAccounts = ref([])
-const selectedLiveAccountId = ref('')
-const livePublishPreview = ref(null)
-const showPublishModal = ref(false)
-const remainderPreview = ref(null)
-const remainderLoading = ref(false)
-const remainderReason = ref('')
-const message = ref('')
-const reviewComment = ref('')
-let realtimeTimer = null
-let generationTaskTimer = null
-let aiRiskTimer = null
-let llmRiskTimer = null
+let generationController
 
-const generateForm = ref({
-  strategy_template_id: '',
-  base_date: todayInputDate(),
-  mode: 'auto',
-  force: false,
-  preset_id: '',
-  params: {},
+function normalizePlanParams(params) {
+  return generationController?.normalizePlanParams(params) || params
+}
+
+function syncGenerateParamsFromStrategy() {
+  generationController?.syncGenerateParamsFromStrategy()
+}
+
+function applyDefaultPreset() {
+  generationController?.applyDefaultPreset()
+}
+
+const {
+  selectedStrategyId,
+  statusFilter,
+  showOnlyActionRequired,
+  hideMonitorPlans,
+  displayPlans,
+  selectedPlanId,
+  selectedDetail,
+  monitorAccountId,
+  operationAccountId,
+  plans,
+  strategies,
+  parameterPresets,
+  generationTasks,
+  workerStatuses,
+  traderHeartbeats,
+  liveSignals,
+  liveExecutions,
+  securitiesAccounts,
+  planGenerationWatermark,
+  equity,
+  realtimeEquity,
+  executions,
+  operationLogs,
+  loading,
+  generateLoading,
+  tasksLoading,
+  watermarkLoading,
+  workerStatusLoading,
+  liveOpsLoading,
+  operationLogsLoading,
+  aiRiskRunning,
+  llmRiskRunning,
+  message,
+  currentGenerationTask,
+  llmRiskMeta,
+  generateForm,
+  loadPlans,
+  loadParameterPresets,
+  loadGenerationTasks,
+  loadWorkerStatus,
+  loadLiveOps,
+  loadPlanGenerationWatermark,
+  loadOperationLogs,
+  refreshAll,
+  generatePlan,
+  reloadSelectedPlan,
+  selectPlan,
+  runAiRisk,
+  runLlmRisk,
+} = usePortfolioPlansWorkbench({
+  normalizePlanParams,
+  syncGenerateParamsFromStrategy,
+  applyDefaultPreset,
+  onBeforeSelect: () => {
+    resetPlanOpsState()
+    clearReselectUi()
+  },
 })
 
+generationController = usePortfolioPlanGeneration({
+  strategies,
+  generateForm,
+  parameterPresets,
+  loadParameterPresets,
+  loadPlanGenerationWatermark,
+})
+const {
+  availableStrategies,
+  selectedGenerateStrategy,
+  selectedPreset,
+  presetEvidenceRows,
+  universeOptions,
+  strategyOptionLabel,
+  planDisplayTitle,
+  setGenerateStrategy,
+  setGenerateField,
+  setGenerateParam,
+  setGeneratePreset,
+  setGrowthWeight,
+  setCycleWeight,
+} = generationController
+
 const executionStatus = computed(() => selectedDetail.value?.execution_status || {})
-// execution_mode is the backend's single source of truth: 'paper' | 'live' | 'not_executed'.
 const selectedPlanExecutionMode = computed(() => selectedDetail.value?.execution_mode || 'not_executed')
 const selectedPlanStatus = computed(() => selectedDetail.value?.plan?.status || '')
 const selectedPlanHasLiveSignals = computed(() => selectedPlanExecutionMode.value === 'live')
-// A monitor (non-rebalance) plan that opted out of intra-cycle trading: it only
-// shows drift and carries no executable delta. Legacy plans without the flag are
-// treated as executable.
+const selectedPlanHasPublishedLiveSignals = computed(() => (
+  selectedPlanHasLiveSignals.value
+  || Boolean(selectedDetail.value?.plan?.live_signals_published_at)
+  || Number(selectedDetail.value?.plan?.live_signal_count || 0) > 0
+))
+const liveExecutionContext = computed(() => selectedDetail.value?.live_execution_context || {})
+const selectedPlanLiveSignalCount = computed(() => Number(liveExecutionContext.value?.signal_count || 0))
+const selectedPlanActiveLiveSignalCount = computed(() => Number(liveExecutionContext.value?.active_signal_count || 0))
 const selectedPlanIsMonitorNoTrade = computed(() => selectedDetail.value?.plan?.executable === false)
 const selectedPlanExcluded = computed(() => selectedDetail.value?.plan?.excluded_symbols || [])
 // Only an unpublished, pre-approval plan can be reselected in place.
@@ -1157,9 +520,7 @@ const {
         await loadGenerationTasks()
         await loadPlans()
         if (task.plan_id) {
-          selectedPlanId.value = task.plan_id
-          const planRes = await getPortfolioPlan(task.plan_id)
-          selectedDetail.value = planRes.data
+          await selectPlan(task.plan_id)
         }
         return task
       }
@@ -1172,7 +533,7 @@ const {
   },
 })
 
-const combinedActionLoading = computed(() => actionLoading.value || reselectActionLoading.value)
+const combinedActionLoading = computed(() => reselectActionLoading.value)
 const paperExecutionCount = computed(() => Number(executionStatus.value?.execution_count || 0))
 const hasPaperExecution = computed(() => Boolean(selectedDetail.value?.plan?.paper_executed_at) || paperExecutionCount.value > 0)
 // Plan-detail page uses plan-level data only. Keep paper panels hidden while the
@@ -1184,16 +545,41 @@ const showPaperSections = computed(() => {
 const showPaperExecutionStatus = computed(() => showPaperSections.value && (
   selectedPlanStatus.value === 'approved' || paperExecutionCount.value > 0
 ))
+const executionVenue = computed(() => {
+  const plan = selectedDetail.value?.plan
+  const capitalBasis = plan?.capital_basis || plan?.summary?.capital_basis
+  return capitalBasis === 'rolling_paper' ? 'paper' : 'live'
+})
+const executionVenueLabel = computed(() => executionVenue.value === 'paper' ? '纸面' : '实盘')
+const isPaperPortfolio = computed(() => executionVenue.value === 'paper')
+const isLivePortfolio = computed(() => executionVenue.value === 'live')
 const canExecutePaperNow = computed(() => canExecutePaperNowFromState({
   planStatus: selectedPlanStatus.value,
   hasLiveSignals: selectedPlanHasLiveSignals.value,
   hasPaperExecution: hasPaperExecution.value,
   missingExecuteDate: executionStatus.value?.missing_execute_date === true,
+  isPaperPortfolio: isPaperPortfolio.value,
 }))
 const canPublishLiveSignals = computed(() => (
-  selectedPlanStatus.value === 'approved'
-  && !selectedPlanHasLiveSignals.value
+  isLivePortfolio.value
+  && selectedPlanStatus.value === 'approved'
+  && !selectedPlanHasPublishedLiveSignals.value
   && !hasPaperExecution.value
+))
+const canCancelCurrentPlan = computed(() => (
+  selectedPlanStatus.value === 'approved'
+  && !hasPaperExecution.value
+))
+const needsReviewPlan = computed(() => (
+  ['needs_review', 'generated', 'draft'].includes(selectedPlanStatus.value)
+))
+const reviewPlanId = computed(() => needsReviewPlan.value ? selectedPlanId.value : '')
+const selectedOperationPlanId = computed(() => (
+  selectedPlanStatus.value === 'approved' ? selectedPlanId.value : ''
+))
+const showPlanOpsPanel = computed(() => (
+  Boolean(selectedOperationPlanId.value)
+  && selectedPlanStatus.value === 'approved'
 ))
 
 const paperExecuteReadyText = computed(() => paperExecuteReadyTextFromState({
@@ -1201,7 +587,138 @@ const paperExecuteReadyText = computed(() => paperExecuteReadyTextFromState({
   hasLiveSignals: selectedPlanHasLiveSignals.value,
   planStatus: selectedPlanStatus.value,
   executionStatus: executionStatus.value,
+  isPaperPortfolio: isPaperPortfolio.value,
 }))
+const cancelPlanReadyText = computed(() => {
+  if (hasPaperExecution.value) return '该 plan 已执行 Paper，不能作废'
+  if (selectedPlanStatus.value !== 'approved') return '只有 approved plan 可以作废'
+  if (selectedPlanHasLiveSignals.value) return '该 plan 存在实盘信号历史；作废会取消未成交信号，若已有成交后端会拒绝'
+  return '误点确认发布/审批后可作废；作废后状态变为 cancelled'
+})
+const selectedPlanExecutionModeLabel = computed(() => {
+  if (selectedPlanExecutionMode.value === 'live') {
+    if (selectedPlanActiveLiveSignalCount.value > 0) {
+      return `实盘信号在途 ${selectedPlanActiveLiveSignalCount.value}/${selectedPlanLiveSignalCount.value}`
+    }
+    if (!selectedPlanHasPublishedLiveSignals.value) {
+      return `有历史实盘信号（未标记发布，${selectedPlanLiveSignalCount.value} 条）`
+    }
+    return `有历史实盘信号（无在途，${selectedPlanLiveSignalCount.value} 条）`
+  }
+  if (selectedPlanExecutionMode.value === 'paper') return '已执行 Paper'
+  return '未执行'
+})
+
+function normalizePlanItemRow(item) {
+  const current = Number(item?.current_shares ?? 0)
+  const target = Number(item?.target_shares ?? 0)
+  const delta = Number((item?.delta_shares ?? (target - current)) || 0)
+  let action = item?.action || ''
+  if (!action) {
+    if (delta > 0) action = 'buy'
+    else if (delta < 0) action = 'sell'
+    else if (target > 0) action = 'hold'
+    else action = 'skip'
+  }
+  if (action === 'hold' && current > 0 && target > 0 && delta !== 0) {
+    action = delta > 0 ? 'buy' : 'sell'
+  }
+  return {
+    ...item,
+    action,
+    current_shares: current,
+    target_shares: target,
+    delta_shares: delta,
+  }
+}
+
+const planTargetRows = computed(() => (
+  (selectedDetail.value?.items || [])
+    .map((item) => normalizePlanItemRow(item))
+    .filter((item) => item.action !== 'skip')
+    .sort((a, b) => {
+      const order = { buy: 0, sell: 1, hold: 2, skip: 3 }
+      const aScore = Number(a.score_value)
+      const bScore = Number(b.score_value)
+      const aHasScore = Number.isFinite(aScore)
+      const bHasScore = Number.isFinite(bScore)
+      if (aHasScore && bHasScore && bScore !== aScore) return bScore - aScore
+      if (aHasScore !== bHasScore) return aHasScore ? -1 : 1
+      return (order[a.action] ?? 9) - (order[b.action] ?? 9)
+        || String(a.symbol).localeCompare(String(b.symbol))
+    })
+))
+
+function summarizePlanRows(rows) {
+  return rows.reduce(
+    (summary, row) => {
+      if (row.action === 'buy') summary.buy += 1
+      else if (row.action === 'sell') summary.sell += 1
+      else if (row.action === 'hold') summary.hold += 1
+      return summary
+    },
+    { buy: 0, sell: 0, hold: 0 },
+  )
+}
+
+const planReviewSummary = computed(() => summarizePlanRows(planTargetRows.value))
+const planReviewRiskSummary = computed(() => (
+  selectedDetail.value?.plan?.summary?.ai_risk_summary
+  || { high: 0, medium: 0, low: 0 }
+))
+
+const {
+  livePublishPreview,
+  livePublishLoading,
+  showPublishModal,
+  allowPartialPublish,
+  livePublishBlockers,
+  canConfirmLivePublish,
+  paperExecuteLoading,
+  cancelPlanLoading,
+  remainderPreview,
+  remainderLoading,
+  remainderReason,
+  allowPartialRemainder,
+  remainderRows,
+  remainderActionableCount,
+  remainderBlockers,
+  remainderSkipped,
+  remainderPublishableCount,
+  canConfirmRemainder,
+  approveSubmitting,
+  rejectSubmitting,
+  previewLivePublish,
+  publishLiveSignals,
+  setAllowPartialPublish,
+  previewRemainder,
+  confirmRemainder,
+  setAllowPartialRemainder,
+  executePaperNow,
+  cancelCurrentPlan,
+  approvePendingPlan,
+  rejectPendingPlan,
+  resetPlanOpsState,
+} = usePlanOps({
+  selectedOperationPlanId,
+  selectedLiveAccountId: operationAccountId,
+  canPublishLiveSignals,
+  canExecutePaperNow,
+  canCancelCurrentPlan,
+  reviewPlanId,
+  onRefresh: async () => {
+    const planId = selectedPlanId.value
+    if (planId) await selectPlan(planId)
+    await Promise.all([
+      loadPlans(),
+      loadLiveOps(planId),
+      loadOperationLogs(planId),
+    ])
+  },
+  onMessage: (text) => {
+    message.value = text
+  },
+})
 
 const latestExecutionText = computed(() => {
   const latest = executionStatus.value.latest_execution_result
@@ -1218,142 +735,6 @@ const realtimePriceBySymbol = computed(() => {
   return Object.fromEntries(rows.map((row) => [row.symbol, row.realtime_price]))
 })
 
-const availableStrategies = computed(() => strategies.value.filter((strategy) => strategy.status !== 'disabled'))
-const selectedGenerateStrategy = computed(() => (
-  strategies.value.find((strategy) => strategy.strategy_template_id === generateForm.value.strategy_template_id) || null
-))
-const selectedPreset = computed(() => parameterPresets.value.find((preset) => preset.preset_id === generateForm.value.preset_id) || null)
-const presetEvidenceRows = computed(() => {
-  const rows = selectedPreset.value?.evidence || []
-  if (!Array.isArray(rows)) return []
-  return rows.slice(-5).reverse()
-})
-const universeOptions = [
-  { value: 'hs300', label: 'hs300 - 沪深300' },
-  { value: 'a500', label: 'a500 - 中证A500' },
-  { value: 'csi500', label: 'csi500 - 中证500' },
-  { value: 'csi1000', label: 'csi1000 - 中证1000' },
-  { value: 'csi2000', label: 'csi2000 - 中证2000' },
-  { value: 'star50', label: 'star50 - 科创50' },
-]
-
-function strategyOptionLabel(strategy) {
-  if (!strategy) return '-'
-  return strategyDisplayName(strategy)
-}
-
-function isGrowthCycleLike(row) {
-  const id = String(row?.strategy_template_id || '')
-  const scoreType = String(row?.score_type || row?.params_snapshot?.score_type || '')
-  return id.startsWith('growth_cycle') || scoreType.startsWith('growth_cycle')
-}
-
-function strategyDisplayName(row) {
-  if (!row) return '-'
-  if (isGrowthCycleLike(row)) return '成长周期指数增强'
-  return row.strategy_name || row.name || row.strategy_template_id || '-'
-}
-
-function planDisplayTitle(plan) {
-  return strategyDisplayName(plan)
-}
-
-function planParamsFromStrategy(strategy) {
-  if (!strategy) return {}
-  return {}
-}
-
-function clampWeight(value) {
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric)) return 0
-  return Math.min(1, Math.max(0, numeric))
-}
-
-function roundWeight(value) {
-  return Number(clampWeight(value).toFixed(4))
-}
-
-function normalizePlanParams(params) {
-  const next = { ...params }
-  if (!universeOptions.some((option) => option.value === next.universe_index)) {
-    next.universe_index = universeOptions[0].value
-  }
-  const growth = Number.isFinite(Number(next.growth_weight)) ? clampWeight(next.growth_weight) : 0.3
-  next.growth_weight = roundWeight(growth)
-  next.cycle_weight = roundWeight(1 - growth)
-  const capital = Number(next.initial_capital)
-  next.initial_capital = Number.isFinite(capital) && capital > 0 ? capital : 1_000_000
-  const trailing = Number(next.trailing_stop_pct)
-  if (!Number.isFinite(trailing) || trailing <= 0) {
-    delete next.trailing_stop_pct
-  } else {
-    next.trailing_stop_pct = Math.min(1, Math.max(0, trailing))
-  }
-  for (const [key, fallback] of Object.entries({
-    buy_commission_rate: 0.0001,
-    sell_commission_rate: 0.0001,
-    min_commission: 5,
-    stamp_tax_rate: 0.0005,
-    transfer_fee_rate: 0,
-  })) {
-    const value = Number(next[key])
-    next[key] = Number.isFinite(value) && value >= 0 ? value : fallback
-  }
-  return next
-}
-
-function setGrowthWeight(value) {
-  const growth = roundWeight(value)
-  generateForm.value.params = {
-    ...generateForm.value.params,
-    growth_weight: growth,
-    cycle_weight: roundWeight(1 - growth),
-  }
-}
-
-function setCycleWeight(value) {
-  const cycle = roundWeight(value)
-  generateForm.value.params = {
-    ...generateForm.value.params,
-    cycle_weight: cycle,
-    growth_weight: roundWeight(1 - cycle),
-  }
-}
-
-function presetLabel(preset) {
-  const defaultText = preset.is_default ? '默认 · ' : ''
-  const source = preset.source === 'portfolio_research' ? '组合研究 · ' : ''
-  const evidenceText = preset.evidence_count ? ` · evidence ${preset.evidence_count}` : ''
-  return `${defaultText}${source}${preset.name || preset.preset_id}${evidenceText}`
-}
-
-function syncGenerateParamsFromStrategy() {
-  generateForm.value.params = planParamsFromStrategy(selectedGenerateStrategy.value)
-}
-
-async function onGenerateStrategyChange() {
-  generateForm.value.preset_id = ''
-  syncGenerateParamsFromStrategy()
-  await loadParameterPresets()
-  applyDefaultPreset()
-  await loadPlanGenerationWatermark()
-}
-
-function applySelectedPreset() {
-  const base = planParamsFromStrategy(selectedGenerateStrategy.value)
-  const presetParams = selectedPreset.value?.params || {}
-  generateForm.value.params = normalizePlanParams({ ...base, ...presetParams })
-}
-
-function applyDefaultPreset() {
-  if (generateForm.value.preset_id || !parameterPresets.value.length) return
-  const preset = parameterPresets.value.find((row) => row.is_default)
-    || parameterPresets.value.find((row) => row.status === 'recommended')
-    || parameterPresets.value[0]
-  generateForm.value.preset_id = preset.preset_id
-  applySelectedPreset()
-}
-
 const latestGenerationTask = computed(() => generationTasks.value[0] || null)
 const latestTraderHeartbeat = computed(() => traderHeartbeats.value[0] || null)
 const liveSignalStatusSummary = computed(() => summarizeByStatus(liveSignals.value))
@@ -1362,47 +743,8 @@ const liveAccountOptions = computed(() => securitiesAccounts.value.map((account)
   id: account.id || account._id,
   label: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}`,
 })))
-const livePublishBlockers = computed(() => {
-  const items = livePublishPreview.value?.risk_report?.items || []
-  return items.flatMap((item) => (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`))
-})
 const liveOverlay = computed(() => selectedDetail.value?.live_overlay || null)
 const scoreSnapshotStale = computed(() => Boolean(liveOverlay.value?.score_snapshot_stale))
-const remainderRows = computed(() => remainderPreview.value?.remainder || [])
-const remainderActionableCount = computed(() => remainderPreview.value?.actionable_count || 0)
-const remainderBlockers = computed(() => {
-  const items = remainderPreview.value?.risk_report?.items || []
-  const riskBlockers = items.flatMap((item) =>
-    (item.blockers || []).map((blocker) => `${item.symbol}: ${blockerText(blocker)}`),
-  )
-  const cashBlockers = (remainderPreview.value?.cash_blockers || []).map((blocker) => blockerText(blocker))
-  return [...riskBlockers, ...cashBlockers]
-})
-
-const remainderCashUsageText = computed(() => {
-  const preview = remainderPreview.value
-  if (!preview) return ''
-  const hasPlan =
-    preview.plan_available_cash != null ||
-    preview.lineage_book_cash != null ||
-    preview.frozen_buy_cash != null
-  const hasBroker = preview.broker_available_cash != null
-  if (!hasPlan && !hasBroker) return ''
-  const parts = []
-  if (hasPlan) {
-    const frozen =
-      preview.frozen_buy_cash != null && Number(preview.frozen_buy_cash) > 0
-        ? `，冻结 ${money(preview.frozen_buy_cash)}`
-        : ''
-    parts.push(
-      `计划可用现金 ${money(preview.plan_available_cash ?? preview.available_cash)}（账本 ${money(preview.lineage_book_cash)}${frozen}）`,
-    )
-  }
-  if (hasBroker) {
-    parts.push(`账户可用现金 ${money(preview.broker_available_cash)}`)
-  }
-  return parts.join('；')
-})
 
 const targetScoringRunText = computed(() => scoringRunText(planGenerationWatermark.value?.target_scoring_run))
 const latestCompletedScoringText = computed(() => scoringRunText(planGenerationWatermark.value?.latest_completed_scoring_run))
@@ -1419,729 +761,8 @@ const latestAvailableScoreMeta = computed(() => {
   return '-'
 })
 
-const equityRows = computed(() => {
-  return [...equity.value]
-    .filter((point) => Number.isFinite(Number(point.equity)))
-    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
-    .map((point, index, rows) => {
-      const value = Number(point.equity)
-      const previous = index > 0 ? Number(rows[index - 1].equity) : NaN
-      const change = Number.isFinite(previous) ? value - previous : null
-      const changePct = Number.isFinite(previous) && previous !== 0 ? change / previous : null
-      return { ...point, equity: value, change, changePct }
-    })
-})
-
-const equityChart = computed(() => {
-  const rows = equityRows.value
-  if (!rows.length) return { points: '', labels: [], min: 0, max: 0, latestReturn: null }
-  const values = rows.map((row) => row.equity)
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const span = max - min || 1
-  const width = 640
-  const height = 220
-  const pad = 28
-  const points = rows
-    .map((row, index) => {
-      const x = rows.length === 1 ? width / 2 : pad + (index * (width - pad * 2)) / (rows.length - 1)
-      const y = height - pad - ((row.equity - min) * (height - pad * 2)) / span
-      return `${x.toFixed(1)},${y.toFixed(1)}`
-    })
-    .join(' ')
-  const first = rows[0].equity
-  const latest = rows[rows.length - 1].equity
-  return {
-    points,
-    min,
-    max,
-    latestReturn: first ? latest / first - 1 : null,
-    labels: [
-      { text: rows[0].date, x: pad, y: height - 6, anchor: 'start' },
-      { text: rows[rows.length - 1].date, x: width - pad, y: height - 6, anchor: 'end' },
-    ],
-  }
-})
-
-function pct(value) {
-  const number = Number(value)
-  return Number.isFinite(number) ? `${(number * 100).toFixed(2)}%` : '-'
-}
-
-function signedMoney(value) {
-  const number = Number(value)
-  if (!Number.isFinite(number)) return '-'
-  const formatted = Math.abs(number).toLocaleString('zh-CN', { maximumFractionDigits: 0 })
-  return `${number >= 0 ? '+' : '-'}${formatted}`
-}
-
-function signedPct(value) {
-  const number = Number(value)
-  if (!Number.isFinite(number)) return '-'
-  return `${number >= 0 ? '+' : ''}${(number * 100).toFixed(2)}%`
-}
-
-function currentPriceForExecution(execution) {
-  return realtimePriceBySymbol.value[execution?.symbol]
-}
-
-function executionReturnPct(execution) {
-  const entry = Number(execution?.price)
-  const current = Number(currentPriceForExecution(execution))
-  if (!Number.isFinite(entry) || entry <= 0 || !Number.isFinite(current)) return '-'
-  return signedPct(current / entry - 1)
-}
-
-function todayInputDate() {
-  const now = new Date()
-  const offset = now.getTimezoneOffset() * 60000
-  return new Date(now.getTime() - offset).toISOString().slice(0, 10)
-}
-
-function scoringRunText(run) {
-  if (!run) return '暂无记录'
-  const scoreDate = run.score_date || '-'
-  const status = run.status || 'unknown'
-  return `${scoreDate} / ${status}`
-}
-
-function summarizeByStatus(rows) {
-  return rows.reduce((acc, row) => {
-    const status = row.status || 'unknown'
-    acc[status] = (acc[status] || 0) + 1
-    return acc
-  }, {})
-}
-
-function formatSummary(summary) {
-  const entries = Object.entries(summary)
-  if (!entries.length) return '暂无'
-  return entries.map(([status, count]) => `${status}: ${count}`).join(' / ')
-}
-
-function signalDisplayName(signal) {
-  return signal?.name || signal?.stock_name || signal?.symbol || '-'
-}
-
-function effectiveTopN(plan) {
-  return plan?.summary?.target_top_n
-    ?? plan?.params_snapshot?.top_n
-    ?? '-'
-}
-
-function effectiveRebalanceDays(plan) {
-  return plan?.params_snapshot?.rebalance_days
-    ?? null
-}
-
-function effectiveConstructionMode(plan) {
-  return plan?.params_snapshot?.construction_mode
-    ?? null
-}
-
-function effectiveInitialCapital(plan) {
-  return plan?.params_snapshot?.initial_capital
-    ?? null
-}
-
-function planParamSummary(plan) {
-  const parts = [`Top${effectiveTopN(plan)}`]
-  const rebalanceDays = effectiveRebalanceDays(plan)
-  if (rebalanceDays) parts.push(`${rebalanceDays}d`)
-  const mode = effectiveConstructionMode(plan)
-  if (mode) parts.push(mode)
-  return parts.join(' · ')
-}
-
-function shortPlanId(planId) {
-  const text = String(planId || '')
-  if (!text) return '-'
-  if (text.length <= 28) return text
-  return `${text.slice(0, 18)}…${text.slice(-8)}`
-}
-
-const CAPITAL_BASIS_LABELS = {
-  account_equity: '实盘账户滚动权益',
-  rolling_paper: '纸面滚动权益',
-  fixed_notional: '固定名义本金',
-}
-
-const BASELINE_SOURCE_LABELS = {
-  live_lineage_reconstruction: '实盘成交重建',
-  paper_snapshot: '纸面快照继承',
-  initial_capital: '初始本金',
-  fixed_notional: '固定名义本金',
-}
-
-function capitalBasisLabel(plan) {
-  const basis = plan?.capital_basis || plan?.summary?.capital_basis
-  return CAPITAL_BASIS_LABELS[basis] || basis || '—'
-}
-
-function baselineSourceLabel(plan) {
-  const source = plan?.summary?.baseline_source
-  return BASELINE_SOURCE_LABELS[source] || source || '—'
-}
-
-function planBaselineEquity(plan) {
-  const value = plan?.summary?.baseline_equity ?? plan?.summary?.equity
-  return Number.isFinite(Number(value)) ? Number(value) : null
-}
-
-function baselineSyncedLabel(plan) {
-  const value = plan?.summary?.baseline_synced_at
-  if (value === null || value === undefined || value === '') return '—'
-  const date = typeof value === 'number'
-    ? new Date(value < 1e12 ? value * 1000 : value)
-    : new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
-  return date.toLocaleString('zh-CN', { hour12: false })
-}
-
-function previousPlanIdFor(plan) {
-  if (!plan) return ''
-  if (plan.previous_rebalance_plan_id) return plan.previous_rebalance_plan_id
-  const previousDate = plan.previous_rebalance_date
-  if (!previousDate || !plan.params_hash) return ''
-  const previous = plans.value.find((row) => (
-    row.base_date === previousDate
-    && row.params_hash === plan.params_hash
-    && row.strategy_template_id === plan.strategy_template_id
-    && (!plan.user_id || row.user_id === plan.user_id)
-    && row.record_kind === 'trade_plan'
-  ))
-  return previous?.plan_id || ''
-}
-
-function planLineage(plan) {
-  if (!plan) return { show: false, previousDate: '', previousPlanId: '' }
-  const previousDate = plan.previous_rebalance_date || ''
-  const previousPlanId = previousPlanIdFor(plan)
-  return {
-    show: Boolean(plan.params_hash || previousDate || previousPlanId),
-    previousDate,
-    previousPlanId,
-  }
-}
-
-function isPreviousPlanOfSelected(plan) {
-  if (!plan || !selectedPlanId.value) return false
-  return plan.plan_id === previousPlanIdFor(selectedDetail.value?.plan)
-}
-
-function isNextPlanOfSelected(plan) {
-  if (!plan || !selectedPlanId.value) return false
-  return previousPlanIdFor(plan) === selectedPlanId.value
-}
-
-function planRelationBadge(plan) {
-  if (!selectedPlanId.value || !plan || plan.plan_id === selectedPlanId.value) return null
-  if (isPreviousPlanOfSelected(plan)) return { text: '上游', cls: 'relation-upstream' }
-  if (isNextPlanOfSelected(plan)) return { text: '下游', cls: 'relation-downstream' }
-  return null
-}
-
-function planRowClass(plan) {
-  return {
-    active: selectedPlanId.value === plan.plan_id,
-    upstream: isPreviousPlanOfSelected(plan),
-    downstream: isNextPlanOfSelected(plan),
-  }
-}
-
-function filterBySelectedAccount(rows) {
-  if (!selectedLiveAccountId.value) return rows
-  return rows.filter((row) => String(row.securities_account_id || '') === String(selectedLiveAccountId.value))
-}
-
-async function previewRemainder() {
-  if (!selectedPlanId.value || !selectedLiveAccountId.value) return
-  remainderLoading.value = true
-  message.value = ''
-  try {
-    const res = await replanPortfolioPlanRemainder(selectedPlanId.value, {
-      securities_account_id: selectedLiveAccountId.value,
-      dry_run: true,
-      reason: remainderReason.value || '',
-    })
-    remainderPreview.value = res.data
-  } catch (error) {
-    message.value = error.response?.data?.detail?.message || error.response?.data?.detail || error.message || '补缺口预检失败'
-  } finally {
-    remainderLoading.value = false
-  }
-}
-
-async function confirmRemainder() {
-  if (!selectedPlanId.value || !selectedLiveAccountId.value) return
-  remainderLoading.value = true
-  message.value = ''
-  try {
-    const res = await replanPortfolioPlanRemainder(selectedPlanId.value, {
-      securities_account_id: selectedLiveAccountId.value,
-      dry_run: false,
-      reason: remainderReason.value || '',
-    })
-    remainderPreview.value = res.data
-    message.value = `已补发 ${res.data?.inserted_count ?? 0} 条 plan_topup 信号`
-    await loadLiveOps()
-    await loadPlans()
-  } catch (error) {
-    const detail = error.response?.data?.detail
-    remainderPreview.value = detail?.risk_report
-      ? { ...(remainderPreview.value || {}), risk_report: detail.risk_report, blocked: true }
-      : remainderPreview.value
-    message.value = detail?.message || detail || error.message || '补缺口失败'
-  } finally {
-    remainderLoading.value = false
-  }
-}
-
-async function refreshAll() {
-  const initialResults = await Promise.allSettled([
-    loadSecuritiesAccounts(),
-    loadStrategies(),
-  ])
-  reportFirstRejected(initialResults, '部分基础配置加载失败')
-  if (!generateForm.value.strategy_template_id && availableStrategies.value.length) {
-    generateForm.value.strategy_template_id = availableStrategies.value[0].strategy_template_id
-  }
-  syncGenerateParamsFromStrategy()
-  const restResults = await Promise.allSettled([
-    loadParameterPresets(),
-    loadWorkerStatus(),
-    loadGenerationTasks(),
-    loadPlans(),
-    loadPlanGenerationWatermark(),
-    loadLiveOps(),
-  ])
-  reportFirstRejected(restResults, '部分组合计划数据加载失败')
-  applyDefaultPreset()
-}
-
-function reportFirstRejected(results, fallback) {
-  const failed = results.find((result) => result.status === 'rejected')
-  if (!failed) return
-  const error = failed.reason || {}
-  const detailText = formatApiDetail(error.response?.data?.detail)
-  message.value = detailText || error.message || fallback
-}
-
-async function loadSecuritiesAccounts() {
-  try {
-    const accounts = await getSecuritiesAccounts()
-    securitiesAccounts.value = Array.isArray(accounts) ? accounts : []
-    if (!selectedLiveAccountId.value && securitiesAccounts.value.length) {
-      selectedLiveAccountId.value = securitiesAccounts.value[0].id || securitiesAccounts.value[0]._id
-    }
-  } catch (error) {
-    securitiesAccounts.value = []
-  }
-}
-
-async function loadStrategies() {
-  try {
-    const res = await listPortfolioStrategies()
-    strategies.value = res.data || []
-  } catch (error) {
-    strategies.value = []
-    throw error
-  }
-}
-
-async function loadParameterPresets() {
-  if (!generateForm.value.strategy_template_id) {
-    parameterPresets.value = []
-    return
-  }
-  try {
-    const res = await listPortfolioParameterPresets({ strategy_template_id: generateForm.value.strategy_template_id })
-    parameterPresets.value = (res.data || []).filter((preset) => preset.status !== 'disabled')
-  } catch (error) {
-    parameterPresets.value = []
-  }
-}
-
-async function loadPlans() {
-  loading.value = true
-  message.value = ''
-  try {
-    const params = {}
-    if (selectedStrategyId.value) params.strategy_template_id = selectedStrategyId.value
-    if (statusFilter.value) params.status = statusFilter.value
-    const res = await listPortfolioPlans(params)
-    plans.value = res.data || []
-    if (selectedPlanId.value && !plans.value.some((plan) => plan.plan_id === selectedPlanId.value)) {
-      selectedPlanId.value = ''
-      selectedDetail.value = null
-      equity.value = []
-      realtimeEquity.value = null
-      executions.value = []
-    }
-  } catch (error) {
-    message.value = error.response?.data?.detail || error.message || '加载计划失败'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function loadGenerationTasks() {
-  tasksLoading.value = true
-  try {
-    const res = await listPortfolioPlanGenerationTasks({ limit: 20 })
-    generationTasks.value = res.data || []
-  } catch (error) {
-    message.value = error.response?.data?.detail || error.message || '加载生成任务失败'
-  } finally {
-    tasksLoading.value = false
-  }
-}
-
-async function loadWorkerStatus() {
-  workerStatusLoading.value = true
-  try {
-    const res = await listPortfolioWorkerStatus({ worker_type: 'portfolio_plan_generator', limit: 20 })
-    workerStatuses.value = res.data || []
-  } catch (error) {
-    message.value = error.response?.data?.detail || error.message || '加载 worker 状态失败'
-  } finally {
-    workerStatusLoading.value = false
-  }
-}
-
-async function loadLiveOps() {
-  liveOpsLoading.value = true
-  try {
-    const params = { limit: 20 }
-    if (selectedLiveAccountId.value) params.securities_account_id = selectedLiveAccountId.value
-    const heartbeatsPromise = listTraderHeartbeats({ limit: 20 })
-    if (selectedPlanId.value) {
-      const [planLiveRes, heartbeatsRes] = await Promise.all([
-        getPortfolioPlanLiveExecutions(selectedPlanId.value),
-        heartbeatsPromise,
-      ])
-      liveSignals.value = filterBySelectedAccount(planLiveRes.data?.signals || [])
-      liveExecutions.value = filterBySelectedAccount(planLiveRes.data?.executions || [])
-      traderHeartbeats.value = heartbeatsRes.data || []
-      return
-    }
-    const [signalsRes, executionsRes, heartbeatsRes] = await Promise.all([
-      listLiveTradeSignals(params),
-      listLiveTradeExecutions(params),
-      heartbeatsPromise,
-    ])
-    liveSignals.value = signalsRes.data || []
-    liveExecutions.value = executionsRes.data || []
-    traderHeartbeats.value = heartbeatsRes.data || []
-  } catch (error) {
-    message.value = error.response?.data?.detail || error.message || '加载实盘执行状态失败'
-  } finally {
-    liveOpsLoading.value = false
-  }
-}
-
-async function loadPlanGenerationWatermark() {
-  if (!generateForm.value.strategy_template_id) {
-    planGenerationWatermark.value = null
-    return
-  }
-  watermarkLoading.value = true
-  try {
-    const res = await getPortfolioPlanGenerationWatermark({
-      strategy_template_id: generateForm.value.strategy_template_id,
-      base_date: generateForm.value.base_date,
-    })
-    planGenerationWatermark.value = res.data || null
-  } catch (error) {
-    message.value = error.response?.data?.detail || error.message || '加载数据水位失败'
-  } finally {
-    watermarkLoading.value = false
-  }
-}
-
-async function generatePlan() {
-  if (!generateForm.value.strategy_template_id || !generateForm.value.base_date) return
-  generateLoading.value = true
-  message.value = ''
-  try {
-    const payload = {
-      strategy_template_id: generateForm.value.strategy_template_id,
-      base_date: generateForm.value.base_date,
-      mode: generateForm.value.mode,
-      force: generateForm.value.force,
-      preset_id: generateForm.value.preset_id || null,
-      params_override: normalizePlanParams(generateForm.value.params),
-    }
-    const res = await generatePortfolioPlan(payload)
-    currentGenerationTask.value = res.data
-    await loadPlanGenerationWatermark()
-    await loadGenerationTasks()
-    selectedStrategyId.value = generateForm.value.strategy_template_id
-    statusFilter.value = ''
-    message.value = `已提交生成任务 ${res.data?.task_id || ''}`
-    startGenerationTaskPolling(res.data?.task_id)
-  } catch (error) {
-    message.value = error.response?.data?.detail || error.message || '生成计划失败'
-  } finally {
-    generateLoading.value = false
-  }
-}
-
-function startGenerationTaskPolling(taskId) {
-  if (!taskId) return
-  if (generationTaskTimer) window.clearInterval(generationTaskTimer)
-  pollGenerationTask(taskId)
-  generationTaskTimer = window.setInterval(() => pollGenerationTask(taskId), 3000)
-}
-
-async function pollGenerationTask(taskId) {
-  try {
-    const res = await getPortfolioPlanGenerationTask(taskId)
-    currentGenerationTask.value = res.data
-    if (['completed', 'failed'].includes(res.data?.status)) {
-      if (generationTaskTimer) {
-        window.clearInterval(generationTaskTimer)
-        generationTaskTimer = null
-      }
-      await loadPlanGenerationWatermark()
-      await loadWorkerStatus()
-      await loadGenerationTasks()
-      await loadPlans()
-      if (res.data.status === 'completed' && res.data.plan_id) {
-        await selectPlan(res.data.plan_id)
-        message.value = `已生成计划 ${res.data.plan_id}`
-      } else if (res.data.status === 'failed') {
-        message.value = res.data.error_message || '生成计划失败'
-      }
-    }
-  } catch (error) {
-    const detailText = formatApiDetail(error.response?.data?.detail)
-    const errText = detailText || error.message || '查询生成任务失败'
-    message.value = errText
-  }
-}
-
-async function reloadSelectedPlan() {
-  if (!selectedPlanId.value) return
-  try {
-    const res = await getPortfolioPlan(selectedPlanId.value)
-    selectedDetail.value = res.data
-  } catch (error) {
-    const detailText = formatApiDetail(error.response?.data?.detail)
-    message.value = detailText || error.message || '刷新 plan 风险失败'
-  }
-}
-
-async function selectPlan(planId) {
-  selectedPlanId.value = planId
-  reviewComment.value = ''
-  livePublishPreview.value = null
-  remainderPreview.value = null
-  remainderReason.value = ''
-  clearReselectUi()
-  try {
-    const res = await getPortfolioPlan(planId)
-    selectedDetail.value = res.data
-  } catch (error) {
-    selectedDetail.value = null
-    const detailText = formatApiDetail(error.response?.data?.detail)
-    message.value = detailText || error.message || '加载 plan 详情失败'
-    return
-  }
-  const optionalLoads = selectedPlanHasLiveSignals.value
-    ? [loadEquity(), loadRealtimeEquity(), loadOperationLogs(), loadLiveOps()]
-    : [loadEquity(), loadRealtimeEquity(), loadExecutions(), loadOperationLogs(), loadLiveOps()]
-  if (selectedPlanHasLiveSignals.value) {
-    executions.value = []
-  }
-  const results = await Promise.allSettled(optionalLoads)
-  const failed = results.find((result) => result.status === 'rejected')
-  if (failed) {
-    const error = failed.reason || {}
-    const detailText = formatApiDetail(error.response?.data?.detail)
-    message.value = detailText || error.message || '部分附加数据加载失败，plan 详情已显示'
-  }
-}
-
-async function previewLivePublish() {
-  if (!selectedPlanId.value || !selectedLiveAccountId.value || !canPublishLiveSignals.value) return
-  livePublishLoading.value = true
-  message.value = ''
-  try {
-    const res = await publishPortfolioPlanLiveSignals(selectedPlanId.value, {
-      securities_account_id: selectedLiveAccountId.value,
-      dry_run: true,
-    })
-    livePublishPreview.value = res.data
-    showPublishModal.value = true
-  } catch (error) {
-    message.value = error.response?.data?.detail?.message || error.response?.data?.detail || error.message || '实盘发布预检失败'
-  } finally {
-    livePublishLoading.value = false
-  }
-}
-
-async function publishLiveSignals() {
-  if (!selectedPlanId.value || !selectedLiveAccountId.value || !canPublishLiveSignals.value) return
-  livePublishLoading.value = true
-  message.value = ''
-  try {
-    const res = await publishPortfolioPlanLiveSignals(selectedPlanId.value, {
-      securities_account_id: selectedLiveAccountId.value,
-      dry_run: false,
-    })
-    livePublishPreview.value = res.data
-    showPublishModal.value = false
-    message.value = `已发布 ${res.data?.inserted_count ?? 0} 条 live signals，已有 ${res.data?.existing_count ?? 0} 条`
-    await loadLiveOps()
-    await loadPlans()
-  } catch (error) {
-    const detail = error.response?.data?.detail
-    livePublishPreview.value = detail?.risk_report ? { risk_report: detail.risk_report, blocked: true } : livePublishPreview.value
-    message.value = detail?.message || detail || error.message || '实盘发布失败'
-  } finally {
-    livePublishLoading.value = false
-  }
-}
-
-async function executePaperNow() {
-  if (!selectedPlanId.value || !canExecutePaperNow.value) return
-  paperExecuteLoading.value = true
-  message.value = ''
-  try {
-    const res = await executePortfolioPlanPaper(selectedPlanId.value, { force: false })
-    const status = res.data?.status || 'executed_paper'
-    message.value = `Paper 执行已触发：${status}`
-    await selectPlan(selectedPlanId.value)
-    await loadPlans()
-  } catch (error) {
-    const detail = error.response?.data?.detail
-    message.value = detail?.message || detail || error.message || '执行 Paper 失败'
-  } finally {
-    paperExecuteLoading.value = false
-  }
-}
-
-async function loadEquity() {
-  if (selectedPlanHasLiveSignals.value) {
-    if (!selectedPlanId.value) {
-      equity.value = []
-      return
-    }
-    const res = await getPortfolioPlanLiveEquity(selectedPlanId.value)
-    equity.value = res.data || []
-    return
-  }
-  if (!selectedPlanId.value) {
-    equity.value = []
-    return
-  }
-  if (!showPaperSections.value) {
-    equity.value = []
-    return
-  }
-  const res = await getPortfolioPlanLineageEquity(selectedPlanId.value)
-  equity.value = res.data?.rows || []
-}
-
-async function loadRealtimeEquity() {
-  if (selectedPlanHasLiveSignals.value) {
-    if (!selectedPlanId.value) {
-      realtimeEquity.value = null
-      return
-    }
-    const res = await getPortfolioPlanLiveRealtimeEquity(selectedPlanId.value)
-    realtimeEquity.value = res.data || null
-    return
-  }
-  // Plan detail should not consume strategy-level realtime snapshots.
-  realtimeEquity.value = null
-}
-
-async function loadExecutions() {
-  if (!showPaperSections.value) {
-    executions.value = []
-    return
-  }
-  if (!selectedPlanId.value) {
-    executions.value = []
-    return
-  }
-  const res = await getPortfolioPlanExecutions(selectedPlanId.value)
-  executions.value = res.data || []
-}
-
-async function loadOperationLogs() {
-  if (!selectedPlanId.value) {
-    operationLogs.value = []
-    return
-  }
-  operationLogsLoading.value = true
-  try {
-    const res = await getPortfolioPlanOperationLogs(selectedPlanId.value, { limit: 100 })
-    operationLogs.value = res.data || []
-  } catch (error) {
-    const detailText = formatApiDetail(error.response?.data?.detail)
-    message.value = detailText || error.message || '加载操作日志失败'
-  } finally {
-    operationLogsLoading.value = false
-  }
-}
-
-async function review(decision) {
-  if (!selectedPlanId.value) return
-  actionLoading.value = true
-  try {
-    const payload = { comment: reviewComment.value }
-    if (decision === 'approved') {
-      await approvePortfolioPlan(selectedPlanId.value, payload)
-    } else {
-      await rejectPortfolioPlan(selectedPlanId.value, payload)
-    }
-    await selectPlan(selectedPlanId.value)
-    await loadPlans()
-  } finally {
-    actionLoading.value = false
-  }
-}
-
-function planCadenceBadge(plan) {
-  if (!plan) return { text: '-', cls: 'cadence-unknown' }
-  // record_kind is the authoritative type stamped by the backend. origin is the
-  // orthogonal provenance dimension (manual vs scheduled) used only to refine the
-  // label within a trade_plan; we no longer infer the kind from plan_type / origin.
-  const pending = ['needs_review', 'generated', 'draft'].includes(plan.status)
-  if (plan.record_kind === 'ledger_event') {
-    return plan.is_liquidation
-      ? { text: '手工补录·清仓', cls: 'cadence-manual' }
-      : { text: '手工补录', cls: 'cadence-manual' }
-  }
-  if (plan.record_kind === 'observation') {
-    return plan.executable === false
-      ? { text: '观察·不交易', cls: 'cadence-monitor-readonly' }
-      : { text: '观察·可交易', cls: 'cadence-monitor-trade' }
-  }
-  if (plan.record_kind === 'trade_plan') {
-    if (plan.origin === 'manual') {
-      return pending
-        ? { text: '手动调仓·待审', cls: 'cadence-manual-pending' }
-        : { text: '手动调仓', cls: 'cadence-manual' }
-    }
-    if (plan.is_rebalance_day === false) {
-      return { text: '未到周期', cls: 'cadence-not-due' }
-    }
-    if (!plan.previous_rebalance_date) {
-      return pending
-        ? { text: '待审核建仓', cls: 'cadence-rebalance-pending' }
-        : { text: '首次建仓', cls: 'cadence-rebalance' }
-    }
-    if (pending) {
-      return { text: '待审核调仓', cls: 'cadence-rebalance-pending' }
-    }
-    return { text: '调仓日', cls: 'cadence-rebalance' }
-  }
-  return { text: plan.plan_type || plan.record_kind || '-', cls: 'cadence-unknown' }
-}
+const equityRows = computed(() => buildEquityRows(equity.value))
+const equityChart = computed(() => buildEquityChart(equityRows.value))
 
 const aiRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_summary || null)
 const llmRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_llm_summary || null)
@@ -2172,1244 +793,6 @@ const signalReviewSummary = computed(() => {
   return parts.join(' · ')
 })
 
-function formatSnapshotAt(value) {
-  if (!value) return '-'
-  return String(value).slice(0, 19).replace('T', ' ')
-}
-
-async function runAiRisk() {
-  if (!selectedPlanId.value || aiRiskRunning.value) return
-  aiRiskRunning.value = true
-  message.value = '规则风控审查已提交，正在运行…'
-  try {
-    const res = await rerunPortfolioPlanAiRisk(selectedPlanId.value)
-    const taskId = res.data?.task?.task_id
-    await loadOperationLogs()
-    if (!taskId) {
-      aiRiskRunning.value = false
-      return
-    }
-    if (aiRiskTimer) window.clearInterval(aiRiskTimer)
-    aiRiskTimer = window.setInterval(() => pollAiRiskTask(taskId), 2000)
-  } catch (error) {
-    aiRiskRunning.value = false
-    const detailText = formatApiDetail(error.response?.data?.detail)
-    message.value = detailText || error.message || '规则风控审查失败'
-  }
-}
-
-async function pollAiRiskTask(taskId) {
-  try {
-    const res = await getPortfolioPlanGenerationTask(taskId)
-    const status = res.data?.status
-    if (['completed', 'failed'].includes(status)) {
-      if (aiRiskTimer) {
-        window.clearInterval(aiRiskTimer)
-        aiRiskTimer = null
-      }
-      aiRiskRunning.value = false
-      await loadOperationLogs()
-      if (status === 'completed') {
-        await selectPlan(selectedPlanId.value)
-        message.value = '规则风控审查完成'
-      } else {
-        message.value = res.data?.error_message || '规则风控审查失败'
-      }
-    }
-  } catch (error) {
-    if (aiRiskTimer) {
-      window.clearInterval(aiRiskTimer)
-      aiRiskTimer = null
-    }
-    aiRiskRunning.value = false
-    message.value = error.message || '规则风控任务查询失败'
-  }
-}
-
-async function runLlmRisk() {
-  if (!selectedPlanId.value || llmRiskRunning.value) return
-  llmRiskRunning.value = true
-  llmRiskMeta.value = { runId: '', status: 'pending', summary: '' }
-  message.value = 'AI 风险/机会分析已提交，正在按行业分桶分析…'
-  try {
-    const res = await enqueuePortfolioLlmRisk(selectedPlanId.value)
-    const runId = res.data?.run_id
-    const summary = res.data?.summary || {}
-    llmRiskMeta.value = {
-      runId: runId || '',
-      status: summary.status || 'pending',
-      summary: summary.partial_summary || '',
-    }
-    await loadOperationLogs()
-    if (!runId) {
-      llmRiskRunning.value = false
-      return
-    }
-    if (llmRiskTimer) window.clearInterval(llmRiskTimer)
-    await pollLlmRiskRun(runId)
-    if (llmRiskRunning.value) {
-      llmRiskTimer = window.setInterval(() => pollLlmRiskRun(runId), 2000)
-    }
-  } catch (error) {
-    llmRiskRunning.value = false
-    const detailText = formatApiDetail(error.response?.data?.detail)
-    message.value = detailText || error.message || 'AI 风险/机会分析失败'
-  }
-}
-
-async function pollLlmRiskRun(runId) {
-  try {
-    const res = await getPortfolioLlmRiskRun(selectedPlanId.value, runId)
-    const status = res.data?.status
-    const summaryText = res.data?.partial_summary || ''
-    llmRiskMeta.value = {
-      runId,
-      status: status || '',
-      summary: summaryText,
-    }
-    if (['completed', 'completed_with_failures', 'failed'].includes(status)) {
-      if (llmRiskTimer) {
-        window.clearInterval(llmRiskTimer)
-        llmRiskTimer = null
-      }
-      llmRiskRunning.value = false
-      await loadOperationLogs()
-      if (status === 'completed') {
-        await selectPlan(selectedPlanId.value)
-        message.value = 'AI 风险/机会分析完成'
-      } else if (status === 'completed_with_failures') {
-        await selectPlan(selectedPlanId.value)
-        message.value = `AI 风险/机会分析部分完成：${summaryText || '部分行业任务失败，已刷新可用结果'}`
-      } else {
-        message.value = `AI 风险/机会分析失败：${summaryText || '所有行业任务均未完成，请稍后重试或检查 worker 日志'}`
-      }
-    }
-  } catch (error) {
-    if (llmRiskTimer) {
-      window.clearInterval(llmRiskTimer)
-      llmRiskTimer = null
-    }
-    llmRiskRunning.value = false
-    message.value = error.message || 'AI 风险/机会分析任务查询失败'
-  }
-}
-
-function formatApiDetail(detail) {
-  if (!detail) return ''
-  if (typeof detail === 'string') return detail
-  if (typeof detail === 'object' && detail.message) return String(detail.message)
-  try {
-    return JSON.stringify(detail)
-  } catch {
-    return String(detail)
-  }
-}
-
-onMounted(() => {
-  refreshAll()
-  realtimeTimer = window.setInterval(() => {
-    if (selectedDetail.value?.plan?.strategy_template_id) {
-      loadRealtimeEquity()
-    }
-  }, 60000)
-})
-
-onUnmounted(() => {
-  if (realtimeTimer) window.clearInterval(realtimeTimer)
-  if (generationTaskTimer) window.clearInterval(generationTaskTimer)
-  if (aiRiskTimer) window.clearInterval(aiRiskTimer)
-  if (llmRiskTimer) window.clearInterval(llmRiskTimer)
-})
 </script>
 
-<style scoped>
-.portfolio-plans {
-  background: #fff;
-  box-sizing: border-box;
-  color: #111827;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  line-height: 1.5;
-  margin: 0 auto;
-  max-width: 1440px;
-  padding: 24px;
-  width: 100%;
-}
-
-.page-header,
-.toolbar,
-.detail-header,
-.metrics,
-.layout {
-  display: flex;
-  gap: 12px;
-}
-
-.page-header,
-.detail-header {
-  align-items: center;
-  justify-content: space-between;
-}
-
-.eyebrow,
-.muted {
-  color: #374151;
-  font-size: 13px;
-}
-
-.subtitle {
-  color: #111827;
-  margin-top: 4px;
-}
-
-h2,
-h3,
-h4,
-p {
-  margin: 0;
-}
-
-button,
-input,
-select,
-textarea {
-  background: #fff;
-  border: 1px solid #111827;
-  border-radius: 4px;
-  color: #111827;
-  padding: 8px 10px;
-}
-
-button {
-  background: #fff;
-  color: #111827;
-  cursor: pointer;
-}
-
-button:disabled {
-  color: #6b7280;
-  cursor: not-allowed;
-}
-
-button.danger {
-  border-color: #111827;
-  color: #111827;
-}
-
-.link-btn {
-  background: transparent;
-  border: 1px solid #c7ccd6;
-  border-radius: 3px;
-  color: #1f2937;
-  font-size: 12px;
-  padding: 2px 8px;
-}
-
-.link-btn--primary {
-  background: #eff6ff;
-  border-color: #93c5fd;
-  color: #1d4ed8;
-  font-weight: 600;
-}
-
-.link-btn--primary:hover:not(:disabled) {
-  background: #dbeafe;
-  border-color: #60a5fa;
-}
-
-.link-btn.danger {
-  border-color: #b91c1c;
-  color: #b91c1c;
-}
-
-.excluded-bar {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.reselect-summary {
-  color: #2563eb;
-  font-size: 12px;
-  margin: 4px 0 8px;
-}
-
-.reselect-meta {
-  color: #6b7280;
-  font-size: 11px;
-  margin: -4px 0 8px;
-}
-
-.operation-log-panel {
-  margin-bottom: 12px;
-}
-
-.operation-log-table td,
-.operation-log-table th {
-  white-space: nowrap;
-}
-
-.reselect-meta {
-  color: #6b7280;
-  font-size: 11px;
-  margin: -4px 0 8px;
-}
-
-.reselect-status {
-  align-items: center;
-  border-radius: 4px;
-  display: inline-flex;
-  font-size: 12px;
-  gap: 6px;
-  margin: 4px 0 8px;
-  padding: 4px 8px;
-}
-
-.reselect-status.is-running {
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
-.reselect-status.is-success {
-  background: #ecfdf5;
-  color: #047857;
-}
-
-.reselect-status.is-error {
-  background: #fef2f2;
-  color: #b91c1c;
-}
-
-.spinner {
-  animation: spin 0.8s linear infinite;
-  border: 2px solid #c7d2fe;
-  border-radius: 999px;
-  border-top-color: #2563eb;
-  display: inline-block;
-  height: 12px;
-  width: 12px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.excluded-label {
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.excluded-chip {
-  align-items: center;
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
-  border-radius: 12px;
-  display: inline-flex;
-  font-size: 12px;
-  gap: 6px;
-  padding: 2px 4px 2px 10px;
-}
-
-.excluded-chip .link-btn {
-  border: none;
-  color: #2563eb;
-  padding: 0 4px;
-}
-
-.plan-items-table {
-  table-layout: fixed;
-  width: 100%;
-}
-
-.plan-items-table th,
-.plan-items-table td {
-  font-size: 12px;
-  overflow: hidden;
-  padding: 3px 5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.plan-items-table .col-num {
-  text-align: right;
-  width: 54px;
-}
-
-.plan-items-table .col-narrow {
-  width: 44px;
-}
-
-.plan-items-table .col-select {
-  text-align: center;
-  width: 32px;
-}
-
-.plan-items-table .col-stock {
-  width: 138px;
-}
-
-.plan-items-table .col-ind {
-  width: 62px;
-}
-
-.plan-items-table .col-action {
-  overflow: visible;
-  width: 60px;
-}
-
-.plan-items-table .col-action .link-btn {
-  padding: 1px 6px;
-}
-
-.plan-items-table .col-risk {
-  width: 84px;
-}
-
-.plan-items-table .col-airisk {
-  width: 52px;
-  text-align: center;
-}
-
-.ai-risk-tag {
-  border-radius: 3px;
-  color: #fff;
-  cursor: help;
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 16px;
-  min-width: 22px;
-  padding: 0 4px;
-  text-align: center;
-}
-
-.price-source-realtime {
-  color: #1f9d55;
-}
-
-.price-source-daily {
-  color: #b8860b;
-}
-
-.price-source-none {
-  color: #d12b2b;
-}
-
-.price-as-of,
-.price-drift,
-.dropped-flag {
-  color: var(--muted, #888);
-  display: block;
-  font-size: 11px;
-}
-
-.rank-up {
-  color: #1f9d55;
-}
-
-.rank-down {
-  color: #d12b2b;
-}
-
-.risk-chip.warn {
-  background: #fff7e6;
-  border-color: #e08e0b;
-  color: #9a6700;
-}
-
-/* A股配色：风险越高越红 */
-.ai-risk-tag.risk-high {
-  background: #d12b2b;
-}
-
-.ai-risk-tag.risk-medium {
-  background: #e08e0b;
-}
-
-.ai-risk-tag.risk-low {
-  background: #b8860b;
-}
-
-.ai-risk-tag.risk-none {
-  background: #1f9d55;
-}
-
-.section-head {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-}
-
-.ai-risk-bar {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-}
-
-.ai-risk-summary {
-  font-size: 12px;
-}
-
-.ai-risk-summary .risk-high {
-  color: #d12b2b;
-}
-
-.ai-risk-summary .risk-medium {
-  color: #e08e0b;
-}
-
-.ai-risk-summary .risk-low {
-  color: #b8860b;
-}
-
-.plan-items-table .link-btn {
-  white-space: nowrap;
-}
-
-.stock-workbench-link {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  color: #1d4ed8;
-  cursor: pointer;
-  display: inline-flex;
-  gap: 4px;
-  max-width: 100%;
-  min-width: 0;
-  padding: 0;
-  text-align: left;
-}
-
-.stock-workbench-link:hover .stock-workbench-link__name,
-.stock-workbench-link:hover .stock-workbench-link__symbol {
-  text-decoration: underline;
-}
-
-.stock-workbench-link__name {
-  font-weight: 700;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.stock-workbench-link__symbol {
-  color: #6b7280;
-  flex-shrink: 0;
-  font-size: 11px;
-}
-
-.action-tag {
-  border-radius: 3px;
-  color: #fff;
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 14px;
-  margin-right: 4px;
-  text-align: center;
-  width: 14px;
-}
-
-.cadence-tag {
-  border-radius: 3px;
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 16px;
-  padding: 0 6px;
-  vertical-align: middle;
-}
-
-.cadence-tag.cadence-rebalance {
-  background: #1d4ed8;
-  color: #fff;
-}
-
-.cadence-tag.cadence-rebalance-pending {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.cadence-tag.cadence-manual {
-  background: #ffedd5;
-  color: #c2410c;
-}
-
-.cadence-tag.cadence-manual-pending {
-  background: #fed7aa;
-  color: #9a3412;
-}
-
-.cadence-tag.cadence-not-due {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.cadence-tag.cadence-monitor-readonly {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.cadence-tag.cadence-monitor-trade {
-  background: #b45309;
-  color: #fff;
-}
-
-.cadence-tag.cadence-unknown {
-  background: #c7ccd6;
-  color: #111827;
-}
-
-.relation-tag {
-  border-radius: 3px;
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 16px;
-  margin-left: 4px;
-  padding: 0 6px;
-}
-
-.relation-tag.relation-upstream {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.relation-tag.relation-downstream {
-  background: #dcfce7;
-  color: #047857;
-}
-
-.monitor-note {
-  background: #f3f4f6;
-  border: 1px solid #9ca3af;
-  border-radius: 4px;
-  color: #374151;
-  font-size: 13px;
-  margin: 0 0 12px;
-  padding: 10px;
-}
-
-.lineage-panel {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  margin: 0 0 12px;
-}
-
-.lineage-panel div {
-  border: 1px solid #111827;
-  border-radius: 4px;
-  min-width: 0;
-  padding: 8px 10px;
-}
-
-.lineage-panel span,
-.lineage-panel small {
-  color: #374151;
-  display: block;
-  font-size: 12px;
-}
-
-.lineage-panel strong {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lineage-link {
-  background: transparent;
-  border: 0;
-  color: #1d4ed8;
-  font-weight: 700;
-  padding: 0;
-  text-align: left;
-}
-
-.lineage-link:hover {
-  text-decoration: underline;
-}
-
-.drift-cell.drift-buy {
-  color: #d12b2b;
-}
-
-.drift-cell.drift-sell {
-  color: #1f9d55;
-}
-
-.drift-cell.drift-flat {
-  color: #6b7280;
-}
-
-/* A股配色：买入=红，卖出=绿 */
-.action-tag.tag-buy {
-  background: #d12b2b;
-}
-
-.action-tag.tag-keep {
-  background: #b91c1c;
-}
-
-.action-tag.tag-sell {
-  background: #1f9d55;
-}
-
-.action-tag.tag-hold {
-  background: #6b7280;
-}
-
-.action-tag.tag-skip {
-  background: #c7ccd6;
-}
-
-.card {
-  background: #fff;
-  border: 1px solid #111827;
-  border-radius: 4px;
-  color: #111827;
-  padding: 14px;
-}
-
-.generate-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.generate-form-body {
-  align-items: end;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1.2fr) minmax(160px, 0.7fr) minmax(140px, 0.6fr) auto auto;
-}
-
-.generate-form-body label,
-.toolbar label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.generate-form-body .inline-check {
-  align-items: center;
-  flex-direction: row;
-  gap: 6px;
-  padding-bottom: 8px;
-}
-
-.strategy-param-card {
-  background: #f9fafb;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  grid-column: 1 / -1;
-  padding: 12px;
-}
-
-.strategy-param-header {
-  align-items: flex-start;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.strategy-param-header p {
-  margin: 4px 0 0;
-}
-
-.editable-badge {
-  border: 1px solid #111827;
-  border-radius: 999px;
-  flex-shrink: 0;
-  font-size: 12px;
-  padding: 3px 8px;
-}
-
-.strategy-param-grid {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-}
-
-.strategy-param-grid div {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
-  min-width: 0;
-  padding: 8px;
-}
-
-.strategy-param-grid.editable label {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  padding: 8px;
-}
-
-.strategy-param-grid span {
-  color: #6b7280;
-  display: block;
-  font-size: 12px;
-  margin-bottom: 4px;
-}
-
-.preset-evidence {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  margin: 8px 0 10px;
-}
-
-.preset-evidence span {
-  color: #4b5563;
-  font-size: 12px;
-}
-
-.preset-evidence-list {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  margin: 0 0 10px;
-  padding: 8px 10px;
-}
-
-.preset-evidence-list strong {
-  display: block;
-  margin-bottom: 6px;
-}
-
-.preset-evidence-list p {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  margin: 4px 0;
-}
-
-.preset-evidence-list span {
-  color: #4b5563;
-  font-size: 12px;
-}
-
-.strategy-param-grid strong {
-  display: block;
-  overflow-wrap: anywhere;
-}
-
-.task-status {
-  grid-column: 1 / -1;
-}
-
-.task-list-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.task-list-header {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.task-list-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.reason-input {
-  min-width: 180px;
-  padding: 4px 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 13px;
-}
-
-.generation-task-table tbody tr {
-  cursor: pointer;
-}
-
-.generation-task-table tbody tr.active {
-  background: #f3f4f6;
-}
-
-.truncate {
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.worker-status-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.live-ops-card,
-.live-publish-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.live-ops-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-}
-
-.ops-line {
-  border: 1px solid #111827;
-  border-radius: 4px;
-  display: grid;
-  gap: 4px;
-  grid-template-columns: 90px 1fr;
-  margin-top: 6px;
-  padding: 8px;
-}
-
-.ops-line small {
-  color: #374151;
-  grid-column: 1 / -1;
-  overflow-wrap: anywhere;
-}
-
-.risk-report {
-  border: 1px solid #111827;
-  border-radius: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-}
-
-.risk-report-table tr.blocked {
-  background: #fef2f2;
-}
-
-.risk-reasons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  max-width: 360px;
-  white-space: normal;
-}
-
-.risk-chip {
-  border: 1px solid #111827;
-  border-radius: 999px;
-  display: inline-block;
-  padding: 2px 8px;
-}
-
-.watermark-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.watermark-grid {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.watermark-grid div {
-  border: 1px solid #111827;
-  border-radius: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px;
-}
-
-.watermark-grid span,
-.watermark-grid small {
-  color: #374151;
-}
-
-.watermark-warning {
-  background: #f3f4f6;
-  border: 1px solid #111827;
-  border-radius: 4px;
-  padding: 10px;
-}
-
-.worker-status-grid {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-}
-
-.worker-status-row {
-  border: 1px solid #111827;
-  border-radius: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px;
-}
-
-.worker-status-row span,
-.worker-status-row small {
-  color: #374151;
-  overflow-wrap: anywhere;
-}
-
-.plan-list {
-  flex: 0 0 340px;
-}
-
-.detail {
-  flex: 1;
-  overflow: hidden;
-}
-
-.plan-row {
-  background: #fff;
-  border: 1px solid #111827;
-  color: #111827;
-  display: block;
-  margin-top: 8px;
-  text-align: left;
-  width: 100%;
-}
-
-.plan-row.active {
-  background: #f3f4f6;
-  border-color: #111827;
-}
-
-.plan-row.upstream {
-  background: #eff6ff;
-  border-left: 4px solid #1d4ed8;
-}
-
-.plan-row.downstream {
-  background: #ecfdf5;
-  border-left: 4px solid #047857;
-}
-
-.plan-row.active.upstream,
-.plan-row.active.downstream {
-  background: #f3f4f6;
-  border-left-color: #111827;
-}
-
-.plan-row span,
-.plan-row small,
-.plan-row em {
-  display: block;
-}
-
-.plan-row small,
-.plan-row em {
-  color: #111827;
-  font-style: normal;
-}
-
-.plan-row-baseline {
-  display: block;
-  margin-top: 2px;
-  color: #4b5563;
-  font-size: 11px;
-}
-
-.metrics {
-  flex-wrap: wrap;
-  margin: 14px 0;
-}
-
-.metrics div {
-  background: #fff;
-  border: 1px solid #111827;
-  border-radius: 4px;
-  color: #111827;
-  padding: 10px 12px;
-}
-
-.metrics span {
-  color: #111827;
-  display: block;
-  font-size: 12px;
-}
-
-.capital-basis {
-  margin: 14px 0;
-}
-
-.capital-basis .metrics {
-  margin: 8px 0 0;
-}
-
-.execution-status {
-  margin-bottom: 14px;
-}
-
-.status-grid {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  margin-top: 8px;
-}
-
-.status-grid div {
-  border: 1px solid #111827;
-  border-radius: 4px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  padding: 8px 10px;
-  word-break: break-word;
-}
-
-.status-grid span,
-.status-grid small {
-  display: block;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.status-grid strong {
-  display: block;
-  line-height: 1.4;
-  white-space: normal;
-}
-
-.message {
-  color: #111827;
-}
-
-.review-comment {
-  display: block;
-  margin-bottom: 14px;
-}
-
-.review-comment textarea {
-  display: block;
-  margin-top: 6px;
-  width: 100%;
-}
-
-.table-wrap {
-  overflow: auto;
-}
-
-table {
-  border-collapse: collapse;
-  font-size: 13px;
-  min-width: 980px;
-  width: 100%;
-}
-
-th,
-td {
-  border: 1px solid #111827;
-  color: #111827;
-  padding: 8px 10px;
-  text-align: left;
-  white-space: nowrap;
-}
-
-th {
-  background: #f3f4f6;
-  color: #111827;
-  font-weight: 700;
-}
-
-.col-date {
-  max-width: 86px;
-  width: 86px;
-}
-
-.col-symbol {
-  max-width: 92px;
-  width: 92px;
-}
-
-.col-name {
-  max-width: 90px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  width: 90px;
-}
-
-.equity-summary,
-.realtime-equity {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.equity-summary div,
-.realtime-equity div {
-  background: #fff;
-  border: 1px solid #111827;
-  border-radius: 4px;
-  color: #111827;
-  padding: 8px 10px;
-}
-
-.equity-summary span,
-.realtime-equity span {
-  display: block;
-  font-size: 12px;
-}
-
-.equity-chart {
-  border: 1px solid #111827;
-  margin-bottom: 10px;
-  overflow: hidden;
-}
-
-.equity-chart svg {
-  background: #fff;
-  display: block;
-  height: 260px;
-  width: 100%;
-}
-
-.equity-chart line {
-  stroke: #111827;
-  stroke-width: 1;
-}
-
-.equity-chart polyline {
-  fill: none;
-  stroke: #111827;
-  stroke-width: 3;
-}
-
-.equity-chart circle {
-  fill: #111827;
-}
-
-.equity-chart text {
-  fill: #111827;
-  font-size: 12px;
-}
-
-.table-wrap.compact table {
-  min-width: 720px;
-}
-
-@media (max-width: 768px) {
-  .portfolio-plans {
-    padding: 12px;
-  }
-}
-</style>
+<style src="../assets/styles/portfolio-plans.css"></style>
