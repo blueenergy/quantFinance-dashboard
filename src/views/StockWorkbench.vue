@@ -74,239 +74,38 @@
         </v-window-item>
 
         <v-window-item value="quote">
-          <section class="panel-grid">
-            <article class="workbench-card">
-              <div class="card-title-row">
-                <h3>行情估值</h3>
-                <div class="analysis-actions">
-                  <span class="muted">
-                    {{ quoteSectionDate || '暂无日期' }}
-                    <template v-if="sectionLoading.quote"> · 刷新中…</template>
-                  </span>
-                  <button
-                    type="button"
-                    class="text-link-button"
-                    :disabled="sectionLoading.quote"
-                    @click="refreshQuoteSection"
-                  >
-                    刷新行情
-                  </button>
-                </div>
-              </div>
-              <div class="financial-metrics">
-                <div v-for="metric in quoteMetrics" :key="metric.label">
-                  <span>{{ metric.label }}</span>
-                  <strong>{{ metric.value }}</strong>
-                </div>
-              </div>
-            </article>
-
-            <article class="workbench-card">
-              <div class="card-title-row">
-                <h3>资金流</h3>
-                <span class="muted">{{ latestMoneyFlow?.trade_date || '暂无日期' }}</span>
-              </div>
-              <div v-if="latestMoneyFlow" class="financial-metrics">
-                <div v-for="metric in moneyFlowMetrics" :key="metric.label">
-                  <span>{{ metric.label }}</span>
-                  <strong :class="metric.className">{{ metric.value }}</strong>
-                </div>
-              </div>
-              <div v-else class="muted-block">暂无该股票的资金流数据。</div>
-            </article>
-
-            <article class="workbench-card">
-              <div class="card-title-row">
-                <h3>进场风险 / 高位派发</h3>
-                <span
-                  class="entry-risk-badge"
-                  :class="`entry-risk-${entryRiskSeverity}`"
-                >
-                  {{ entryRiskSeverityLabel }}
-                </span>
-              </div>
-              <div v-if="entryRisk.status === 'ok'" class="entry-risk-narrative">
-                <div v-for="metric in entryRiskNarrativeRows" :key="metric.label">
-                  <span>{{ metric.label }}</span>
-                  <strong :class="metric.className">{{ metric.value }}</strong>
-                </div>
-              </div>
-              <div v-else class="muted-block">{{ entryRisk.summary || '暂无足够样本计算进场风险。' }}</div>
-              <p v-if="entryRisk.summary" class="entry-risk-summary">{{ entryRisk.summary }}</p>
-              <div v-if="entryRisk.status === 'ok'" class="entry-risk-explain">
-                <strong>判断逻辑</strong>
-                <p>
-                  `mainflow20` 是近20日主力净流 / 近20日成交额，按成交规模归一；
-                  `派发风险值 = hipos120 × (-mainflow20)`，只在主力净流出时才代表风险。
-                  因此绝对流出金额很大但成交额也很大时，风险值可能仍然不高。
-                </p>
-                <p>
-                  初始参考阈值：派发风险值低于 0.02 通常只作观察；0.02-0.05 需要结合高位和涨幅复核；
-                  大于 0.05 且 hipos120 接近 0.97、mainflow20 为负时，可作为高位派发警觉信号。
-                  后续会用历史候选池分位数和未来20日表现进一步标定。
-                </p>
-              </div>
-            </article>
-          </section>
-
-          <section class="workbench-card">
-            <div class="card-title-row">
-              <h3>{{ quoteKlineTitle }}</h3>
-              <div class="quote-kline-actions">
-                <div class="quote-kline-tf">
-                  <button
-                    v-for="item in quoteKlineTfOptions"
-                    :key="item.value"
-                    type="button"
-                    :class="{ on: quoteKlineTf === item.value }"
-                    @click="quoteKlineTf = item.value"
-                  >
-                    {{ item.label }}
-                  </button>
-                </div>
-                <span class="muted">最近 {{ quoteKlineRows.length }} 根</span>
-              </div>
-            </div>
-            <StockKLineChart
-              v-if="quoteKlineRows.length"
-              :records="quoteKlineRows"
-              :tf="quoteKlineTf"
-            />
-            <details v-if="quoteKlineRows.length" class="quote-details">
-              <summary>展开最近 10 根{{ quoteKlineShortLabel }}行情明细</summary>
-              <div class="quote-table-wrap">
-                <table class="quote-table">
-                  <thead>
-                    <tr>
-                      <th>日期</th>
-                      <th>收盘</th>
-                      <th>涨跌幅</th>
-                      <th>最高</th>
-                      <th>最低</th>
-                      <th>成交额</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in quoteKlineRows.slice(0, 10)" :key="row.trade_date">
-                      <td>
-                        {{ row.trade_date }}
-                        <span v-if="row.is_partial" class="partial-kline-tag">未完</span>
-                      </td>
-                      <td>{{ fmtNumber(row.close) }}</td>
-                      <td :class="pctClass(row.pct_chg ?? row.pct_change)">{{ fmtPct(row.pct_chg ?? row.pct_change) }}</td>
-                      <td>{{ fmtNumber(row.high) }}</td>
-                      <td>{{ fmtNumber(row.low) }}</td>
-                      <td>{{ fmtKlineAmount(row) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </details>
-            <div v-else-if="quoteKlineIsLoading" class="muted-block">正在加载{{ quoteKlineShortLabel }}行情…</div>
-            <div v-else class="muted-block">暂无该股票的{{ quoteKlineShortLabel }}行情。</div>
-          </section>
-
-          <section class="workbench-card">
-            <div class="card-title-row">
-              <h3>主力资金趋势</h3>
-              <span class="muted">金额单位：万元，展示按亿/万自动换算</span>
-            </div>
-            <MoneyFlowPanel
-              :latest="latestMoneyFlow"
-              :history="activeMoneyFlowHistory"
-              :summary="moneyFlowSummary"
-              :period="quoteKlineTf"
-              :kline-rows="quoteKlineRows"
-              :loading="moneyFlowIsLoading"
-            />
-          </section>
+          <WorkbenchQuotePanel
+            v-model:quote-kline-tf="quoteKlineTf"
+            :quote-section-date="quoteSectionDate"
+            :loading="sectionLoading.quote"
+            :quote-metrics="quoteMetrics"
+            :latest-money-flow="latestMoneyFlow"
+            :money-flow-metrics="moneyFlowMetrics"
+            :entry-risk="entryRisk"
+            :entry-risk-severity="entryRiskSeverity"
+            :entry-risk-severity-label="entryRiskSeverityLabel"
+            :entry-risk-narrative-rows="entryRiskNarrativeRows"
+            :quote-kline-tf-options="quoteKlineTfOptions"
+            :quote-kline-title="quoteKlineTitle"
+            :quote-kline-short-label="quoteKlineShortLabel"
+            :quote-kline-rows="quoteKlineRows"
+            :quote-kline-is-loading="quoteKlineIsLoading"
+            :active-money-flow-history="activeMoneyFlowHistory"
+            :money-flow-summary="moneyFlowSummary"
+            :money-flow-is-loading="moneyFlowIsLoading"
+            @refresh="refreshQuoteSection"
+          />
         </v-window-item>
 
         <v-window-item value="nine-turn">
-          <section class="panel-grid">
-            <article class="workbench-card nine-turn-latest-card">
-              <div class="card-title-row">
-                <h3>最近九转信号</h3>
-                <span class="muted">
-                  {{ nineTurnStatus.as_of || '暂无日期' }}
-                  <template v-if="sectionLoading.nine_turn"> · 刷新中…</template>
-                </span>
-              </div>
-              <div v-if="latestNineTurnSignal" class="nine-turn-summary">
-                <strong :class="nineturnSignalClass(latestNineTurnSignal)">
-                  {{ latestNineTurnSignal.label }} · {{ latestNineTurnSignal.grade_label }}
-                </strong>
-                <span>{{ latestNineTurnSignal.trade_date }} · 强度 {{ latestNineTurnSignal.strength }}/4</span>
-                <p>
-                  完美结构 {{ formatCheck(latestNineTurnSignal.perfect) }}，
-                  量能过滤 {{ formatCheck(latestNineTurnSignal.vol_filter_pass) }}，
-                  均线过滤 {{ formatCheck(latestNineTurnSignal.trend_filter_pass) }}
-                </p>
-              </div>
-              <div v-else class="muted-block">暂无已完成的九转信号。</div>
-            </article>
-
-            <article class="workbench-card">
-              <div class="card-title-row">
-                <h3>规则说明</h3>
-                <span class="muted">Tushare 原始计数 + 本地增强</span>
-              </div>
-              <div class="nine-turn-rules">
-                <span>下九转：第 8/9 天低点低于第 6/7 天低点</span>
-                <span>上九转：第 8/9 天高点高于第 6/7 天高点</span>
-                <span>过滤：下九转缩量 + 站上 60 日线；上九转放量</span>
-              </div>
-            </article>
-          </section>
-
-          <section class="workbench-card">
-            <div class="card-title-row">
-              <h3>九转 K 线</h3>
-              <span class="muted">最近 {{ nineTurnDailyRows.length }} 个交易日 · {{ nineTurnSignals.length }} 个信号</span>
-            </div>
-            <StockKLineChart
-              v-if="nineTurnDailyRows.length"
-              :records="nineTurnDailyRows"
-              :markers="nineTurnMarkers"
-            />
-            <div v-else class="muted-block">暂无该股票的九转 K 线数据。</div>
-          </section>
-
-          <section class="workbench-card">
-            <div class="card-title-row">
-              <h3>信号明细</h3>
-              <span class="muted">普通 / 完美 / 强</span>
-            </div>
-            <div v-if="nineTurnSignals.length" class="quote-table-wrap">
-              <table class="quote-table">
-                <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th>方向</th>
-                    <th>分级</th>
-                    <th>完美结构</th>
-                    <th>量能过滤</th>
-                    <th>均线过滤</th>
-                    <th>收盘</th>
-                    <th>5日均量</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="signal in nineTurnSignals" :key="`${signal.trade_date}-${signal.direction}`">
-                    <td>{{ signal.trade_date }}</td>
-                    <td :class="nineturnSignalClass(signal)">{{ signal.label }}</td>
-                    <td>{{ signal.grade_label }}</td>
-                    <td>{{ formatCheck(signal.perfect) }}</td>
-                    <td>{{ formatCheck(signal.vol_filter_pass) }}</td>
-                    <td>{{ formatCheck(signal.trend_filter_pass) }}</td>
-                    <td>{{ fmtNumber(signal.close) }}</td>
-                    <td>{{ fmtNumber(signal.volume_ma) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div v-else class="muted-block">暂无完成 9 计数的九转信号。</div>
-          </section>
+          <WorkbenchNineTurnPanel
+            :nine-turn-status="nineTurnStatus"
+            :loading="sectionLoading.nine_turn"
+            :latest-nine-turn-signal="latestNineTurnSignal"
+            :nine-turn-daily-rows="nineTurnDailyRows"
+            :nine-turn-signals="nineTurnSignals"
+            :nine-turn-markers="nineTurnMarkers"
+          />
         </v-window-item>
 
         <v-window-item value="scores">
@@ -1312,11 +1111,11 @@ import {
 import { useStockWorkbench } from '../composables/useStockWorkbench'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
 import GrowthChart from '../components/GrowthChart.vue'
-import MoneyFlowPanel from '../components/MoneyFlowPanel.vue'
-import StockKLineChart from '../components/StockKLineChart.vue'
 import StockWorkbenchSwotPanel from '../components/stock/StockWorkbenchSwotPanel.vue'
 import WorkbenchHero from '../components/stock/WorkbenchHero.vue'
+import WorkbenchNineTurnPanel from '../components/stock/WorkbenchNineTurnPanel.vue'
 import WorkbenchOverviewPanel from '../components/stock/WorkbenchOverviewPanel.vue'
+import WorkbenchQuotePanel from '../components/stock/WorkbenchQuotePanel.vue'
 import WorkbenchSearchBar from '../components/stock/WorkbenchSearchBar.vue'
 import WorkbenchScoresPanel from '../components/stock/WorkbenchScoresPanel.vue'
 import {
@@ -1326,7 +1125,6 @@ import {
   diffOrNull,
   firstFinite,
   fmtAmount,
-  fmtKlineAmount,
   fmtNumber,
   fmtNullableNumber,
   fmtNullablePct,
@@ -1337,11 +1135,9 @@ import {
   fmtSignedShares,
   fmtStatementAmount,
   fmtWanAmount,
-  formatCheck,
   holderTrendClass,
   inDeLabel,
   isFutureDate,
-  nineturnSignalClass,
   pctClass,
   ratioPct,
   reportQuarter,
@@ -2776,37 +2572,6 @@ h1, h2, h3 {
 .valuation-help-content li + li {
   margin-top: 6px;
 }
-.quote-kline-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-}
-.quote-kline-tf {
-  background: rgba(15, 23, 42, .72);
-  border: 1px solid rgba(148, 163, 184, .18);
-  border-radius: 999px;
-  display: inline-flex;
-  gap: 4px;
-  padding: 3px;
-}
-.quote-kline-tf button {
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
-  color: #94a3b8;
-  cursor: pointer;
-  font-size: 12px;
-  padding: 5px 10px;
-}
-.quote-kline-tf button:hover {
-  color: #dbeafe;
-}
-.quote-kline-tf button.on {
-  background: rgba(37, 99, 235, .88);
-  color: #fff;
-}
 .analysis-actions {
   align-items: center;
   display: flex;
@@ -2925,37 +2690,6 @@ h1, h2, h3 {
 .financial-mode-toggle :deep(.v-btn--active) {
   color: #f8fafc;
 }
-.nine-turn-summary {
-  background: rgba(30, 41, 59, .62);
-  border: 1px solid rgba(148, 163, 184, .18);
-  border-radius: 14px;
-  padding: 16px;
-}
-.nine-turn-summary strong {
-  display: block;
-  font-size: 22px;
-  margin-bottom: 8px;
-}
-.nine-turn-summary span,
-.nine-turn-summary p {
-  color: #cbd5e1;
-  font-size: 13px;
-  line-height: 1.6;
-  margin: 0;
-}
-.nine-turn-rules {
-  display: grid;
-  gap: 10px;
-}
-.nine-turn-rules span {
-  background: rgba(15, 23, 42, .58);
-  border: 1px solid rgba(148, 163, 184, .16);
-  border-radius: 12px;
-  color: #cbd5e1;
-  font-size: 13px;
-  line-height: 1.5;
-  padding: 10px 12px;
-}
 .quality-card-grid {
   display: grid;
   gap: 12px;
@@ -3003,70 +2737,6 @@ h1, h2, h3 {
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.entry-risk-badge {
-  border: 1px solid rgba(148, 163, 184, .28);
-  border-radius: 999px;
-  color: #cbd5e1;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 10px;
-}
-.entry-risk-high {
-  background: rgba(239, 68, 68, .14);
-  border-color: rgba(239, 68, 68, .35);
-  color: #fca5a5;
-}
-.entry-risk-medium {
-  background: rgba(234, 179, 8, .14);
-  border-color: rgba(234, 179, 8, .35);
-  color: #fde68a;
-}
-.entry-risk-low {
-  background: rgba(59, 130, 246, .14);
-  border-color: rgba(59, 130, 246, .35);
-  color: #bfdbfe;
-}
-.entry-risk-none {
-  background: rgba(34, 197, 94, .12);
-  border-color: rgba(34, 197, 94, .32);
-  color: #bbf7d0;
-}
-.entry-risk-narrative {
-  display: grid;
-  gap: 10px;
-}
-.entry-risk-narrative div {
-  background: rgba(15, 23, 42, .46);
-  border: 1px solid rgba(148, 163, 184, .14);
-  border-radius: 12px;
-  padding: 10px 12px;
-}
-.entry-risk-narrative span {
-  color: #94a3b8;
-  display: block;
-  font-size: 12px;
-  margin-bottom: 4px;
-}
-.entry-risk-narrative strong {
-  color: #f8fafc;
-  font-size: 14px;
-  line-height: 1.5;
-}
-.entry-risk-text-high {
-  color: #fca5a5 !important;
-}
-.entry-risk-text-medium {
-  color: #fde68a !important;
-}
-.entry-risk-text-low {
-  color: #bfdbfe !important;
-}
-.entry-risk-summary {
-  color: #cbd5e1;
-  font-size: 13px;
-  line-height: 1.6;
-  margin: 12px 0 0;
-}
 details summary {
   color: #bfdbfe;
   cursor: pointer;
@@ -3074,19 +2744,6 @@ details summary {
 .quote-table-wrap {
   margin-top: 14px;
   overflow-x: auto;
-}
-.quote-details {
-  background: rgba(15, 23, 42, .36);
-  border: 1px solid rgba(148, 163, 184, .14);
-  border-radius: 12px;
-  margin-top: 14px;
-  padding: 10px 12px;
-}
-.quote-details summary {
-  color: #bfdbfe;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
 }
 .quote-table {
   border-collapse: collapse;
@@ -3125,16 +2782,6 @@ details summary {
 .quote-table td.valuation-na-cell {
   color: #94a3b8;
   font-style: italic;
-}
-.partial-kline-tag {
-  background: rgba(96, 165, 250, .14);
-  border: 1px solid rgba(96, 165, 250, .34);
-  border-radius: 999px;
-  color: #bfdbfe;
-  display: inline-flex;
-  font-size: 11px;
-  margin-left: 6px;
-  padding: 1px 6px;
 }
 .report-rc-table {
   min-width: 1280px;
