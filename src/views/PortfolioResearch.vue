@@ -63,9 +63,28 @@
         </div>
       </aside>
 
-      <main class="card detail-card" :class="{ 'mobile-hidden': isNarrow && !mobileShowDetail }">
-        <p v-if="!selectedJob" class="muted detail-empty">请选择一个研究任务。</p>
-        <template v-else>
+      <main v-if="!selectedJob" class="card detail-card" :class="{ 'mobile-hidden': isNarrow && !mobileShowDetail }">
+        <p class="muted detail-empty">请选择一个研究任务。</p>
+      </main>
+      <Teleport v-else to="body" :disabled="!detailMaximized">
+        <div :class="detailMaximized ? 'detail-fullscreen-shell' : 'detail-inline-shell'">
+          <div
+            v-if="detailMaximized"
+            class="detail-fullscreen-backdrop"
+            aria-hidden="true"
+            @click="exitDetailFullscreen"
+          />
+          <main
+            class="card detail-card"
+            :class="{
+              'detail-card--maximized': detailMaximized,
+              'mobile-hidden': isNarrow && !mobileShowDetail,
+            }"
+            :role="detailMaximized ? 'dialog' : undefined"
+            :aria-modal="detailMaximized ? 'true' : undefined"
+            aria-label="研究任务详情"
+            @click.stop
+          >
           <div class="detail-toolbar">
             <button v-if="isNarrow" type="button" class="back-btn" @click="backToList">← 任务列表</button>
             <div class="detail-title">
@@ -79,6 +98,12 @@
               </p>
             </div>
             <div class="actions">
+              <button
+                type="button"
+                @click="toggleDetailFullscreen"
+              >
+                {{ detailMaximized ? '退出全屏' : '全屏' }}
+              </button>
               <button
                 ref="loadParamsBtnRef"
                 type="button"
@@ -202,8 +227,9 @@
             />
             <p v-else class="muted">暂无结果。任务完成后会显示。</p>
           </div>
-        </template>
-      </main>
+          </main>
+        </div>
+      </Teleport>
     </section>
 
     <div
@@ -318,6 +344,11 @@
           <div>
             <h3>{{ comboTitle }}</h3>
             <p class="muted">{{ comboSubtitle }}</p>
+            <div v-if="comboDetail" class="combo-params">
+              <span><strong>移动止盈</strong>{{ comboTrailingStopLabel }}</span>
+              <span><strong>成交价</strong>后复权 · next_open</span>
+              <span v-if="comboTrailingStopEnabled"><strong>卖出规则</strong>峰值回撤触发后次日开盘卖，否则持满 {{ comboMeta.horizon || comboMeta.rebalance_interval_days }} 日</span>
+            </div>
           </div>
           <button class="link-btn" @click="closeComboDetail">关闭 ✕</button>
         </header>
@@ -399,7 +430,12 @@
             </table>
           </div>
           <p class="muted combo-note">
-            成交价口径：买入 = 调仓日「次日开盘价」(next_open)，卖出 = 持有 {{ comboMeta.horizon || comboMeta.rebalance_interval_days }} 个交易日后那天的开盘价（next_open；遇一字跌停顺延，见 sell_delayed_days），open-to-open。
+            <template v-if="comboTrailingStopEnabled">
+              移动止盈（{{ comboTrailingStopLabel }}）：持仓期内跟踪最高价，若某日收盘价 ≤ 峰值×(1−止盈比例)，则于次日开盘价卖出；否则持有满 {{ comboMeta.horizon || comboMeta.rebalance_interval_days }} 个交易日后按开盘价卖出（next_open；遇一字跌停顺延，见 sell_delayed_days）。价格为后复权 OHLC。
+            </template>
+            <template v-else>
+              成交价口径：买入 = 调仓日「次日开盘价」(next_open)，卖出 = 持有 {{ comboMeta.horizon || comboMeta.rebalance_interval_days }} 个交易日后那天的开盘价（next_open；遇一字跌停顺延，见 sell_delayed_days），open-to-open。价格为后复权 OHLC。
+            </template>
             等权建仓、整手取整、含费用模型；无期内再平衡、无额外滑点。
           </p>
           <p class="muted combo-note">
@@ -419,6 +455,7 @@ import {
   getPortfolioResearchComboDetail,
   getPortfolioResearchJob,
   getPortfolioResearchResults,
+  getPortfolioResearchResultRows,
   listPortfolioResearchJobs,
   publishPortfolioResearchResult,
   rerunPortfolioResearchJob,
@@ -427,7 +464,7 @@ import {
   buildPortfolioResearchPayload,
   formatResearchApiError,
 } from '../utils/portfolioResearchPayload'
-import { buildCandidateConfigFromRow } from '../utils/sweepResultView'
+import { buildCandidateConfigFromRow, formatAxisValue, resolveComboTrailingStopPct } from '../utils/sweepResultView'
 import SweepResultPanel from '../components/portfolio/SweepResultPanel.vue'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
@@ -438,6 +475,7 @@ const submitting = ref(false)
 const deleteLoading = ref(false)
 const publishLoading = ref(false)
 const artifactLoading = ref(false)
+const detailMaximized = ref(false)
 const nameTouched = ref(false)
 const jobs = ref([])
 const selectedJob = ref(null)
@@ -477,6 +515,7 @@ const comboModalOpen = ref(false)
 const comboLoading = ref(false)
 const comboError = ref('')
 const comboDetail = ref(null)
+const comboContextRow = ref(null)
 const tradeDateFilter = ref('')
 const tradeSymFilter = ref('')
 const tradeSortKey = ref('score_date')
@@ -640,17 +679,52 @@ function openCreateDrawer() {
 }
 
 function onGlobalKeydown(event) {
+  if (event.key === 'Escape' && detailMaximized.value) {
+    event.preventDefault()
+    exitDetailFullscreen()
+    return
+  }
   if (event.key === 'Escape' && drawerOpen.value) {
     event.preventDefault()
     closeDrawer()
   }
 }
 
+function toggleDetailFullscreen() {
+  detailMaximized.value = !detailMaximized.value
+}
+
+function exitDetailFullscreen() {
+  detailMaximized.value = false
+}
+
+function onDetailFullscreenKeydown(event) {
+  if (event.key === 'Escape' && detailMaximized.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    exitDetailFullscreen()
+  }
+}
+
+watch(detailMaximized, (value) => {
+  document.body.style.overflow = value ? 'hidden' : ''
+  if (value) {
+    window.addEventListener('keydown', onDetailFullscreenKeydown, true)
+  } else {
+    window.removeEventListener('keydown', onDetailFullscreenKeydown, true)
+  }
+})
+
+watch(selectedJobId, () => {
+  detailMaximized.value = false
+})
+
 function onNarrowChange(event) {
   isNarrow.value = event.matches
 }
 
 function backToList() {
+  detailMaximized.value = false
   selectedJobId.value = ''
   selectedJob.value = null
   resultDetail.value = null
@@ -910,6 +984,16 @@ const comboSubtitle = computed(() => {
   return parts.join(' · ')
 })
 
+const comboTrailingStopPct = computed(() => resolveComboTrailingStopPct({
+  meta: comboMeta.value,
+  row: comboContextRow.value,
+  comboKey: comboMeta.value?.combo_key || comboContextRow.value?.combo_key,
+}))
+
+const comboTrailingStopLabel = computed(() => formatAxisValue('trailing_stop_pct', comboTrailingStopPct.value))
+
+const comboTrailingStopEnabled = computed(() => comboTrailingStopPct.value != null)
+
 const comboSummaryCards = computed(() => {
   const s = comboSummary.value
   return [
@@ -1000,10 +1084,12 @@ function sortTrades(key) {
 
 async function openComboDetail(row) {
   if (!selectedJobId.value || !row?.combo_key) return
+  detailMaximized.value = false
   comboModalOpen.value = true
   comboLoading.value = true
   comboError.value = ''
   comboDetail.value = null
+  comboContextRow.value = row
   tradeDateFilter.value = ''
   tradeSymFilter.value = ''
   tradeSortKey.value = 'score_date'
@@ -1020,6 +1106,7 @@ async function openComboDetail(row) {
 function closeComboDetail() {
   comboModalOpen.value = false
   comboDetail.value = null
+  comboContextRow.value = null
 }
 
 async function loadJobs() {
@@ -1047,6 +1134,25 @@ async function loadJobs() {
   }
 }
 
+async function loadResearchResultDetail(jobId) {
+  const resultRes = await getPortfolioResearchResults(jobId)
+  const detail = resultRes.data
+  if (!detail) return null
+  try {
+    const rowsRes = await getPortfolioResearchResultRows(jobId, { page: 1, page_size: 500 })
+    const fullRows = rowsRes.data?.rows
+    if (Array.isArray(fullRows) && fullRows.length) {
+      detail.rows = fullRows
+      if (rowsRes.data?.total) {
+        detail.row_count_total = rowsRes.data.total
+      }
+    }
+  } catch {
+    // Keep mongo preview rows when artifact pagination is unavailable.
+  }
+  return detail
+}
+
 async function selectJob(jobId, { scrollDetail = false } = {}) {
   if (!jobId) return
   const seq = ++selectSeq
@@ -1058,9 +1164,9 @@ async function selectJob(jobId, { scrollDetail = false } = {}) {
     selectedJob.value = jobRes.data
     if (selectedJob.value?.result_id || selectedJob.value?.status === 'completed') {
       try {
-        const resultRes = await getPortfolioResearchResults(jobId)
+        const detail = await loadResearchResultDetail(jobId)
         if (seq !== selectSeq) return
-        resultDetail.value = resultRes.data
+        resultDetail.value = detail
         syncSelectedResultRow()
       } catch (err) {
         if (seq !== selectSeq) return
@@ -1245,6 +1351,8 @@ onMounted(async () => {
 onUnmounted(() => {
   stopActiveJobTimers()
   window.removeEventListener('keydown', onGlobalKeydown)
+  window.removeEventListener('keydown', onDetailFullscreenKeydown, true)
+  document.body.style.overflow = ''
   narrowMql?.removeEventListener('change', onNarrowChange)
 })
 </script>
@@ -1417,6 +1525,44 @@ button.secondary-btn {
   height: min(75dvh, calc(100dvh - 12rem));
   min-height: 480px;
   overflow: hidden;
+}
+
+.detail-inline-shell {
+  display: contents;
+  min-width: 0;
+}
+
+.detail-fullscreen-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.detail-fullscreen-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.detail-card--maximized {
+  position: relative;
+  z-index: 1;
+  width: min(96vw, 1680px);
+  height: min(92vh, 100%);
+  max-height: 92vh;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+}
+
+.detail-card--maximized .detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .jobs-card,
@@ -1675,6 +1821,21 @@ th {
 
 .combo-head h3 {
   overflow-wrap: anywhere;
+}
+
+.combo-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.combo-params strong {
+  color: #64748b;
+  font-weight: 600;
+  margin-right: 4px;
 }
 
 .combo-cards {

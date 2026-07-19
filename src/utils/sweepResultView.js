@@ -24,6 +24,24 @@ export function normalizeAxisValue(key, value) {
   return value ?? null
 }
 
+export function parseTrailingStopFromComboKey(comboKey) {
+  const match = String(comboKey || '').match(/__ts([^_]+)$/)
+  if (!match) return undefined
+  if (match[1] === 'off') return null
+  const value = Number(match[1])
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
+export function resolveComboTrailingStopPct({ meta, row, comboKey } = {}) {
+  const fromMeta = normalizeAxisValue('trailing_stop_pct', meta?.trailing_stop_pct)
+  if (fromMeta != null) return fromMeta
+  const fromRow = normalizeAxisValue('trailing_stop_pct', row?.trailing_stop_pct)
+  if (fromRow != null) return fromRow
+  const fromKey = parseTrailingStopFromComboKey(comboKey)
+  if (fromKey !== undefined) return fromKey
+  return null
+}
+
 export function formatAxisValue(key, value) {
   const normalized = normalizeAxisValue(key, value)
   if (key === 'trailing_stop_pct') {
@@ -88,8 +106,12 @@ function riskScore(row) {
   return Number.isFinite(score) ? score : -1e18
 }
 
+export function sortRowsByRiskScore(rows = []) {
+  return [...rows].sort((a, b) => riskScore(b) - riskScore(a))
+}
+
 export function computeFacetBest(rows = [], sweepAxes = []) {
-  const ordered = [...rows].sort((a, b) => riskScore(b) - riskScore(a))
+  const ordered = sortRowsByRiskScore(rows)
   const facetBest = {}
   for (const axis of sweepAxes) {
     const bucket = []
@@ -109,16 +131,18 @@ export function computeFacetBest(rows = [], sweepAxes = []) {
 }
 
 export function buildSweepResultView(resultDetail, jobParams = {}) {
-  if (resultDetail?.sweep_view) {
-    return resultDetail.sweep_view
-  }
   const rows = resultDetail?.rows || []
   const params = jobParams || resultDetail?.params || {}
-  const sweepAxes = inferSweepAxes(params, rows)
+  const stored = resultDetail?.sweep_view
+  const sweepAxes = stored?.sweep_axes?.length
+    ? stored.sweep_axes
+    : inferSweepAxes(params, rows)
+  const sortedRows = sortRowsByRiskScore(rows)
   return {
+    ...(stored || {}),
     sweep_axes: sweepAxes,
-    fixed_params: params,
-    metric_keys: [
+    fixed_params: stored?.fixed_params || params,
+    metric_keys: stored?.metric_keys || [
       'cumulative_return',
       'index_excess_cumulative_return',
       'sharpe',
@@ -128,7 +152,7 @@ export function buildSweepResultView(resultDetail, jobParams = {}) {
     ],
     row_count: Number(resultDetail?.row_count_total || rows.length),
     facet_best: computeFacetBest(rows, sweepAxes),
-    global_best_row: rows[0] || null,
+    global_best_row: sortedRows[0] || null,
   }
 }
 
@@ -138,7 +162,7 @@ export function rowMatchesAxis(row, axisKey, axisValue) {
 
 export function filterRowsByFacet(rows, axisKey, axisValue) {
   if (axisKey == null || axisValue === undefined) return rows
-  return rows.filter((row) => rowMatchesAxis(row, axisKey, axisValue))
+  return sortRowsByRiskScore(rows.filter((row) => rowMatchesAxis(row, axisKey, axisValue)))
 }
 
 export function filterRowsBySelections(rows, selections = {}) {
