@@ -1,21 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getAllTradeActivities } from './tradeExecution'
 
+const requestMock = vi.fn()
+
+vi.mock('../utils/request', () => ({
+  default: (...args) => requestMock(...args),
+}))
+
 describe('tradeExecution API', () => {
   afterEach(() => {
-    vi.unstubAllGlobals()
     vi.restoreAllMocks()
+    requestMock.mockReset()
   })
 
-  it('includes activity_type in trade-activities query string', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true, data: [] }),
-    })
-    vi.stubGlobal('fetch', fetchMock)
-    vi.stubGlobal('localStorage', {
-      getItem: () => 'token-1',
-    })
+  it('includes activity_type in trade-activities query params', async () => {
+    requestMock.mockResolvedValue({ success: true, data: [] })
 
     await getAllTradeActivities({
       limit: 200,
@@ -24,28 +23,25 @@ describe('tradeExecution API', () => {
       days: 7,
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const url = fetchMock.mock.calls[0][0]
-    expect(url).toContain('activity_type=signals')
-    expect(url).toContain('status_filter=pending')
-    expect(url).toContain('days=7')
-    expect(url).toContain('limit=200')
+    expect(requestMock).toHaveBeenCalledTimes(1)
+    const config = requestMock.mock.calls[0][0]
+    expect(config.url).toBe('/trade-activities/')
+    expect(config.method).toBe('get')
+    expect(config.params).toEqual({
+      limit: 200,
+      days: 7,
+      status_filter: 'pending',
+      activity_type: 'signals',
+    })
   })
 
   it('omits activity_type when not provided', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true, data: [] }),
-    })
-    vi.stubGlobal('fetch', fetchMock)
-    vi.stubGlobal('localStorage', {
-      getItem: () => null,
-    })
+    requestMock.mockResolvedValue({ success: true, data: [] })
 
     await getAllTradeActivities({ limit: 50 })
 
-    const url = fetchMock.mock.calls[0][0]
-    expect(url).not.toContain('activity_type=')
-    expect(url).toContain('limit=50')
+    const config = requestMock.mock.calls[0][0]
+    expect(config.params).toEqual({ limit: 50 })
+    expect(config.params).not.toHaveProperty('activity_type')
   })
 })

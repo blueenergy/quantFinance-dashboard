@@ -1,14 +1,18 @@
-import axios from 'axios'
-
-const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+import request from '../utils/request'
 
 export const earningsHunterApi = {
     getSignals(days = 30) {
-        return axios.get(`${API_BASE}/hunter/signals`, { params: { days } })
+        return request({
+            url: '/hunter/signals',
+            method: 'get',
+            params: { days },
+        })
     },
     analyzeSignal(signalId, signalType) {
-        return axios.post(`${API_BASE}/hunter/analyze/${signalId}`, null, {
-            params: { signal_type: signalType }
+        return request({
+            url: `/hunter/analyze/${signalId}`,
+            method: 'post',
+            params: { signal_type: signalType },
         })
-    }
+    },
 }

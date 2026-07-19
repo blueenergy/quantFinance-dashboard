@@ -2,25 +2,18 @@
  * 市场风险预警 API 调用
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
-
-function authHeaders() {
-    const token = localStorage.getItem("access_token");
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    return headers;
-}
+import request, { requestOrNull } from '../utils/request'
 
 /**
  * 获取单日全行业风险概览（dashboard 卡片）
  * @param {string|null} date - YYYYMMDD，默认今天
  */
 export async function getRiskOverview(date = null) {
-    let url = `${API_BASE}/risk-reports/overview`;
-    if (date) url += `?date=${date}`;
-    const res = await fetch(url, { headers: authHeaders() });
-    if (!res.ok) throw new Error(`getRiskOverview failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/risk-reports/overview',
+        method: 'get',
+        params: date ? { date } : undefined,
+    })
 }
 
 /**
@@ -30,13 +23,14 @@ export async function getRiskOverview(date = null) {
  * @param {boolean} withAnalysis - 是否附带 LLM 解读
  */
 export async function getRiskDetail(sector, date = null, withAnalysis = false) {
-    let url = `${API_BASE}/risk-reports/detail?sector=${sector}`;
-    if (date) url += `&date=${date}`;
-    if (withAnalysis) url += `&with_analysis=true`;
-    const res = await fetch(url, { headers: authHeaders() });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`getRiskDetail failed: ${res.status}`);
-    return await res.json();
+    const params = { sector }
+    if (date) params.date = date
+    if (withAnalysis) params.with_analysis = 'true'
+    return requestOrNull({
+        url: '/risk-reports/detail',
+        method: 'get',
+        params,
+    })
 }
 
 /**
@@ -45,10 +39,11 @@ export async function getRiskDetail(sector, date = null, withAnalysis = false) {
  * @param {number} limit - 最近 N 个交易日，默认 30
  */
 export async function getRiskTrend(sector, limit = 30) {
-    const url = `${API_BASE}/risk-reports/trend?sector=${sector}&limit=${limit}`;
-    const res = await fetch(url, { headers: authHeaders() });
-    if (!res.ok) throw new Error(`getRiskTrend failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/risk-reports/trend',
+        method: 'get',
+        params: { sector, limit },
+    })
 }
 
 /**
@@ -57,11 +52,11 @@ export async function getRiskTrend(sector, limit = 30) {
  * @param {string|null} date - YYYYMMDD，默认今天
  */
 export async function triggerRiskAnalysis(sector, date = null) {
-    let url = `${API_BASE}/risk-reports/analyze?sector=${sector}`;
-    if (date) url += `&date=${date}`;
-    const res = await fetch(url, { method: "POST", headers: authHeaders() });
-    if (!res.ok) throw new Error(`triggerRiskAnalysis failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/risk-reports/analyze',
+        method: 'post',
+        params: { sector, ...(date ? { date } : {}) },
+    })
 }
 
 /**
@@ -69,11 +64,11 @@ export async function triggerRiskAnalysis(sector, date = null) {
  * @param {string|null} date - YYYYMMDD，默认今天
  */
 export async function getMarketDailyAnalysis(date = null) {
-    let url = `${API_BASE}/risk-reports/market-daily-analysis`;
-    if (date) url += `?date=${date}`;
-    const res = await fetch(url, { headers: authHeaders() });
-    if (!res.ok) throw new Error(`getMarketDailyAnalysis failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/risk-reports/market-daily-analysis',
+        method: 'get',
+        params: date ? { date } : undefined,
+    })
 }
 
 /**
@@ -81,11 +76,11 @@ export async function getMarketDailyAnalysis(date = null) {
  * @param {string|null} date - YYYYMMDD，默认今天
  */
 export async function triggerMarketDailyAnalysis(date = null) {
-    let url = `${API_BASE}/risk-reports/analyze/market-daily`;
-    if (date) url += `?date=${date}`;
-    const res = await fetch(url, { method: "POST", headers: authHeaders() });
-    if (!res.ok) throw new Error(`triggerMarketDailyAnalysis failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/risk-reports/analyze/market-daily',
+        method: 'post',
+        params: date ? { date } : undefined,
+    })
 }
 
 /**
@@ -93,11 +88,11 @@ export async function triggerMarketDailyAnalysis(date = null) {
  * @param {string|null} date - YYYYMMDD，默认今天
  */
 export async function getUsMarketDailyAnalysis(date = null) {
-    let url = `${API_BASE}/risk-reports/us-market-daily-analysis`;
-    if (date) url += `?date=${date}`;
-    const res = await fetch(url, { headers: authHeaders() });
-    if (!res.ok) throw new Error(`getUsMarketDailyAnalysis failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/risk-reports/us-market-daily-analysis',
+        method: 'get',
+        params: date ? { date } : undefined,
+    })
 }
 
 /**
@@ -105,30 +100,30 @@ export async function getUsMarketDailyAnalysis(date = null) {
  * @param {string|null} date - YYYYMMDD，默认今天
  */
 export async function triggerUsMarketDailyAnalysis(date = null) {
-    let url = `${API_BASE}/risk-reports/analyze/us-market-daily`;
-    if (date) url += `?date=${date}`;
-    const res = await fetch(url, { method: "POST", headers: authHeaders() });
-    if (!res.ok) throw new Error(`triggerUsMarketDailyAnalysis failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/risk-reports/analyze/us-market-daily',
+        method: 'post',
+        params: date ? { date } : undefined,
+    })
 }
 
 /**
  * 获取A股波动率快照（含缓存的 LLM 解读文本）
  */
 export async function getIVSnapshot() {
-    const res = await fetch(`${API_BASE}/risk-reports/iv-snapshot`, { headers: authHeaders() });
-    if (!res.ok) throw new Error(`getIVSnapshot failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/risk-reports/iv-snapshot',
+        method: 'get',
+    })
 }
 
 /**
  * 触发A股波动率 LLM 专业解读（同步，约10-20秒）
  */
 export async function interpretIVSnapshot() {
-    const res = await fetch(`${API_BASE}/risk-reports/iv-snapshot/interpret`, {
-        method: "POST",
-        headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error(`interpretIVSnapshot failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/risk-reports/iv-snapshot/interpret',
+        method: 'post',
+        timeout: 120000,
+    })
 }

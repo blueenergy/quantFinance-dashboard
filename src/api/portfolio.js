@@ -2,14 +2,7 @@
  * 组合分析 API 调用
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
-
-function authHeaders() {
-    const token = localStorage.getItem("access_token");
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    return headers;
-}
+import request from '../utils/request'
 
 function normalizeTaskStatus(rawStatus) {
     if (rawStatus == null) return "unknown";
@@ -24,42 +17,30 @@ function normalizeTaskStatus(rawStatus) {
  * 获取组合机会分析（自选股 + 持仓）
  */
 export async function getPortfolioOpportunities() {
-    const url = `${API_BASE}/analyze/portfolio-opportunities`;
-
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: authHeaders()
-    });
-    if (!res.ok) throw new Error(`Failed to analyze portfolio: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/analyze/portfolio-opportunities',
+        method: 'post',
+    })
 }
 
 /**
  * 仅分析自选股机会
  */
 export async function getWatchlistOpportunities() {
-    const url = `${API_BASE}/analyze/watchlist-opportunities`;
-
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: authHeaders()
-    });
-    if (!res.ok) throw new Error(`Failed to analyze watchlist: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/analyze/watchlist-opportunities',
+        method: 'post',
+    })
 }
 
 /**
  * 仅分析持仓机会
  */
 export async function getPositionsOpportunities() {
-    const url = `${API_BASE}/analyze/positions-opportunities`;
-
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: authHeaders()
-    });
-    if (!res.ok) throw new Error(`Failed to analyze positions: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/analyze/positions-opportunities',
+        method: 'post',
+    })
 }
 
 /**
@@ -67,19 +48,13 @@ export async function getPositionsOpportunities() {
  * @param {string} type - 可选: watchlist, positions, combined
  */
 export async function getLatestPortfolioAnalysis(type = null) {
-    let url = `${API_BASE}/analyze/portfolio-opportunities/latest`;
-    const params = new URLSearchParams();
-    if (type) params.set('analysis_type', type);
-    params.set('_t', Date.now());  // 禁用浏览器缓存
-    const qs = params.toString();
-    if (qs) url += '?' + qs;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-    if (!res.ok) throw new Error(`Failed to get latest analysis: ${res.status}`);
-    return await res.json();
+    const params = { _t: Date.now() }
+    if (type) params.analysis_type = type
+    return request({
+        url: '/analyze/portfolio-opportunities/latest',
+        method: 'get',
+        params,
+    })
 }
 
 /**
@@ -87,14 +62,11 @@ export async function getLatestPortfolioAnalysis(type = null) {
  * @param {string} taskId - 任务ID
  */
 export async function getPortfolioTaskStatus(taskId) {
-    const url = `${API_BASE}/analyze/portfolio-task/${taskId}?_t=${Date.now()}`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-    if (!res.ok) throw new Error(`Failed to get task status: ${res.status}`);
-    return await res.json();
+    return request({
+        url: `/analyze/portfolio-task/${taskId}`,
+        method: 'get',
+        params: { _t: Date.now() },
+    })
 }
 
 /**

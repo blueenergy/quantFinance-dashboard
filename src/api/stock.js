@@ -3,14 +3,11 @@
  * 股票信息查询相关 API
  */
 
-// 使用与其他 API 模块相同的配置
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
+import request from '../utils/request'
 
-function authHeaders() {
-    const token = localStorage.getItem('access_token');
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    return headers;
+async function unwrapData(config) {
+    const result = await request(config)
+    return result.data
 }
 
 /**
@@ -20,19 +17,12 @@ function authHeaders() {
 export async function searchStocks(query) {
     if (!query) return [];
 
-    // 如果 query 包含 .SH/.SZ/.BJ 后缀，去掉后缀再搜索
-    // 主要是为了处理用户输入完整代码的情况
     const cleanQuery = query.replace(/\.(SZ|SH|BJ)$/i, '');
-
-    const url = `${API_BASE}/stock/search?q=${encodeURIComponent(cleanQuery)}`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to search stocks: ${res.status}`);
-    const result = await res.json();
+    const result = await request({
+        url: '/stock/search',
+        method: 'get',
+        params: { q: cleanQuery },
+    })
     return result.data || [];
 }
 
@@ -41,16 +31,10 @@ export async function searchStocks(query) {
  * @param {string} symbol - 股票代码
  */
 export async function getStockInfo(symbol) {
-    const url = `${API_BASE}/stock/info/${encodeURIComponent(symbol)}`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock info: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/info/${encodeURIComponent(symbol)}`,
+        method: 'get',
+    })
 }
 
 /**
@@ -58,16 +42,10 @@ export async function getStockInfo(symbol) {
  * @param {string} symbol - 股票代码
  */
 export async function getStockWorkbench(symbol) {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench`,
+        method: 'get',
+    })
 }
 
 /**
@@ -75,16 +53,10 @@ export async function getStockWorkbench(symbol) {
  * @param {string} symbol - 股票代码
  */
 export async function getStockWorkbenchQuote(symbol) {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/quote`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench quote: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/quote`,
+        method: 'get',
+    })
 }
 
 /**
@@ -93,16 +65,11 @@ export async function getStockWorkbenchQuote(symbol) {
  * @param {string} tf - 1d / 1w / 1m
  */
 export async function getStockWorkbenchKline(symbol, tf = '1d') {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/kline?tf=${encodeURIComponent(tf)}`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench kline: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/kline`,
+        method: 'get',
+        params: { tf },
+    })
 }
 
 /**
@@ -111,16 +78,11 @@ export async function getStockWorkbenchKline(symbol, tf = '1d') {
  * @param {string} tf - 1d / 1w / 1m
  */
 export async function getStockWorkbenchMoneyFlow(symbol, tf = '1d') {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/money-flow?tf=${encodeURIComponent(tf)}`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench money flow: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/money-flow`,
+        method: 'get',
+        params: { tf },
+    })
 }
 
 /**
@@ -128,16 +90,10 @@ export async function getStockWorkbenchMoneyFlow(symbol, tf = '1d') {
  * @param {string} symbol - 股票代码
  */
 export async function getStockWorkbenchNineTurn(symbol) {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/nine-turn`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench nine-turn: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/nine-turn`,
+        method: 'get',
+    })
 }
 
 /**
@@ -145,16 +101,10 @@ export async function getStockWorkbenchNineTurn(symbol) {
  * @param {string} symbol - 股票代码
  */
 export async function getStockWorkbenchScores(symbol) {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/scores`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench scores: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/scores`,
+        method: 'get',
+    })
 }
 
 /**
@@ -162,16 +112,10 @@ export async function getStockWorkbenchScores(symbol) {
  * @param {string} symbol - 股票代码
  */
 export async function getStockWorkbenchFinancials(symbol) {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/financials`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench financials: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/financials`,
+        method: 'get',
+    })
 }
 
 /**
@@ -179,16 +123,10 @@ export async function getStockWorkbenchFinancials(symbol) {
  * @param {string} symbol - 股票代码
  */
 export async function getStockWorkbenchValuation(symbol) {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/valuation`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench valuation: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/valuation`,
+        method: 'get',
+    })
 }
 
 /**
@@ -196,16 +134,10 @@ export async function getStockWorkbenchValuation(symbol) {
  * @param {string} symbol - 股票代码
  */
 export async function getStockWorkbenchAi(symbol) {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/ai`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench ai: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/ai`,
+        method: 'get',
+    })
 }
 
 /**
@@ -213,16 +145,10 @@ export async function getStockWorkbenchAi(symbol) {
  * @param {string} symbol - 股票代码
  */
 export async function getStockWorkbenchTrading(symbol) {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/trading`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench trading: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/trading`,
+        method: 'get',
+    })
 }
 
 /**
@@ -230,16 +156,10 @@ export async function getStockWorkbenchTrading(symbol) {
  * @param {string} symbol - 股票代码
  */
 export async function getStockWorkbenchShareholders(symbol) {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/shareholders`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench shareholders: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/shareholders`,
+        method: 'get',
+    })
 }
 
 /**
@@ -247,85 +167,54 @@ export async function getStockWorkbenchShareholders(symbol) {
  * @param {string} symbol - 股票代码
  */
 export async function getStockWorkbenchSignals(symbol) {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/signals`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench signals: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/signals`,
+        method: 'get',
+    })
 }
 
 /**
  * 触发单只股票的机会与风险证据搜集分析
  */
 export async function collectStockWorkbenchSignals(symbol) {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/signals/collect`;
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to collect stock workbench signals: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/signals/collect`,
+        method: 'post',
+    })
 }
 
 /**
  * 刷新单只股票的规则型优势与劣势信号
  */
 export async function refreshStockWorkbenchInternalSignals(symbol, { force = false } = {}) {
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/signals/refresh-internal`;
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-            ...authHeaders(),
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ force }),
-    });
-
-    if (!res.ok) throw new Error(`Failed to refresh internal stock signals: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/signals/refresh-internal`,
+        method: 'post',
+        data: { force },
+    })
 }
 
 /**
  * 提交新闻链接，触发后台抓取与 LLM 风险/机会分析
  */
 export async function analyzeStockWorkbenchNewsUrl(symbol, { url, findingKey } = {}) {
-    const endpoint = `${API_BASE}/stock/${encodeURIComponent(symbol)}/workbench/signals/analyze-url`;
-    const body = { url };
-    if (findingKey) body.finding_key = findingKey;
-    const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-            ...authHeaders(),
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-    });
-
-    if (!res.ok) throw new Error(`Failed to analyze stock workbench news url: ${res.status}`);
-    const result = await res.json();
-    return result.data;
+    const data = { url }
+    if (findingKey) data.finding_key = findingKey
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/signals/analyze-url`,
+        method: 'post',
+        data,
+    })
 }
 
 /**
  * 获取机会与风险搜集任务状态
  */
 export async function getStockWorkbenchSignalTask(taskId) {
-    const url = `${API_BASE}/analysis-tasks/${encodeURIComponent(taskId)}`;
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock workbench signal task: ${res.status}`);
-    return res.json();
+    return request({
+        url: `/analysis-tasks/${encodeURIComponent(taskId)}`,
+        method: 'get',
+    })
 }
 
 /**
@@ -335,18 +224,10 @@ export async function getStockWorkbenchSignalTask(taskId) {
  * @param {number} periods - 最近多少期
  */
 export async function getStockFinancial(symbol, statement = 'indicator', periods = 8) {
-    const params = new URLSearchParams({
-        statement,
-        periods: String(periods)
-    });
-    const url = `${API_BASE}/stock/${encodeURIComponent(symbol)}/financial?${params.toString()}`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get stock financial: ${res.status}`);
-    const result = await res.json();
+    const result = await request({
+        url: `/stock/${encodeURIComponent(symbol)}/financial`,
+        method: 'get',
+        params: { statement, periods },
+    })
     return result.data || [];
 }

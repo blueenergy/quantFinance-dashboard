@@ -157,50 +157,6 @@ import { useHomeSummaries } from './composables/useHomeSummaries.js'
 import { useChartWorkspace } from './composables/useChartWorkspace.js'
 import { useNavigationShell } from './composables/useNavigationShell.js'
 import { useAuth, authService } from './services/auth.js'
-import axios from 'axios'
-
-// 设置axios请求拦截器，自动添加认证头
-axios.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    // Guard: prevent calling analysis-history without a symbol (backend requires symbol)
-    try {
-      const url = config.url || ''
-      const method = (config.method || 'get').toString().toLowerCase()
-      if (method === 'get' && url.includes('/api/analysis-history')) {
-        const params = config.params || {}
-        // Allow requests that provide either a symbol OR pagination params (page/limit)
-        const hasSymbol = !!params.symbol
-        const hasPagination = params.page || params.limit
-        if (!hasSymbol && !hasPagination) {
-          return Promise.reject({ message: 'Client blocked: analysis-history requires symbol or pagination parameters' })
-        }
-      }
-    } catch (e) {
-      // swallow
-    }
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
-
-// 设置axios响应拦截器，处理认证失败
-axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // 认证失败，清除本地认证信息
-      authService.clearAuth()
-      console.log('认证已过期，请重新登录')
-    }
-    return Promise.reject(error)
-  }
-)
 
 const { user, isAuthenticated, validateToken, logout } = useAuth()
 

@@ -190,12 +190,12 @@ const fetchSignals = async () => {
   loading.value = true
   try {
     const res = await earningsHunterApi.getSignals(days.value)
-    if (res.data?.success) {
-      signals.value = res.data.data.map(item => ({...item, analyzing: false}))
+    if (res?.success) {
+      signals.value = res.data.map(item => ({...item, analyzing: false}))
       // 每次重新获取数据时清空选中筛选，或者保留也行，但考虑到行业列表可能变了，主动清空比较保险
       selectedIndustries.value = []
     } else {
-      console.error('Failed to fetch signals:', res.data?.error)
+      console.error('Failed to fetch signals:', res?.error)
     }
   } catch (e) {
     console.error('Error fetching signals:', e)
@@ -246,10 +246,10 @@ const triggerAnalysis = async (signal) => {
   signal.analyzing = true
   try {
     const res = await earningsHunterApi.analyzeSignal(signal.id, signal.signal_type)
-    if (res.data?.success) {
-      alert(`AI 研判任务已提交！\n任务ID: ${res.data.task_id}\n猎手正在进行深度分析，稍后请刷新或前往分析历史查看。`)
+    if (res?.success) {
+      alert(`AI 研判任务已提交！\n任务ID: ${res.task_id}\n猎手正在进行深度分析，稍后请刷新或前往分析历史查看。`)
     } else {
-      alert('分析提交失败: ' + res.data.error)
+      alert('分析提交失败: ' + res.error)
       signal.analyzing = false
     }
   } catch (e) {

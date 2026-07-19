@@ -1,95 +1,96 @@
-// Simple user API client using fetch; assumes JWT in localStorage
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
+// Simple user API client
+import request from '../utils/request'
+
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 function authHeaders() {
-  const token = localStorage.getItem("access_token");
-  const headers = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
+  const token = localStorage.getItem('access_token')
+  const headers = { 'Content-Type': 'application/json' }
+  if (token) headers.Authorization = `Bearer ${token}`
+  return headers
 }
 
 export async function getWatchlist() {
-  const res = await fetch(`${API_BASE}/user/watchlist`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`Failed watchlist: ${res.status}`);
-  return res.json();
+  return request({
+    url: '/user/watchlist',
+    method: 'get',
+  })
 }
 
 export async function getWatchlistStrategies() {
-  const res = await fetch(`${API_BASE}/user/watchlist/strategies`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`Failed strategies: ${res.status}`);
-  return res.json();
+  return request({
+    url: '/user/watchlist/strategies',
+    method: 'get',
+  })
 }
 
 export async function setWatchlistStrategy(payload) {
-  const res = await fetch(`${API_BASE}/user/watchlist/strategy`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    const message = data?.detail || data?.message || `设置策略失败：${res.status}`;
-    throw new Error(message);
+  try {
+    return await request({
+      url: '/user/watchlist/strategy',
+      method: 'post',
+      data: payload,
+    })
+  } catch (err) {
+    const data = err.response?.data
+    const message = data?.detail || data?.message || `设置策略失败：${err.response?.status || 'unknown'}`
+    throw new Error(message)
   }
-  return data;
 }
 
 export async function getAvailableStrategies() {
-  const res = await fetch(`${API_BASE}/strategy/strategies`, {
-    headers: authHeaders(),
-  });
-  if (!res.ok) throw new Error(`Failed available strategies: ${res.status}`);
-  const data = await res.json();
-  // 支持直接数组或 { strategies: [...] }
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.strategies)) return data.strategies;
-  return [];
+  const data = await request({
+    url: '/strategy/strategies',
+    method: 'get',
+  })
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data.strategies)) return data.strategies
+  return []
 }
 
 export async function getSecuritiesAccounts() {
-  const res = await fetch(`${API_BASE}/user/securities_accounts`, { headers: authHeaders() })
-  if (!res.ok) throw new Error(`Failed to get accounts: ${res.status}`)
-  return await res.json()
+  return request({
+    url: '/user/securities_accounts',
+    method: 'get',
+  })
 }
+
 export async function createSecuritiesAccount(payload) {
-  const res = await fetch(`${API_BASE}/user/securities_accounts`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
+  return request({
+    url: '/user/securities_accounts',
+    method: 'post',
+    data: payload,
   })
-  if (!res.ok) throw new Error(`Failed to create account: ${res.status}`)
-  return await res.json()
 }
+
 export async function updateSecuritiesAccount(account_id, payload) {
-  const res = await fetch(`${API_BASE}/user/securities_accounts/${account_id}`, {
-    method: 'PUT',
-    headers: authHeaders(),
-    body: JSON.stringify(payload),
+  return request({
+    url: `/user/securities_accounts/${account_id}`,
+    method: 'put',
+    data: payload,
   })
-  if (!res.ok) throw new Error(`Failed to update account: ${res.status}`)
-  return await res.json()
 }
+
 export async function deleteSecuritiesAccount(account_id) {
-  const res = await fetch(`${API_BASE}/user/securities_accounts/${account_id}`, {
-    method: 'DELETE',
-    headers: authHeaders(),
+  return request({
+    url: `/user/securities_accounts/${account_id}`,
+    method: 'delete',
   })
-  if (!res.ok) throw new Error(`Failed to delete account: ${res.status}`)
-  return await res.json()
 }
 
 export async function changePassword(oldPassword, newPassword) {
-  const res = await fetch(`${API_BASE}/user/change-password`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
-  })
-  const data = await res.json().catch(() => null)
-  if (!res.ok) {
-    const message = data?.detail || data?.message || `Failed to change password: ${res.status}`
+  try {
+    return await request({
+      url: '/user/change-password',
+      method: 'post',
+      data: { old_password: oldPassword, new_password: newPassword },
+    })
+  } catch (err) {
+    const data = err.response?.data
+    const message = data?.detail || data?.message || `Failed to change password: ${err.response?.status || 'unknown'}`
     throw new Error(message)
   }
-  return data
 }
 
+// Kept for WatchlistStrategyTable inline fetch calls (out of scope for this migration)
 export { API_BASE, authHeaders }

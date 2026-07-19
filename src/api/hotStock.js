@@ -2,55 +2,47 @@
  * 热股分析 API 调用 (THS 同花顺 / DC 东方财富)
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
-
-function authHeaders() {
-    const token = localStorage.getItem("access_token");
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    return headers;
-}
+import request from '../utils/request'
 
 export async function analyzeHotStock(source = 'ths', force = false) {
-    const res = await fetch(`${API_BASE}/hot-stock/analyze`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ source, force }),
-    });
-    if (!res.ok) throw new Error(`Submit failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/hot-stock/analyze',
+        method: 'post',
+        data: { source, force },
+    })
 }
 
 export async function getHotStockTask(taskId) {
-    const res = await fetch(`${API_BASE}/hot-stock/task/${taskId}`, {
-        headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error(`Poll failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: `/hot-stock/task/${taskId}`,
+        method: 'get',
+    })
 }
 
 export async function getLatestHotStock(source = 'ths') {
-    const res = await fetch(`${API_BASE}/hot-stock/latest?source=${source}`, {
-        headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error(`Get latest failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/hot-stock/latest',
+        method: 'get',
+        params: { source },
+    })
 }
 
 export async function getHotStockHistory(source = 'ths', date = null) {
-    let url = `${API_BASE}/hot-stock/history?source=${source}`;
-    if (date) url += `&date=${date}`;
-    const res = await fetch(url, { headers: authHeaders() });
-    if (!res.ok) throw new Error(`Get history failed: ${res.status}`);
-    return await res.json();
+    const params = { source }
+    if (date) params.date = date
+    return request({
+        url: '/hot-stock/history',
+        method: 'get',
+        params,
+    })
 }
 
 export async function getHotStockDataStatus(source = 'ths') {
-    const res = await fetch(`${API_BASE}/hot-stock/data-status?source=${source}`, {
-        headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error(`Get data status failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/hot-stock/data-status',
+        method: 'get',
+        params: { source },
+    })
 }
 
 export async function pollHotStockTask(taskId, onProgress, intervalMs = 2000, maxAttempts = 60) {

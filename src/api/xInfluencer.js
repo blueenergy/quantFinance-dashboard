@@ -1,14 +1,19 @@
-import axios from 'axios'
+import request from '../utils/request'
 
 /**
  * @param {{ limit?: number, username?: string, with_analysis?: boolean }} params
  */
 export async function fetchXInfluencerPosts(params = {}) {
-  const res = await axios.get('/api/x-influencer/posts', { params })
-  return res.data
+  return request({
+    url: '/x-influencer/posts',
+    method: 'get',
+    params,
+  })
 }
 
 export async function triggerXInfluencerAnalyze(tweetId) {
-  const res = await axios.post(`/api/x-influencer/posts/${encodeURIComponent(tweetId)}/analyze`)
-  return res.data
+  return request({
+    url: `/x-influencer/posts/${encodeURIComponent(tweetId)}/analyze`,
+    method: 'post',
+  })
 }

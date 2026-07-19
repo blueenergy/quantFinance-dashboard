@@ -2,14 +2,7 @@
  * 概念板块分析 API 调用 (DC 东方财富 / THS 同花顺)
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
-
-function authHeaders() {
-    const token = localStorage.getItem("access_token");
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    return headers;
-}
+import request from '../utils/request'
 
 /**
  * Submit a sector concept analysis task (async).
@@ -17,13 +10,11 @@ function authHeaders() {
  * @param {string} source - "dc" or "ths"
  */
 export async function analyzeSectorConcept(date, source = 'dc') {
-    const res = await fetch(`${API_BASE}/sector-concept/analyze`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ date, source }),
-    });
-    if (!res.ok) throw new Error(`Submit failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/sector-concept/analyze',
+        method: 'post',
+        data: { date, source },
+    })
 }
 
 /**
@@ -31,11 +22,10 @@ export async function analyzeSectorConcept(date, source = 'dc') {
  * @param {string} taskId
  */
 export async function getSectorConceptTask(taskId) {
-    const res = await fetch(`${API_BASE}/sector-concept/task/${taskId}`, {
-        headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error(`Poll failed: ${res.status}`);
-    return await res.json();
+    return request({
+        url: `/sector-concept/task/${taskId}`,
+        method: 'get',
+    })
 }
 
 /**
@@ -44,13 +34,13 @@ export async function getSectorConceptTask(taskId) {
  * @param {string} date - Trade date YYYYMMDD (optional)
  */
 export async function getLatestSectorConcept(source = 'dc', date = null) {
-    let url = `${API_BASE}/sector-concept/latest?source=${source}`;
-    if (date) url += `&date=${date}`;
-    const res = await fetch(url, {
-        headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error(`Get latest failed: ${res.status}`);
-    return await res.json();
+    const params = { source }
+    if (date) params.date = date
+    return request({
+        url: '/sector-concept/latest',
+        method: 'get',
+        params,
+    })
 }
 
 /**

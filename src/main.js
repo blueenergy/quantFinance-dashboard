@@ -1,6 +1,7 @@
 import './assets/styles/stock-ranking-tokens.css';
 import './assets/styles/design-tokens.css';
 import './assets/styles/utilities.css';
+import './utils/request.js';
 import { createApp } from 'vue';
 import App from './App.vue';
 import { installPreloadErrorReload } from './utils/preloadRecovery';

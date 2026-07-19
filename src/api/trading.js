@@ -3,15 +3,7 @@
  * 手动交易相关 API
  */
 
-// 使用与其他 API 模块相同的配置
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
-
-function authHeaders() {
-    const token = localStorage.getItem('access_token');
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    return headers;
-}
+import request from '../utils/request'
 
 /**
  * 创建手动交易信号
@@ -22,30 +14,27 @@ function authHeaders() {
  * @param {string} securitiesAccountId - 证券账户 ID
  */
 export async function createManualSignal(symbol, action, size, price = null, securitiesAccountId = '') {
-    const url = `${API_BASE}/trade-signals/manual-create`;
-
     const body = {
         securities_account_id: securitiesAccountId,
         symbol,
         action,
-        size: parseInt(size)
-    };
+        size: parseInt(size),
+    }
 
     if (price !== null && price !== '' && price > 0) {
-        body.price = parseFloat(price);
+        body.price = parseFloat(price)
     }
 
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify(body)
-    });
-
-    if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || `Failed to create signal: ${res.status}`);
+    try {
+        return await request({
+            url: '/trade-signals/manual-create',
+            method: 'post',
+            data: body,
+        })
+    } catch (err) {
+        const detail = err.response?.data?.detail
+        throw new Error(detail || `Failed to create signal: ${err.response?.status || 'unknown'}`)
     }
-    return await res.json();
 }
 
 /**
@@ -53,30 +42,21 @@ export async function createManualSignal(symbol, action, size, price = null, sec
  * @param {number} limit - 返回数量限制
  */
 export async function getManualSignals(limit = 20) {
-    const url = `${API_BASE}/trade-signals/manual?limit=${limit}`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get manual signals: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/trade-signals/manual',
+        method: 'get',
+        params: { limit },
+    })
 }
 
 /**
  * 获取交易信号状态统计
  */
 export async function getSignalStatusSummary() {
-    const url = `${API_BASE}/trade-signals/status-summary`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get status summary: ${res.status}`);
-    return await res.json();
+    return request({
+        url: '/trade-signals/status-summary',
+        method: 'get',
+    })
 }
 
 /**
@@ -85,14 +65,9 @@ export async function getSignalStatusSummary() {
  * @param {number} limit - 返回数量限制
  */
 export async function getTradeExecutionsBySymbol(symbol, limit = 50) {
-    // trade_execution_router is registered at /api, so path is /api/trade-executions/...
-    const url = `${API_BASE}/trade-executions/symbol/${encodeURIComponent(symbol)}?limit=${limit}`;
-
-    const res = await fetch(url, {
-        method: 'GET',
-        headers: authHeaders()
-    });
-
-    if (!res.ok) throw new Error(`Failed to get trade executions: ${res.status}`);
-    return await res.json();
+    return request({
+        url: `/trade-executions/symbol/${encodeURIComponent(symbol)}`,
+        method: 'get',
+        params: { limit },
+    })
 }
