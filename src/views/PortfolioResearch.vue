@@ -466,6 +466,10 @@ import {
   publishPortfolioResearchResult,
   rerunPortfolioResearchJob,
 } from '../api/portfolioResearch'
+import {
+  buildPortfolioResearchPayload,
+  formatResearchApiError,
+} from '../utils/portfolioResearchPayload'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 const NARROW_MQ = '(max-width: 900px)'
@@ -640,20 +644,9 @@ function todayInputDate() {
 }
 
 function buildFormPayload() {
-  const { trailing_stop_pcts, ...formRest } = form.value
-  const payload = {
-    ...formRest,
-    name: form.value.name || defaultResearchName(form.value.universe_index),
-    growth_cycle_weights: parseCsvNumbers(form.value.growth_cycle_weights, String),
-    top_n_values: parseCsvNumbers(form.value.top_n_values, Number),
-    active_caps: parseCsvNumbers(form.value.active_caps, Number),
-    rebalance_interval_days: [Number(form.value.horizon)],
-    trailing_stop_pcts: parseCsvNumbers(trailing_stop_pcts, Number),
-    force: true,
-  }
-  if (payload.index_benchmark_symbol == null) delete payload.index_benchmark_symbol
-  if (payload.cash_buffer == null) delete payload.cash_buffer
-  return payload
+  return buildPortfolioResearchPayload(form.value, {
+    defaultName: defaultResearchName(form.value.universe_index),
+  })
 }
 
 function openDrawer(mode) {
@@ -745,14 +738,6 @@ function withRerunNameSuffix(baseName) {
   const name = String(baseName || '').trim() || '组合研究'
   if (name.endsWith('(rerun)')) return name
   return `${name} (rerun)`
-}
-
-function parseCsvNumbers(value, mapper = Number) {
-  return String(value || '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .map(mapper)
 }
 
 function compactDate(value) {
@@ -1061,7 +1046,7 @@ async function openComboDetail(row) {
   try {
     comboDetail.value = await getPortfolioResearchComboDetail(selectedJobId.value, row.combo_key)
   } catch (err) {
-    comboError.value = err?.response?.data?.detail || err.message || '加载成交明细失败'
+    comboError.value = formatResearchApiError(err, '加载成交明细失败')
   } finally {
     comboLoading.value = false
   }
@@ -1091,7 +1076,7 @@ async function loadJobs() {
       resultDetail.value = null
     }
   } catch (err) {
-    errorMessage.value = err?.response?.data?.detail || err.message || '加载研究任务失败'
+    errorMessage.value = formatResearchApiError(err, '加载研究任务失败')
   } finally {
     loading.value = false
   }
@@ -1114,7 +1099,7 @@ async function selectJob(jobId, { scrollDetail = false } = {}) {
       } catch (err) {
         if (seq !== selectSeq) return
         if (selectedJob.value?.status === 'completed') {
-          errorMessage.value = err?.response?.data?.detail || err.message || '加载研究结果失败'
+          errorMessage.value = formatResearchApiError(err, '加载研究结果失败')
         }
       }
     } else if (scrollDetail) {
@@ -1126,7 +1111,7 @@ async function selectJob(jobId, { scrollDetail = false } = {}) {
     }
   } catch (err) {
     if (seq !== selectSeq) return
-    errorMessage.value = err?.response?.data?.detail || err.message || '加载研究任务失败'
+    errorMessage.value = formatResearchApiError(err, '加载研究任务失败')
   }
 }
 
@@ -1150,7 +1135,7 @@ async function submitJobForm() {
     await loadJobs()
     if (selectedJobId.value) await selectJob(selectedJobId.value, { scrollDetail: true })
   } catch (err) {
-    errorMessage.value = err?.response?.data?.detail || err.message || '提交研究任务失败'
+    errorMessage.value = formatResearchApiError(err, '提交研究任务失败')
   } finally {
     submitting.value = false
   }
@@ -1223,7 +1208,7 @@ async function deleteJob() {
     resultDetail.value = null
     await loadJobs()
   } catch (err) {
-    errorMessage.value = err?.response?.data?.detail || err.message || '删除研究报告失败'
+    errorMessage.value = formatResearchApiError(err, '删除研究报告失败')
   } finally {
     deleteLoading.value = false
   }
@@ -1244,7 +1229,7 @@ async function publish(status) {
     await selectJob(selectedJobId.value, { scrollDetail: false })
     await loadJobs()
   } catch (err) {
-    errorMessage.value = err?.response?.data?.detail || err.message || '发布策略失败'
+    errorMessage.value = formatResearchApiError(err, '发布策略失败')
   } finally {
     publishLoading.value = false
   }
