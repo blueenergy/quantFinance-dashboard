@@ -1,0 +1,428 @@
+/* Holdings panel shared styles.
+ * Keep the section root in :where() so component-level overrides can win.
+ */
+:where(.holdings-section) {
+  margin-top: 8px;
+}
+
+:where(.holdings-section) .holdings-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+:where(.holdings-section) .holdings-header h3,
+:where(.holdings-section) .lineup-header h3 {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+:where(.holdings-section) .holdings-actions {
+  display: flex;
+  gap: 8px;
+}
+
+:where(.holdings-section) .holdings-header button,
+:where(.holdings-section) .fast-btn {
+  background: #fff;
+  border: 1px solid #111827;
+  border-radius: 4px;
+  color: #111827;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 8px 10px;
+}
+
+:where(.holdings-section) .holdings-header button.danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+:where(.holdings-section) .holdings-header button:disabled {
+  border-color: #9ca3af;
+  color: #6b7280;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+:where(.holdings-section) .muted {
+  color: #374151;
+  font-size: 13px;
+  margin: 0;
+}
+
+:where(.holdings-section) .holdings-risk-summary {
+  margin-bottom: 8px;
+}
+
+:where(.holdings-section) .table-wrap {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+:where(.holdings-section) .table-wrap table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+:where(.holdings-section) .table-wrap th,
+:where(.holdings-section) .table-wrap td {
+  border-bottom: 1px solid #e5e7eb;
+  color: #111827;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+:where(.holdings-section) .table-wrap th {
+  background: #f3f4f6;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+:where(.holdings-section) .table-wrap tbody tr:hover td {
+  background: #f9fafb;
+}
+
+:where(.holdings-section) .table-wrap tfoot td {
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+:where(.holdings-section) .holdings-total-row td {
+  border-bottom: 0;
+}
+
+:where(.holdings-section) .target-input {
+  max-width: 88px;
+  width: 88px;
+}
+
+:where(.holdings-section) .risk-badge {
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+}
+
+:where(.holdings-section) .risk-badge.risk-high {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+:where(.holdings-section) .risk-badge.risk-medium {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+:where(.holdings-section) .risk-badge.risk-low {
+  background: #fef9c3;
+  color: #a16207;
+}
+
+:where(.holdings-section) .risk-badge.risk-none {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+:where(.holdings-section) .risk-tags {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+:where(.holdings-section) .llm-risk-tag {
+  background: #eef2ff;
+  border: 1px solid #818cf8;
+  border-radius: 999px;
+  color: #3730a3;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 1px 5px;
+}
+
+:where(.holdings-section) .llm-risk-tag:hover {
+  filter: brightness(0.97);
+}
+
+:where(.holdings-section) .llm-risk-tag.is-active {
+  box-shadow: 0 0 0 2px #6366f1;
+}
+
+:where(.holdings-section) .llm-risk-tag.risk-high {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+:where(.holdings-section) .llm-risk-tag.risk-medium {
+  background: #ffedd5;
+  border-color: #fb923c;
+  color: #c2410c;
+}
+
+:where(.holdings-section) .llm-risk-tag.risk-low {
+  background: #fef9c3;
+  border-color: #facc15;
+  color: #854d0e;
+}
+
+:where(.holdings-section) .llm-risk-tag.risk-none {
+  background: #ecfdf5;
+  border-color: #34d399;
+  color: #047857;
+}
+
+:where(.holdings-section) .llm-risk-tag.opportunity-high {
+  background: #dcfce7;
+  border-color: #22c55e;
+  color: #15803d;
+}
+
+:where(.holdings-section) .llm-risk-tag.opportunity-medium {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+  color: #0369a1;
+}
+
+:where(.holdings-section) .llm-risk-tag.opportunity-low {
+  background: #ecfccb;
+  border-color: #84cc16;
+  color: #4d7c0f;
+}
+
+:where(.holdings-section) .llm-risk-tag.opportunity-none {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #64748b;
+}
+
+:where(.holdings-section) .internal-swot-tag {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 8px;
+  text-decoration: none;
+}
+
+:where(.holdings-section) .internal-swot-tag--strength {
+  background: #eef2ff;
+  border-color: #818cf8;
+  color: #4338ca;
+}
+
+:where(.holdings-section) .internal-swot-tag--weakness {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #c2410c;
+}
+
+:where(.holdings-section) .risk-row-high {
+  background: #fff7f7;
+}
+
+:where(.holdings-section) .detail-toggle-cell,
+:where(.holdings-section) .fast-actions {
+  white-space: nowrap;
+}
+
+:where(.holdings-section) .detail-toggle {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 10px;
+}
+
+:where(.holdings-section) .detail-toggle:hover {
+  background: #e5e7eb;
+}
+
+:where(.holdings-section) .detail-row td {
+  background: #f9fafb;
+  padding: 0;
+}
+
+:where(.holdings-section) .detail-wrap {
+  overflow-x: auto;
+  padding: 8px 12px 12px;
+}
+
+:where(.holdings-section) .detail-table {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  width: 100%;
+}
+
+:where(.holdings-section) .detail-table th,
+:where(.holdings-section) .detail-table td {
+  padding: 6px 10px;
+}
+
+:where(.holdings-section) .detail-table .open-trade td {
+  background: #f8fafc;
+}
+
+:where(.holdings-section) .badge-open {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  color: #1d4ed8;
+  font-size: 12px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+:where(.holdings-section) .stock-workbench-link {
+  background: transparent;
+  border: 0;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+  text-decoration: none;
+}
+
+:where(.holdings-section) .stock-workbench-link:hover {
+  text-decoration: underline;
+}
+
+:where(.holdings-section) .fast-btn {
+  border-color: transparent;
+  border-radius: 6px;
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 2px 4px 2px 0;
+  padding: 3px 10px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+:where(.holdings-section) .fast-btn-swap {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+:where(.holdings-section) .fast-btn-swap:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+:where(.holdings-section) .fast-btn-reduce {
+  background: #fff7ed;
+  border-color: #fcd9a8;
+  color: #b45309;
+}
+
+:where(.holdings-section) .fast-btn-reduce:hover {
+  background: #ffedd5;
+  border-color: #fbbf24;
+}
+
+:where(.holdings-section) .fast-btn-clear {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+:where(.holdings-section) .fast-btn-clear:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+:where(.holdings-section) .pos {
+  color: #dc2626;
+}
+
+:where(.holdings-section) .neg {
+  color: #16a34a;
+}
+
+:where(.holdings-section) .lineup-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 16px;
+}
+
+:where(.holdings-section) .lineup-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+:where(.holdings-section) .lineup-hint {
+  margin: 6px 0 0;
+}
+
+:where(.holdings-section) .bench-risk-bar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  margin: 8px 0;
+}
+
+:where(.holdings-section) .bench-risk-summary {
+  font-size: 12px;
+}
+
+:where(.holdings-section) .bench-risk-summary .risk-high {
+  color: #dc2626;
+}
+
+:where(.holdings-section) .bench-risk-summary .risk-medium {
+  color: #c2410c;
+}
+
+:where(.holdings-section) .bench-risk-summary .risk-low {
+  color: #a16207;
+}
+
+:where(.holdings-section) .bench-price-cell small {
+  color: #64748b;
+  display: block;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+:where(.holdings-section) .bench-price-cell small.pos {
+  color: #dc2626;
+}
+
+:where(.holdings-section) .bench-price-cell small.neg {
+  color: #16a34a;
+}
+
+:where(.holdings-section) .link-btn {
+  background: none;
+  border: none;
+  color: #c2410c;
+  cursor: pointer;
+  padding: 0;
+}
+
+:where(.holdings-section) .link-btn:disabled {
+  color: #6b7280;
+  cursor: not-allowed;
+}

@@ -37,6 +37,7 @@
     />
 
     <HoldingsBenchPanel
+      v-if="benchData"
       :bench-data="benchData"
       :bench-expanded="benchExpanded"
       :bench-loading="benchLoading"
@@ -72,11 +73,13 @@
 </template>
 
 <script setup>
-import HoldingsBenchPanel from './HoldingsBenchPanel.vue'
+import { defineAsyncComponent } from 'vue'
 import HoldingsTable from './HoldingsTable.vue'
 import HoldingsTableToolbar from './HoldingsTableToolbar.vue'
 import LlmRiskDetailPanel from './LlmRiskDetailPanel.vue'
 import { useLlmRiskDetail } from '../../composables/useLlmRiskDetail'
+
+const HoldingsBenchPanel = defineAsyncComponent(() => import('./HoldingsBenchPanel.vue'))
 
 defineProps({
   selectedLatestPlanId: { type: String, default: '' },
@@ -156,8 +159,4 @@ function openLlm({ payload, row, scope, event, mode = 'risk' }) {
 }
 </script>
 
-<style scoped>
-.holdings-section {
-  margin-top: 8px;
-}
-</style>
+<style src="../../assets/styles/holdings-panel.css"></style>
