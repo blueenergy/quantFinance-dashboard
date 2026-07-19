@@ -6,97 +6,18 @@
         <h2>组合研究</h2>
         <p class="subtitle">用生产数据复跑组合策略研究，筛选可行参数并保存为组合交易计划可消费的参数预设。</p>
       </div>
-      <button :disabled="loading" @click="refreshAll">刷新</button>
+      <div class="header-actions">
+        <button ref="newJobBtnRef" type="button" @click="openCreateDrawer">新建研究</button>
+        <button type="button" :disabled="loading" @click="refreshAll">刷新</button>
+      </div>
     </header>
-
-    <section class="card create-card">
-      <div class="create-head" @click="createCollapsed = !createCollapsed">
-        <div>
-          <h3>创建研究任务</h3>
-          <p class="muted">任务由 stock-scoring-system 后台 worker 执行，完成后可发布最佳候选策略。</p>
-        </div>
-        <button class="collapse-btn" type="button">{{ createCollapsed ? '展开 ▸' : '收起 ▾' }}</button>
-      </div>
-      <div v-show="!createCollapsed">
-      <div class="form-grid">
-        <label>
-          名称
-          <input v-model="form.name" @input="nameTouched = true" />
-        </label>
-        <label>
-          universe
-          <select v-model="form.universe_index" @change="syncDefaultName">
-            <option v-for="universe in universeOptions" :key="universe.value" :value="universe.value">
-              {{ universe.label }}
-            </option>
-          </select>
-        </label>
-        <label>
-          start_date
-          <input v-model="form.start_date" type="date" />
-        </label>
-        <label>
-          end_date
-          <input v-model="form.end_date" type="date" />
-        </label>
-        <label>
-          score_column
-          <input v-model="form.score_column" />
-        </label>
-        <label>
-          growth:cycle 权重
-          <input v-model="form.growth_cycle_weights" placeholder="30:70,40:60" />
-          <small class="field-hint">逗号分隔可对比多组，如 30:70,60:40</small>
-        </label>
-        <label>
-          Top N
-          <input v-model="form.top_n_values" placeholder="10,20,50" />
-        </label>
-        <label>
-          rebalance_days
-          <input v-model.number="form.horizon" type="number" min="1" />
-        </label>
-        <label>
-          active caps
-          <input v-model="form.active_caps" placeholder="0.2,0.25,0.3" />
-        </label>
-        <label>
-          legacy transaction_cost
-          <input v-model.number="form.transaction_cost" type="number" min="0" step="0.0001" />
-        </label>
-        <label>
-          buy commission
-          <input v-model.number="form.buy_commission_rate" type="number" min="0" step="0.00001" />
-        </label>
-        <label>
-          sell commission
-          <input v-model.number="form.sell_commission_rate" type="number" min="0" step="0.00001" />
-        </label>
-        <label>
-          min commission
-          <input v-model.number="form.min_commission" type="number" min="0" step="0.1" />
-        </label>
-        <label>
-          stamp tax
-          <input v-model.number="form.stamp_tax_rate" type="number" min="0" step="0.00001" />
-        </label>
-        <label>
-          initial capital
-          <input v-model.number="form.initial_capital" type="number" min="0" step="10000" />
-        </label>
-      </div>
-      <button :disabled="submitting || !form.start_date || !form.end_date" @click="createJob">
-        {{ submitting ? '提交中...' : '提交研究任务' }}
-      </button>
-      </div>
-    </section>
 
     <p v-if="message" class="message">{{ message }}</p>
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
-    <section class="layout">
-      <aside class="card jobs-card">
-        <div class="section-header jobs-header">
+    <section class="workspace">
+      <aside class="card jobs-card" :class="{ 'mobile-hidden': isNarrow && mobileShowDetail }">
+        <div class="jobs-toolbar">
           <h3>研究任务</h3>
           <div class="job-filters">
             <select v-model="statusFilter" @change="loadJobs" title="状态">
@@ -121,30 +42,33 @@
             />
           </div>
         </div>
-        <p v-if="loading" class="muted">加载中...</p>
-        <p v-else-if="!jobs.length" class="muted">暂无研究任务。</p>
-        <button
-          v-for="job in jobs"
-          :key="job.job_id"
-          class="job-row"
-          :class="{ active: selectedJobId === job.job_id }"
-          @click="selectJob(job.job_id)"
-        >
-          <strong>{{ job.name || job.job_id }}</strong>
-          <span>{{ job.status }} · {{ job.universe_index || job.params?.universe_index || '-' }}</span>
-          <small v-if="jobWeightLabel(job)">{{ jobWeightLabel(job) }}</small>
-          <small v-if="jobElapsedLabel(job)">{{ jobElapsedLabel(job) }}</small>
-          <small v-if="jobProgressStageLabel(job)" class="progress-stage">{{ jobProgressStageLabel(job) }}</small>
-          <small>{{ compactDate(job.start_date) }} → {{ compactDate(job.end_date) }}</small>
-          <small v-if="job.best_row">best {{ pct(job.best_row.index_excess_cumulative_return) }} excess</small>
-        </button>
+        <div class="jobs-list">
+          <p v-if="loading" class="muted">加载中...</p>
+          <p v-else-if="!jobs.length" class="muted">暂无研究任务。</p>
+          <button
+            v-for="job in jobs"
+            :key="job.job_id"
+            class="job-row"
+            :class="{ active: selectedJobId === job.job_id }"
+            @click="selectJob(job.job_id, { scrollDetail: true })"
+          >
+            <strong>{{ job.name || job.job_id }}</strong>
+            <span>{{ job.status }} · {{ job.universe_index || job.params?.universe_index || '-' }}</span>
+            <small v-if="jobWeightLabel(job)">{{ jobWeightLabel(job) }}</small>
+            <small v-if="jobElapsedLabel(job)">{{ jobElapsedLabel(job) }}</small>
+            <small v-if="jobProgressStageLabel(job)" class="progress-stage">{{ jobProgressStageLabel(job) }}</small>
+            <small>{{ compactDate(job.start_date) }} → {{ compactDate(job.end_date) }}</small>
+            <small v-if="job.best_row">best {{ pct(job.best_row.index_excess_cumulative_return) }} excess</small>
+          </button>
+        </div>
       </aside>
 
-      <main class="card detail-card">
-        <p v-if="!selectedJob" class="muted">请选择一个研究任务。</p>
+      <main class="card detail-card" :class="{ 'mobile-hidden': isNarrow && !mobileShowDetail }">
+        <p v-if="!selectedJob" class="muted detail-empty">请选择一个研究任务。</p>
         <template v-else>
-          <div class="section-header">
-            <div>
+          <div class="detail-toolbar">
+            <button v-if="isNarrow" type="button" class="back-btn" @click="backToList">← 任务列表</button>
+            <div class="detail-title">
               <h3>{{ selectedJob.name || selectedJob.job_id }}</h3>
               <p class="muted">
                 {{ selectedJob.status }} · {{ selectedJob.job_id }}
@@ -156,20 +80,23 @@
             </div>
             <div class="actions">
               <button
-                :disabled="rerunLoading || selectedJob.status === 'pending' || selectedJob.status === 'running'"
-                :title="rerunDisabledReason"
-                @click="rerunJob"
+                ref="loadParamsBtnRef"
+                type="button"
+                :title="loadParamsHint"
+                @click="loadParamsFromSelectedJob"
               >
-                {{ rerunLoading ? '重跑中...' : '用原参数重跑' }}
+                加载原参数
               </button>
               <button
                 v-if="selectedJob.result_id"
+                type="button"
                 :disabled="artifactLoading"
                 @click="openArtifact(selectedJob.job_id)"
               >
                 {{ artifactLoading ? '打开中...' : '打开 HTML 报告' }}
               </button>
               <button
+                type="button"
                 class="danger"
                 :disabled="deleteLoading || selectedJob.status === 'pending' || selectedJob.status === 'running'"
                 :title="deleteDisabledReason"
@@ -180,142 +107,246 @@
             </div>
           </div>
 
-          <div class="info-grid">
-            <div>
-              <span>任务耗时</span>
-              <strong>{{ jobElapsedLabel(selectedJob) || '-' }}</strong>
+          <div ref="detailBodyRef" class="detail-body">
+            <div class="info-grid">
+              <div>
+                <span>任务耗时</span>
+                <strong>{{ jobElapsedLabel(selectedJob) || '-' }}</strong>
+              </div>
+              <div v-if="selectedJob.status === 'running'">
+                <span>当前阶段</span>
+                <strong>{{ jobProgressStageLabel(selectedJob) || '-' }}</strong>
+              </div>
+              <div>
+                <span>评分数据水位</span>
+                <strong>{{ selectedJob.data_watermark?.stock_scores_max_date || '-' }}</strong>
+              </div>
+              <div>
+                <span>可回测收益水位</span>
+                <strong>{{ selectedJob.data_watermark?.backtest_score_max_date || selectedJob.data_watermark?.stock_scores_max_date || '-' }}</strong>
+              </div>
+              <div>
+                <span>dataset rows</span>
+                <strong>{{ selectedJob.data_watermark?.dataset_rows ?? '-' }}</strong>
+              </div>
+              <div>
+                <span>成分口径</span>
+                <strong>{{ universePitQualityLabel }}</strong>
+              </div>
+              <div>
+                <span>已保存预设</span>
+                <strong>{{ publishedPresetLabel }}</strong>
+              </div>
+              <div>
+                <span>发布动作</span>
+                <strong>{{ publishActionLabel }}</strong>
+              </div>
             </div>
-            <div v-if="selectedJob.status === 'running'">
-              <span>当前阶段</span>
-              <strong>{{ jobProgressStageLabel(selectedJob) || '-' }}</strong>
-            </div>
-            <div>
-              <span>评分数据水位</span>
-              <strong>{{ selectedJob.data_watermark?.stock_scores_max_date || '-' }}</strong>
-            </div>
-            <div>
-              <span>可回测收益水位</span>
-              <strong>{{ selectedJob.data_watermark?.backtest_score_max_date || selectedJob.data_watermark?.stock_scores_max_date || '-' }}</strong>
-            </div>
-            <div>
-              <span>dataset rows</span>
-              <strong>{{ selectedJob.data_watermark?.dataset_rows ?? '-' }}</strong>
-            </div>
-            <div>
-              <span>成分口径</span>
-              <strong>{{ universePitQualityLabel }}</strong>
-            </div>
-            <div>
-              <span>已保存预设</span>
-              <strong>{{ publishedPresetLabel }}</strong>
-            </div>
-            <div>
-              <span>发布动作</span>
-              <strong>{{ publishActionLabel }}</strong>
-            </div>
+
+            <section class="research-params">
+              <div class="section-header">
+                <div>
+                  <h4>研究参数</h4>
+                  <p class="muted">创建研究任务时使用的参数。</p>
+                </div>
+              </div>
+              <div class="config-grid">
+                <span v-for="row in researchParamRows" :key="row.key">
+                  <strong>{{ row.label }}</strong>{{ row.value }}
+                </span>
+              </div>
+            </section>
+
+            <section v-if="candidateConfig" class="candidate">
+              <div class="section-header">
+                <div>
+                  <h4>候选策略配置</h4>
+                  <p class="muted">{{ candidateConfig.name || candidateConfig.preset_id }}</p>
+                </div>
+                <div class="actions">
+                  <button type="button" :disabled="publishLoading || hasPublishedPreset" @click="publish('draft')">
+                    保存为 draft 预设
+                  </button>
+                  <button type="button" :disabled="publishLoading || hasPublishedPreset" @click="publish('enabled')">
+                    保存并启用预设
+                  </button>
+                </div>
+              </div>
+              <p v-if="hasPublishedPreset" class="muted">
+                该研究结果已经保存为参数预设，不能重复启用。
+              </p>
+              <div class="config-grid">
+                <span><strong>top_n</strong>{{ candidateConfig.top_n ?? '-' }}</span>
+                <span><strong>rebalance</strong>{{ candidateConfig.rebalance_days ? `${candidateConfig.rebalance_days}d` : '-' }}</span>
+                <span><strong>mode</strong>{{ candidateConfig.construction_mode || '-' }}</span>
+                <span><strong>industry cap</strong>{{ pct(candidateConfig.max_industry_weight) }}</span>
+                <span><strong>growth</strong>{{ pct(candidateConfig.growth_weight) }}</span>
+                <span><strong>cycle</strong>{{ pct(candidateConfig.cycle_weight) }}</span>
+                <span><strong>benchmark</strong>{{ candidateConfig.index_benchmark_symbol || '-' }}</span>
+                <span><strong>initial capital</strong>{{ money(candidateConfig.initial_capital) }}</span>
+                <span><strong>cash buffer</strong>{{ pct(candidateConfig.cash_buffer) }}</span>
+                <span><strong>execution price</strong>{{ candidateConfig.execution_price || '-' }}</span>
+              </div>
+            </section>
+
+            <section>
+              <h4>结果排行</h4>
+              <p v-if="!resultRows.length" class="muted">暂无结果。任务完成后会显示。</p>
+              <div v-else class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th v-if="showScoreColumn">Score</th>
+                      <th>Variant</th>
+                      <th>TopN</th>
+                      <th>收益</th>
+                      <th>超额</th>
+                      <th>Sharpe</th>
+                      <th>回撤</th>
+                      <th>综合分</th>
+                      <th>明细</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="(row, idx) in resultRows.slice(0, 30)"
+                      :key="`${row.score_variant}-${row.variant}-${row.top_n}-${idx}`"
+                      :class="{ 'selected-result-row': isSelectedResultRow(row, idx) }"
+                    >
+                      <td>
+                        {{ idx + 1 }}
+                        <span v-if="isSelectedResultRow(row, idx)" class="selected-badge">已选</span>
+                      </td>
+                      <td v-if="showScoreColumn">{{ row.score_variant || row.score_column || '-' }}</td>
+                      <td>{{ row.variant || '-' }}</td>
+                      <td>{{ row.top_n }}</td>
+                      <td>{{ pct(row.cumulative_return) }}</td>
+                      <td>{{ pct(row.index_excess_cumulative_return) }}</td>
+                      <td>{{ num(row.sharpe) }}</td>
+                      <td>{{ pct(row.max_drawdown) }}</td>
+                      <td>{{ num(row.risk_adjusted_score, 3) }}</td>
+                      <td class="detail-cell">
+                        <button
+                          v-if="row.combo_key && row.has_detail !== false"
+                          type="button"
+                          class="link-btn"
+                          @click="openComboDetail(row)"
+                        >
+                          查看成交
+                        </button>
+                        <span v-else class="muted" title="该结果未生成成交明细，重跑任务后可查看">—</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
-
-          <section class="research-params">
-            <div class="section-header">
-              <div>
-                <h4>研究参数</h4>
-                <p class="muted">创建研究任务时使用的参数。</p>
-              </div>
-            </div>
-            <div class="config-grid">
-              <span v-for="row in researchParamRows" :key="row.key">
-                <strong>{{ row.label }}</strong>{{ row.value }}
-              </span>
-            </div>
-          </section>
-
-          <section v-if="candidateConfig" class="candidate">
-            <div class="section-header">
-              <div>
-                <h4>候选策略配置</h4>
-                <p class="muted">{{ candidateConfig.name || candidateConfig.preset_id }}</p>
-              </div>
-              <div class="actions">
-                <button :disabled="publishLoading || hasPublishedPreset" @click="publish('draft')">
-                  保存为 draft 预设
-                </button>
-                <button :disabled="publishLoading || hasPublishedPreset" @click="publish('enabled')">
-                  保存并启用预设
-                </button>
-              </div>
-            </div>
-            <p v-if="hasPublishedPreset" class="muted">
-              该研究结果已经保存为参数预设，不能重复启用。
-            </p>
-            <div class="config-grid">
-              <span><strong>top_n</strong>{{ candidateConfig.top_n ?? '-' }}</span>
-              <span><strong>rebalance</strong>{{ candidateConfig.rebalance_days ? `${candidateConfig.rebalance_days}d` : '-' }}</span>
-              <span><strong>mode</strong>{{ candidateConfig.construction_mode || '-' }}</span>
-              <span><strong>industry cap</strong>{{ pct(candidateConfig.max_industry_weight) }}</span>
-              <span><strong>growth</strong>{{ pct(candidateConfig.growth_weight) }}</span>
-              <span><strong>cycle</strong>{{ pct(candidateConfig.cycle_weight) }}</span>
-              <span><strong>benchmark</strong>{{ candidateConfig.index_benchmark_symbol || '-' }}</span>
-              <span><strong>initial capital</strong>{{ money(candidateConfig.initial_capital) }}</span>
-              <span><strong>cash buffer</strong>{{ pct(candidateConfig.cash_buffer) }}</span>
-              <span><strong>execution price</strong>{{ candidateConfig.execution_price || '-' }}</span>
-            </div>
-          </section>
-
-          <section>
-            <h4>结果排行</h4>
-            <p v-if="!resultRows.length" class="muted">暂无结果。任务完成后会显示。</p>
-            <div v-else class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Rank</th>
-                    <th v-if="showScoreColumn">Score</th>
-                    <th>Variant</th>
-                    <th>TopN</th>
-                    <th>收益</th>
-                    <th>超额</th>
-                    <th>Sharpe</th>
-                    <th>回撤</th>
-                    <th>综合分</th>
-                    <th>明细</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="(row, idx) in resultRows.slice(0, 30)"
-                    :key="`${row.score_variant}-${row.variant}-${row.top_n}-${idx}`"
-                    :class="{ 'selected-result-row': isSelectedResultRow(row, idx) }"
-                  >
-                    <td>
-                      {{ idx + 1 }}
-                      <span v-if="isSelectedResultRow(row, idx)" class="selected-badge">已选</span>
-                    </td>
-                    <td v-if="showScoreColumn">{{ row.score_variant || row.score_column || '-' }}</td>
-                    <td>{{ row.variant || '-' }}</td>
-                    <td>{{ row.top_n }}</td>
-                    <td>{{ pct(row.cumulative_return) }}</td>
-                    <td>{{ pct(row.index_excess_cumulative_return) }}</td>
-                    <td>{{ num(row.sharpe) }}</td>
-                    <td>{{ pct(row.max_drawdown) }}</td>
-                    <td>{{ num(row.risk_adjusted_score, 3) }}</td>
-                    <td class="detail-cell">
-                      <button
-                        v-if="row.combo_key && row.has_detail !== false"
-                        class="link-btn"
-                        @click="openComboDetail(row)"
-                      >
-                        查看成交
-                      </button>
-                      <span v-else class="muted" title="该结果未生成成交明细，重跑任务后可查看">—</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
         </template>
       </main>
     </section>
+
+    <div
+      v-if="drawerOpen"
+      class="drawer-overlay"
+      @click.self="closeDrawer"
+    >
+      <aside
+        class="drawer-panel"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="drawerTitle"
+        @keydown.esc.stop="closeDrawer"
+      >
+        <header class="drawer-head">
+          <div>
+            <h3>{{ drawerTitle }}</h3>
+            <p class="muted">{{ drawerSubtitle }}</p>
+          </div>
+          <button type="button" class="link-btn" @click="closeDrawer">关闭 ✕</button>
+        </header>
+        <div class="drawer-body">
+          <div class="form-grid">
+            <label>
+              名称
+              <input v-model="form.name" @input="nameTouched = true" />
+            </label>
+            <label>
+              universe
+              <select v-model="form.universe_index" @change="syncDefaultName">
+                <option v-for="universe in universeOptions" :key="universe.value" :value="universe.value">
+                  {{ universe.label }}
+                </option>
+              </select>
+            </label>
+            <label>
+              start_date
+              <input v-model="form.start_date" type="date" />
+            </label>
+            <label>
+              end_date
+              <input v-model="form.end_date" type="date" />
+            </label>
+            <label>
+              score_column
+              <input v-model="form.score_column" />
+            </label>
+            <label>
+              growth:cycle 权重
+              <input v-model="form.growth_cycle_weights" placeholder="30:70,40:60" />
+              <small class="field-hint">逗号分隔可对比多组，如 30:70,60:40</small>
+            </label>
+            <label>
+              Top N
+              <input v-model="form.top_n_values" placeholder="10,20,50" />
+            </label>
+            <label>
+              rebalance_days
+              <input v-model.number="form.horizon" type="number" min="1" />
+            </label>
+            <label>
+              active caps
+              <input v-model="form.active_caps" placeholder="0.2,0.25,0.3" />
+            </label>
+            <label>
+              legacy transaction_cost
+              <input v-model.number="form.transaction_cost" type="number" min="0" step="0.0001" />
+            </label>
+            <label>
+              buy commission
+              <input v-model.number="form.buy_commission_rate" type="number" min="0" step="0.00001" />
+            </label>
+            <label>
+              sell commission
+              <input v-model.number="form.sell_commission_rate" type="number" min="0" step="0.00001" />
+            </label>
+            <label>
+              min commission
+              <input v-model.number="form.min_commission" type="number" min="0" step="0.1" />
+            </label>
+            <label>
+              stamp tax
+              <input v-model.number="form.stamp_tax_rate" type="number" min="0" step="0.00001" />
+            </label>
+            <label>
+              initial capital
+              <input v-model.number="form.initial_capital" type="number" min="0" step="10000" />
+            </label>
+          </div>
+        </div>
+        <footer class="drawer-footer">
+          <button type="button" class="secondary-btn" @click="closeDrawer">取消</button>
+          <button
+            type="button"
+            :disabled="submitting || !form.start_date || !form.end_date"
+            @click="submitJobForm"
+          >
+            {{ submitting ? '提交中...' : submitButtonLabel }}
+          </button>
+        </footer>
+      </aside>
+    </div>
 
     <div v-if="comboModalOpen" class="combo-overlay" @click.self="closeComboDetail">
       <div class="combo-modal">
@@ -417,7 +448,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   createPortfolioResearchJob,
   deletePortfolioResearchJob,
@@ -430,10 +461,10 @@ import {
 } from '../api/portfolioResearch'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+const NARROW_MQ = '(max-width: 900px)'
 
 const loading = ref(false)
 const submitting = ref(false)
-const rerunLoading = ref(false)
 const deleteLoading = ref(false)
 const publishLoading = ref(false)
 const artifactLoading = ref(false)
@@ -447,8 +478,18 @@ const universeFilter = ref('')
 const growthCycleWeightFilter = ref('')
 const message = ref('')
 const errorMessage = ref('')
-const createCollapsed = ref(false)
+const drawerOpen = ref(false)
+const drawerMode = ref('create') // 'create' | 'rerun'
+/** When set, submit goes through rerun API for this source job. */
+const formSourceJobId = ref('')
 const nowMs = ref(Date.now())
+const isNarrow = ref(typeof window !== 'undefined' ? window.matchMedia(NARROW_MQ).matches : false)
+const detailBodyRef = ref(null)
+const newJobBtnRef = ref(null)
+const loadParamsBtnRef = ref(null)
+let selectSeq = 0
+let narrowMql = null
+let drawerFocusEl = null
 
 let clockTimer = null
 let pollTimer = null
@@ -458,6 +499,8 @@ const hasActiveJobs = computed(() =>
     || selectedJob.value?.status === 'running'
     || selectedJob.value?.status === 'pending',
 )
+
+const mobileShowDetail = computed(() => Boolean(selectedJobId.value))
 
 const comboModalOpen = ref(false)
 const comboLoading = ref(false)
@@ -493,24 +536,28 @@ const universeOptions = [
   { value: 'star50', label: 'star50 - 科创50' },
 ]
 
-const form = ref({
-  name: defaultResearchName('csi1000'),
-  universe_index: 'csi1000',
-  start_date: '2023-01-01',
-  end_date: todayInputDate(),
-  score_column: 'composite_growth_cycle_score',
-  growth_cycle_weights: '30:70',
-  top_n_values: '10,20,50',
-  horizon: 20,
-  active_caps: '0.2,0.25,0.3,0.4',
-  transaction_cost: 0.001,
-  buy_commission_rate: 0.0001,
-  sell_commission_rate: 0.0001,
-  min_commission: 5,
-  stamp_tax_rate: 0.0005,
-  transfer_fee_rate: 0,
-  initial_capital: 1_000_000,
-})
+function defaultFormState() {
+  return {
+    name: defaultResearchName('csi1000'),
+    universe_index: 'csi1000',
+    start_date: '2023-01-01',
+    end_date: todayInputDate(),
+    score_column: 'composite_growth_cycle_score',
+    growth_cycle_weights: '30:70',
+    top_n_values: '10,20,50',
+    horizon: 20,
+    active_caps: '0.2,0.25,0.3,0.4',
+    transaction_cost: 0.001,
+    buy_commission_rate: 0.0001,
+    sell_commission_rate: 0.0001,
+    min_commission: 5,
+    stamp_tax_rate: 0.0005,
+    transfer_fee_rate: 0,
+    initial_capital: 1_000_000,
+  }
+}
+
+const form = ref(defaultFormState())
 
 const resultRows = computed(() => resultDetail.value?.rows || [])
 const showScoreColumn = computed(() => new Set(resultRows.value.map((row) => row.score_variant)).size > 1)
@@ -531,13 +578,19 @@ const publishActionLabel = computed(() => {
   }
   return labels[publishAction.value] || '-'
 })
-const rerunDisabledReason = computed(() => {
-  const status = selectedJob.value?.status
-  if (status === 'pending' || status === 'running') {
-    return '任务仍在排队或运行中，完成后可重跑'
+const loadParamsHint = '将当前任务参数填入侧栏，可调整后提交重跑（保留来源链路）'
+const drawerTitle = computed(() => (
+  drawerMode.value === 'rerun' ? '基于原参数调整后重跑' : '新建研究任务'
+))
+const drawerSubtitle = computed(() => {
+  if (drawerMode.value === 'rerun' && formSourceJobId.value) {
+    return `来源任务 ${formSourceJobId.value} · 提交后新建任务并保留 rerun 链路`
   }
-  return '用原参数新建一条研究任务，不覆盖当前报告'
+  return '任务由 stock-scoring-system 后台 worker 执行'
 })
+const submitButtonLabel = computed(() => (
+  drawerMode.value === 'rerun' ? '提交重跑' : '提交研究任务'
+))
 const deleteDisabledReason = computed(() => {
   const status = selectedJob.value?.status
   if (status === 'pending' || status === 'running') {
@@ -572,6 +625,91 @@ function syncDefaultName() {
 
 function todayInputDate() {
   return new Date().toISOString().slice(0, 10)
+}
+
+function buildFormPayload() {
+  const payload = {
+    ...form.value,
+    name: form.value.name || defaultResearchName(form.value.universe_index),
+    growth_cycle_weights: parseCsvNumbers(form.value.growth_cycle_weights, String),
+    top_n_values: parseCsvNumbers(form.value.top_n_values, Number),
+    active_caps: parseCsvNumbers(form.value.active_caps, Number),
+    rebalance_interval_days: [Number(form.value.horizon)],
+    force: true,
+  }
+  if (payload.index_benchmark_symbol == null) delete payload.index_benchmark_symbol
+  if (payload.cash_buffer == null) delete payload.cash_buffer
+  return payload
+}
+
+function openDrawer(mode) {
+  drawerMode.value = mode
+  drawerOpen.value = true
+  drawerFocusEl = document.activeElement
+  nextTick(() => {
+    const panel = document.querySelector('.drawer-panel input, .drawer-panel select')
+    panel?.focus?.()
+  })
+}
+
+function closeDrawer() {
+  drawerOpen.value = false
+  formSourceJobId.value = ''
+  const restore = drawerFocusEl
+  drawerFocusEl = null
+  nextTick(() => restore?.focus?.())
+}
+
+function openCreateDrawer() {
+  form.value = defaultFormState()
+  nameTouched.value = false
+  formSourceJobId.value = ''
+  errorMessage.value = ''
+  openDrawer('create')
+}
+
+function onGlobalKeydown(event) {
+  if (event.key === 'Escape' && drawerOpen.value) {
+    event.preventDefault()
+    closeDrawer()
+  }
+}
+
+function onNarrowChange(event) {
+  isNarrow.value = event.matches
+}
+
+function backToList() {
+  selectedJobId.value = ''
+  selectedJob.value = null
+  resultDetail.value = null
+}
+
+function scrollDetailToTop() {
+  if (detailBodyRef.value) detailBodyRef.value.scrollTop = 0
+}
+
+function toDateInputValue(value) {
+  if (!value) return ''
+  const text = String(value).trim()
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10)
+  const compact = text.replace(/-/g, '')
+  if (compact.length >= 8 && /^\d{8}/.test(compact)) {
+    return `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`
+  }
+  return ''
+}
+
+function formatListForInput(value) {
+  if (Array.isArray(value)) return value.map(String).join(',')
+  if (value == null || value === '') return ''
+  return String(value)
+}
+
+function withRerunNameSuffix(baseName) {
+  const name = String(baseName || '').trim() || '组合研究'
+  if (name.endsWith('(rerun)')) return name
+  return `${name} (rerun)`
 }
 
 function parseCsvNumbers(value, mapper = Number) {
@@ -923,64 +1061,104 @@ async function loadJobs() {
   }
 }
 
-async function selectJob(jobId) {
+async function selectJob(jobId, { scrollDetail = false } = {}) {
+  if (!jobId) return
+  const seq = ++selectSeq
   selectedJobId.value = jobId
-  resultDetail.value = null
-  const jobRes = await getPortfolioResearchJob(jobId)
-  selectedJob.value = jobRes.data
-  if (selectedJob.value?.result_id || selectedJob.value?.status === 'completed') {
-    try {
-      const resultRes = await getPortfolioResearchResults(jobId)
-      resultDetail.value = resultRes.data
-    } catch (err) {
-      if (selectedJob.value?.status === 'completed') {
-        errorMessage.value = err?.response?.data?.detail || err.message || '加载研究结果失败'
+  if (scrollDetail) resultDetail.value = null
+  try {
+    const jobRes = await getPortfolioResearchJob(jobId)
+    if (seq !== selectSeq) return
+    selectedJob.value = jobRes.data
+    if (selectedJob.value?.result_id || selectedJob.value?.status === 'completed') {
+      try {
+        const resultRes = await getPortfolioResearchResults(jobId)
+        if (seq !== selectSeq) return
+        resultDetail.value = resultRes.data
+      } catch (err) {
+        if (seq !== selectSeq) return
+        if (selectedJob.value?.status === 'completed') {
+          errorMessage.value = err?.response?.data?.detail || err.message || '加载研究结果失败'
+        }
       }
+    } else if (scrollDetail) {
+      resultDetail.value = null
     }
+    if (scrollDetail) {
+      await nextTick()
+      if (seq === selectSeq) scrollDetailToTop()
+    }
+  } catch (err) {
+    if (seq !== selectSeq) return
+    errorMessage.value = err?.response?.data?.detail || err.message || '加载研究任务失败'
   }
 }
 
-async function createJob() {
+async function submitJobForm() {
   submitting.value = true
   message.value = ''
   errorMessage.value = ''
   try {
-    const payload = {
-      ...form.value,
-      name: form.value.name || defaultResearchName(form.value.universe_index),
-      growth_cycle_weights: parseCsvNumbers(form.value.growth_cycle_weights, String),
-      top_n_values: parseCsvNumbers(form.value.top_n_values, Number),
-      active_caps: parseCsvNumbers(form.value.active_caps, Number),
-      rebalance_interval_days: [Number(form.value.horizon)],
+    const sourceJobId = formSourceJobId.value
+    const payload = buildFormPayload()
+    let res
+    if (sourceJobId) {
+      res = await rerunPortfolioResearchJob(sourceJobId, payload)
+      message.value = `已基于原参数创建重跑任务 ${res.data?.job_id}`
+    } else {
+      res = await createPortfolioResearchJob(payload)
+      message.value = `已创建研究任务 ${res.data?.job_id}`
     }
-    const res = await createPortfolioResearchJob(payload)
-    message.value = `已创建研究任务 ${res.data?.job_id}`
+    closeDrawer()
     selectedJobId.value = res.data?.job_id || ''
     await loadJobs()
-    if (selectedJobId.value) await selectJob(selectedJobId.value)
+    if (selectedJobId.value) await selectJob(selectedJobId.value, { scrollDetail: true })
   } catch (err) {
-    errorMessage.value = err?.response?.data?.detail || err.message || '创建研究任务失败'
+    errorMessage.value = err?.response?.data?.detail || err.message || '提交研究任务失败'
   } finally {
     submitting.value = false
   }
 }
 
-async function rerunJob() {
-  if (!selectedJobId.value) return
-  rerunLoading.value = true
-  message.value = ''
-  errorMessage.value = ''
-  try {
-    const res = await rerunPortfolioResearchJob(selectedJobId.value, { force: true })
-    message.value = `已用原参数创建重跑任务 ${res.data?.job_id}`
-    selectedJobId.value = res.data?.job_id || ''
-    await loadJobs()
-    if (selectedJobId.value) await selectJob(selectedJobId.value)
-  } catch (err) {
-    errorMessage.value = err?.response?.data?.detail || err.message || '重跑研究任务失败'
-  } finally {
-    rerunLoading.value = false
+function loadParamsFromSelectedJob() {
+  const job = selectedJob.value
+  if (!job) return
+  const params = job.params || {}
+  const universe = params.universe_index || job.universe_index || form.value.universe_index
+  const intervals = params.rebalance_interval_days
+  const horizon = Number(
+    params.horizon
+      ?? (Array.isArray(intervals) && intervals.length ? intervals[0] : null)
+      ?? form.value.horizon,
+  )
+  const baseName = job.name || params.name || defaultResearchName(universe)
+
+  form.value = {
+    ...defaultFormState(),
+    name: withRerunNameSuffix(baseName),
+    universe_index: universe,
+    start_date: toDateInputValue(params.start_date || job.start_date) || form.value.start_date,
+    end_date: toDateInputValue(params.end_date || job.end_date) || form.value.end_date,
+    score_column: params.score_column || form.value.score_column,
+    growth_cycle_weights: formatListForInput(params.growth_cycle_weights) || form.value.growth_cycle_weights,
+    top_n_values: formatListForInput(params.top_n_values) || form.value.top_n_values,
+    horizon: Number.isFinite(horizon) && horizon > 0 ? horizon : form.value.horizon,
+    active_caps: formatListForInput(params.active_caps) || form.value.active_caps,
+    transaction_cost: params.transaction_cost ?? form.value.transaction_cost,
+    buy_commission_rate: params.buy_commission_rate ?? form.value.buy_commission_rate,
+    sell_commission_rate: params.sell_commission_rate ?? form.value.sell_commission_rate,
+    min_commission: params.min_commission ?? form.value.min_commission,
+    stamp_tax_rate: params.stamp_tax_rate ?? form.value.stamp_tax_rate,
+    transfer_fee_rate: params.transfer_fee_rate ?? form.value.transfer_fee_rate,
+    initial_capital: params.initial_capital ?? form.value.initial_capital,
+    index_benchmark_symbol: params.index_benchmark_symbol,
+    cash_buffer: params.cash_buffer,
   }
+  nameTouched.value = true
+  formSourceJobId.value = job.job_id
+  errorMessage.value = ''
+  message.value = `已加载任务 ${job.job_id} 的参数，可调整后提交重跑`
+  openDrawer('rerun')
 }
 
 async function deleteJob() {
@@ -1026,7 +1204,7 @@ async function publish(status) {
     } else {
       message.value = `已保存参数预设 ${res.data?.preset?.preset_id}`
     }
-    await selectJob(selectedJobId.value)
+    await selectJob(selectedJobId.value, { scrollDetail: false })
     await loadJobs()
   } catch (err) {
     errorMessage.value = err?.response?.data?.detail || err.message || '发布策略失败'
@@ -1060,16 +1238,22 @@ async function openArtifact(jobId) {
 
 async function refreshAll() {
   await loadJobs()
-  if (selectedJobId.value) await selectJob(selectedJobId.value)
+  if (selectedJobId.value) await selectJob(selectedJobId.value, { scrollDetail: false })
 }
 
 onMounted(async () => {
+  narrowMql = window.matchMedia(NARROW_MQ)
+  isNarrow.value = narrowMql.matches
+  narrowMql.addEventListener('change', onNarrowChange)
+  window.addEventListener('keydown', onGlobalKeydown)
   await refreshAll()
   if (hasActiveJobs.value) startActiveJobTimers()
 })
 
 onUnmounted(() => {
   stopActiveJobTimers()
+  window.removeEventListener('keydown', onGlobalKeydown)
+  narrowMql?.removeEventListener('change', onNarrowChange)
 })
 </script>
 
@@ -1092,10 +1276,23 @@ onUnmounted(() => {
   margin-bottom: 16px;
 }
 
-.jobs-header {
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: none;
+}
+
+.jobs-toolbar {
+  flex: none;
+  display: flex;
   flex-direction: column;
-  align-items: stretch;
   gap: 10px;
+  margin-bottom: 10px;
+}
+
+.jobs-toolbar h3 {
+  margin: 0;
 }
 
 .job-filters {
@@ -1160,35 +1357,10 @@ small {
   box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
 }
 
-.create-card {
-  margin-bottom: 20px;
-}
-
 .field-hint {
   font-weight: 400;
   color: #94a3b8;
   font-size: 12px;
-}
-
-.create-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  cursor: pointer;
-}
-
-.create-head > div {
-  min-width: 0;
-}
-
-.collapse-btn {
-  flex: none;
-  border: 1px solid #d9e1ec;
-  background: #fff;
-  color: #475569;
-  font-size: 13px;
-  white-space: nowrap;
 }
 
 .form-grid,
@@ -1240,10 +1412,68 @@ button.danger:disabled {
   opacity: .45;
 }
 
-.layout {
+button.secondary-btn {
+  border-color: #d9e1ec;
+  background: #fff;
+  color: #334155;
+}
+
+.workspace {
   display: grid;
-  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 16px;
+  height: min(75dvh, calc(100dvh - 12rem));
+  min-height: 480px;
+  overflow: hidden;
+}
+
+.jobs-card,
+.detail-card {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 16px;
+}
+
+.jobs-list,
+.detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.detail-empty {
+  margin: 0;
+}
+
+.detail-toolbar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.detail-title {
+  flex: 1;
+  min-width: 180px;
+}
+
+.detail-title h3 {
+  margin: 0 0 4px;
+}
+
+.back-btn {
+  flex: none;
+  border-color: #d9e1ec;
+  background: #fff;
+  color: #334155;
 }
 
 .job-row {
@@ -1282,11 +1512,6 @@ button.danger:disabled {
   min-width: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
-}
-
-.detail-card,
-.jobs-card {
-  min-width: 0;
 }
 
 .job-row strong,
@@ -1552,13 +1777,69 @@ th {
   font-size: 12px;
 }
 
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(15, 23, 42, .4);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawer-panel {
+  width: min(640px, 100%);
+  height: 100%;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 24px rgba(15, 23, 42, .12);
+}
+
+.drawer-head,
+.drawer-footer {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.drawer-footer {
+  border-bottom: 0;
+  border-top: 1px solid #eef2f7;
+  justify-content: flex-end;
+}
+
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 20px 20px;
+}
+
+.drawer-head h3 {
+  margin: 0 0 4px;
+}
+
 @media (max-width: 900px) {
   .portfolio-research {
     padding: 18px;
   }
 
-  .layout {
+  .workspace {
     grid-template-columns: 1fr;
+    height: min(78dvh, calc(100dvh - 10rem));
+    min-height: 420px;
+  }
+
+  .mobile-hidden {
+    display: none !important;
+  }
+
+  .drawer-panel {
+    width: 100%;
   }
 }
 </style>
