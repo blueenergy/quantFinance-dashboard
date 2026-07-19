@@ -400,6 +400,271 @@ export function aiRiskBadge(item) {
   }
 }
 
+export function pct(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? `${(number * 100).toFixed(2)}%` : '-'
+}
+
+export function signedMoney(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '-'
+  const formatted = Math.abs(number).toLocaleString('zh-CN', { maximumFractionDigits: 0 })
+  return `${number >= 0 ? '+' : '-'}${formatted}`
+}
+
+export function signedPct(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '-'
+  return `${number >= 0 ? '+' : ''}${(number * 100).toFixed(2)}%`
+}
+
+export function todayInputDate() {
+  const now = new Date()
+  const offset = now.getTimezoneOffset() * 60000
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10)
+}
+
+export function scoringRunText(run) {
+  if (!run) return '暂无记录'
+  const scoreDate = run.score_date || '-'
+  const status = run.status || 'unknown'
+  return `${scoreDate} / ${status}`
+}
+
+export function summarizeByStatus(rows) {
+  return rows.reduce((acc, row) => {
+    const status = row.status || 'unknown'
+    acc[status] = (acc[status] || 0) + 1
+    return acc
+  }, {})
+}
+
+export function formatSummary(summary) {
+  const entries = Object.entries(summary)
+  if (!entries.length) return '暂无'
+  return entries.map(([status, count]) => `${status}: ${count}`).join(' / ')
+}
+
+export function signalDisplayName(signal) {
+  return signal?.name || signal?.stock_name || signal?.symbol || '-'
+}
+
+export function effectiveTopN(plan) {
+  return plan?.summary?.target_top_n
+    ?? plan?.params_snapshot?.top_n
+    ?? '-'
+}
+
+export function effectiveRebalanceDays(plan) {
+  return plan?.params_snapshot?.rebalance_days
+    ?? null
+}
+
+export function effectiveConstructionMode(plan) {
+  return plan?.params_snapshot?.construction_mode
+    ?? null
+}
+
+export function effectiveInitialCapital(plan) {
+  return plan?.params_snapshot?.initial_capital
+    ?? null
+}
+
+export function planParamSummary(plan) {
+  const parts = [`Top${effectiveTopN(plan)}`]
+  const rebalanceDays = effectiveRebalanceDays(plan)
+  if (rebalanceDays) parts.push(`${rebalanceDays}d`)
+  const mode = effectiveConstructionMode(plan)
+  if (mode) parts.push(mode)
+  return parts.join(' · ')
+}
+
+export function shortPlanId(planId) {
+  const text = String(planId || '')
+  if (!text) return '-'
+  if (text.length <= 28) return text
+  return `${text.slice(0, 18)}…${text.slice(-8)}`
+}
+
+export const CAPITAL_BASIS_LABELS = {
+  account_equity: '实盘账户滚动权益',
+  rolling_paper: '纸面滚动权益',
+  fixed_notional: '固定名义本金',
+}
+
+export const BASELINE_SOURCE_LABELS = {
+  live_lineage_reconstruction: '实盘成交重建',
+  paper_snapshot: '纸面快照继承',
+  initial_capital: '初始本金',
+  fixed_notional: '固定名义本金',
+}
+
+export function capitalBasisLabel(plan) {
+  const basis = plan?.capital_basis || plan?.summary?.capital_basis
+  return CAPITAL_BASIS_LABELS[basis] || basis || '—'
+}
+
+export function baselineSourceLabel(plan) {
+  const source = plan?.summary?.baseline_source
+  return BASELINE_SOURCE_LABELS[source] || source || '—'
+}
+
+export function planBaselineEquity(plan) {
+  const value = plan?.summary?.baseline_equity ?? plan?.summary?.equity
+  return Number.isFinite(Number(value)) ? Number(value) : null
+}
+
+export function baselineSyncedLabel(plan) {
+  const value = plan?.summary?.baseline_synced_at
+  if (value === null || value === undefined || value === '') return '—'
+  const date = typeof value === 'number'
+    ? new Date(value < 1e12 ? value * 1000 : value)
+    : new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+export function formatSnapshotAt(value) {
+  if (!value) return '-'
+  return String(value).slice(0, 19).replace('T', ' ')
+}
+
+export function planCadenceBadge(plan) {
+  if (!plan) return { text: '-', cls: 'cadence-unknown' }
+  // record_kind is the authoritative type stamped by the backend. origin is the
+  // orthogonal provenance dimension (manual vs scheduled) used only to refine the
+  // label within a trade_plan; we no longer infer the kind from plan_type / origin.
+  const pending = ['needs_review', 'generated', 'draft'].includes(plan.status)
+  if (plan.record_kind === 'ledger_event') {
+    return plan.is_liquidation
+      ? { text: '手工补录·清仓', cls: 'cadence-manual' }
+      : { text: '手工补录', cls: 'cadence-manual' }
+  }
+  if (plan.record_kind === 'observation') {
+    return plan.executable === false
+      ? { text: '观察·不交易', cls: 'cadence-monitor-readonly' }
+      : { text: '观察·可交易', cls: 'cadence-monitor-trade' }
+  }
+  if (plan.record_kind === 'trade_plan') {
+    if (plan.origin === 'manual') {
+      return pending
+        ? { text: '手动调仓·待审', cls: 'cadence-manual-pending' }
+        : { text: '手动调仓', cls: 'cadence-manual' }
+    }
+    if (plan.is_rebalance_day === false) {
+      return { text: '未到周期', cls: 'cadence-not-due' }
+    }
+    if (!plan.previous_rebalance_date) {
+      return pending
+        ? { text: '待审核建仓', cls: 'cadence-rebalance-pending' }
+        : { text: '首次建仓', cls: 'cadence-rebalance' }
+    }
+    if (pending) {
+      return { text: '待审核调仓', cls: 'cadence-rebalance-pending' }
+    }
+    return { text: '调仓日', cls: 'cadence-rebalance' }
+  }
+  return { text: plan.plan_type || plan.record_kind || '-', cls: 'cadence-unknown' }
+}
+
+export function buildEquityRows(equity) {
+  return [...equity]
+    .filter((point) => Number.isFinite(Number(point.equity)))
+    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
+    .map((point, index, rows) => {
+      const value = Number(point.equity)
+      const previous = index > 0 ? Number(rows[index - 1].equity) : NaN
+      const change = Number.isFinite(previous) ? value - previous : null
+      const changePct = Number.isFinite(previous) && previous !== 0 ? change / previous : null
+      return { ...point, equity: value, change, changePct }
+    })
+}
+
+export function buildEquityChart(equityRows) {
+  if (!equityRows.length) return { points: '', labels: [], min: 0, max: 0, latestReturn: null }
+  const values = equityRows.map((row) => row.equity)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min || 1
+  const width = 640
+  const height = 220
+  const pad = 28
+  const points = equityRows
+    .map((row, index) => {
+      const x = equityRows.length === 1 ? width / 2 : pad + (index * (width - pad * 2)) / (equityRows.length - 1)
+      const y = height - pad - ((row.equity - min) * (height - pad * 2)) / span
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+  const first = equityRows[0].equity
+  const latest = equityRows[equityRows.length - 1].equity
+  return {
+    points,
+    min,
+    max,
+    latestReturn: first ? latest / first - 1 : null,
+    labels: [
+      { text: equityRows[0].date, x: pad, y: height - 6, anchor: 'start' },
+      { text: equityRows[equityRows.length - 1].date, x: width - pad, y: height - 6, anchor: 'end' },
+    ],
+  }
+}
+
+export function previousPlanIdFor(plan, plans) {
+  if (!plan) return ''
+  if (plan.previous_rebalance_plan_id) return plan.previous_rebalance_plan_id
+  const previousDate = plan.previous_rebalance_date
+  if (!previousDate || !plan.params_hash) return ''
+  const previous = plans.find((row) => (
+    row.base_date === previousDate
+    && row.params_hash === plan.params_hash
+    && row.strategy_template_id === plan.strategy_template_id
+    && (!plan.user_id || row.user_id === plan.user_id)
+    && row.record_kind === 'trade_plan'
+  ))
+  return previous?.plan_id || ''
+}
+
+export function planLineage(plan, plans) {
+  if (!plan) return { show: false, previousDate: '', previousPlanId: '' }
+  const previousDate = plan.previous_rebalance_date || ''
+  const previousPlanId = previousPlanIdFor(plan, plans)
+  return {
+    show: Boolean(plan.params_hash || previousDate || previousPlanId),
+    previousDate,
+    previousPlanId,
+  }
+}
+
+export function isPreviousPlanOfSelected(plan, selectedPlanId, selectedDetail, plans) {
+  if (!plan || !selectedPlanId) return false
+  return plan.plan_id === previousPlanIdFor(selectedDetail?.plan, plans)
+}
+
+export function isNextPlanOfSelected(plan, selectedPlanId, plans) {
+  if (!plan || !selectedPlanId) return false
+  return previousPlanIdFor(plan, plans) === selectedPlanId
+}
+
+export function planRelationBadge(plan, selectedPlanId, selectedDetail, plans) {
+  if (!selectedPlanId || !plan || plan.plan_id === selectedPlanId) return null
+  if (isPreviousPlanOfSelected(plan, selectedPlanId, selectedDetail, plans)) {
+    return { text: '上游', cls: 'relation-upstream' }
+  }
+  if (isNextPlanOfSelected(plan, selectedPlanId, plans)) {
+    return { text: '下游', cls: 'relation-downstream' }
+  }
+  return null
+}
+
+export function planRowClass(plan, selectedPlanId, selectedDetail, plans) {
+  return {
+    active: selectedPlanId === plan.plan_id,
+    upstream: isPreviousPlanOfSelected(plan, selectedPlanId, selectedDetail, plans),
+    downstream: isNextPlanOfSelected(plan, selectedPlanId, plans),
+  }
+}
+
 export function usePortfolioPlanFormat() {
   return {
     num,
@@ -435,5 +700,33 @@ export function usePortfolioPlanFormat() {
     actionBadge,
     driftBadge,
     aiRiskBadge,
+    pct,
+    signedMoney,
+    signedPct,
+    todayInputDate,
+    scoringRunText,
+    summarizeByStatus,
+    formatSummary,
+    signalDisplayName,
+    effectiveTopN,
+    effectiveRebalanceDays,
+    effectiveConstructionMode,
+    effectiveInitialCapital,
+    planParamSummary,
+    shortPlanId,
+    capitalBasisLabel,
+    baselineSourceLabel,
+    planBaselineEquity,
+    baselineSyncedLabel,
+    formatSnapshotAt,
+    planCadenceBadge,
+    buildEquityRows,
+    buildEquityChart,
+    previousPlanIdFor,
+    planLineage,
+    isPreviousPlanOfSelected,
+    isNextPlanOfSelected,
+    planRelationBadge,
+    planRowClass,
   }
 }
