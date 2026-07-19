@@ -24,6 +24,10 @@ export function getPortfolioResearchResults(jobId) {
   return request({ url: `/portfolio-research/jobs/${jobId}/results`, method: 'get' })
 }
 
+export function getPortfolioResearchResultRows(jobId, params = {}) {
+  return request({ url: `/portfolio-research/jobs/${jobId}/results/rows`, method: 'get', params })
+}
+
 export function listPortfolioResearchCombos(jobId) {
   return request({ url: `/portfolio-research/jobs/${jobId}/combos`, method: 'get' })
 }

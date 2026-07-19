@@ -185,65 +185,22 @@
                 <span><strong>benchmark</strong>{{ candidateConfig.index_benchmark_symbol || '-' }}</span>
                 <span><strong>initial capital</strong>{{ money(candidateConfig.initial_capital) }}</span>
                 <span><strong>cash buffer</strong>{{ pct(candidateConfig.cash_buffer) }}</span>
+                <span><strong>trailing stop</strong>{{ pct(candidateConfig.trailing_stop_pct) }}</span>
                 <span><strong>execution price</strong>{{ candidateConfig.execution_price || '-' }}</span>
               </div>
             </section>
 
-            <section>
-              <h4>结果排行</h4>
-              <p v-if="!resultRows.length" class="muted">暂无结果。任务完成后会显示。</p>
-              <div v-else class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Rank</th>
-                      <th v-if="showScoreColumn">Score</th>
-                      <th v-if="showTrailingStopColumn">止盈</th>
-                      <th>Variant</th>
-                      <th>TopN</th>
-                      <th>收益</th>
-                      <th>超额</th>
-                      <th>Sharpe</th>
-                      <th>回撤</th>
-                      <th>综合分</th>
-                      <th>明细</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="(row, idx) in resultRows.slice(0, 30)"
-                      :key="`${row.score_variant}-${row.variant}-${row.top_n}-${idx}`"
-                      :class="{ 'selected-result-row': isSelectedResultRow(row, idx) }"
-                    >
-                      <td>
-                        {{ idx + 1 }}
-                        <span v-if="isSelectedResultRow(row, idx)" class="selected-badge">已选</span>
-                      </td>
-                      <td v-if="showScoreColumn">{{ row.score_variant || row.score_column || '-' }}</td>
-                      <td v-if="showTrailingStopColumn">{{ formatTrailingStopCell(row.trailing_stop_pct) }}</td>
-                      <td>{{ row.variant || '-' }}</td>
-                      <td>{{ row.top_n }}</td>
-                      <td>{{ pct(row.cumulative_return) }}</td>
-                      <td>{{ pct(row.index_excess_cumulative_return) }}</td>
-                      <td>{{ num(row.sharpe) }}</td>
-                      <td>{{ pct(row.max_drawdown) }}</td>
-                      <td>{{ num(row.risk_adjusted_score, 3) }}</td>
-                      <td class="detail-cell">
-                        <button
-                          v-if="row.combo_key && row.has_detail !== false"
-                          type="button"
-                          class="link-btn"
-                          @click="openComboDetail(row)"
-                        >
-                          查看成交
-                        </button>
-                        <span v-else class="muted" title="该结果未生成成交明细，重跑任务后可查看">—</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </section>
+            <SweepResultPanel
+              v-if="resultRows.length"
+              :result-detail="resultDetail"
+              :job="selectedJob"
+              :selected-row="selectedResultRow"
+              :pct="pct"
+              :num="num"
+              @select-row="onSelectResultRow"
+              @open-combo="openComboDetail"
+            />
+            <p v-else class="muted">暂无结果。任务完成后会显示。</p>
           </div>
         </template>
       </main>
@@ -470,6 +427,8 @@ import {
   buildPortfolioResearchPayload,
   formatResearchApiError,
 } from '../utils/portfolioResearchPayload'
+import { buildCandidateConfigFromRow } from '../utils/sweepResultView'
+import SweepResultPanel from '../components/portfolio/SweepResultPanel.vue'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 const NARROW_MQ = '(max-width: 900px)'
@@ -483,6 +442,7 @@ const nameTouched = ref(false)
 const jobs = ref([])
 const selectedJob = ref(null)
 const resultDetail = ref(null)
+const selectedResultRow = ref(null)
 const selectedJobId = ref('')
 const statusFilter = ref('')
 const universeFilter = ref('')
@@ -572,12 +532,16 @@ function defaultFormState() {
 const form = ref(defaultFormState())
 
 const resultRows = computed(() => resultDetail.value?.rows || [])
-const showScoreColumn = computed(() => new Set(resultRows.value.map((row) => row.score_variant)).size > 1)
-const showTrailingStopColumn = computed(() => {
-  const values = new Set(resultRows.value.map((row) => (row.trailing_stop_pct == null || row.trailing_stop_pct === 0 ? 0 : row.trailing_stop_pct)))
-  return values.size > 1
+const candidateConfig = computed(() => {
+  if (selectedResultRow.value) {
+    return buildCandidateConfigFromRow(
+      selectedResultRow.value,
+      selectedJob.value || {},
+      selectedJob.value?.params || resultDetail.value?.params || {},
+    )
+  }
+  return resultDetail.value?.candidate_strategy_config || selectedJob.value?.candidate_strategy_config
 })
-const candidateConfig = computed(() => resultDetail.value?.candidate_strategy_config || selectedJob.value?.candidate_strategy_config)
 const researchParamRows = computed(() => buildResearchParamRows(selectedJob.value))
 const publishedPresetId = computed(() => resultDetail.value?.published_preset_id || selectedJob.value?.published_preset_id || '')
 const publishedStatus = computed(() => resultDetail.value?.published_status || selectedJob.value?.published_status || '')
@@ -719,11 +683,6 @@ function formatTrailingStopPctsForInput(params) {
   }
   if (params?.trailing_stop_pct == null) return '0'
   return String(params.trailing_stop_pct)
-}
-
-function formatTrailingStopCell(value) {
-  if (value == null || value === 0 || value === 0.0) return '关闭'
-  return pct(value)
 }
 
 function formatTrailingStopParamValue(params) {
@@ -915,8 +874,14 @@ function buildResearchParamRows(job) {
   return rows.map((row) => ({ ...row, value: row.value || '-' }))
 }
 
-function isSelectedResultRow(row, idx) {
-  return idx === 0
+function onSelectResultRow(row) {
+  selectedResultRow.value = row
+}
+
+function syncSelectedResultRow() {
+  selectedResultRow.value = resultDetail.value?.best_row
+    || resultDetail.value?.rows?.[0]
+    || null
 }
 
 function signClass(value) {
@@ -1096,6 +1061,7 @@ async function selectJob(jobId, { scrollDetail = false } = {}) {
         const resultRes = await getPortfolioResearchResults(jobId)
         if (seq !== selectSeq) return
         resultDetail.value = resultRes.data
+        syncSelectedResultRow()
       } catch (err) {
         if (seq !== selectSeq) return
         if (selectedJob.value?.status === 'completed') {
@@ -1104,6 +1070,7 @@ async function selectJob(jobId, { scrollDetail = false } = {}) {
       }
     } else if (scrollDetail) {
       resultDetail.value = null
+      selectedResultRow.value = null
     }
     if (scrollDetail) {
       await nextTick()
@@ -1220,7 +1187,10 @@ async function publish(status) {
   message.value = ''
   errorMessage.value = ''
   try {
-    const res = await publishPortfolioResearchResult(resultDetail.value.result_id, { status })
+    const res = await publishPortfolioResearchResult(resultDetail.value.result_id, {
+      status,
+      selected_row: selectedResultRow.value || resultDetail.value?.best_row || null,
+    })
     if (res.data?.attached_to_existing) {
       message.value = `参数已存在，已作为 evidence 附加到预设 ${res.data?.preset?.preset_id}`
     } else {
