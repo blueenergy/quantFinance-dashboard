@@ -7,6 +7,7 @@
 
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { waitForChartDom } from '../utils/chartDom'
 import { buildShenwanKlineOption } from '../utils/echarts/shenwanKlineOption'
 
 const props = defineProps({
@@ -66,6 +67,8 @@ async function ensureChart() {
     echarts = mod.default || mod
   }
   if (!chart) {
+    const ready = await waitForChartDom(chartRef.value)
+    if (!ready || !chartRef.value) return null
     chart = echarts.init(chartRef.value, 'dark')
   }
   return chart

@@ -231,6 +231,7 @@
 <script setup>
 import * as echarts from 'echarts'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { waitForChartDom } from '../../utils/chartDom'
 import {
   holderTrendClass,
   fmtPct,
@@ -281,11 +282,13 @@ function holderNumQoq(idx) {
 }
 
 function renderShareholderCharts() {
-  renderHolderNumberChart()
-  renderHkHoldChart()
+  return Promise.all([
+    renderHolderNumberChart(),
+    renderHkHoldChart(),
+  ])
 }
 
-function renderHolderNumberChart() {
+async function renderHolderNumberChart() {
   const rows = props.holderNumbers
     .slice(0, 12)
     .reverse()
@@ -301,7 +304,11 @@ function renderHolderNumberChart() {
     }
     return
   }
-  if (!holderNumberChart) holderNumberChart = echarts.init(holderNumberChartRef.value)
+  if (!holderNumberChart) {
+    const ready = await waitForChartDom(holderNumberChartRef.value)
+    if (!ready || !holderNumberChartRef.value) return
+    holderNumberChart = echarts.init(holderNumberChartRef.value)
+  }
   holderNumberChart.setOption({
     backgroundColor: 'transparent',
     grid: { left: 44, right: 18, top: 20, bottom: 28 },
@@ -344,7 +351,7 @@ function renderHolderNumberChart() {
   holderNumberChart.resize()
 }
 
-function renderHkHoldChart() {
+async function renderHkHoldChart() {
   const rows = props.hkHold
     .slice(0, 12)
     .reverse()
@@ -360,7 +367,11 @@ function renderHkHoldChart() {
     }
     return
   }
-  if (!hkHoldChart) hkHoldChart = echarts.init(hkHoldChartRef.value)
+  if (!hkHoldChart) {
+    const ready = await waitForChartDom(hkHoldChartRef.value)
+    if (!ready || !hkHoldChartRef.value) return
+    hkHoldChart = echarts.init(hkHoldChartRef.value)
+  }
   hkHoldChart.setOption({
     backgroundColor: 'transparent',
     grid: { left: 42, right: 18, top: 20, bottom: 28 },
@@ -407,7 +418,7 @@ function disposeShareholderCharts() {
 async function renderActiveShareholderCharts() {
   if (!props.active) return
   await nextTick()
-  renderShareholderCharts()
+  await renderShareholderCharts()
 }
 
 watch(

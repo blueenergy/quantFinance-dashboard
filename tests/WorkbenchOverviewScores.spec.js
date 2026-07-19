@@ -29,6 +29,14 @@ const scoreItems = [
 describe('WorkbenchOverviewPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => 640,
+    })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get: () => 360,
+    })
   })
 
   it('emits goto-panel with quote from the detail action', async () => {

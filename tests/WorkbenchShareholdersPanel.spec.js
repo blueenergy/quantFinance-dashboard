@@ -32,6 +32,14 @@ function findButton(wrapper, text) {
 describe('WorkbenchShareholdersPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => 640,
+    })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get: () => 180,
+    })
   })
 
   it('toggles the holder-number detail table', async () => {

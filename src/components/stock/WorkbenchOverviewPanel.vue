@@ -56,6 +56,7 @@
 <script setup>
 import * as echarts from 'echarts'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { waitForChartDom } from '../../utils/chartDom'
 
 const props = defineProps({
   scoreItems: { type: Array, default: () => [] },
@@ -72,15 +73,31 @@ defineEmits(['goto-panel'])
 
 const radarRef = ref(null)
 let radarChart = null
+let resizeObserver = null
 
-function renderRadar() {
+async function ensureRadarChart() {
+  if (!radarRef.value) return null
+  if (!radarChart) {
+    const ready = await waitForChartDom(radarRef.value)
+    if (!ready || !radarRef.value) return null
+    radarChart = echarts.init(radarRef.value)
+    if (typeof ResizeObserver !== 'undefined' && !resizeObserver) {
+      resizeObserver = new ResizeObserver(() => radarChart?.resize())
+      resizeObserver.observe(radarRef.value)
+    }
+  }
+  return radarChart
+}
+
+async function renderRadar() {
   const items = props.scoreItems.filter((item) => item.score != null)
   if (!radarRef.value || !items.length) {
     radarChart?.clear()
     return
   }
-  if (!radarChart) radarChart = echarts.init(radarRef.value)
-  radarChart.setOption({
+  const chart = await ensureRadarChart()
+  if (!chart) return
+  chart.setOption({
     backgroundColor: 'transparent',
     tooltip: { trigger: 'item' },
     radar: {
@@ -102,13 +119,13 @@ function renderRadar() {
       }],
     }],
   })
-  radarChart.resize()
+  chart.resize()
 }
 
 async function renderActiveRadar() {
   if (!props.active) return
   await nextTick()
-  renderRadar()
+  await renderRadar()
 }
 
 watch(
@@ -120,6 +137,8 @@ watch(
 onMounted(renderActiveRadar)
 
 onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
   radarChart?.dispose()
   radarChart = null
 })
