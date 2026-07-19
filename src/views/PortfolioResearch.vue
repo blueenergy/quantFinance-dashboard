@@ -198,6 +198,7 @@
                     <tr>
                       <th>Rank</th>
                       <th v-if="showScoreColumn">Score</th>
+                      <th v-if="showTrailingStopColumn">止盈</th>
                       <th>Variant</th>
                       <th>TopN</th>
                       <th>收益</th>
@@ -219,6 +220,7 @@
                         <span v-if="isSelectedResultRow(row, idx)" class="selected-badge">已选</span>
                       </td>
                       <td v-if="showScoreColumn">{{ row.score_variant || row.score_column || '-' }}</td>
+                      <td v-if="showTrailingStopColumn">{{ formatTrailingStopCell(row.trailing_stop_pct) }}</td>
                       <td>{{ row.variant || '-' }}</td>
                       <td>{{ row.top_n }}</td>
                       <td>{{ pct(row.cumulative_return) }}</td>
@@ -335,8 +337,8 @@
             </label>
             <label>
               浮动止盈
-              <input v-model.number="form.trailing_stop_pct" type="number" min="0" max="1" step="0.01" placeholder="0.15" />
-              <small class="field-hint">峰值回撤比例，0 或留空关闭；回测已支持，实盘监控二期</small>
+              <input v-model="form.trailing_stop_pcts" placeholder="0,0.1,0.15,0.2" />
+              <small class="field-hint">逗号分隔多档 A/B，0 表示关闭；与 CLI --trailing-stop-pcts 一致</small>
             </label>
           </div>
         </div>
@@ -559,7 +561,7 @@ function defaultFormState() {
     stamp_tax_rate: 0.0005,
     transfer_fee_rate: 0,
     initial_capital: 1_000_000,
-    trailing_stop_pct: 0.15,
+    trailing_stop_pcts: '0,0.15',
   }
 }
 
@@ -567,6 +569,10 @@ const form = ref(defaultFormState())
 
 const resultRows = computed(() => resultDetail.value?.rows || [])
 const showScoreColumn = computed(() => new Set(resultRows.value.map((row) => row.score_variant)).size > 1)
+const showTrailingStopColumn = computed(() => {
+  const values = new Set(resultRows.value.map((row) => (row.trailing_stop_pct == null || row.trailing_stop_pct === 0 ? 0 : row.trailing_stop_pct)))
+  return values.size > 1
+})
 const candidateConfig = computed(() => resultDetail.value?.candidate_strategy_config || selectedJob.value?.candidate_strategy_config)
 const researchParamRows = computed(() => buildResearchParamRows(selectedJob.value))
 const publishedPresetId = computed(() => resultDetail.value?.published_preset_id || selectedJob.value?.published_preset_id || '')
@@ -634,19 +640,19 @@ function todayInputDate() {
 }
 
 function buildFormPayload() {
+  const { trailing_stop_pcts, ...formRest } = form.value
   const payload = {
-    ...form.value,
+    ...formRest,
     name: form.value.name || defaultResearchName(form.value.universe_index),
     growth_cycle_weights: parseCsvNumbers(form.value.growth_cycle_weights, String),
     top_n_values: parseCsvNumbers(form.value.top_n_values, Number),
     active_caps: parseCsvNumbers(form.value.active_caps, Number),
     rebalance_interval_days: [Number(form.value.horizon)],
+    trailing_stop_pcts: parseCsvNumbers(trailing_stop_pcts, Number),
     force: true,
   }
   if (payload.index_benchmark_symbol == null) delete payload.index_benchmark_symbol
   if (payload.cash_buffer == null) delete payload.cash_buffer
-  const tsp = Number(form.value.trailing_stop_pct)
-  payload.trailing_stop_pct = Number.isFinite(tsp) && tsp > 0 ? tsp : null
   return payload
 }
 
@@ -712,6 +718,27 @@ function formatListForInput(value) {
   if (Array.isArray(value)) return value.map(String).join(',')
   if (value == null || value === '') return ''
   return String(value)
+}
+
+function formatTrailingStopPctsForInput(params) {
+  if (Array.isArray(params?.trailing_stop_pcts) && params.trailing_stop_pcts.length) {
+    return params.trailing_stop_pcts.map((value) => (value === 0 || value === 0.0 ? '0' : String(value))).join(',')
+  }
+  if (params?.trailing_stop_pct == null) return '0'
+  return String(params.trailing_stop_pct)
+}
+
+function formatTrailingStopCell(value) {
+  if (value == null || value === 0 || value === 0.0) return '关闭'
+  return pct(value)
+}
+
+function formatTrailingStopParamValue(params) {
+  if (Array.isArray(params?.trailing_stop_pcts) && params.trailing_stop_pcts.length) {
+    return params.trailing_stop_pcts.map((value) => (value === 0 || value === 0.0 ? '关闭' : pct(value))).join(', ')
+  }
+  if (params?.trailing_stop_pct == null) return '-'
+  return params.trailing_stop_pct === 0 ? '关闭' : pct(params.trailing_stop_pct)
 }
 
 function withRerunNameSuffix(baseName) {
@@ -897,7 +924,7 @@ function buildResearchParamRows(job) {
     { key: 'index_benchmark_symbol', label: 'benchmark', value: params.index_benchmark_symbol || '-' },
     { key: 'cash_buffer', label: 'cash_buffer', value: pct(params.cash_buffer) },
     { key: 'initial_capital', label: 'initial_capital', value: money(params.initial_capital) },
-    { key: 'trailing_stop_pct', label: 'trailing_stop_pct', value: params.trailing_stop_pct == null ? '-' : pct(params.trailing_stop_pct) },
+    { key: 'trailing_stop_pcts', label: 'trailing_stop', value: formatTrailingStopParamValue(params) },
     { key: 'force', label: 'force', value: formatBool(params.force) },
   ]
   return rows.map((row) => ({ ...row, value: row.value || '-' }))
@@ -1160,7 +1187,7 @@ function loadParamsFromSelectedJob() {
     stamp_tax_rate: params.stamp_tax_rate ?? form.value.stamp_tax_rate,
     transfer_fee_rate: params.transfer_fee_rate ?? form.value.transfer_fee_rate,
     initial_capital: params.initial_capital ?? form.value.initial_capital,
-    trailing_stop_pct: params.trailing_stop_pct ?? form.value.trailing_stop_pct,
+    trailing_stop_pcts: formatTrailingStopPctsForInput(params) || form.value.trailing_stop_pcts,
     index_benchmark_symbol: params.index_benchmark_symbol,
     cash_buffer: params.cash_buffer,
   }
