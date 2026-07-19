@@ -85,9 +85,11 @@
       <TrailingStopMonitorPanel
         v-if="!isLivePortfolio"
         :latest-run="timelineData?.latest_trailing_stop_run"
+        :trailing-stop-setting="timelineData?.trailing_stop_setting"
         :plan-id="selectedLatestPlanId"
         :default-expanded="trailingStopDefaultExpanded"
         :triggers-only="trailingStopTriggersOnly"
+        @setting-updated="refreshDetail"
       />
 
       <PlanReviewPanel

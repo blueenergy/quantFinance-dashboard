@@ -160,6 +160,10 @@ export function getTrailingStopRun(runId) {
   return request({ url: `/portfolio-plans/trailing-stop-runs/${encodeURIComponent(runId)}`, method: 'get' })
 }
 
+export function updatePortfolioPlanTrailingStop(planId, data) {
+  return request({ url: `/portfolio-plans/plans/${planId}/trailing-stop`, method: 'put', data })
+}
+
 // Enqueues a manual-rebalance generation task; poll the returned task_id via
 // getPortfolioPlanGenerationTask until status === 'completed'.
 export function createManualRebalancePlan(data) {
