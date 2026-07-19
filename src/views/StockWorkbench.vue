@@ -1,56 +1,14 @@
 <template>
   <div class="stock-workbench">
-    <section class="workbench-search">
-      <div>
-        <p class="eyebrow">Stock Workbench</p>
-        <h2>股票研究工作台</h2>
-        <p>以单只股票为中心，集中查看量化评分、财务快照和 AI 深度分析。</p>
-      </div>
-      <div class="stock-input-panel">
-        <div class="stock-code-row">
-          <StockSearchInput
-            v-model="directSymbol"
-            input-id="stock-workbench-symbol-input"
-            label="输入股票代码 / 名称 / 拼音"
-            placeholder="例如 600519、平安银行、PAYH、600519.SH"
-            density="comfortable"
-            bg-color="rgba(255,255,255,.06)"
-            input-class="stock-code-input"
-            @select="selectSearchCandidate"
-            @submit="submitDirectSymbol"
-          />
-          <v-btn
-            color="primary"
-            size="large"
-            :loading="loading"
-            @click="submitDirectSymbol"
-          >
-            加载工作台
-          </v-btn>
-        </div>
-        <div class="quick-symbols">
-          <span>快速示例</span>
-          <button type="button" @click="loadSymbol('600519.SH')">600519.SH</button>
-          <button type="button" @click="loadSymbol('000858.SZ')">000858.SZ</button>
-          <button type="button" @click="loadSymbol('000001.SZ')">000001.SZ</button>
-        </div>
-        <div v-if="recentStocks.length" class="quick-symbols recent-symbols">
-          <span>最近使用</span>
-          <button
-            v-for="item in recentStocks"
-            :key="item.symbol"
-            type="button"
-            class="recent-stock-btn"
-            :title="item.symbol"
-            @click="loadSymbol(item.symbol)"
-          >
-            <strong>{{ item.name || item.symbol }}</strong>
-            <small v-if="item.name">{{ item.symbol }}</small>
-          </button>
-          <button type="button" class="clear-recent-btn" @click="clearRecentSymbols">清空</button>
-        </div>
-      </div>
-    </section>
+    <WorkbenchSearchBar
+      v-model="directSymbol"
+      :loading="loading"
+      :recent-stocks="recentStocks"
+      @select="selectSearchCandidate"
+      @submit="submitDirectSymbol"
+      @load-symbol="loadSymbol"
+      @clear-recent="clearRecentSymbols"
+    />
 
     <v-alert
       v-if="error"
@@ -67,57 +25,26 @@
     </section>
 
     <template v-if="payload">
-      <section class="hero-card">
-        <div class="hero-main">
-          <p class="eyebrow">{{ stockIndustry || '行业未覆盖' }}</p>
-          <h1>{{ stockName || payload.symbol }} <span>{{ stockSymbol }}</span></h1>
-          <div class="hero-tags">
-            <span v-if="stockIndustryL2">{{ stockIndustryL2 }}</span>
-            <span v-if="stockIndustryL3">{{ stockIndustryL3 }}</span>
-            <span v-for="code in indexCodes" :key="code">{{ code }}</span>
-          </div>
-          <div class="section-status-row">
-            <button
-              v-for="item in sectionStatusItems"
-              :key="item.key"
-              type="button"
-              class="section-status-chip"
-              :class="{ 'is-missing': !item.found, 'is-stale': item.stale }"
-              :title="item.title"
-              @click="activePanel = item.panel"
-            >
-              <span>{{ item.label }}</span>
-              <strong>{{ item.found ? '已覆盖' : '暂无' }}</strong>
-              <small v-if="item.asOf">{{ item.asOf }}</small>
-            </button>
-          </div>
-        </div>
-        <div class="hero-metrics">
-          <div>
-            <small>最新价</small>
-            <strong>{{ fmtNumber(latestPrice) }}</strong>
-            <span v-if="sectionLoading.quote" class="muted">行情刷新中…</span>
-            <span
-              v-else
-              class="price-change-line"
-              :class="changeClass"
-              :title="priceChangeTitle"
-            >
-              日涨跌幅 {{ fmtPct(latestPctChange) }}
-            </span>
-          </div>
-          <div>
-            <small>综合评分</small>
-            <strong>{{ fmtNumber(currentCompositeScore) }}</strong>
-            <span>{{ ratingText }}</span>
-          </div>
-          <div>
-            <small>数据日期</small>
-            <strong>评分 {{ dataStatus.score_date || '-' }}</strong>
-            <span>行情 {{ dataStatus.quote_date || '未覆盖' }}</span>
-          </div>
-        </div>
-      </section>
+      <WorkbenchHero
+        :name="stockName"
+        :symbol="stockSymbol"
+        :fallback-symbol="payload.symbol"
+        :industry="stockIndustry"
+        :industry-l2="stockIndustryL2"
+        :industry-l3="stockIndustryL3"
+        :index-codes="indexCodes"
+        :section-status-items="sectionStatusItems"
+        :latest-price="latestPrice"
+        :latest-pct-change="latestPctChange"
+        :change-class="changeClass"
+        :price-change-title="priceChangeTitle"
+        :quote-loading="sectionLoading.quote"
+        :composite-score="currentCompositeScore"
+        :rating-text="ratingText"
+        :score-date="dataStatus.score_date"
+        :quote-date="dataStatus.quote_date"
+        @select-panel="activePanel = $event"
+      />
 
       <v-tabs v-model="activePanel" class="workbench-tabs" color="primary">
         <v-tab value="overview">总览</v-tab>
@@ -1487,8 +1414,9 @@ import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
 import GrowthChart from '../components/GrowthChart.vue'
 import MoneyFlowPanel from '../components/MoneyFlowPanel.vue'
 import StockKLineChart from '../components/StockKLineChart.vue'
-import StockSearchInput from '../components/StockSearchInput.vue'
 import StockWorkbenchSwotPanel from '../components/stock/StockWorkbenchSwotPanel.vue'
+import WorkbenchHero from '../components/stock/WorkbenchHero.vue'
+import WorkbenchSearchBar from '../components/stock/WorkbenchSearchBar.vue'
 import {
   blankDash,
   calcYoy,
@@ -3379,22 +3307,12 @@ onBeforeUnmount(() => {
   color: #e2e8f0;
   padding: 6px;
 }
-.workbench-search,
-.hero-card,
 .workbench-card,
 .empty-state {
   background: rgba(15, 23, 42, 0.76);
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 18px;
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
-}
-.workbench-search {
-  align-items: center;
-  display: grid;
-  gap: 20px;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 460px);
-  margin-bottom: 18px;
-  padding: 22px;
 }
 .eyebrow {
   color: #93c5fd;
@@ -3406,61 +3324,6 @@ onBeforeUnmount(() => {
 h1, h2, h3 {
   margin: 0;
 }
-.workbench-search p:not(.eyebrow) {
-  color: #94a3b8;
-  margin: 7px 0 0;
-}
-.stock-input-panel {
-  display: grid;
-  gap: 12px;
-}
-.stock-code-row {
-  align-items: center;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-.stock-code-input {
-  background: rgba(255,255,255,.06);
-  border-radius: 12px;
-}
-.quick-symbols {
-  align-items: center;
-  color: #94a3b8;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 13px;
-}
-.quick-symbols button {
-  background: rgba(96, 165, 250, .14);
-  border: 1px solid rgba(96, 165, 250, .32);
-  border-radius: 999px;
-  color: #bfdbfe;
-  cursor: pointer;
-  padding: 5px 10px;
-}
-.quick-symbols button:hover {
-  background: rgba(96, 165, 250, .24);
-}
-.quick-symbols .recent-stock-btn {
-  align-items: flex-start;
-  border-radius: 12px;
-  display: inline-flex;
-  flex-direction: column;
-  gap: 1px;
-  line-height: 1.2;
-  padding: 6px 10px;
-}
-.recent-stock-btn strong {
-  color: #e0f2fe;
-  font-size: 13px;
-}
-.recent-stock-btn small {
-  color: #93c5fd;
-  font-size: 11px;
-  opacity: .88;
-}
 .empty-state {
   padding: 44px;
   text-align: center;
@@ -3470,78 +3333,12 @@ h1, h2, h3 {
 .muted-block {
   color: #94a3b8;
 }
-.hero-card {
-  display: grid;
-  gap: 22px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  margin-bottom: 16px;
-  padding: 24px;
-}
-.hero-main h1 {
-  color: #f8fafc;
-  font-size: 34px;
-}
-.hero-main h1 span {
-  color: #94a3b8;
-  font-size: 20px;
-  font-weight: 500;
-}
-.hero-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-.hero-tags span,
 .summary-meta span {
   background: rgba(96, 165, 250, .12);
   border: 1px solid rgba(96, 165, 250, .24);
   border-radius: 999px;
   color: #bfdbfe;
   padding: 5px 10px;
-}
-.section-status-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 16px;
-}
-.section-status-chip {
-  background: rgba(34, 197, 94, .10);
-  border: 1px solid rgba(34, 197, 94, .30);
-  border-radius: 14px;
-  color: #dcfce7;
-  cursor: pointer;
-  display: grid;
-  gap: 2px;
-  min-width: 116px;
-  padding: 9px 12px;
-  text-align: left;
-}
-.section-status-chip:hover {
-  background: rgba(34, 197, 94, .18);
-}
-.section-status-chip.is-missing {
-  background: rgba(148, 163, 184, .10);
-  border-color: rgba(148, 163, 184, .24);
-  color: #cbd5e1;
-}
-.section-status-chip.is-stale {
-  background: rgba(245, 158, 11, .12);
-  border-color: rgba(245, 158, 11, .35);
-  color: #fde68a;
-}
-.section-status-chip span {
-  font-size: 12px;
-  opacity: .86;
-}
-.section-status-chip strong {
-  font-size: 14px;
-}
-.section-status-chip small {
-  color: inherit;
-  font-size: 11px;
-  opacity: .72;
 }
 .text-link-button {
   background: transparent;
@@ -3554,38 +3351,24 @@ h1, h2, h3 {
 .text-link-button:hover {
   color: #bfdbfe;
 }
-.hero-metrics {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(3, 130px);
-}
-.hero-metrics div,
 .status-grid div,
 .financial-metrics div {
   background: rgba(30, 41, 59, .78);
   border-radius: 14px;
   padding: 14px;
 }
-.hero-metrics small,
 .status-grid span,
 .financial-metrics span {
   color: #94a3b8;
   display: block;
   font-size: 12px;
 }
-.hero-metrics strong,
 .status-grid strong,
 .financial-metrics strong {
   color: #f8fafc;
   display: block;
   font-size: 22px;
   margin: 4px 0;
-}
-.price-change-line {
-  cursor: help;
-  display: block;
-  font-size: 12px;
-  line-height: 1.35;
 }
 .is-up {
   color: #ef4444;
@@ -4228,16 +4011,8 @@ pre {
   padding: 18px;
 }
 @media (max-width: 980px) {
-  .workbench-search,
-  .hero-card,
   .panel-grid,
   .panel-grid--overview {
-    grid-template-columns: 1fr;
-  }
-  .hero-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .stock-code-row {
     grid-template-columns: 1fr;
   }
 }
