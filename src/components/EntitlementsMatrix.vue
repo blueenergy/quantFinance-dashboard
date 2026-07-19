@@ -106,8 +106,7 @@
 
 <script>
 import { ref, reactive, onMounted } from 'vue'
-
-const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+import request from '../utils/request'
 
 const TIER_LABELS = {
   free: '免费',
@@ -205,15 +204,10 @@ export default {
       ready.value = false
       saveMsg.value = ''
       try {
-        const token = localStorage.getItem('access_token')
-        const headers = {}
-        if (token) headers.Authorization = `Bearer ${token}`
-        const res = await fetch(`${API_BASE}/admin/entitlements-matrix`, { headers })
-        if (!res.ok) {
-          loadError.value = `加载失败 (${res.status})`
-          return
-        }
-        const body = await res.json()
+        const body = await request({
+          method: 'get',
+          url: '/admin/entitlements-matrix',
+        })
         if (!body.success || !body.data?.registry || !body.data?.categories) {
           loadError.value = '响应格式异常'
           return
@@ -228,7 +222,11 @@ export default {
         hydrateReactive(merged)
         ready.value = true
       } catch (e) {
-        loadError.value = e.message || '加载失败'
+        if (e.response?.status) {
+          loadError.value = `加载失败 (${e.response.status})`
+        } else {
+          loadError.value = e.message || '加载失败'
+        }
       }
     }
 
@@ -236,23 +234,11 @@ export default {
       saveMsg.value = ''
       saving.value = true
       try {
-        const token = localStorage.getItem('access_token')
-        const headers = { 'Content-Type': 'application/json' }
-        if (token) headers.Authorization = `Bearer ${token}`
-        const res = await fetch(`${API_BASE}/admin/entitlements-matrix`, {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({ cells: payloadFromCells() }),
+        const body = await request({
+          method: 'put',
+          url: '/admin/entitlements-matrix',
+          data: { cells: payloadFromCells() },
         })
-        const body = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          saveOk.value = false
-          saveMsg.value =
-            (typeof body.detail === 'string' ? body.detail : null) ||
-            body.message ||
-            `保存失败 (${res.status})`
-          return
-        }
         if (!body.success) {
           saveOk.value = false
           saveMsg.value = body.message || '保存失败'
@@ -263,7 +249,13 @@ export default {
         if (body.data?.cells) hydrateReactive(deepCloneCells(body.data.cells))
       } catch (e) {
         saveOk.value = false
-        saveMsg.value = e.message || '保存失败'
+        const data = e.response?.data || {}
+        saveMsg.value =
+          (typeof data.detail === 'string' ? data.detail : null) ||
+          data.message ||
+          (e.response?.status ? `保存失败 (${e.response.status})` : null) ||
+          e.message ||
+          '保存失败'
       } finally {
         saving.value = false
       }

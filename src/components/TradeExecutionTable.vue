@@ -340,8 +340,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
 import * as tradeApi from '../api/tradeExecution.js';
-
-const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+import request from '../utils/request'
 
 // Reactive data
 const trades = ref([]);
@@ -567,13 +566,7 @@ const availableStrategies = ref([]);
 // Load strategy keys and metadata in one request
 async function loadStrategies() {
   try {
-    const token = localStorage.getItem('access_token')
-    const response = await fetch(`${API_BASE}/strategy/strategies`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-
-    if (!response.ok) throw new Error('Failed to load strategies')
-    const strategiesData = await response.json()
+    const strategiesData = await request.get('/strategy/strategies')
     const strategyList = strategiesData.strategies || []
 
     availableStrategies.value = strategyList

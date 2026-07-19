@@ -140,8 +140,23 @@
 
 <script>
 import { ref, onMounted, watch } from 'vue'
+import request from '../utils/request'
 
-const API_BASE = import.meta.env.VITE_API_BASE || "/api"
+function extractErrorMessage(err) {
+  const data = err.response?.data
+  if (typeof data === 'string') {
+    if (data.includes('Internal Server Error')) return '服务器内部错误'
+    if (data.length > 100) return '请求失败，请检查服务器状态'
+    return data || '未知错误'
+  }
+  if (data && typeof data === 'object') {
+    return data.detail || data.message || '未知错误'
+  }
+  if (err.response?.status) {
+    return `HTTP ${err.response.status}`
+  }
+  return err.message || '未知错误'
+}
 
 export default {
   name: 'UpgradeRequest',
@@ -264,18 +279,11 @@ export default {
     // 加载服务级别定义
     const loadServiceLevels = async () => {
       try {
-        const token = localStorage.getItem('access_token')
-        const headers = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-        
-        const response = await fetch(`${API_BASE}/permissions/service-levels`, {
-          headers
+        const data = await request({
+          method: 'get',
+          url: '/permissions/service-levels',
         })
-        
-        if (response.ok) {
-          const data = await response.json()
-          serviceLevels.value = data.service_levels
-        }
+        serviceLevels.value = data.service_levels
       } catch (error) {
         // 加载失败，使用默认值
       }
@@ -284,10 +292,6 @@ export default {
     // 提交升级申请
     const submitUpgradeRequest = async () => {
       try {
-        const token = localStorage.getItem('access_token')
-        const headers = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-        
         const currentUsername = props.currentUser.username || props.currentUser.name
         if (!currentUsername) {
           upgradeRequestResult.value = '用户信息不完整，无法提交升级申请'
@@ -295,55 +299,21 @@ export default {
           return
         }
         
-        const response = await fetch(`${API_BASE}/permissions/upgrade-requests`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
+        const result = await request({
+          method: 'post',
+          url: '/permissions/upgrade-requests',
+          data: {
             username: currentUsername,
             target_service_level: targetServiceLevel.value,
-            reason: upgradeReason.value
-          })
+            reason: upgradeReason.value,
+          },
         })
-        
-        // Check if response is ok before trying to parse JSON
-        if (response.ok) {
-          const result = await response.json()
-          upgradeRequestResult.value = result.message
-          upgradeRequestSuccess.value = true
-          // 重新加载用户申请记录
-          await loadUserUpgradeRequests()
-          // 清空表单
-          upgradeReason.value = ''
-        } else {
-          // 先克隆响应以便可以多次读取
-          const responseClone = response.clone()
-          let errorMessage = '未知错误'
-          
-          // 首先尝试作为JSON解析
-          try {
-            const errorResult = await response.json()
-            errorMessage = errorResult.detail || errorResult.message || '未知错误'
-          } catch {
-            // 如果JSON解析失败，使用克隆的响应读取文本
-            try {
-              const textContent = await responseClone.text()
-              // 提取HTML中的错误消息或使用通用消息
-              if (textContent.includes('Internal Server Error')) {
-                errorMessage = '服务器内部错误'
-              } else if (textContent.length > 100) {
-                errorMessage = '请求失败，请检查服务器状态'
-              } else {
-                errorMessage = textContent || '未知错误'
-              }
-            } catch {
-              errorMessage = `HTTP ${response.status}: ${response.statusText}`
-            }
-          }
-          upgradeRequestResult.value = `申请失败: ${errorMessage}`
-          upgradeRequestSuccess.value = false
-        }
+        upgradeRequestResult.value = result.message
+        upgradeRequestSuccess.value = true
+        await loadUserUpgradeRequests()
+        upgradeReason.value = ''
       } catch (error) {
-        upgradeRequestResult.value = `申请失败: ${error.message}`
+        upgradeRequestResult.value = `申请失败: ${extractErrorMessage(error)}`
         upgradeRequestSuccess.value = false
       }
     }
@@ -353,19 +323,11 @@ export default {
       if (!isCurrentUserAdmin.value) return
       
       try {
-        const token = localStorage.getItem('access_token')
-        const headers = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-        
-        const response = await fetch(`${API_BASE}/permissions/upgrade-requests`, {
-          headers
+        const data = await request({
+          method: 'get',
+          url: '/permissions/upgrade-requests',
         })
-        
-        if (response.ok) {
-          const data = await response.json()
-          // 只显示待处理的申请
-          upgradeRequests.value = data.requests.filter(req => req.status === 'pending')
-        }
+        upgradeRequests.value = data.requests.filter(req => req.status === 'pending')
       } catch (error) {
         // 加载失败
       }
@@ -374,22 +336,14 @@ export default {
     // 加载用户自己的升级申请记录
     const loadUserUpgradeRequests = async () => {
       try {
-        const token = localStorage.getItem('access_token')
-        const headers = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-        
-        const response = await fetch(`${API_BASE}/permissions/upgrade-requests`, {
-          headers
+        const data = await request({
+          method: 'get',
+          url: '/permissions/upgrade-requests',
         })
-        
-        if (response.ok) {
-          const data = await response.json()
-          // 只显示当前用户的申请
-          const currentUsername = props.currentUser.username || props.currentUser.name
-          userUpgradeRequests.value = data.requests.filter(
-            req => req.username === currentUsername
-          ).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) // 按时间倒序
-        }
+        const currentUsername = props.currentUser.username || props.currentUser.name
+        userUpgradeRequests.value = data.requests.filter(
+          req => req.username === currentUsername
+        ).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       } catch (error) {
         // 加载失败
       }
@@ -400,59 +354,22 @@ export default {
       if (!isCurrentUserAdmin.value) return
       
       try {
-        const token = localStorage.getItem('access_token')
-        const headers = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-        
-        const response = await fetch(`${API_BASE}/permissions/upgrade-requests/${requestId}`, {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({
+        const result = await request({
+          method: 'put',
+          url: `/permissions/upgrade-requests/${requestId}`,
+          data: {
             status: status,
-            processed_by: props.currentUser.username
-          })
+            processed_by: props.currentUser.username,
+          },
         })
-        
-        // Check if response is ok before trying to parse JSON
-        if (response.ok) {
-          const result = await response.json()
-          // 更新本地列表
-          if (status === 'approved') {
-            upgradeRequestResult.value = `申请已批准: ${result.message}`
-          } else {
-            upgradeRequestResult.value = `申请已拒绝: ${result.message}`
-          }
-          // 重新加载请求列表
-          await loadUpgradeRequests()
+        if (status === 'approved') {
+          upgradeRequestResult.value = `申请已批准: ${result.message}`
         } else {
-          // 先克隆响应以便可以多次读取
-          const responseClone = response.clone()
-          let errorMessage = '未知错误'
-          
-          // 首先尝试作为JSON解析
-          try {
-            const errorResult = await response.json()
-            errorMessage = errorResult.detail || errorResult.message || '未知错误'
-          } catch {
-            // 如果JSON解析失败，使用克隆的响应读取文本
-            try {
-              const textContent = await responseClone.text()
-              // 提取HTML中的错误消息或使用通用消息
-              if (textContent.includes('Internal Server Error')) {
-                errorMessage = '服务器内部错误'
-              } else if (textContent.length > 100) {
-                errorMessage = '请求失败，请检查服务器状态'
-              } else {
-                errorMessage = textContent || '未知错误'
-              }
-            } catch {
-              errorMessage = `HTTP ${response.status}: ${response.statusText}`
-            }
-          }
-          upgradeRequestResult.value = `处理失败: ${errorMessage}`
+          upgradeRequestResult.value = `申请已拒绝: ${result.message}`
         }
+        await loadUpgradeRequests()
       } catch (error) {
-        upgradeRequestResult.value = `处理失败: ${error.message}`
+        upgradeRequestResult.value = `处理失败: ${extractErrorMessage(error)}`
       }
     }
     

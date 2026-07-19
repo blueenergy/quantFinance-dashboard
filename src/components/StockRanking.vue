@@ -393,11 +393,14 @@ async function fetchScoreDetails(row, category) {
     await Promise.resolve()
     showScoreDetail.value = true
 
-    const params = new URLSearchParams({ symbol: row.symbol, category })
-    if (row.score_date) params.append('score_date', row.score_date)
-    if (category === 'composite') params.append('strategy', getEffectiveStrategyFor(row.symbol))
-    const res = await fetch(`/api/stock-score-detail?${params.toString()}`)
-    const json = await res.json()
+    const params = { symbol: row.symbol, category }
+    if (row.score_date) params.score_date = row.score_date
+    if (category === 'composite') params.strategy = getEffectiveStrategyFor(row.symbol)
+    const json = await request({
+      url: '/stock-score-detail',
+      method: 'get',
+      params,
+    })
     if (json && json.success) {
       scoreDetailData.value = json.data.details
       scoreDetailWeights.value = json.data.weights || {}

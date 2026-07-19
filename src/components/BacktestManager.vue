@@ -378,6 +378,7 @@ import { ref, onMounted, computed, onUnmounted, watch } from 'vue'
 import EquityCurveChart from './EquityCurveChart.vue'
 import MetricsRadarChart from './MetricsRadarChart.vue'
 import StrategyParamsEditor from './StrategyParamsEditor.vue'
+import request from '../utils/request'
 
 export default {
   name: 'BacktestManager',
@@ -387,8 +388,6 @@ export default {
     StrategyParamsEditor
   },
   setup() {
-    const API_BASE = import.meta.env.VITE_API_BASE || '/api'
-    
     // State
     const tasks = ref([])
     const loading = ref(false)
@@ -630,20 +629,14 @@ export default {
     const loadTasks = async () => {
       loading.value = true
       try {
-        const token = localStorage.getItem('access_token')
-        const url = statusFilter.value 
-          ? `${API_BASE}/backtest/tasks?status=${statusFilter.value}`
-          : `${API_BASE}/backtest/tasks`
-        
-        const response = await fetch(url, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+        const params = {}
+        if (statusFilter.value) params.status = statusFilter.value
+
+        tasks.value = await request({
+          method: 'get',
+          url: '/backtest/tasks',
+          params
         })
-        
-        if (!response.ok) throw new Error('Failed to load tasks')
-        
-        tasks.value = await response.json()
         
         // 检查是否有运行中的任务，决定是否启动自动刷新
         const hasRunningTasks = tasks.value.some(task => 
@@ -659,7 +652,7 @@ export default {
         }
       } catch (error) {
         console.error('Error loading tasks:', error)
-        alert('加载任务列表失败')
+        alert(error.response?.data?.detail || '加载任务列表失败')
       } finally {
         loading.value = false
       }
@@ -668,24 +661,18 @@ export default {
     // 加载策略元数据
     const loadStrategyMeta = async () => {
       try {
-        const token = localStorage.getItem('access_token')
-        
         // 加载策略列表
-        const strategiesRes = await fetch(`${API_BASE}/strategy/strategies`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+        const strategiesData = await request({
+          method: 'get',
+          url: '/strategy/strategies'
         })
-        
-        if (!strategiesRes.ok) throw new Error('Failed to load strategies')
-        const strategiesData = await strategiesRes.json()
         const strategies = strategiesData.strategies || []
         
         // 加载策略模板
-        const templatesRes = await fetch(`${API_BASE}/strategy/templates`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+        const templatesData = await request({
+          method: 'get',
+          url: '/strategy/templates'
         })
-        
-        if (!templatesRes.ok) throw new Error('Failed to load templates')
-        const templatesData = await templatesRes.json()
         
         // 处理数据
         availableStrategies.value = strategies
@@ -827,8 +814,6 @@ export default {
       
       creating.value = true
       try {
-        const token = localStorage.getItem('access_token')
-        
         // Use normalized symbol
         const taskData = {
           ...newTask.value,
@@ -840,25 +825,17 @@ export default {
         
         console.log('[DEBUG] Creating backtest task with params:', taskData.strategy_params)
         
-        const response = await fetch(`${API_BASE}/backtest/tasks`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(taskData)
+        await request({
+          method: 'post',
+          url: '/backtest/tasks',
+          data: taskData
         })
-        
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.detail || 'Failed to create task')
-        }
         
         showCreateModal.value = false
         resetNewTask()
         await loadTasks()
       } catch (error) {
-        createError.value = error.message
+        createError.value = error.response?.data?.detail || error.message || 'Failed to create task'
       } finally {
         creating.value = false
       }
@@ -896,20 +873,10 @@ export default {
       result.value = null
       
       try {
-        const token = localStorage.getItem('access_token')
-        const response = await fetch(`${API_BASE}/backtest/results/${taskId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+        result.value = await request({
+          method: 'get',
+          url: `/backtest/results/${taskId}`
         })
-        
-        if (!response.ok) {
-          const errBody = await response.json().catch(() => null)
-          const detail = errBody?.detail || 'Failed to load result'
-          throw new Error(detail)
-        }
-        
-        result.value = await response.json()
         
         // 合并回测结果中的参数到 selectedTask，确保部署时可以获取到参数
         if (result.value.strategy_params) {
@@ -935,7 +902,7 @@ export default {
       } catch (error) {
         console.error('Error loading result:', error)
         // Keep modal open; caller may be polling for completion.
-        resultError.value = error.message || '加载结果失败'
+        resultError.value = error.response?.data?.detail || error.message || '加载结果失败'
       } finally {
         loadingResult.value = false
       }
@@ -976,32 +943,40 @@ export default {
       result.value = null
 
       try {
-        const token = localStorage.getItem('access_token')
         const normSymbol = normalizeSymbolStr(symbol)
         if (!normSymbol) throw new Error('股票代码为空')
         if (!strategy) throw new Error('策略为空')
 
         // 1) Fetch existing backtest-style result from strategy pool trade history
-        let url = `${API_BASE}/strategy-pool/backtest-result?symbol=${encodeURIComponent(normSymbol)}&strategy=${encodeURIComponent(strategy)}`
-        if (preset) url += `&preset=${encodeURIComponent(preset)}`
-        if (signalDate) url += `&end_date=${encodeURIComponent(signalDate)}`
-
-        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
-        if (!res.ok) {
-          const err = await res.json().catch(() => null)
-          throw new Error(err?.detail || '加载回测结果失败')
+        const params = {
+          symbol: normSymbol,
+          strategy
         }
-        const body = await res.json()
+        if (preset) params.preset = preset
+        if (signalDate) params.end_date = signalDate
+
+        const body = await request({
+          method: 'get',
+          url: '/strategy-pool/backtest-result',
+          params
+        })
         result.value = body
 
         // Prefer exact params_used from stored result; fallback to template params.
         let strategyParams = body?.strategy_params
         if (!strategyParams || Object.keys(strategyParams).length === 0) {
-          let paramsUrl = `${API_BASE}/strategy-pool/params?strategy=${encodeURIComponent(strategy)}`
-          if (preset) paramsUrl += `&preset=${encodeURIComponent(preset)}`
-          const paramsRes = await fetch(paramsUrl, { headers: { 'Authorization': `Bearer ${token}` } })
-          const paramsBody = await paramsRes.json().catch(() => null)
-          strategyParams = paramsBody?.params || {}
+          try {
+            const paramsQuery = { strategy }
+            if (preset) paramsQuery.preset = preset
+            const paramsBody = await request({
+              method: 'get',
+              url: '/strategy-pool/params',
+              params: paramsQuery
+            })
+            strategyParams = paramsBody?.params || {}
+          } catch {
+            strategyParams = {}
+          }
         }
 
         // Build a BacktestManager-like selectedTask object for deployToLive()/prefill
@@ -1028,7 +1003,7 @@ export default {
       } catch (e) {
         console.error('[BacktestManager] openExistingBacktestFromStrategyPool failed:', e)
         loadingResult.value = false
-        resultError.value = e?.message || '加载回测结果失败'
+        resultError.value = e?.response?.data?.detail || e?.message || '加载回测结果失败'
       }
     }
 
@@ -1036,20 +1011,15 @@ export default {
       if (!confirm('确定要取消这个任务吗？')) return
       
       try {
-        const token = localStorage.getItem('access_token')
-        const response = await fetch(`${API_BASE}/backtest/tasks/${taskId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+        await request({
+          method: 'delete',
+          url: `/backtest/tasks/${taskId}`
         })
-        
-        if (!response.ok) throw new Error('Failed to cancel task')
         
         await loadTasks()
       } catch (error) {
         console.error('Error cancelling task:', error)
-        alert('取消任务失败')
+        alert(error.response?.data?.detail || '取消任务失败')
       }
     }
 
@@ -1057,24 +1027,15 @@ export default {
       if (!confirm('确定要将该任务重置为等待状态再试一次吗？')) return
 
       try {
-        const token = localStorage.getItem('access_token')
-        const response = await fetch(`${API_BASE}/backtest/tasks/${taskId}/reset`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+        await request({
+          method: 'post',
+          url: `/backtest/tasks/${taskId}/reset`
         })
-
-        if (!response.ok) {
-          const errBody = await response.json().catch(() => null)
-          const detail = errBody?.detail || 'Failed to reset task'
-          throw new Error(detail)
-        }
 
         await loadTasks()
       } catch (error) {
         console.error('Error resetting task:', error)
-        alert(`重置任务失败：${error.message || error}`)
+        alert(`重置任务失败：${error.response?.data?.detail || error.message || error}`)
       }
     }
 
@@ -1082,20 +1043,15 @@ export default {
       if (!confirm('确定要删除这个任务吗？')) return
       
       try {
-        const token = localStorage.getItem('access_token')
-        const response = await fetch(`${API_BASE}/backtest/tasks/${taskId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+        await request({
+          method: 'delete',
+          url: `/backtest/tasks/${taskId}`
         })
-        
-        if (!response.ok) throw new Error('Failed to delete task')
         
         await loadTasks()
       } catch (error) {
         console.error('Error deleting task:', error)
-        alert('删除任务失败')
+        alert(error.response?.data?.detail || '删除任务失败')
       }
     }
 
@@ -1158,33 +1114,23 @@ export default {
       if (!confirmed) return
       
       try {
-        const token = localStorage.getItem('access_token')
-        
         // 调用策略配置 API
-        const response = await fetch(`${API_BASE}/user/watchlist/strategy`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
+        await request({
+          method: 'post',
+          url: '/user/watchlist/strategy',
+          data: {
             symbol: task.symbol,
             strategy: task.strategy_key,  // 后端API期望的字段名是 'strategy'
             enabled: true,
             params: task.strategy_params
-          })
+          }
         })
-        
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.detail || '部署失败')
-        }
         
         alert('✅ 部署成功！策略已配置到实盘')
         showResultModal.value = false
       } catch (error) {
         console.error('Deploy to live error:', error)
-        alert(`❌ 部署失败：${error.message}`)
+        alert(`❌ 部署失败：${error.response?.data?.detail || error.message}`)
       }
     }
 

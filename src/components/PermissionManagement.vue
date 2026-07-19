@@ -97,10 +97,22 @@
 
 <script>
 import { ref, onMounted } from 'vue'
+import request from '../utils/request'
 import UpgradeRequest from './UpgradeRequest.vue'
 import EntitlementsMatrix from './EntitlementsMatrix.vue'
 
-const API_BASE = import.meta.env.VITE_API_BASE || "/api"
+function extractErrorMessage(err) {
+  const data = err.response?.data
+  if (typeof data === 'string') {
+    if (data.includes('Internal Server Error')) return '服务器内部错误'
+    if (data.length > 100) return '请求失败，请检查服务器状态'
+    return data || '未知错误'
+  }
+  if (data && typeof data === 'object') {
+    return data.detail || data.message || '未知错误'
+  }
+  return err.message || '未知错误'
+}
 
 export default {
   name: 'PermissionManagement',
@@ -127,47 +139,29 @@ export default {
     // 获取所有策略权限
     const loadStrategies = async () => {
       try {
-        const token = localStorage.getItem('access_token')
-        const headers = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-        
-        const response = await fetch(`${API_BASE}/permissions/strategies`, {
-          headers
+        const data = await request({
+          method: 'get',
+          url: '/permissions/strategies',
         })
-        
-        if (response.ok) {
-          const data = await response.json()
-          strategies.value = data.strategies || []
-          if (strategies.value.length > 0) {
-            selectedStrategy.value = strategies.value[0].key
-          }
-        } else {
-          console.error('Failed to load strategies:', response.status)
+        strategies.value = data.strategies || []
+        if (strategies.value.length > 0) {
+          selectedStrategy.value = strategies.value[0].key
         }
       } catch (error) {
-        console.error('Error loading strategies:', error)
+        console.error('Failed to load strategies:', error.response?.status || error)
       }
     }
     
     // 获取服务级别定义
     const loadServiceLevels = async () => {
       try {
-        const token = localStorage.getItem('access_token')
-        const headers = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-        
-        const response = await fetch(`${API_BASE}/permissions/service-levels`, {
-          headers
+        const data = await request({
+          method: 'get',
+          url: '/permissions/service-levels',
         })
-        
-        if (response.ok) {
-          const data = await response.json()
-          serviceLevels.value = data.service_levels || {}
-        } else {
-          console.error('Failed to load service levels:', response.status)
-        }
+        serviceLevels.value = data.service_levels || {}
       } catch (error) {
-        console.error('Error loading service levels:', error)
+        console.error('Failed to load service levels:', error.response?.status || error)
       }
     }
     
@@ -179,42 +173,14 @@ export default {
       }
       
       try {
-        const token = localStorage.getItem('access_token')
-        const headers = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-        
-        const response = await fetch(`${API_BASE}/permissions/user/${username.value}`, {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({
-            service_level: selectedUserLevel.value
-          })
+        await request({
+          method: 'put',
+          url: `/permissions/user/${username.value}`,
+          data: { service_level: selectedUserLevel.value },
         })
-        
-        // Check if response is ok before trying to parse JSON
-        if (response.ok) {
-          const result = await response.json()
-          userPermissionResult.value = `用户 ${username.value} 权限已更新为 ${selectedUserLevel.value}`
-        } else {
-          // Try to parse error response as JSON, fallback to text if it's not JSON
-          let errorMessage = '未知错误'
-          try {
-            const errorResult = await response.json()
-            errorMessage = errorResult.detail || errorResult.message || '未知错误'
-          } catch {
-            // If response is not JSON (e.g., HTML error page), get text content
-            errorMessage = await response.text()
-            // Extract error message from HTML if possible, or use generic message
-            if (errorMessage.includes('Internal Server Error')) {
-              errorMessage = '服务器内部错误'
-            } else if (errorMessage.length > 100) {
-              errorMessage = '请求失败，请检查服务器状态'
-            }
-          }
-          userPermissionResult.value = `更新失败: ${errorMessage}`
-        }
+        userPermissionResult.value = `用户 ${username.value} 权限已更新为 ${selectedUserLevel.value}`
       } catch (error) {
-        userPermissionResult.value = `更新失败: ${error.message}`
+        userPermissionResult.value = `更新失败: ${extractErrorMessage(error)}`
       }
     }
     
@@ -226,44 +192,15 @@ export default {
       }
       
       try {
-        const token = localStorage.getItem('access_token')
-        const headers = { 'Content-Type': 'application/json' }
-        if (token) headers['Authorization'] = `Bearer ${token}`
-        
-        const response = await fetch(`${API_BASE}/permissions/strategy/${selectedStrategy.value}`, {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({
-            min_service_level: selectedStrategyLevel.value
-          })
+        await request({
+          method: 'put',
+          url: `/permissions/strategy/${selectedStrategy.value}`,
+          data: { min_service_level: selectedStrategyLevel.value },
         })
-        
-        // Check if response is ok before trying to parse JSON
-        if (response.ok) {
-          const result = await response.json()
-          strategyPermissionResult.value = `策略 ${selectedStrategy.value} 权限已更新为 ${selectedStrategyLevel.value}`
-          // 重新加载策略列表
-          await loadStrategies()
-        } else {
-          // Try to parse error response as JSON, fallback to text if it's not JSON
-          let errorMessage = '未知错误'
-          try {
-            const errorResult = await response.json()
-            errorMessage = errorResult.detail || errorResult.message || '未知错误'
-          } catch {
-            // If response is not JSON (e.g., HTML error page), get text content
-            errorMessage = await response.text()
-            // Extract error message from HTML if possible, or use generic message
-            if (errorMessage.includes('Internal Server Error')) {
-              errorMessage = '服务器内部错误'
-            } else if (errorMessage.length > 100) {
-              errorMessage = '请求失败，请检查服务器状态'
-            }
-          }
-          strategyPermissionResult.value = `更新失败: ${errorMessage}`
-        }
+        strategyPermissionResult.value = `策略 ${selectedStrategy.value} 权限已更新为 ${selectedStrategyLevel.value}`
+        await loadStrategies()
       } catch (error) {
-        strategyPermissionResult.value = `更新失败: ${error.message}`
+        strategyPermissionResult.value = `更新失败: ${extractErrorMessage(error)}`
       }
     }
     

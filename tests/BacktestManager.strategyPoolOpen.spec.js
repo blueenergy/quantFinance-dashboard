@@ -1,15 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+
+const requestMock = vi.fn()
+
+vi.mock('../src/utils/request', () => ({
+  default: (...args) => requestMock(...args),
+}))
+
 import BacktestManager from '../src/components/BacktestManager.vue'
 
-const okJson = (body) => ({
-  ok: true,
-  json: async () => body
-})
+function urlOf(call) {
+  const config = call[0]
+  return typeof config === 'string' ? config : (config?.url || '')
+}
 
 describe('BacktestManager - open from strategy pool', () => {
   beforeEach(() => {
-    vi.restoreAllMocks()
+    requestMock.mockReset()
     localStorage.setItem('access_token', 'test-token')
   })
 
@@ -18,14 +25,14 @@ describe('BacktestManager - open from strategy pool', () => {
   })
 
   it('opens existing strategy-pool result and prefers returned strategy_params (no fallback params call)', async () => {
-    const fetchMock = vi.fn(async (url) => {
-      const u = String(url)
-      if (u.includes('/strategy/strategies')) return okJson({ strategies: [] })
-      if (u.includes('/strategy/templates')) return okJson({ templates: {} })
-      if (u.includes('/backtest/tasks')) return okJson([])
+    requestMock.mockImplementation(async (config) => {
+      const u = urlOf([config])
+      if (u.includes('/strategy/strategies')) return { strategies: [] }
+      if (u.includes('/strategy/templates')) return { templates: {} }
+      if (u.includes('/backtest/tasks')) return []
 
       if (u.includes('/strategy-pool/backtest-result')) {
-        return okJson({
+        return {
           task_id: 'pool_hidden_dragon_dragon_default_000001.SZ_20260109',
           symbol: '000001.SZ',
           strategy_key: 'hidden_dragon',
@@ -37,17 +44,15 @@ describe('BacktestManager - open from strategy pool', () => {
             { date: '20260109', value: 1100000 }
           ],
           created_at: '2026-01-11T00:00:00Z'
-        })
+        }
       }
 
       if (u.includes('/strategy-pool/params')) {
-        return okJson({ success: true, found: true, params: { p: 999 } })
+        return { success: true, found: true, params: { p: 999 } }
       }
 
-      return okJson({})
+      return {}
     })
-
-    vi.stubGlobal('fetch', fetchMock)
 
     const wrapper = mount(BacktestManager, {
       global: {
@@ -89,7 +94,7 @@ describe('BacktestManager - open from strategy pool', () => {
     expect(wrapper.text()).toContain('2025-01-01')
     expect(wrapper.text()).toContain('2026-01-09')
 
-    const calledUrls = fetchMock.mock.calls.map(c => String(c[0]))
+    const calledUrls = requestMock.mock.calls.map(c => urlOf(c))
     expect(calledUrls.some(u => u.includes('/strategy-pool/backtest-result'))).toBe(true)
     // Because strategy_params exists, it should not need the template params endpoint.
     expect(calledUrls.some(u => u.includes('/strategy-pool/params'))).toBe(false)
@@ -98,14 +103,14 @@ describe('BacktestManager - open from strategy pool', () => {
   })
 
   it('falls back to /strategy-pool/params when result has no strategy_params', async () => {
-    const fetchMock = vi.fn(async (url) => {
-      const u = String(url)
-      if (u.includes('/strategy/strategies')) return okJson({ strategies: [] })
-      if (u.includes('/strategy/templates')) return okJson({ templates: {} })
-      if (u.includes('/backtest/tasks')) return okJson([])
+    requestMock.mockImplementation(async (config) => {
+      const u = urlOf([config])
+      if (u.includes('/strategy/strategies')) return { strategies: [] }
+      if (u.includes('/strategy/templates')) return { templates: {} }
+      if (u.includes('/backtest/tasks')) return []
 
       if (u.includes('/strategy-pool/backtest-result')) {
-        return okJson({
+        return {
           task_id: 'pool_hidden_dragon_dragon_default_000001.SZ_20260109',
           symbol: '000001.SZ',
           strategy_key: 'hidden_dragon',
@@ -117,17 +122,15 @@ describe('BacktestManager - open from strategy pool', () => {
             { date: '20260109', value: 1100000 }
           ],
           created_at: '2026-01-11T00:00:00Z'
-        })
+        }
       }
 
       if (u.includes('/strategy-pool/params')) {
-        return okJson({ success: true, found: true, params: { p: 999 } })
+        return { success: true, found: true, params: { p: 999 } }
       }
 
-      return okJson({})
+      return {}
     })
-
-    vi.stubGlobal('fetch', fetchMock)
 
     const wrapper = mount(BacktestManager, {
       global: {
@@ -166,7 +169,7 @@ describe('BacktestManager - open from strategy pool', () => {
     expect(wrapper.text()).toContain('2025-01-01')
     expect(wrapper.text()).toContain('2026-01-09')
 
-    const calledUrls = fetchMock.mock.calls.map(c => String(c[0]))
+    const calledUrls = requestMock.mock.calls.map(c => urlOf(c))
     expect(calledUrls.some(u => u.includes('/strategy-pool/params'))).toBe(true)
 
     wrapper.unmount()
@@ -176,15 +179,13 @@ describe('BacktestManager - open from strategy pool', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-01-11T12:00:00Z'))
 
-    const fetchMock = vi.fn(async (url) => {
-      const u = String(url)
-      if (u.includes('/strategy/strategies')) return okJson({ strategies: [] })
-      if (u.includes('/strategy/templates')) return okJson({ templates: {} })
-      if (u.includes('/backtest/tasks')) return okJson([])
-      return okJson({})
+    requestMock.mockImplementation(async (config) => {
+      const u = urlOf([config])
+      if (u.includes('/strategy/strategies')) return { strategies: [] }
+      if (u.includes('/strategy/templates')) return { templates: {} }
+      if (u.includes('/backtest/tasks')) return []
+      return {}
     })
-
-    vi.stubGlobal('fetch', fetchMock)
 
     const wrapper = mount(BacktestManager, {
       global: {

@@ -528,17 +528,7 @@
 
 <script setup>
 import { computed, ref, reactive, onMounted } from 'vue'
-
-// API base URL
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
-
-// Authentication headers
-function authHeaders() {
-  const token = localStorage.getItem("access_token");
-  const headers = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
-}
+import request from '../utils/request'
 
 // 响应式数据
 const activeTab = ref('summary')
@@ -621,38 +611,32 @@ const manualOrderForm = reactive({
 const signalDetailVisible = ref(false)
 const selectedSignal = ref(null)
 
-// API 方法
+function requestErrorMessage(error) {
+  const detail = error.response?.data?.detail
+  if (typeof detail === 'string' && detail) return detail
+  if (detail != null && typeof detail !== 'object') return String(detail)
+  return error.message || `Request failed: ${error.response?.status ?? 'unknown'}`
+}
+
+// API 方法 — request 已带 baseURL/auth，直接返回 body
 const get = async (endpoint, params = {}) => {
-  const queryParams = new URLSearchParams();
-  Object.keys(params).forEach(key => {
-    if (params[key] !== undefined && params[key] !== null) {
-      queryParams.append(key, params[key]);
-    }
-  });
-  
-  const queryString = queryParams.toString();
-  const url = queryString ? `${API_BASE}${endpoint}?${queryString}` : `${API_BASE}${endpoint}`;
-  
-  const res = await fetch(url, { headers: authHeaders() });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || `Request failed: ${res.status}`);
+  const cleanParams = Object.fromEntries(
+    Object.entries(params).filter(([, v]) => v !== undefined && v !== null)
+  )
+  try {
+    return await request.get(endpoint, { params: cleanParams })
+  } catch (error) {
+    throw new Error(requestErrorMessage(error))
   }
-  return res.json();
-};
+}
 
 const post = async (endpoint, data = {}) => {
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(data)
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || `Request failed: ${res.status}`);
+  try {
+    return await request.post(endpoint, data)
+  } catch (error) {
+    throw new Error(requestErrorMessage(error))
   }
-  return res.json();
-};
+}
 
 // 搜索股票
 const searchStocks = async (query) => {
