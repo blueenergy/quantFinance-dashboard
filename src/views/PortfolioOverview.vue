@@ -378,6 +378,16 @@ import {
 import {
   formatShareDelta,
 } from '../composables/usePortfolioPlanFormat'
+import {
+  cycleProgressPct as calculateCycleProgressPct,
+  executionVenueLabel,
+  foldedTimeline as foldTimeline,
+  formatSyncedAt,
+  portfolioKey,
+  portfolioOptionLabel,
+  trailingStopDefaultExpanded as shouldExpandTrailingStop,
+  trailingStopTriggersOnly as showTrailingStopTriggersOnly,
+} from '../utils/portfolioOverviewFormat'
 import { isSubmittingForKey } from '../utils/scopedSubmitting'
 
 const portfolios = ref([])
@@ -649,102 +659,20 @@ const {
   },
 })
 
-const cycleProgressPct = computed(() => {
-  const cycle = timelineData.value?.current_cycle
-  if (!cycle?.rebalance_days) return 0
-  const elapsed = Number(cycle.elapsed_trading_days || 0)
-  return Math.min(100, Math.round((elapsed / cycle.rebalance_days) * 100))
-})
+const cycleProgressPct = computed(() => calculateCycleProgressPct(timelineData.value))
 
-const trailingStopTriggersOnly = computed(() => {
-  const verbosity = timelineData.value?.latest_trailing_stop_run?.verbosity
-  return verbosity === 'triggers_only'
-})
+const trailingStopTriggersOnly = computed(() => (
+  showTrailingStopTriggersOnly(timelineData.value?.latest_trailing_stop_run)
+))
 
-const trailingStopDefaultExpanded = computed(() => {
-  const run = timelineData.value?.latest_trailing_stop_run
-  if (!run) return false
-  const triggered = Number(run.triggered_count ?? run.summary?.triggered_count ?? 0)
-  return triggered > 0
-})
+const trailingStopDefaultExpanded = computed(() => (
+  shouldExpandTrailingStop(timelineData.value?.latest_trailing_stop_run)
+))
 
-const foldedTimeline = computed(() => {
-  const nodes = timelineData.value?.timeline || []
-  const folded = []
-  let monitorRun = null
-  for (const node of nodes) {
-    const isPassiveMonitor = node.node_type === 'monitor' && !node.action_required
-    if (isPassiveMonitor) {
-      const drift = Number(node.drift_brief?.estimated_turnover || 0)
-      if (!monitorRun) {
-        monitorRun = {
-          type: 'monitor_fold',
-          start: node.date,
-          end: node.date,
-          count: 1,
-          maxDrift: drift,
-        }
-      } else {
-        monitorRun.end = node.date
-        monitorRun.count += 1
-        monitorRun.maxDrift = Math.max(monitorRun.maxDrift, drift)
-      }
-      continue
-    }
-    if (monitorRun) {
-      folded.push(monitorRun)
-      monitorRun = null
-    }
-    folded.push({ type: 'node', node })
-  }
-  if (monitorRun) folded.push(monitorRun)
-  return folded
-})
-
-function portfolioKey(portfolio) {
-  return `${portfolio.strategy_template_id}:${portfolio.params_hash}`
-}
-
-function portfolioOptionLabel(portfolio) {
-  const name = portfolio.strategy_name || portfolio.strategy_template_id || '组合'
-  const params = portfolio.param_summary || '参数未记录'
-  const range = portfolio.first_base_date && portfolio.last_base_date
-    ? `${portfolio.first_base_date}→${portfolio.last_base_date}`
-    : (portfolio.last_base_date || '-')
-  const hash = portfolio.params_hash_short || (portfolio.params_hash ? portfolio.params_hash.slice(0, 8) : '--------')
-  const account = portfolio.securities_account_id
-    ? ` · 账户${portfolio.securities_account_id.slice(-6)}`
-    : ''
-  return `${name} · ${params} · ${range}（${portfolio.plan_count}期${account} · #${hash}）`
-}
-
-function executionVenueLabel(venue) {
-  if (venue === 'live') return '实盘'
-  if (venue === 'paper') return '纸面'
-  return venue || '-'
-}
-
-function shortPlanId(planId) {
-  const text = String(planId || '')
-  if (!text) return '-'
-  if (text.length <= 28) return text
-  return `${text.slice(0, 18)}…${text.slice(-8)}`
-}
-
-function paperExecutionModeLabel(mode) {
-  if (mode === 'auto_shadow') return '自动跟跑'
-  if (mode === 'manual_review') return '人工审核'
-  return mode || '-'
-}
+const foldedTimeline = computed(() => foldTimeline(timelineData.value?.timeline))
 
 function toggleTimelineDetail(planId) {
   expandedTimelinePlanId.value = expandedTimelinePlanId.value === planId ? null : planId
-}
-
-function formatSyncedAt(value) {
-  const seconds = Number(value)
-  if (!Number.isFinite(seconds) || seconds <= 0) return ''
-  return new Date(seconds * 1000).toLocaleString()
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
