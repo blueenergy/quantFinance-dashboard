@@ -169,6 +169,14 @@
               >
                 {{ artifactLoading ? '打开中...' : '打开 HTML 报告' }}
               </button>
+              <button
+                class="danger"
+                :disabled="deleteLoading || selectedJob.status === 'pending' || selectedJob.status === 'running'"
+                :title="deleteDisabledReason"
+                @click="deleteJob"
+              >
+                {{ deleteLoading ? '删除中...' : '删除报告' }}
+              </button>
             </div>
           </div>
 
@@ -412,6 +420,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   createPortfolioResearchJob,
+  deletePortfolioResearchJob,
   getPortfolioResearchComboDetail,
   getPortfolioResearchJob,
   getPortfolioResearchResults,
@@ -425,6 +434,7 @@ const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 const loading = ref(false)
 const submitting = ref(false)
 const rerunLoading = ref(false)
+const deleteLoading = ref(false)
 const publishLoading = ref(false)
 const artifactLoading = ref(false)
 const nameTouched = ref(false)
@@ -527,6 +537,16 @@ const rerunDisabledReason = computed(() => {
     return '任务仍在排队或运行中，完成后可重跑'
   }
   return '用原参数新建一条研究任务，不覆盖当前报告'
+})
+const deleteDisabledReason = computed(() => {
+  const status = selectedJob.value?.status
+  if (status === 'pending' || status === 'running') {
+    return '任务仍在排队或运行中，完成后可删除'
+  }
+  if (selectedJob.value?.published_preset_id || publishedPresetId.value) {
+    return '删除报告与产物；已发布的参数预设会保留'
+  }
+  return '删除任务、结果与 HTML/combos 产物'
 })
 const universePitQualityLabel = computed(() => {
   const quality = selectedJob.value?.data_watermark?.universe_pit_quality
@@ -963,6 +983,37 @@ async function rerunJob() {
   }
 }
 
+async function deleteJob() {
+  if (!selectedJobId.value || !selectedJob.value) return
+  const name = selectedJob.value.name || selectedJobId.value
+  const presetNote = (selectedJob.value.published_preset_id || publishedPresetId.value)
+    ? '\n已发布的参数预设会保留，不会一并删除。'
+    : ''
+  const confirmed = window.confirm(
+    `确认删除研究报告「${name}」？\n将删除任务、结果与 HTML/combos 产物，且不可恢复。${presetNote}`
+  )
+  if (!confirmed) return
+
+  deleteLoading.value = true
+  message.value = ''
+  errorMessage.value = ''
+  try {
+    const res = await deletePortfolioResearchJob(selectedJobId.value)
+    const kept = res.data?.published_preset_kept
+    message.value = kept
+      ? `已删除研究报告 ${selectedJobId.value}（预设 ${kept} 已保留）`
+      : `已删除研究报告 ${selectedJobId.value}`
+    selectedJobId.value = ''
+    selectedJob.value = null
+    resultDetail.value = null
+    await loadJobs()
+  } catch (err) {
+    errorMessage.value = err?.response?.data?.detail || err.message || '删除研究报告失败'
+  } finally {
+    deleteLoading.value = false
+  }
+}
+
 async function publish(status) {
   if (!resultDetail.value?.result_id) return
   publishLoading.value = true
@@ -1178,6 +1229,15 @@ button {
 button:disabled {
   cursor: not-allowed;
   opacity: .55;
+}
+
+button.danger {
+  border-color: #b42318;
+  background: #b42318;
+}
+
+button.danger:disabled {
+  opacity: .45;
 }
 
 .layout {

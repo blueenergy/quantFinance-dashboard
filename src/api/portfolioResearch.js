@@ -12,6 +12,10 @@ export function rerunPortfolioResearchJob(jobId, data = {}) {
   return request({ url: `/portfolio-research/jobs/${jobId}/rerun`, method: 'post', data })
 }
 
+export function deletePortfolioResearchJob(jobId) {
+  return request({ url: `/portfolio-research/jobs/${jobId}`, method: 'delete' })
+}
+
 export function getPortfolioResearchJob(jobId) {
   return request({ url: `/portfolio-research/jobs/${jobId}`, method: 'get' })
 }
