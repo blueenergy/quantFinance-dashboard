@@ -333,6 +333,11 @@
               initial capital
               <input v-model.number="form.initial_capital" type="number" min="0" step="10000" />
             </label>
+            <label>
+              浮动止盈
+              <input v-model.number="form.trailing_stop_pct" type="number" min="0" max="1" step="0.01" placeholder="0.15" />
+              <small class="field-hint">峰值回撤比例，0 或留空关闭；回测已支持，实盘监控二期</small>
+            </label>
           </div>
         </div>
         <footer class="drawer-footer">
@@ -554,6 +559,7 @@ function defaultFormState() {
     stamp_tax_rate: 0.0005,
     transfer_fee_rate: 0,
     initial_capital: 1_000_000,
+    trailing_stop_pct: 0.15,
   }
 }
 
@@ -639,6 +645,8 @@ function buildFormPayload() {
   }
   if (payload.index_benchmark_symbol == null) delete payload.index_benchmark_symbol
   if (payload.cash_buffer == null) delete payload.cash_buffer
+  const tsp = Number(form.value.trailing_stop_pct)
+  payload.trailing_stop_pct = Number.isFinite(tsp) && tsp > 0 ? tsp : null
   return payload
 }
 
@@ -889,6 +897,7 @@ function buildResearchParamRows(job) {
     { key: 'index_benchmark_symbol', label: 'benchmark', value: params.index_benchmark_symbol || '-' },
     { key: 'cash_buffer', label: 'cash_buffer', value: pct(params.cash_buffer) },
     { key: 'initial_capital', label: 'initial_capital', value: money(params.initial_capital) },
+    { key: 'trailing_stop_pct', label: 'trailing_stop_pct', value: params.trailing_stop_pct == null ? '-' : pct(params.trailing_stop_pct) },
     { key: 'force', label: 'force', value: formatBool(params.force) },
   ]
   return rows.map((row) => ({ ...row, value: row.value || '-' }))
@@ -1151,6 +1160,7 @@ function loadParamsFromSelectedJob() {
     stamp_tax_rate: params.stamp_tax_rate ?? form.value.stamp_tax_rate,
     transfer_fee_rate: params.transfer_fee_rate ?? form.value.transfer_fee_rate,
     initial_capital: params.initial_capital ?? form.value.initial_capital,
+    trailing_stop_pct: params.trailing_stop_pct ?? form.value.trailing_stop_pct,
     index_benchmark_symbol: params.index_benchmark_symbol,
     cash_buffer: params.cash_buffer,
   }

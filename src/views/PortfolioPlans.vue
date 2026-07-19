@@ -178,6 +178,11 @@
             <input v-model.number="generateForm.params.cash_buffer" type="number" min="0" max="1" step="0.01" />
           </label>
           <label>
+            浮动止盈
+            <input v-model.number="generateForm.params.trailing_stop_pct" type="number" min="0" max="1" step="0.01" placeholder="0.15" />
+            <small class="field-hint">峰值回撤比例，0 或留空关闭；回测已支持，实盘监控二期</small>
+          </label>
+          <label>
             buy commission
             <input v-model.number="generateForm.params.buy_commission_rate" type="number" min="0" step="0.00001" />
           </label>
@@ -1278,6 +1283,12 @@ function normalizePlanParams(params) {
   next.cycle_weight = roundWeight(1 - growth)
   const capital = Number(next.initial_capital)
   next.initial_capital = Number.isFinite(capital) && capital > 0 ? capital : 1_000_000
+  const trailing = Number(next.trailing_stop_pct)
+  if (!Number.isFinite(trailing) || trailing <= 0) {
+    delete next.trailing_stop_pct
+  } else {
+    next.trailing_stop_pct = Math.min(1, Math.max(0, trailing))
+  }
   for (const [key, fallback] of Object.entries({
     buy_commission_rate: 0.0001,
     sell_commission_rate: 0.0001,
