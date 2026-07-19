@@ -368,12 +368,16 @@ import { useHoldingsOps } from '../composables/useHoldingsOps'
 import { usePlanOps } from '../composables/usePlanOps'
 import { useReselectPlanItems } from '../composables/useReselectPlanItems'
 import {
+  buildPlanReviewRiskSummary,
+  buildPlanSignalMaps,
+  buildPlanTargetRows,
+  executionVenueFromPortfolio,
+  summarizePlanRows,
+  usePlanExecutionState,
+} from '../composables/usePortfolioPlanViewModel'
+import {
   formatShareDelta,
 } from '../composables/usePortfolioPlanFormat'
-import {
-  canExecutePaperNowFromState,
-  paperExecuteReadyTextFromState,
-} from '../utils/paperExecutionEligibility'
 import { isSubmittingForKey } from '../utils/scopedSubmitting'
 
 const portfolios = ref([])
@@ -432,8 +436,9 @@ const openLineageTradePlan = computed(() => {
   }) || null
 })
 
-const isLivePortfolio = computed(() => selectedPortfolio.value?.execution_venue === 'live')
-const isPaperPortfolio = computed(() => selectedPortfolio.value?.execution_venue === 'paper')
+const executionVenue = computed(() => executionVenueFromPortfolio(selectedPortfolio.value))
+const isLivePortfolio = computed(() => Boolean(selectedPortfolio.value) && executionVenue.value === 'live')
+const isPaperPortfolio = computed(() => Boolean(selectedPortfolio.value) && executionVenue.value === 'paper')
 
 const {
   holdingsRisk,
@@ -524,18 +529,28 @@ const operationPlanStatus = computed(() => timelineData.value?.operation_plan?.s
 const selectedPlanStatus = computed(() => latestPlan.value?.status || operationPlanStatus.value || '')
 const selectedPlanExecutionMode = computed(() => latestPlanDetail.value?.execution_mode || 'not_executed')
 const liveExecutionContext = computed(() => latestPlanDetail.value?.live_execution_context || {})
-const selectedPlanHasLiveSignals = computed(() => selectedPlanExecutionMode.value === 'live')
-const selectedPlanHasPublishedLiveSignals = computed(() => (
-  Boolean(latestPlan.value?.live_signals_published_at)
-  || Number(latestPlan.value?.live_signal_count || 0) > 0
-))
-const selectedPlanLiveSignalCount = computed(() => Number(liveExecutionContext.value?.signal_count || 0))
-const selectedPlanActiveLiveSignalCount = computed(() => Number(liveExecutionContext.value?.active_signal_count || 0))
+const {
+  hasPaperExecution,
+  selectedPlanHasLiveSignals,
+  selectedPlanHasPublishedLiveSignals,
+  selectedPlanLiveSignalCount,
+  canExecutePaperNow,
+  canPublishLiveSignals,
+  canCancelCurrentPlan,
+  paperExecuteReadyText,
+  cancelPlanReadyText,
+  selectedPlanExecutionModeLabel,
+} = usePlanExecutionState({
+  plan: latestPlan,
+  planStatus: selectedPlanStatus,
+  executionStatus,
+  executionMode: selectedPlanExecutionMode,
+  liveExecutionContext,
+  venue: executionVenue,
+})
 const latestPlanItems = computed(() => latestPlanDetail.value?.items || [])
 const liveOverlay = computed(() => latestPlanDetail.value?.live_overlay || null)
 const scoreSnapshotStale = computed(() => Boolean(liveOverlay.value?.score_snapshot_stale))
-const paperExecutionCount = computed(() => Number(executionStatus.value?.execution_count || 0))
-const hasPaperExecution = computed(() => Boolean(latestPlan.value?.paper_executed_at) || paperExecutionCount.value > 0)
 const hasApprovedPlanAwaitingAction = computed(() => (
   selectedPlanStatus.value === 'approved'
   && !selectedPlanHasLiveSignals.value
@@ -551,54 +566,11 @@ const forceRebalanceBlockReason = computed(() => {
   }
   return ''
 })
-const canExecutePaperNow = computed(() => canExecutePaperNowFromState({
-  planStatus: selectedPlanStatus.value,
-  hasLiveSignals: selectedPlanHasLiveSignals.value,
-  hasPaperExecution: hasPaperExecution.value,
-  missingExecuteDate: executionStatus.value?.missing_execute_date === true,
-  isPaperPortfolio: isPaperPortfolio.value,
-}))
-const canPublishLiveSignals = computed(() => (
-  isLivePortfolio.value
-  && selectedPlanStatus.value === 'approved'
-  && !selectedPlanHasPublishedLiveSignals.value
-  && !hasPaperExecution.value
-))
-const canCancelCurrentPlan = computed(() => (
-  selectedPlanStatus.value === 'approved'
-  && !hasPaperExecution.value
-))
 const showPlanOpsPanel = computed(() => (
   Boolean(selectedOperationPlanId.value)
   && selectedPlanStatus.value === 'approved'
   && (isPaperPortfolio.value || isLivePortfolio.value)
 ))
-const selectedPlanExecutionModeLabel = computed(() => {
-  if (selectedPlanExecutionMode.value === 'live') {
-    if (selectedPlanActiveLiveSignalCount.value > 0) {
-      return `实盘信号在途 ${selectedPlanActiveLiveSignalCount.value}/${selectedPlanLiveSignalCount.value}`
-    }
-    if (!selectedPlanHasPublishedLiveSignals.value) {
-      return `有历史实盘信号（未标记发布，${selectedPlanLiveSignalCount.value} 条）`
-    }
-    return `有历史实盘信号（无在途，${selectedPlanLiveSignalCount.value} 条）`
-  }
-  if (selectedPlanExecutionMode.value === 'paper') return '已执行 Paper'
-  return '未执行'
-})
-const paperExecuteReadyText = computed(() => paperExecuteReadyTextFromState({
-  hasPaperExecution: hasPaperExecution.value,
-  hasLiveSignals: selectedPlanHasLiveSignals.value,
-  planStatus: selectedPlanStatus.value,
-  executionStatus: executionStatus.value,
-  isPaperPortfolio: isPaperPortfolio.value,
-}))
-const cancelPlanReadyText = computed(() => {
-  if (hasPaperExecution.value) return '该 plan 已执行 Paper，不能作废'
-  if (selectedPlanStatus.value !== 'approved') return '只有 approved plan 可以作废'
-  if (selectedPlanHasLiveSignals.value) return '该 plan 存在实盘信号历史；作废会取消未成交信号，若已有成交后端会拒绝'
-  return '误点确认发布/审批后可作废；作废后状态变为 cancelled'
-})
 const liveAccountOptions = computed(() => securitiesAccounts.value.map((account) => ({
   id: account.id || account._id,
   label: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}`,
@@ -609,76 +581,18 @@ const liveAccountOptions = computed(() => securitiesAccounts.value.map((account)
 // needs_review. The display gating below is purely about *which lifecycle
 // states* should surface this table, not about data availability.
 const planTargetRows = computed(() => (
-  latestPlanItems.value
-    .map((item) => normalizePlanItemRow(item))
-    .filter((item) => item.action !== 'skip')
-    .sort((a, b) => {
-      const order = { buy: 0, sell: 1, hold: 2, skip: 3 }
-      const aScore = Number(a.score_value)
-      const bScore = Number(b.score_value)
-      const aHasScore = Number.isFinite(aScore)
-      const bHasScore = Number.isFinite(bScore)
-      if (aHasScore && bHasScore && bScore !== aScore) return bScore - aScore
-      if (aHasScore !== bHasScore) return aHasScore ? -1 : 1
-      return (order[a.action] ?? 9) - (order[b.action] ?? 9) || String(a.symbol).localeCompare(String(b.symbol))
-    })
+  buildPlanTargetRows(latestPlanItems.value)
 ))
-const holdingPlanRiskBySymbol = computed(() => {
-  const map = {}
-  for (const row of planTargetRows.value) {
-    if (!row?.symbol || !row.ai_risk) continue
-    map[row.symbol] = row.ai_risk
-    const bareSymbol = String(row.symbol).split('.')[0]
-    if (bareSymbol) map[bareSymbol] = row.ai_risk
-  }
-  return map
-})
-const holdingPlanOpportunityBySymbol = computed(() => {
-  const map = {}
-  for (const row of planTargetRows.value) {
-    if (!row?.symbol || !row.ai_opportunity) continue
-    map[row.symbol] = row.ai_opportunity
-    const bareSymbol = String(row.symbol).split('.')[0]
-    if (bareSymbol) map[bareSymbol] = row.ai_opportunity
-  }
-  return map
-})
-const holdingPlanInternalSwotBySymbol = computed(() => {
-  const map = {}
-  for (const row of planTargetRows.value) {
-    if (!row?.symbol || !row.internal_swot) continue
-    map[row.symbol] = row.internal_swot
-    const bareSymbol = String(row.symbol).split('.')[0]
-    if (bareSymbol) map[bareSymbol] = row.internal_swot
-  }
-  return map
-})
-function summarizePlanRows(rows) {
-  return rows.reduce(
-    (acc, row) => {
-      if (row.action === 'buy') acc.buy += 1
-      else if (row.action === 'sell') acc.sell += 1
-      else if (row.action === 'hold') acc.hold += 1
-      return acc
-    },
-    { buy: 0, sell: 0, hold: 0 },
-  )
-}
+const planSignalMaps = computed(() => buildPlanSignalMaps(planTargetRows.value))
+const holdingPlanRiskBySymbol = computed(() => planSignalMaps.value.holdingPlanRiskBySymbol)
+const holdingPlanOpportunityBySymbol = computed(() => planSignalMaps.value.holdingPlanOpportunityBySymbol)
+const holdingPlanInternalSwotBySymbol = computed(() => planSignalMaps.value.holdingPlanInternalSwotBySymbol)
 const needsReviewPlan = computed(() => selectedPlanStatus.value === 'needs_review')
 // Single source of truth for which plan the review card acts on. Prefer the
 // timeline's action-required node, but fall back to the currently selected
 // latest plan so approve/reject always target the plan the user is looking at.
 const reviewPlanId = computed(() => pendingActionPlan.value?.plan_id || selectedOperationPlanId.value || '')
-const planReviewRiskSummary = computed(() => planTargetRows.value.reduce(
-  (acc, row) => {
-    const severity = row.ai_risk?.severity
-    if (severity === 'high') acc.high += 1
-    else if (severity === 'medium') acc.medium += 1
-    else if (severity === 'low') acc.low += 1
-    return acc
-  },
-  { high: 0, medium: 0, low: 0 },
-))
+const planReviewRiskSummary = computed(() => buildPlanReviewRiskSummary(planTargetRows.value))
 const pendingPlanRows = computed(() => (
   hasApprovedPlanAwaitingAction.value ? planTargetRows.value : []
 ))
@@ -825,30 +739,6 @@ function paperExecutionModeLabel(mode) {
 
 function toggleTimelineDetail(planId) {
   expandedTimelinePlanId.value = expandedTimelinePlanId.value === planId ? null : planId
-}
-
-function normalizePlanItemRow(item) {
-  const current = Number(item?.current_shares ?? 0)
-  const target = Number(item?.target_shares ?? 0)
-  const rawDelta = item?.delta_shares ?? (target - current)
-  const delta = Number(rawDelta || 0)
-  let action = item?.action || ''
-  if (!action) {
-    if (delta > 0) action = 'buy'
-    else if (delta < 0) action = 'sell'
-    else if (target > 0) action = 'hold'
-    else action = 'skip'
-  }
-  if (action === 'hold' && current > 0 && target > 0 && delta !== 0) {
-    action = delta > 0 ? 'buy' : 'sell'
-  }
-  return {
-    ...item,
-    action,
-    current_shares: current,
-    target_shares: target,
-    delta_shares: delta,
-  }
 }
 
 function formatSyncedAt(value) {

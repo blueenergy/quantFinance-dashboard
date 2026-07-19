@@ -351,8 +351,13 @@ import { usePortfolioPlanGeneration } from '../composables/usePortfolioPlanGener
 import { usePortfolioPlansWorkbench } from '../composables/usePortfolioPlansWorkbench'
 import { useReselectPlanItems } from '../composables/useReselectPlanItems'
 import {
-  canExecutePaperNowFromState,
-  paperExecuteReadyTextFromState,
+  buildPlanReviewRiskSummary,
+  buildPlanTargetRows,
+  executionVenueFromPlan,
+  summarizePlanRows,
+  usePlanExecutionState,
+} from '../composables/usePortfolioPlanViewModel'
+import {
   paperExecutionPriceStatusText,
 } from '../utils/paperExecutionEligibility'
 
@@ -471,15 +476,28 @@ const {
 const executionStatus = computed(() => selectedDetail.value?.execution_status || {})
 const selectedPlanExecutionMode = computed(() => selectedDetail.value?.execution_mode || 'not_executed')
 const selectedPlanStatus = computed(() => selectedDetail.value?.plan?.status || '')
-const selectedPlanHasLiveSignals = computed(() => selectedPlanExecutionMode.value === 'live')
-const selectedPlanHasPublishedLiveSignals = computed(() => (
-  selectedPlanHasLiveSignals.value
-  || Boolean(selectedDetail.value?.plan?.live_signals_published_at)
-  || Number(selectedDetail.value?.plan?.live_signal_count || 0) > 0
-))
 const liveExecutionContext = computed(() => selectedDetail.value?.live_execution_context || {})
-const selectedPlanLiveSignalCount = computed(() => Number(liveExecutionContext.value?.signal_count || 0))
-const selectedPlanActiveLiveSignalCount = computed(() => Number(liveExecutionContext.value?.active_signal_count || 0))
+const executionVenue = computed(() => executionVenueFromPlan(selectedDetail.value?.plan))
+const {
+  paperExecutionCount,
+  hasPaperExecution,
+  selectedPlanHasLiveSignals,
+  selectedPlanHasPublishedLiveSignals,
+  canExecutePaperNow,
+  canPublishLiveSignals,
+  canCancelCurrentPlan,
+  paperExecuteReadyText,
+  cancelPlanReadyText,
+  selectedPlanExecutionModeLabel,
+} = usePlanExecutionState({
+  plan: computed(() => selectedDetail.value?.plan),
+  planStatus: selectedPlanStatus,
+  executionStatus,
+  executionMode: selectedPlanExecutionMode,
+  liveExecutionContext,
+  venue: executionVenue,
+  liveExecutionModeImpliesPublished: true,
+})
 const selectedPlanIsMonitorNoTrade = computed(() => selectedDetail.value?.plan?.executable === false)
 const selectedPlanExcluded = computed(() => selectedDetail.value?.plan?.excluded_symbols || [])
 // Only an unpublished, pre-approval plan can be reselected in place.
@@ -534,8 +552,6 @@ const {
 })
 
 const combinedActionLoading = computed(() => reselectActionLoading.value)
-const paperExecutionCount = computed(() => Number(executionStatus.value?.execution_count || 0))
-const hasPaperExecution = computed(() => Boolean(selectedDetail.value?.plan?.paper_executed_at) || paperExecutionCount.value > 0)
 // Plan-detail page uses plan-level data only. Keep paper panels hidden while the
 // plan is still reselectable to avoid showing stale history from prior plans.
 const showPaperSections = computed(() => {
@@ -545,31 +561,9 @@ const showPaperSections = computed(() => {
 const showPaperExecutionStatus = computed(() => showPaperSections.value && (
   selectedPlanStatus.value === 'approved' || paperExecutionCount.value > 0
 ))
-const executionVenue = computed(() => {
-  const plan = selectedDetail.value?.plan
-  const capitalBasis = plan?.capital_basis || plan?.summary?.capital_basis
-  return capitalBasis === 'rolling_paper' ? 'paper' : 'live'
-})
 const executionVenueLabel = computed(() => executionVenue.value === 'paper' ? '纸面' : '实盘')
 const isPaperPortfolio = computed(() => executionVenue.value === 'paper')
 const isLivePortfolio = computed(() => executionVenue.value === 'live')
-const canExecutePaperNow = computed(() => canExecutePaperNowFromState({
-  planStatus: selectedPlanStatus.value,
-  hasLiveSignals: selectedPlanHasLiveSignals.value,
-  hasPaperExecution: hasPaperExecution.value,
-  missingExecuteDate: executionStatus.value?.missing_execute_date === true,
-  isPaperPortfolio: isPaperPortfolio.value,
-}))
-const canPublishLiveSignals = computed(() => (
-  isLivePortfolio.value
-  && selectedPlanStatus.value === 'approved'
-  && !selectedPlanHasPublishedLiveSignals.value
-  && !hasPaperExecution.value
-))
-const canCancelCurrentPlan = computed(() => (
-  selectedPlanStatus.value === 'approved'
-  && !hasPaperExecution.value
-))
 const needsReviewPlan = computed(() => (
   ['needs_review', 'generated', 'draft'].includes(selectedPlanStatus.value)
 ))
@@ -582,89 +576,14 @@ const showPlanOpsPanel = computed(() => (
   && selectedPlanStatus.value === 'approved'
 ))
 
-const paperExecuteReadyText = computed(() => paperExecuteReadyTextFromState({
-  hasPaperExecution: hasPaperExecution.value,
-  hasLiveSignals: selectedPlanHasLiveSignals.value,
-  planStatus: selectedPlanStatus.value,
-  executionStatus: executionStatus.value,
-  isPaperPortfolio: isPaperPortfolio.value,
-}))
-const cancelPlanReadyText = computed(() => {
-  if (hasPaperExecution.value) return '该 plan 已执行 Paper，不能作废'
-  if (selectedPlanStatus.value !== 'approved') return '只有 approved plan 可以作废'
-  if (selectedPlanHasLiveSignals.value) return '该 plan 存在实盘信号历史；作废会取消未成交信号，若已有成交后端会拒绝'
-  return '误点确认发布/审批后可作废；作废后状态变为 cancelled'
-})
-const selectedPlanExecutionModeLabel = computed(() => {
-  if (selectedPlanExecutionMode.value === 'live') {
-    if (selectedPlanActiveLiveSignalCount.value > 0) {
-      return `实盘信号在途 ${selectedPlanActiveLiveSignalCount.value}/${selectedPlanLiveSignalCount.value}`
-    }
-    if (!selectedPlanHasPublishedLiveSignals.value) {
-      return `有历史实盘信号（未标记发布，${selectedPlanLiveSignalCount.value} 条）`
-    }
-    return `有历史实盘信号（无在途，${selectedPlanLiveSignalCount.value} 条）`
-  }
-  if (selectedPlanExecutionMode.value === 'paper') return '已执行 Paper'
-  return '未执行'
-})
-
-function normalizePlanItemRow(item) {
-  const current = Number(item?.current_shares ?? 0)
-  const target = Number(item?.target_shares ?? 0)
-  const delta = Number((item?.delta_shares ?? (target - current)) || 0)
-  let action = item?.action || ''
-  if (!action) {
-    if (delta > 0) action = 'buy'
-    else if (delta < 0) action = 'sell'
-    else if (target > 0) action = 'hold'
-    else action = 'skip'
-  }
-  if (action === 'hold' && current > 0 && target > 0 && delta !== 0) {
-    action = delta > 0 ? 'buy' : 'sell'
-  }
-  return {
-    ...item,
-    action,
-    current_shares: current,
-    target_shares: target,
-    delta_shares: delta,
-  }
-}
-
 const planTargetRows = computed(() => (
-  (selectedDetail.value?.items || [])
-    .map((item) => normalizePlanItemRow(item))
-    .filter((item) => item.action !== 'skip')
-    .sort((a, b) => {
-      const order = { buy: 0, sell: 1, hold: 2, skip: 3 }
-      const aScore = Number(a.score_value)
-      const bScore = Number(b.score_value)
-      const aHasScore = Number.isFinite(aScore)
-      const bHasScore = Number.isFinite(bScore)
-      if (aHasScore && bHasScore && bScore !== aScore) return bScore - aScore
-      if (aHasScore !== bHasScore) return aHasScore ? -1 : 1
-      return (order[a.action] ?? 9) - (order[b.action] ?? 9)
-        || String(a.symbol).localeCompare(String(b.symbol))
-    })
+  buildPlanTargetRows(selectedDetail.value?.items)
 ))
-
-function summarizePlanRows(rows) {
-  return rows.reduce(
-    (summary, row) => {
-      if (row.action === 'buy') summary.buy += 1
-      else if (row.action === 'sell') summary.sell += 1
-      else if (row.action === 'hold') summary.hold += 1
-      return summary
-    },
-    { buy: 0, sell: 0, hold: 0 },
-  )
-}
 
 const planReviewSummary = computed(() => summarizePlanRows(planTargetRows.value))
 const planReviewRiskSummary = computed(() => (
   selectedDetail.value?.plan?.summary?.ai_risk_summary
-  || { high: 0, medium: 0, low: 0 }
+  || buildPlanReviewRiskSummary(planTargetRows.value)
 ))
 
 const {
