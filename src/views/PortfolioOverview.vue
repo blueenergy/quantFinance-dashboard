@@ -290,7 +290,7 @@
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, defineAsyncComponent, watch } from 'vue'
 import PortfolioIdentityCard from '../components/portfolio/PortfolioIdentityCard.vue'
 import CurrentPeriodStatus from '../components/portfolio/CurrentPeriodStatus.vue'
 import TrailingStopMonitorPanel from '../components/portfolio/TrailingStopMonitorPanel.vue'
@@ -298,8 +298,6 @@ import PlanReviewPanel from '../components/portfolio/PlanReviewPanel.vue'
 import PlanOpsPanel from '../components/portfolio/PlanOpsPanel.vue'
 import PlanPublishPreviewModal from '../components/portfolio/PlanPublishPreviewModal.vue'
 import LineageTimeline from '../components/portfolio/LineageTimeline.vue'
-import ExecutionsPanel from '../components/portfolio/ExecutionsPanel.vue'
-import HoldingsPanel from '../components/portfolio/HoldingsPanel.vue'
 import PortfolioEquityChart from '../components/portfolio/PortfolioEquityChart.vue'
 import PortfolioReconcileBanner from '../components/portfolio/PortfolioReconcileBanner.vue'
 import PortfolioSummaryCards from '../components/portfolio/PortfolioSummaryCards.vue'
@@ -328,6 +326,9 @@ import {
   trailingStopDefaultExpanded as shouldExpandTrailingStop,
   trailingStopTriggersOnly as showTrailingStopTriggersOnly,
 } from '../utils/portfolioOverviewFormat'
+
+const ExecutionsPanel = defineAsyncComponent(() => import('../components/portfolio/ExecutionsPanel.vue'))
+const HoldingsPanel = defineAsyncComponent(() => import('../components/portfolio/HoldingsPanel.vue'))
 
 const {
   portfolios,
@@ -744,108 +745,4 @@ watch(selectedLatestPlanId, (planId, previousPlanId) => {
 })
 </script>
 
-<style scoped>
-/* Align contrast with PortfolioPlans.vue: #111827 body, #374151 secondary */
-.portfolio-overview {
-  background: #fff;
-  box-sizing: border-box;
-  color: #111827;
-  line-height: 1.5;
-  margin: 0 auto;
-  max-width: 1200px;
-  padding: 24px;
-  width: 100%;
-}
-
-.overview-header h2 {
-  color: #111827;
-  font-size: 20px;
-  margin: 0 0 8px;
-}
-
-.muted {
-  color: #374151;
-  font-size: 13px;
-  margin: 0;
-}
-
-.toolbar {
-  align-items: flex-end;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 20px 0 12px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.field span {
-  color: #111827;
-  font-weight: 600;
-}
-
-.field select,
-button {
-  background: #fff;
-  border: 1px solid #111827;
-  border-radius: 4px;
-  color: #111827;
-  padding: 8px 10px;
-}
-
-.field select {
-  min-width: 420px;
-}
-
-.field select:disabled,
-button:disabled {
-  border-color: #9ca3af;
-  color: #6b7280;
-  cursor: not-allowed;
-  opacity: 1;
-}
-
-.message {
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  color: #111827;
-  font-size: 14px;
-  padding: 10px 12px;
-}
-
-.message.error {
-  background: #fef2f2;
-  border-color: #b91c1c;
-  color: #7f1d1d;
-}
-
-.spinner {
-  animation: spin 0.8s linear infinite;
-  border: 2px solid #d1d5db;
-  border-radius: 50%;
-  border-top-color: #111827;
-  display: inline-block;
-  height: 12px;
-  margin-right: 6px;
-  vertical-align: middle;
-  width: 12px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-button {
-  cursor: pointer;
-  font-weight: 500;
-}
-
-</style>
+<style src="../assets/styles/portfolio-overview.css"></style>
