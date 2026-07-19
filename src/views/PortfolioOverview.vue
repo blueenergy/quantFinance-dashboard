@@ -82,6 +82,14 @@
         @force-rebalance="submitForceRebalance"
       />
 
+      <TrailingStopMonitorPanel
+        v-if="!isLivePortfolio"
+        :latest-run="timelineData?.latest_trailing_stop_run"
+        :plan-id="selectedLatestPlanId"
+        :default-expanded="trailingStopDefaultExpanded"
+        :triggers-only="trailingStopTriggersOnly"
+      />
+
       <PlanReviewPanel
         :visible="needsReviewPlan && Boolean(reviewPlanId)"
         :plan-id="reviewPlanId"
@@ -341,6 +349,7 @@ import {
 import { getSecuritiesAccounts } from '../api/trader'
 import PortfolioIdentityCard from '../components/portfolio/PortfolioIdentityCard.vue'
 import CurrentPeriodStatus from '../components/portfolio/CurrentPeriodStatus.vue'
+import TrailingStopMonitorPanel from '../components/portfolio/TrailingStopMonitorPanel.vue'
 import PlanReviewPanel from '../components/portfolio/PlanReviewPanel.vue'
 import PlanOpsPanel from '../components/portfolio/PlanOpsPanel.vue'
 import PlanPublishPreviewModal from '../components/portfolio/PlanPublishPreviewModal.vue'
@@ -729,6 +738,18 @@ const cycleProgressPct = computed(() => {
   if (!cycle?.rebalance_days) return 0
   const elapsed = Number(cycle.elapsed_trading_days || 0)
   return Math.min(100, Math.round((elapsed / cycle.rebalance_days) * 100))
+})
+
+const trailingStopTriggersOnly = computed(() => {
+  const verbosity = timelineData.value?.latest_trailing_stop_run?.verbosity
+  return verbosity === 'triggers_only'
+})
+
+const trailingStopDefaultExpanded = computed(() => {
+  const run = timelineData.value?.latest_trailing_stop_run
+  if (!run) return false
+  const triggered = Number(run.triggered_count ?? run.summary?.triggered_count ?? 0)
+  return triggered > 0
 })
 
 const foldedTimeline = computed(() => {

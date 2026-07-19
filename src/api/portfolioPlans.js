@@ -148,6 +148,18 @@ export function getPortfolioPlanLineageTimeline(planId, params = {}) {
   return request({ url: `/portfolio-plans/plans/${planId}/lineage-timeline`, method: 'get', params })
 }
 
+export function listLineageTrailingStopRuns(strategyTemplateId, paramsHash, params = {}) {
+  return request({
+    url: `/portfolio-plans/lineages/${encodeURIComponent(strategyTemplateId)}/${encodeURIComponent(paramsHash)}/trailing-stop-runs`,
+    method: 'get',
+    params,
+  })
+}
+
+export function getTrailingStopRun(runId) {
+  return request({ url: `/portfolio-plans/trailing-stop-runs/${encodeURIComponent(runId)}`, method: 'get' })
+}
+
 // Enqueues a manual-rebalance generation task; poll the returned task_id via
 // getPortfolioPlanGenerationTask until status === 'completed'.
 export function createManualRebalancePlan(data) {
