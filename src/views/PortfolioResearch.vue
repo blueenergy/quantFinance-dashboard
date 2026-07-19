@@ -148,12 +148,20 @@
               <h3>{{ selectedJob.name || selectedJob.job_id }}</h3>
               <p class="muted">
                 {{ selectedJob.status }} · {{ selectedJob.job_id }}
+                <span v-if="selectedJob.rerun_of_job_id"> · rerun of {{ selectedJob.rerun_of_job_id }}</span>
                 <span v-if="jobElapsedLabel(selectedJob)"> · {{ jobElapsedLabel(selectedJob) }}</span>
                 <span v-if="jobProgressStageLabel(selectedJob)"> · {{ jobProgressStageLabel(selectedJob) }}</span>
                 <span v-if="selectedJob.error_message"> · {{ selectedJob.error_message }}</span>
               </p>
             </div>
             <div class="actions">
+              <button
+                :disabled="rerunLoading || selectedJob.status === 'pending' || selectedJob.status === 'running'"
+                :title="rerunDisabledReason"
+                @click="rerunJob"
+              >
+                {{ rerunLoading ? '重跑中...' : '用原参数重跑' }}
+              </button>
               <button
                 v-if="selectedJob.result_id"
                 :disabled="artifactLoading"
@@ -409,12 +417,14 @@ import {
   getPortfolioResearchResults,
   listPortfolioResearchJobs,
   publishPortfolioResearchResult,
+  rerunPortfolioResearchJob,
 } from '../api/portfolioResearch'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 const loading = ref(false)
 const submitting = ref(false)
+const rerunLoading = ref(false)
 const publishLoading = ref(false)
 const artifactLoading = ref(false)
 const nameTouched = ref(false)
@@ -510,6 +520,13 @@ const publishActionLabel = computed(() => {
     evidence_attached: '作为 evidence 附加',
   }
   return labels[publishAction.value] || '-'
+})
+const rerunDisabledReason = computed(() => {
+  const status = selectedJob.value?.status
+  if (status === 'pending' || status === 'running') {
+    return '任务仍在排队或运行中，完成后可重跑'
+  }
+  return '用原参数新建一条研究任务，不覆盖当前报告'
 })
 const universePitQualityLabel = computed(() => {
   const quality = selectedJob.value?.data_watermark?.universe_pit_quality
@@ -925,6 +942,24 @@ async function createJob() {
     errorMessage.value = err?.response?.data?.detail || err.message || '创建研究任务失败'
   } finally {
     submitting.value = false
+  }
+}
+
+async function rerunJob() {
+  if (!selectedJobId.value) return
+  rerunLoading.value = true
+  message.value = ''
+  errorMessage.value = ''
+  try {
+    const res = await rerunPortfolioResearchJob(selectedJobId.value, { force: true })
+    message.value = `已用原参数创建重跑任务 ${res.data?.job_id}`
+    selectedJobId.value = res.data?.job_id || ''
+    await loadJobs()
+    if (selectedJobId.value) await selectJob(selectedJobId.value)
+  } catch (err) {
+    errorMessage.value = err?.response?.data?.detail || err.message || '重跑研究任务失败'
+  } finally {
+    rerunLoading.value = false
   }
 }
 
