@@ -210,171 +210,27 @@
         </v-window-item>
 
         <v-window-item value="analysis">
-          <section class="workbench-card">
-            <div class="card-title-row">
-              <h3>AI 命中率</h3>
-              <span class="muted">
-                <template v-if="sectionLoading.ai">刷新中…</template>
-                <template v-else>基于已完成的历史评估</template>
-              </span>
-            </div>
-            <div class="financial-metrics">
-              <div>
-                <span>综合命中率</span>
-                <strong>{{ fmtPctPlain(evaluationSummary.hit_rate) }}</strong>
-              </div>
-              <div>
-                <span>严格准确率</span>
-                <strong>{{ fmtPctPlain(evaluationSummary.accuracy_rate) }}</strong>
-              </div>
-              <div>
-                <span>已评估 / 最近分析</span>
-                <strong>{{ evaluationSummary.evaluated_count || 0 }} / {{ evaluationSummary.recent_analyses || analysisHistory.length }}</strong>
-              </div>
-              <div>
-                <span>待评估</span>
-                <strong>{{ evaluationSummary.pending_count || 0 }} 条</strong>
-              </div>
-            </div>
-            <div v-if="evaluationRows.length" class="evaluation-list">
-              <article v-for="row in evaluationRows.slice(0, 3)" :key="row.history_id" class="evaluation-item">
-                <div>
-                  <span>{{ row.analysis_created_at || '-' }}</span>
-                  <strong>{{ row.title || '历史分析' }}</strong>
-                  <small>{{ row.summary || row.short_review || '暂无评估摘要' }}</small>
-                </div>
-                <b :class="['evaluation-badge', row.outcome_accuracy || 'unknown']">
-                  {{ accuracyLabel(row.outcome_accuracy) }}
-                </b>
-              </article>
-            </div>
-            <div v-else class="muted-block">
-              暂无已完成评估。可在个股深度分析历史中手动触发评估，完成后这里会汇总命中率。
-            </div>
-          </section>
-          <section class="workbench-card">
-            <div class="card-title-row">
-              <h3>交易状态</h3>
-              <span class="muted">
-                <template v-if="sectionLoading.trading">刷新中…</template>
-                <template v-else>自选 / 策略 / 持仓 / 信号</template>
-              </span>
-            </div>
-            <div class="financial-metrics">
-              <div>
-                <span>自选状态</span>
-                <strong>{{ watchlistContext.in_watchlist ? '已加入' : '未加入' }}</strong>
-              </div>
-              <div>
-                <span>绑定策略</span>
-                <strong>{{ watchlistStrategies.length }} 个</strong>
-              </div>
-              <div>
-                <span>持仓记录</span>
-                <strong>{{ tradingPositions.length }} 条</strong>
-              </div>
-              <div>
-                <span>最近信号</span>
-                <strong>{{ recentTradeSignals.length }} 条</strong>
-              </div>
-            </div>
-            <div v-if="watchlistStrategies.length || tradingPositions.length || recentTradeSignals.length" class="trading-context-grid">
-              <article v-if="watchlistStrategies.length">
-                <h4>自选策略</h4>
-                <p v-for="row in watchlistStrategies.slice(0, 3)" :key="`${row.symbol}-${row.strategy_key}`">
-                  {{ row.strategy_key || row.strategy || '未命名策略' }}
-                  <span>{{ row.enabled === false ? '停用' : '启用' }}</span>
-                </p>
-              </article>
-              <article v-if="tradingPositions.length">
-                <h4>持仓</h4>
-                <p v-for="row in tradingPositions.slice(0, 3)" :key="`${row.symbol}-${row.securities_account_id || row.account_id || row.updated_at}`">
-                  数量 {{ row.quantity ?? row.shares ?? row.volume ?? '-' }}
-                  <span>成本 {{ fmtNumber(row.avg_cost ?? row.cost_basis ?? row.cost_price) }}</span>
-                </p>
-              </article>
-              <article v-if="recentTradeSignals.length">
-                <h4>交易信号</h4>
-                <p v-for="row in recentTradeSignals.slice(0, 3)" :key="row.order_id || `${row.symbol}-${row.timestamp}`">
-                  {{ row.action || row.signal_type || '-' }}
-                  <span>{{ row.status || row.created_at || row.timestamp || '-' }}</span>
-                </p>
-              </article>
-            </div>
-            <div v-else class="muted-block">暂无自选策略、持仓或交易信号。</div>
-          </section>
-          <section class="workbench-card">
-            <div class="card-title-row">
-              <h3>深度分析</h3>
-              <div class="analysis-actions">
-                <span v-if="sectionLoading.ai" class="muted">刷新中…</span>
-                <v-select
-                  v-model="analysisMode"
-                  :items="analysisModeOptions"
-                  density="compact"
-                  variant="outlined"
-                  hide-details
-                  class="analysis-mode-select"
-                />
-                <v-btn
-                  color="primary"
-                  variant="tonal"
-                  :loading="analysisSubmitting"
-                  :disabled="!stockSymbol || stockSymbol === '-'"
-                  @click="submitDeepAnalysis"
-                >
-                  {{ deepAnalysis?.analysis ? '重新分析' : '开始深度分析' }}
-                </v-btn>
-              </div>
-            </div>
-            <v-alert v-if="analysisSubmitError" type="error" variant="tonal" class="mb-3">
-              {{ analysisSubmitError }}
-            </v-alert>
-            <v-alert v-if="analysisSubmitStatus" type="info" variant="tonal" class="mb-3">
-              {{ analysisSubmitStatus }}
-            </v-alert>
-            <div v-if="deepAnalysis?.created_at" class="analysis-time">
-              最近分析时间：{{ deepAnalysis.created_at }}
-            </div>
-            <AnalysisDetailContent
-              v-if="deepAnalysis?.analysis"
-              :analysis="deepAnalysis.analysis"
-              :analysis-mode="deepAnalysis.analysis_mode || 'classic'"
-              layout="stacked"
-              mode="stock"
-              show-mode
-            />
-            <div v-else class="muted-block">暂无深度分析，可点击上方按钮直接发起分析任务。</div>
-          </section>
-          <section class="workbench-card">
-            <div class="card-title-row">
-              <h3>最近分析历史</h3>
-              <span class="muted">最近 {{ analysisHistory.length }} 条</span>
-            </div>
-            <div v-if="analysisHistory.length" class="analysis-history-list">
-              <button
-                v-for="item in analysisHistory"
-                :key="item.id || item.created_at"
-                type="button"
-                class="analysis-history-item"
-                :class="{ active: item.id && item.id === deepAnalysis?.id }"
-                @click="selectAnalysisHistory(item)"
-              >
-                <span>{{ item.created_at || '-' }}</span>
-                <strong>{{ analysisHistoryTitle(item) }}</strong>
-                <small>
-                  {{ item.analysis_mode || 'classic' }}
-                  <b
-                    v-if="evaluationByHistoryId[item.id]"
-                    :class="['evaluation-inline-badge', evaluationByHistoryId[item.id].outcome_accuracy || 'unknown']"
-                  >
-                    {{ accuracyLabel(evaluationByHistoryId[item.id].outcome_accuracy) }}
-                  </b>
-                </small>
-              </button>
-            </div>
-            <div v-else class="muted-block">暂无历史分析。</div>
-          </section>
+          <WorkbenchAnalysisPanel
+            v-model:analysis-mode="analysisMode"
+            :evaluation-summary="evaluationSummary"
+            :evaluation-rows="evaluationRows"
+            :analysis-history="analysisHistory"
+            :evaluation-by-history-id="evaluationByHistoryId"
+            :deep-analysis="deepAnalysis"
+            :watchlist-context="watchlistContext"
+            :watchlist-strategies="watchlistStrategies"
+            :trading-positions="tradingPositions"
+            :recent-trade-signals="recentTradeSignals"
+            :section-loading-ai="sectionLoading.ai"
+            :section-loading-trading="sectionLoading.trading"
+            :stock-symbol="stockSymbol"
+            :analysis-mode-options="analysisModeOptions"
+            :analysis-submitting="analysisSubmitting"
+            :analysis-submit-status="analysisSubmitStatus"
+            :analysis-submit-error="analysisSubmitError"
+            @submit="submitDeepAnalysis"
+            @select-history="selectAnalysisHistory"
+          />
         </v-window-item>
       </v-window>
     </template>
@@ -386,17 +242,12 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
-import request from '../utils/request'
-import {
-  collectStockWorkbenchSignals,
-  analyzeStockWorkbenchNewsUrl,
-  getStockWorkbenchSignalTask,
-  refreshStockWorkbenchInternalSignals,
-} from '../api/stock'
+import { computed, ref } from 'vue'
 import { useStockWorkbench } from '../composables/useStockWorkbench'
-import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
+import { useWorkbenchDeepAnalysis } from '../composables/useWorkbenchDeepAnalysis'
+import { useWorkbenchSwotSignals } from '../composables/useWorkbenchSwotSignals'
 import StockWorkbenchSwotPanel from '../components/stock/StockWorkbenchSwotPanel.vue'
+import WorkbenchAnalysisPanel from '../components/stock/WorkbenchAnalysisPanel.vue'
 import WorkbenchFinancialPanel from '../components/stock/WorkbenchFinancialPanel.vue'
 import WorkbenchHero from '../components/stock/WorkbenchHero.vue'
 import WorkbenchNineTurnPanel from '../components/stock/WorkbenchNineTurnPanel.vue'
@@ -444,24 +295,10 @@ const SCORE_DEFS = [
   { key: 'cycle', label: '动量' },
 ]
 
-const analysisMode = ref('multi_expert_v1')
-const analysisSubmitting = ref(false)
-const analysisSubmitStatus = ref('')
-const analysisSubmitError = ref('')
 const financialMode = ref('quarterly')
-const signalCollecting = ref(false)
-const signalCollectionMessage = ref('')
-const signalCollectionError = ref(false)
-const internalSignalRefreshing = ref(false)
-const internalSignalRefreshMessage = ref('')
-const internalSignalRefreshError = ref(false)
 const shareholdersUiResetKey = ref(0)
-let analysisPollTimer = null
-let signalCollectionTimer = null
-let signalCollectionPollCount = 0
-const signalCollectionMode = ref('')
-let internalSignalTimer = null
-let internalSignalPollCount = 0
+let deepAnalysisApi = null
+let swotSignalsApi = null
 
 const {
   loading,
@@ -498,17 +335,56 @@ const {
 } = useStockWorkbench({
   pendingNavigation: () => props.pendingNavigation,
   onBeforeLoadSymbol() {
-    clearAnalysisPolling()
-    clearSignalCollectionPolling()
-    analysisSubmitStatus.value = ''
-    analysisSubmitError.value = ''
-    signalCollectionMessage.value = ''
-    signalCollectionError.value = false
-    internalSignalRefreshMessage.value = ''
-    internalSignalRefreshError.value = false
+    deepAnalysisApi?.clearAnalysisPolling()
+    swotSignalsApi?.clearSignalCollectionPolling()
+    if (deepAnalysisApi) {
+      deepAnalysisApi.analysisSubmitStatus.value = ''
+      deepAnalysisApi.analysisSubmitError.value = ''
+    }
+    if (swotSignalsApi) {
+      swotSignalsApi.signalCollectionMessage.value = ''
+      swotSignalsApi.signalCollectionError.value = false
+      swotSignalsApi.internalSignalRefreshMessage.value = ''
+      swotSignalsApi.internalSignalRefreshError.value = false
+    }
     shareholdersUiResetKey.value += 1
   },
 })
+
+deepAnalysisApi = useWorkbenchDeepAnalysis({
+  payload,
+  stockSymbol,
+  directSymbol,
+  stockName: () => stockName.value,
+  analysisHistory: () => analysisHistory.value,
+  isCurrentWorkbenchSymbol,
+})
+const {
+  analysisMode,
+  analysisSubmitting,
+  analysisSubmitStatus,
+  analysisSubmitError,
+  selectAnalysisHistory,
+  submitDeepAnalysis,
+} = deepAnalysisApi
+
+swotSignalsApi = useWorkbenchSwotSignals({
+  stockSymbol,
+  directSymbol,
+  isCurrentWorkbenchSymbol,
+  loadWorkbenchSection,
+})
+const {
+  signalCollecting,
+  signalCollectionMessage,
+  signalCollectionError,
+  internalSignalRefreshing,
+  internalSignalRefreshMessage,
+  internalSignalRefreshError,
+  collectSwotSignals,
+  refreshInternalSwotSignals,
+  analyzeSwotNewsUrl,
+} = swotSignalsApi
 
 const analysisModeOptions = [
   { title: '多专家', value: 'multi_expert_v1' },
@@ -1186,370 +1062,12 @@ const overviewQuoteDataAvailable = computed(() => Boolean(
   || Object.keys(latestDailyBasic.value).length,
 ))
 
-function clearCollectPolling() {
-  if (signalCollectionTimer) {
-    window.clearTimeout(signalCollectionTimer)
-    signalCollectionTimer = null
-  }
-  signalCollectionPollCount = 0
-  signalCollecting.value = false
-  signalCollectionMode.value = ''
-}
-
-function clearInternalPolling() {
-  if (internalSignalTimer) {
-    window.clearTimeout(internalSignalTimer)
-    internalSignalTimer = null
-  }
-  internalSignalPollCount = 0
-  internalSignalRefreshing.value = false
-}
-
-// 机会/风险搜集与优势/劣势刷新是两条独立的轮询链路，
-// 该函数仅用于离开页面/切换标的等需要同时清理的场景。
-function clearSignalCollectionPolling() {
-  clearCollectPolling()
-  clearInternalPolling()
-}
-
-function friendlyNewsUrlError(rawError = '') {
-  const text = String(rawError || '').toLowerCase()
-  if (!text) return '新闻链接分析失败，请稍后重试'
-  if (text.includes('too short') || text.includes('empty')) {
-    return '无法从该链接提取正文（可能需要登录或由脚本动态渲染），请换一个正文可直接访问的新闻链接'
-  }
-  if (text.includes('unsupported content type')) {
-    return '该链接不是网页文章（可能是 PDF 或其它类型），暂不支持分析'
-  }
-  if (text.includes('blocked') || text.includes('resolve') || text.includes('not allowed')) {
-    return '该链接指向的地址不可访问或被拦截，请确认是公开可访问的新闻链接'
-  }
-  if (text.includes('too large')) {
-    return '页面内容过大，无法分析，请更换链接'
-  }
-  if (text.includes('status') || text.includes('redirect') || text.includes('fetch')) {
-    return '抓取新闻失败（目标站点返回错误或拒绝访问），请稍后重试或更换链接'
-  }
-  if (text.includes('json') || text.includes('parse')) {
-    return '分析结果解析失败，请稍后重试'
-  }
-  return '新闻链接分析失败，请稍后重试'
-}
-
-function formatNewsUrlTaskMessage(summary = {}, status = 'completed') {
-  if (summary.status === 'unrelated_to_tracked_risk') {
-    return summary.relation_reason
-      ? `该新闻与所跟踪风险无直接关联，未更新：${summary.relation_reason}`
-      : '该新闻与所跟踪风险无直接关联，未更新。'
-  }
-  if (summary.status === 'follow_up_updated') {
-    return '已更新所跟踪风险的最新进展，SWOT 已刷新。'
-  }
-  if (summary.status === 'no_material_impact') {
-    return '未发现对该股票的实质影响。'
-  }
-  const riskCount = Number(summary.risk_finding_count || 0)
-  const oppCount = Number(summary.opportunity_finding_count || 0)
-  if (riskCount || oppCount) {
-    const parts = []
-    if (riskCount) parts.push(`${riskCount} 条风险`)
-    if (oppCount) parts.push(`${oppCount} 条机会`)
-    return `新闻分析完成，已写入 ${parts.join('、')}，SWOT 已刷新。`
-  }
-  if (status === 'completed_with_parse_error') {
-    return '新闻分析已完成，但部分结果解析失败；已刷新可用信号。'
-  }
-  return '新闻分析完成，SWOT 已刷新。'
-}
-
-async function collectSwotSignals() {
-  const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
-  if (!symbol || signalCollecting.value) return
-  clearCollectPolling()
-  signalCollecting.value = true
-  signalCollectionMode.value = 'collect'
-  signalCollectionError.value = false
-  signalCollectionMessage.value = '已提交机会与风险证据搜集，等待分析任务处理…'
-  try {
-    const task = await collectStockWorkbenchSignals(symbol)
-    if (!task?.task_id) throw new Error('分析任务未返回 task_id')
-    signalCollectionMessage.value = task.reused
-      ? '已有该股票的搜集分析任务正在运行…'
-      : '正在搜集公告、新闻等证据并分析机会与风险…'
-    await pollSwotSignalTask(task.task_id, symbol, 'collect')
-  } catch (e) {
-    clearCollectPolling()
-    signalCollectionError.value = true
-    signalCollectionMessage.value = e?.message || '机会与风险搜集分析提交失败'
-  }
-}
-
-async function refreshInternalSwotSignals() {
-  const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
-  if (!symbol || internalSignalRefreshing.value) return
-  clearInternalPolling()
-  internalSignalRefreshing.value = true
-  internalSignalRefreshError.value = false
-  internalSignalRefreshMessage.value = '已提交优势与劣势规则评估，等待任务处理…'
-  try {
-    const task = await refreshStockWorkbenchInternalSignals(symbol)
-    if (!task?.task_id) throw new Error('分析任务未返回 task_id')
-    internalSignalRefreshMessage.value = task.reused
-      ? '已有该股票的优势与劣势评估任务正在运行…'
-      : '正在读取财务指标并评估优势与劣势…'
-    await pollSwotSignalTask(task.task_id, symbol, 'internal')
-  } catch (e) {
-    clearInternalPolling()
-    internalSignalRefreshError.value = true
-    internalSignalRefreshMessage.value = e?.message || '优势与劣势规则评估提交失败'
-  }
-}
-
-async function analyzeSwotNewsUrl(payload) {
-  const url = typeof payload === 'string' ? payload : payload?.url
-  const findingKey = typeof payload === 'string' ? '' : (payload?.findingKey || '')
-  const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
-  if (!symbol || signalCollecting.value || !url) return
-  clearCollectPolling()
-  signalCollecting.value = true
-  signalCollectionMode.value = 'news-url'
-  signalCollectionError.value = false
-  signalCollectionMessage.value = findingKey
-    ? '已提交后续新闻，正在核对与所跟踪风险的关联…'
-    : '已提交新闻链接分析，正在抓取正文…'
-  try {
-    const task = await analyzeStockWorkbenchNewsUrl(symbol, { url, findingKey })
-    if (!task?.task_id) throw new Error('分析任务未返回 task_id')
-    signalCollectionMessage.value = task.reused
-      ? '已有该新闻链接分析任务正在运行…'
-      : '正在抓取新闻正文并由 LLM 研判机会与风险…'
-    await pollSwotSignalTask(task.task_id, symbol, 'collect')
-  } catch (e) {
-    clearCollectPolling()
-    signalCollectionError.value = true
-    signalCollectionMessage.value = e?.message || '新闻链接分析提交失败'
-  }
-}
-
-async function pollSwotSignalTask(taskId, symbol, track = 'collect') {
-  const isInternal = track === 'internal'
-  const clearThis = isInternal ? clearInternalPolling : clearCollectPolling
-  try {
-    const response = await getStockWorkbenchSignalTask(taskId)
-    if (!isCurrentWorkbenchSymbol(symbol)) {
-      clearThis()
-      return
-    }
-    const status = response?.task_meta?.status || ''
-    const resultStatus = response?.base_result?.summary?.status || response?.base_result?.status || ''
-    const mode = signalCollectionMode.value
-    if (status === 'failed') {
-      clearThis()
-      if (isInternal) {
-        internalSignalRefreshError.value = true
-        internalSignalRefreshMessage.value = response?.task_meta?.error || '优势与劣势规则评估失败'
-      } else if (mode === 'news-url') {
-        signalCollectionError.value = true
-        signalCollectionMessage.value = friendlyNewsUrlError(response?.task_meta?.error)
-      } else {
-        signalCollectionError.value = true
-        signalCollectionMessage.value = response?.task_meta?.error || '机会与风险搜集分析失败'
-      }
-      return
-    }
-    if (status === 'completed' || status === 'completed_with_parse_error') {
-      clearThis()
-      const summary = response?.base_result?.summary || {}
-      if (isInternal) {
-        const counts = response?.base_result?.result_counts || {}
-        internalSignalRefreshMessage.value = resultStatus === 'skipped_unchanged'
-          ? '内部财务证据没有变化，已保留当前优势与劣势判断。'
-          : `优势与劣势评估完成：${Number(counts.strength || 0)} 条优势、${Number(counts.weakness || 0)} 条劣势。`
-        internalSignalRefreshError.value = false
-      } else {
-        if (mode === 'news-url') {
-          signalCollectionMessage.value = formatNewsUrlTaskMessage(summary, status)
-        } else if (resultStatus === 'skipped_unchanged') {
-          signalCollectionMessage.value = '证据没有变化，已保留当前机会与风险判断。'
-        } else {
-          signalCollectionMessage.value = status === 'completed_with_parse_error'
-            ? '分析已完成，但部分结果解析失败；已刷新可用信号。'
-            : '机会与风险分析完成，SWOT 已刷新。'
-        }
-        signalCollectionError.value = status === 'completed_with_parse_error'
-      }
-      await loadWorkbenchSection('signals', { force: true })
-      return
-    }
-    if (isInternal) {
-      internalSignalPollCount += 1
-      if (internalSignalPollCount >= 90) {
-        clearThis()
-        internalSignalRefreshError.value = true
-        internalSignalRefreshMessage.value = '规则评估任务处理时间较长，请稍后重新进入 SWOT 查看结果。'
-        return
-      }
-      internalSignalTimer = window.setTimeout(
-        () => pollSwotSignalTask(taskId, symbol, track),
-        2000,
-      )
-    } else {
-      signalCollectionPollCount += 1
-      if (signalCollectionPollCount >= 90) {
-        clearThis()
-        signalCollectionError.value = true
-        signalCollectionMessage.value = '分析任务处理时间较长，请稍后重新进入 SWOT 查看结果。'
-        return
-      }
-      signalCollectionTimer = window.setTimeout(
-        () => pollSwotSignalTask(taskId, symbol, track),
-        2000,
-      )
-    }
-  } catch (e) {
-    clearThis()
-    if (isInternal) {
-      internalSignalRefreshError.value = true
-      internalSignalRefreshMessage.value = e?.message || '优势与劣势任务查询失败'
-    } else {
-      signalCollectionError.value = true
-      signalCollectionMessage.value = e?.message || '机会与风险分析任务查询失败'
-    }
-  }
-}
-
-function clearAnalysisPolling() {
-  if (analysisPollTimer) {
-    clearInterval(analysisPollTimer)
-    analysisPollTimer = null
-  }
-}
-
-async function selectAnalysisHistory(item) {
-  if (!item?.id) return
-  try {
-    const body = await request.get(`/analysis-history/${item.id}`)
-    const full = body?.data || item
-    payload.value = {
-      ...(payload.value || {}),
-      deep_analysis: full,
-    }
-  } catch (_) {
-    payload.value = {
-      ...(payload.value || {}),
-      deep_analysis: item,
-    }
-  }
-}
-
-function analysisHistoryTitle(item) {
-  const analysis = item?.analysis || {}
-  return analysis.final_conclusion
-    || analysis.investment_advice
-    || analysis.long_term_forecast
-    || analysis.mid_term_forecast
-    || analysis.short_term_forecast
-    || item?.stock_name
-    || '查看分析详情'
-}
-
-function accuracyLabel(value) {
-  return {
-    accurate: '准确',
-    mixed: '部分准确',
-    inaccurate: '不准确',
-  }[value] || value || '未评估'
-}
-
-async function submitDeepAnalysis() {
-  const symbol = stockSymbol.value && stockSymbol.value !== '-' ? stockSymbol.value : directSymbol.value
-  if (!symbol) return
-  clearAnalysisPolling()
-  analysisSubmitting.value = true
-  analysisSubmitError.value = ''
-  analysisSubmitStatus.value = ''
-  try {
-    const body = await request.post(
-      '/analyze/deep-analysis',
-      { symbol, priority: 30, analysis_mode: analysisMode.value },
-    )
-    if (!body?.success) {
-      analysisSubmitError.value = body?.message || '提交失败'
-      analysisSubmitting.value = false
-      return
-    }
-    const taskId = body.task_id
-    analysisSubmitStatus.value = `已提交，前方 ${body.queue_ahead ?? '?'} 个任务。${body.wait_hint || '分析中…'}`
-    let tries = 0
-    analysisPollTimer = setInterval(async () => {
-      tries += 1
-      if (tries > 120) {
-        clearAnalysisPolling()
-        analysisSubmitStatus.value = '等待超时，请稍后刷新工作台或在个股深度分析历史中查看。'
-        analysisSubmitting.value = false
-        return
-      }
-      try {
-        const poll = await request.get(`/analyze/task/${taskId}`)
-        const status = poll?.status
-        if (status === 'completed') {
-          clearAnalysisPolling()
-          analysisSubmitting.value = false
-          analysisSubmitStatus.value = '分析完成，已更新当前工作台。'
-          const analysis = poll?.analysis || {}
-          const nextDeepAnalysis = {
-            id: taskId,
-            symbol,
-            stock_name: analysis.stock_name || stockName.value || '',
-            analysis_mode: poll?.analysis_mode || analysis.analysis_mode || analysisMode.value,
-            analysis,
-            model: poll?.model,
-            created_at: new Date().toISOString(),
-          }
-          payload.value = {
-            ...(payload.value || {}),
-            deep_analysis: nextDeepAnalysis,
-            analysis_history: [
-              nextDeepAnalysis,
-              ...analysisHistory.value.filter((item) => item.id !== nextDeepAnalysis.id),
-            ],
-            data_status: {
-              ...(payload.value?.data_status || {}),
-              deep_analysis_found: true,
-              analysis_created_at: nextDeepAnalysis.created_at,
-            },
-          }
-        } else if (status === 'failed' || status === 'completed_with_parse_error') {
-          clearAnalysisPolling()
-          analysisSubmitting.value = false
-          analysisSubmitStatus.value = ''
-          analysisSubmitError.value = poll?.error || '分析失败'
-        } else if (status === 'pending') {
-          analysisSubmitStatus.value = `排队中，前方 ${poll?.queue_ahead ?? '?'} 个任务。${poll?.wait_hint || '预计等待时间计算中'}`
-        } else if (status === 'processing') {
-          analysisSubmitStatus.value = poll?.wait_hint || '正在分析，LLM 响应时间可能有波动'
-        }
-      } catch (_) {
-        // Keep polling through transient network/server hiccups.
-      }
-    }, 3000)
-  } catch (e) {
-    analysisSubmitError.value = e.response?.data?.detail || e.message || '提交失败'
-    analysisSubmitting.value = false
-  }
-}
-
 function valuationMultipleWithPercentile(field, suffix = '') {
   const value = fmtNumber(valuationCurrentMultiples.value?.[field], 2, suffix)
   const pct = valuationPercentiles.value?.[field]
   if (pct == null) return value
   return `${value} / P${Number(pct).toFixed(0)}`
 }
-
-onBeforeUnmount(() => {
-  clearAnalysisPolling()
-  clearSignalCollectionPolling()
-})
 </script>
 
 <style scoped>
@@ -1557,274 +1075,21 @@ onBeforeUnmount(() => {
   color: #e2e8f0;
   padding: 6px;
 }
-.workbench-card,
+
 .empty-state {
   background: rgba(15, 23, 42, 0.76);
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 18px;
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
-}
-.eyebrow {
-  color: #93c5fd;
-  font-size: 12px;
-  letter-spacing: .08em;
-  margin: 0 0 5px;
-  text-transform: uppercase;
-}
-h1, h2, h3 {
-  margin: 0;
-}
-.empty-state {
   padding: 44px;
   text-align: center;
 }
-.empty-state p,
-.muted,
-.muted-block {
+
+.empty-state p {
   color: #94a3b8;
 }
-.text-link-button {
-  background: transparent;
-  border: 0;
-  color: #93c5fd;
-  cursor: pointer;
-  font-size: 13px;
-  padding: 0;
-}
-.text-link-button:hover {
-  color: #bfdbfe;
-}
-.financial-metrics div {
-  background: rgba(30, 41, 59, .78);
-  border-radius: 14px;
-  padding: 14px;
-}
-.financial-metrics span {
-  color: #94a3b8;
-  display: block;
-  font-size: 12px;
-}
-.financial-metrics strong {
-  color: #f8fafc;
-  display: block;
-  font-size: 22px;
-  margin: 4px 0;
-}
-.is-up {
-  color: #ef4444;
-}
-.is-down {
-  color: #22c55e;
-}
+
 .workbench-tabs {
   margin-bottom: 14px;
-}
-.panel-grid {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
-}
-.workbench-card {
-  margin-bottom: 16px;
-  padding: 20px;
-}
-.card-title-row {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-.analysis-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-}
-.analysis-mode-select {
-  min-width: 140px;
-}
-.analysis-time {
-  color: #94a3b8;
-  font-size: 13px;
-  margin: -4px 0 14px;
-}
-.analysis-history-list {
-  display: grid;
-  gap: 10px;
-}
-.evaluation-list {
-  display: grid;
-  gap: 10px;
-  margin-top: 14px;
-}
-.evaluation-item {
-  align-items: center;
-  background: rgba(30, 41, 59, .62);
-  border: 1px solid rgba(148, 163, 184, .16);
-  border-radius: 12px;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 12px 14px;
-}
-.evaluation-item span,
-.evaluation-item small {
-  color: #94a3b8;
-  display: block;
-  font-size: 12px;
-}
-.evaluation-item strong {
-  color: #f8fafc;
-  display: block;
-  margin: 2px 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.evaluation-badge,
-.evaluation-inline-badge {
-  border: 1px solid rgba(148, 163, 184, .24);
-  border-radius: 999px;
-  color: #cbd5e1;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 8px;
-  white-space: nowrap;
-}
-.evaluation-badge.accurate,
-.evaluation-inline-badge.accurate {
-  background: rgba(34, 197, 94, .14);
-  border-color: rgba(34, 197, 94, .34);
-  color: #86efac;
-}
-.evaluation-badge.mixed,
-.evaluation-inline-badge.mixed {
-  background: rgba(234, 179, 8, .14);
-  border-color: rgba(234, 179, 8, .34);
-  color: #fde68a;
-}
-.evaluation-badge.inaccurate,
-.evaluation-inline-badge.inaccurate {
-  background: rgba(239, 68, 68, .14);
-  border-color: rgba(239, 68, 68, .34);
-  color: #fca5a5;
-}
-.evaluation-inline-badge {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 2px 7px;
-}
-.analysis-history-item {
-  background: rgba(30, 41, 59, .62);
-  border: 1px solid rgba(148, 163, 184, .16);
-  border-radius: 12px;
-  color: #cbd5e1;
-  cursor: pointer;
-  display: grid;
-  gap: 6px;
-  grid-template-columns: 170px minmax(0, 1fr) 110px;
-  padding: 12px 14px;
-  text-align: left;
-}
-.analysis-history-item:hover,
-.analysis-history-item.active {
-  background: rgba(96, 165, 250, .14);
-  border-color: rgba(96, 165, 250, .34);
-}
-.analysis-history-item span,
-.analysis-history-item small {
-  color: #94a3b8;
-  font-size: 12px;
-}
-.analysis-history-item strong {
-  color: #f8fafc;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.analysis-points-list {
-  color: #cbd5e1;
-  margin: 12px 0 0;
-  padding-left: 18px;
-  line-height: 1.7;
-}
-.financial-metrics {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-details summary {
-  color: #bfdbfe;
-  cursor: pointer;
-}
-.quote-table-wrap {
-  margin-top: 14px;
-  overflow-x: auto;
-}
-.quote-table {
-  border-collapse: collapse;
-  min-width: 680px;
-  width: 100%;
-}
-.quote-table th,
-.quote-table td {
-  border-bottom: 1px solid rgba(148, 163, 184, .16);
-  color: #cbd5e1;
-  font-size: 13px;
-  padding: 10px 8px;
-  text-align: right;
-  white-space: nowrap;
-}
-.quote-table th:first-child,
-.quote-table td:first-child {
-  text-align: left;
-}
-.quote-table th {
-  color: #94a3b8;
-  font-weight: 600;
-}
-.quote-table td.cell-name {
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.trading-context-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  margin-top: 14px;
-}
-.trading-context-grid article {
-  background: rgba(30, 41, 59, .56);
-  border: 1px solid rgba(148, 163, 184, .14);
-  border-radius: 12px;
-  padding: 14px;
-}
-.trading-context-grid h4 {
-  color: #e2e8f0;
-  margin: 0 0 10px;
-}
-.trading-context-grid p {
-  color: #f8fafc;
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
-  margin: 8px 0 0;
-}
-.trading-context-grid span {
-  color: #94a3b8;
-}
-.muted-block {
-  background: rgba(30, 41, 59, .56);
-  border-radius: 12px;
-  padding: 18px;
-}
-@media (max-width: 980px) {
-  .panel-grid {
-    grid-template-columns: 1fr;
-  }
 }
 </style>
