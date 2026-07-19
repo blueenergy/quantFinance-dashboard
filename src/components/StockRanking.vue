@@ -317,7 +317,7 @@ import AppLink from './common/AppLink.vue'
 import ScoreDetailView from './ranking/ScoreDetailView.vue'
 import StockRankingControls from './StockRankingControls.vue'
 import RankingTable from './RankingTable.vue'
-import axios from 'axios'
+import request from '../utils/request'
 import {
   DEFAULT_RANKING_WEIGHTS,
   getCompositeScore,
@@ -650,16 +650,6 @@ function isUserLoggedIn() {
   return localStorage.getItem('access_token') !== null
 }
 
-// ✅ 获取 axios 配置（包含认证头）
-function getAuthHeaders() {
-  const token = localStorage.getItem('access_token')
-  return token ? {
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  } : {}
-}
-
 // -------------------------
 // Helper utilities (pure, small)
 // -------------------------
@@ -806,13 +796,13 @@ async function fetchRankings() {
     switch (requestContext.viewMode) {
       case 'ranking': {
         loadingMessage.value = `加载前 ${requestContext.displayLimit} 名股票评分...`
-        let url = `/api/stock-rankings?limit=${requestContext.displayLimit}`
+        let url = `/stock-rankings?limit=${requestContext.displayLimit}`
         // include selected ranking strategy so server can sort accordingly
         if (requestContext.rankingStrategy) url += `&strategy=${encodeURIComponent(requestContext.rankingStrategy)}`
         if (requestContext.sortBy) url += `&sort_by=${encodeURIComponent(requestContext.sortBy)}`
         if (weightsParam) url += `&weights=${encodeURIComponent(weightsParam)}`
         if (dateParam) url += `&date=${dateParam}`
-        response = await axios.get(url, { signal })
+        response = await request({ method: 'get', url, signal })
         break
       }
       case 'hs300':
@@ -830,7 +820,7 @@ async function fetchRankings() {
           star50: '科创50',
         }
         loadingMessage.value = `加载${indexLabels[requestContext.viewMode]}指数成分股评分...`
-        let url = `/api/stock-rankings/by-index/${encodeURIComponent(requestContext.viewMode)}`
+        let url = `/stock-rankings/by-index/${encodeURIComponent(requestContext.viewMode)}`
         const qpIdx = []
         if (requestContext.rankingStrategy) {
           qpIdx.push(`strategy=${encodeURIComponent(requestContext.rankingStrategy)}`)
@@ -845,7 +835,7 @@ async function fetchRankings() {
         if (qpIdx.length) url += `?${qpIdx.join('&')}`
         url = appendRequestPageQuery(url)
         dlog('index rankings GET', url)
-        response = await axios.get(url, { signal })
+        response = await request({ method: 'get', url, signal })
         break
       }
       case 'selected': {
@@ -859,7 +849,7 @@ async function fetchRankings() {
         const payload = { symbols: requestContext.selectedStocks }
         dlog('selectedStocks', requestContext.selectedStocks)
         // 如果有多日期，传递 dates 数组；否则继续使用单日期参数
-        let url = '/api/stock-rankings/selected'
+        let url = '/stock-rankings/selected'
         // include strategy in payload so server can choose ranking method for selected fetch
         payload.strategy = requestContext.rankingStrategy
         if (requestContext.selectedDates.length > 0) {
@@ -871,7 +861,7 @@ async function fetchRankings() {
           if (qpSel.length) url += `?${qpSel.join('&')}`
           url = appendRequestPageQuery(url)
           dlog('posting with dates', payload.dates)
-          response = await axios.post(url, payload, { signal })
+          response = await request({ method: 'post', url, data: payload, signal })
         } else {
           const qpSel = []
           if (dateParam) qpSel.push(`date=${dateParam}`)
@@ -881,7 +871,7 @@ async function fetchRankings() {
           if (qpSel.length) url += `?${qpSel.join('&')}`
           url = appendRequestPageQuery(url)
           dlog('posting without dates url=', url)
-          response = await axios.post(url, payload, { signal })
+          response = await request({ method: 'post', url, data: payload, signal })
         }
         break
       }
@@ -900,7 +890,7 @@ async function fetchRankings() {
         }
         loadingMessage.value = `加载自选股评分...`
         const payload = { symbols: requestContext.watchlistSymbols }
-        let url = '/api/stock-rankings/selected'
+        let url = '/stock-rankings/selected'
         // include strategy and date as query parameters
         const qp2 = []
         if (dateParam) qp2.push(`date=${dateParam}`)
@@ -909,7 +899,7 @@ async function fetchRankings() {
         appendWeightedQuery(qp2)
         if (qp2.length) url += `?${qp2.join('&')}`
         url = appendRequestPageQuery(url)
-        response = await axios.post(url, payload, { signal })
+        response = await request({ method: 'post', url, data: payload, signal })
         break
       }
       default: {
@@ -923,17 +913,20 @@ async function fetchRankings() {
       dlog('stale response dropped: superseded by a newer fetch', { requestId, mode: requestContext.viewMode })
       return
     }
-    dlog('response status', response?.status, 'items=', Array.isArray(response?.data?.data) ? response.data.data.length : (Array.isArray(response?.data) ? response.data.length : 'n/a'))
-    // 处理响应数据（防御性检查）
+    dlog('response items=', Array.isArray(response?.data) ? response.data.length : (Array.isArray(response) ? response.length : 'n/a'))
+    // 处理响应数据（防御性检查）；request 已解包为 HTTP body
     if (!response) {
       console.error('[fetchRankings] empty response')
       rankings.value = []
       rankingTotal.value = 0
-    } else if (response.data && typeof response.data === 'object') {
-      if (response.data.success && response.data.data) {
-        rankings.value = response.data.data
-        const t = response.data.total
-        rankingTotal.value = typeof t === 'number' ? t : (response.data.data || []).length
+    } else if (response && typeof response === 'object') {
+      if (response.success && response.data) {
+        rankings.value = response.data
+        const t = response.total
+        rankingTotal.value = typeof t === 'number' ? t : (response.data || []).length
+      } else if (Array.isArray(response)) {
+        rankings.value = response
+        rankingTotal.value = response.length
       } else if (Array.isArray(response.data)) {
         rankings.value = response.data
         rankingTotal.value = response.data.length
@@ -943,7 +936,7 @@ async function fetchRankings() {
         rankingTotal.value = 0
       }
     } else if (Array.isArray(response)) {
-      // fallback if axios returned array directly
+      // fallback if body is array directly
       rankings.value = response
       rankingTotal.value = response.length
     } else {
@@ -1100,10 +1093,10 @@ function addDateToSelection() {
 
 async function fetchAvailableDatesForSymbol(symbol) {
   try {
-    const resp = await axios.get(`/api/stock-dates?symbol=${symbol}`)
-    if (resp.data && resp.data.success && Array.isArray(resp.data.data)) {
+    const resp = await request({ method: 'get', url: '/stock-dates', params: { symbol } })
+    if (resp && resp.success && Array.isArray(resp.data)) {
       // expect data like ['20250918','20250917',...]
-      availableDatesForSymbol.value = resp.data.data
+      availableDatesForSymbol.value = resp.data
       // prefill selection with dates already chosen by user
       availableDatesSelection.value = availableDatesForSymbol.value.filter(d => selectedDates.value.includes(d))
     } else {
@@ -1506,11 +1499,11 @@ async function fetchWatchlist() {
   }
   
   try {
-    const response = await axios.get('/api/user/watchlist', getAuthHeaders())
-    dlog('watchlist response', response.data)
+    const response = await request({ method: 'get', url: '/user/watchlist' })
+    dlog('watchlist response', response)
     
-    if (response.data.success && response.data.data) {
-      watchlist.value = response.data.data.symbols || []
+    if (response.success && response.data) {
+      watchlist.value = response.data.symbols || []
     }
   } catch (error) {
     console.error('获取自选股失败:', error)
@@ -1537,14 +1530,15 @@ async function toggleWatchlist(symbol) {
 // ✅ 修改添加到自选股功能
 async function addToWatchlist(symbol) {
   try {
-    const response = await axios.post('/api/user/watchlist/add', 
-      { symbol: symbol }, 
-      getAuthHeaders()
-    )
+    const response = await request({
+      method: 'post',
+      url: '/user/watchlist/add',
+      data: { symbol: symbol },
+    })
     
-  dlog('add watchlist response', response.data)
+  dlog('add watchlist response', response)
     
-    if (response.data.success) {
+    if (response.success) {
       watchlist.value.push(symbol)
       alert(`✅ 已将 ${symbol} 添加到自选股`)
     } else {
@@ -1561,10 +1555,10 @@ async function addToWatchlist(symbol) {
 async function removeFromWatchlist(symbol) {
   try {
     // Check if the stock has any active strategies
-    const stratCheckResponse = await axios.get('/api/user/watchlist/strategies', getAuthHeaders())
+    const stratCheckResponse = await request({ method: 'get', url: '/user/watchlist/strategies' })
     
-    if (stratCheckResponse.data.success) {
-      const activeStrategies = stratCheckResponse.data.data
+    if (stratCheckResponse.success) {
+      const activeStrategies = stratCheckResponse.data
         .filter(s => s.symbol === symbol && s.enabled === true)
       
       if (activeStrategies.length > 0) {
@@ -1574,9 +1568,9 @@ async function removeFromWatchlist(symbol) {
       }
     }
     
-    const response = await axios.delete(`/api/user/watchlist/remove/${symbol}`, getAuthHeaders())
+    const response = await request({ method: 'delete', url: `/user/watchlist/remove/${symbol}` })
     
-    if (response.data.success) {
+    if (response.success) {
       watchlist.value = watchlist.value.filter(s => s !== symbol)
       alert(`✅ 已将 ${symbol} 从自选股中移除`)
       
@@ -1602,11 +1596,11 @@ async function viewWatchlistStocks() {
   }
   
   try {
-    const response = await axios.get('/api/user/watchlist-stocks', getAuthHeaders())
-    dlog('watchlist stocks detail', response.data)
+    const response = await request({ method: 'get', url: '/user/watchlist-stocks' })
+    dlog('watchlist stocks detail', response)
     
-    if (response.data.success) {
-      const stocks = response.data.data
+    if (response.success) {
+      const stocks = response.data
       if (stocks.length === 0) {
         alert('📝 自选股列表为空')
       } else {
@@ -1642,12 +1636,13 @@ async function clearWatchlist() {
   }
   
   try {
-    const response = await axios.put('/api/user/watchlist', 
-      { symbols: [] }, 
-      getAuthHeaders()
-    )
+    const response = await request({
+      method: 'put',
+      url: '/user/watchlist',
+      data: { symbols: [] },
+    })
     
-    if (response.data.success) {
+    if (response.success) {
       watchlist.value = []
       alert('🗑️ 自选股列表已清空')
       
@@ -1877,31 +1872,31 @@ function onRankingSortChange() {
 // ✅ 指数成分股通用工具
 // =============================
 const indexStateMap = {
-  hs300: { list: hs300Stocks, loading: hs300Loading, path: '/api/index/hs300/constituents', fallback: [
+  hs300: { list: hs300Stocks, loading: hs300Loading, path: '/index/hs300/constituents', fallback: [
     { symbol: '000001.SZ', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.85 },
     { symbol: '000002.SZ', name: '万科A', industry: '房地产开发', market_cap: 250000000000, weight: 0.78 }
   ] },
-  a500: { list: a500Stocks, loading: a500Loading, path: '/api/index/a500/constituents', fallback: [
+  a500: { list: a500Stocks, loading: a500Loading, path: '/index/a500/constituents', fallback: [
     { symbol: '600519.SH', name: '贵州茅台', industry: '白酒', market_cap: 2500000000000, weight: 2.50 },
     { symbol: '000333.SZ', name: '美的集团', industry: '家电', market_cap: 450000000000, weight: 1.20 }
   ] },
   // 修复: 中证500 应使用自身 loading ref 且提供更贴近该指数的示例成分
-  csi500: { list: csi500Stocks, loading: csi500Loading, path: '/api/index/csi500/constituents', fallback: [
+  csi500: { list: csi500Stocks, loading: csi500Loading, path: '/index/csi500/constituents', fallback: [
     { symbol: '000001.SZ', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.35 },
     { symbol: '600036.SH', name: '招商银行', industry: '银行', market_cap: 340000000000, weight: 0.40 },
     { symbol: '002415.SZ', name: '海康威视', industry: '电子', market_cap: 310000000000, weight: 0.45 }
   ] },
-  csi1000: { list: csi1000Stocks, loading: csi1000Loading, path: '/api/index/csi1000/constituents', fallback: [
+  csi1000: { list: csi1000Stocks, loading: csi1000Loading, path: '/index/csi1000/constituents', fallback: [
     { symbol: '300014.SZ', name: '亿纬锂能', industry: '电力设备', market_cap: 80000000000, weight: 0.32 },
     { symbol: '002304.SZ', name: '洋河股份', industry: '食品饮料', market_cap: 120000000000, weight: 0.28 },
     { symbol: '600887.SH', name: '伊利股份', industry: '食品饮料', market_cap: 150000000000, weight: 0.30 }
   ] },
-  csi2000: { list: csi2000Stocks, loading: csi2000Loading, path: '/api/index/csi2000/constituents', fallback: [
+  csi2000: { list: csi2000Stocks, loading: csi2000Loading, path: '/index/csi2000/constituents', fallback: [
     { symbol: '300014.SZ', name: '亿纬锂能', industry: '电力设备', market_cap: 80000000000, weight: 0.20 },
     { symbol: '002304.SZ', name: '洋河股份', industry: '食品饮料', market_cap: 120000000000, weight: 0.18 },
     { symbol: '603986.SH', name: '兆易创新', industry: '电子', market_cap: 90000000000, weight: 0.16 }
   ] },
-  star50: { list: star50Stocks, loading: star50Loading, path: '/api/index/star50/constituents', fallback: [
+  star50: { list: star50Stocks, loading: star50Loading, path: '/index/star50/constituents', fallback: [
     { symbol: '688001.SH', name: '华兴源创', industry: '半导体', market_cap: 45000000000, weight: 1.10 },
     { symbol: '688012.SH', name: '中微公司', industry: '半导体设备', market_cap: 120000000000, weight: 2.20 }
   ] }
@@ -1913,15 +1908,15 @@ async function fetchIndexConstituents(indexKey) {
   if (st.list.value.length > 0) return st.list.value
   st.loading.value = true
   try {
-    const resp = await axios.get(st.path)
-    // 注意：[] 在 JS 中为 truthy，不能写 `if (resp.data.data)`，否则 success + 空列表会误采纳、且不走 fallback
-    const rows = Array.isArray(resp.data?.data) ? resp.data.data : null
-    if (resp.data?.success && rows && rows.length > 0) {
+    const resp = await request({ method: 'get', url: st.path })
+    // 注意：[] 在 JS 中为 truthy，不能写 `if (resp.data)`，否则 success + 空列表会误采纳、且不走 fallback
+    const rows = Array.isArray(resp?.data) ? resp.data : null
+    if (resp?.success && rows && rows.length > 0) {
       st.list.value = rows
       console.log(`📊 获取到 ${st.list.value.length} 只 ${indexKey} 成分股`)
       return st.list.value
     }
-    if (resp.data?.success && rows && rows.length === 0) {
+    if (resp?.success && rows && rows.length === 0) {
       console.warn(`获取 ${indexKey} 成分股返回空列表，使用本地 fallback`)
       st.list.value = [...st.fallback]
       return st.list.value

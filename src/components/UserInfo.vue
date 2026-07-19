@@ -116,7 +116,7 @@
 <script>
 import { computed, ref } from 'vue'
 import { changePassword } from '../api/user'
-import axios from 'axios'
+import request from '../utils/request'
 
 export default {
   name: 'UserInfo',
@@ -233,11 +233,11 @@ export default {
       
       try {
         // 重新登录获取新 token（或调用专门的 refresh token API）
-        const response = await axios.post('/api/auth/token/refresh')
+        const body = await request({ method: 'post', url: '/auth/token/refresh' })
         
-        if (response.data.access_token) {
-          apiToken.value = response.data.access_token
-          localStorage.setItem('access_token', response.data.access_token)
+        if (body.access_token) {
+          apiToken.value = body.access_token
+          localStorage.setItem('access_token', body.access_token)
           tokenSuccess.value = '✓ Token 生成成功！请立即复制保存'
           tokenRevealed.value = true
           calculateTokenExpiry()
@@ -273,7 +273,7 @@ export default {
       tokenGenerating.value = true
       
       try {
-        await axios.post('/api/auth/token/revoke')
+        await request({ method: 'post', url: '/auth/token/revoke' })
         apiToken.value = ''
         tokenSuccess.value = 'Token 已撤销'
       } catch (err) {

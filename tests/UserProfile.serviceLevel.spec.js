@@ -1,62 +1,66 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { defineComponent } from 'vue'
-import axios from 'axios'
+
+const requestMock = vi.fn()
+
+vi.mock('../src/utils/request', () => ({
+  default: (...args) => requestMock(...args),
+}))
+
 import UserProfile from '../src/components/UserProfile.vue'
 
 const UpgradeRequestStub = defineComponent({
   name: 'UpgradeRequest',
   props: {
-    currentUser: { type: Object, default: null }
+    currentUser: { type: Object, default: null },
   },
-  template: '<div class="upgrade-request-stub" />'
+  template: '<div class="upgrade-request-stub" />',
 })
 
 describe('UserProfile - service level', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    requestMock.mockReset()
   })
 
-  it('loads service_level from /api/user/profile and passes it to UpgradeRequest', async () => {
-    vi.spyOn(axios, 'get').mockImplementation(async (url) => {
-      if (url === '/api/user/profile') {
+  it('loads service_level from /user/profile and passes it to UpgradeRequest', async () => {
+    requestMock.mockImplementation(async (config) => {
+      const url = config?.url || ''
+      if (url === '/user/profile') {
         return {
-          data: {
-            success: true,
-            user: {
-              id: 'u1',
-              username: 'test',
-              email: 't@example.com',
-              full_name: 'T',
-              email_verified: true,
-              is_admin: false,
-              service_level: 'vip',
-              active_llm_config_id: null
-            }
-          }
+          success: true,
+          user: {
+            id: 'u1',
+            username: 'test',
+            email: 't@example.com',
+            full_name: 'T',
+            email_verified: true,
+            is_admin: false,
+            service_level: 'vip',
+            active_llm_config_id: null,
+          },
         }
       }
-      if (url === '/api/user/security-settings') {
-        return { data: { success: true, two_factor_enabled: false } }
+      if (url === '/user/security-settings') {
+        return { success: true, two_factor_enabled: false }
       }
-      if (url === '/api/user/llm-configs') {
-        return { data: [] }
+      if (url === '/user/llm-configs') {
+        return []
       }
-      // default safe response
-      return { data: { success: true } }
+      return { success: true }
     })
 
     const wrapper = mount(UserProfile, {
       global: {
         stubs: {
-          UpgradeRequest: UpgradeRequestStub
-        }
-      }
+          UpgradeRequest: UpgradeRequestStub,
+        },
+      },
     })
 
     await flushPromises()
 
-    // Switch to permissions tab which ensures loadProfile() runs again.
     wrapper.vm.switchTab('permissions')
     await flushPromises()
 

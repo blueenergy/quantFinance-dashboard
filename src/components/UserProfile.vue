@@ -547,7 +547,7 @@
 
 <script>
 import { ref, reactive, onMounted, computed } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import UpgradeRequest from './UpgradeRequest.vue'
 
 // Rely on Vite proxy configuration instead of setting baseURL
@@ -681,9 +681,9 @@ export default {
     // 加载用户资料
     const loadProfile = async () => {
       try {
-        const response = await axios.get('/api/user/profile')
-        if (response.data && response.data.user) {
-          const user = response.data.user
+        const body = await request({ method: 'get', url: '/user/profile' })
+        if (body && body.user) {
+          const user = body.user
           profile.user_id = user.id || user.user_id || ''
           profile.username = user.username
           profile.email = user.email
@@ -700,11 +700,13 @@ export default {
     // 保存用户资料
     const saveProfile = async () => {
       try {
-        const response = await axios.put('/api/user/profile', {
-          full_name: profile.full_name
+        const body = await request({
+          method: 'put',
+          url: '/user/profile',
+          data: { full_name: profile.full_name },
         })
         
-        if (response.data.success) {
+        if (body.success) {
           alert('个人资料保存成功！')
         }
       } catch (error) {
@@ -726,11 +728,13 @@ export default {
       }
       
       try {
-        const response = await axios.put('/api/user/email', {
-          email: profile.email
+        const body = await request({
+          method: 'put',
+          url: '/user/email',
+          data: { email: profile.email },
         })
         
-        if (response.data.success) {
+        if (body.success) {
           emailVerificationRequired.value = true
           isEditingEmail.value = false
           alert('邮箱地址已更新，验证邮件已发送到您的邮箱')
@@ -744,7 +748,7 @@ export default {
     // 重新发送验证邮件
     const resendVerification = async () => {
       try {
-        await axios.post('/api/user/resend-verification')
+        await request({ method: 'post', url: '/user/resend-verification' })
         alert('验证邮件已重新发送')
       } catch (error) {
         console.error('发送验证邮件失败:', error)
@@ -756,9 +760,9 @@ export default {
     const loadSecuritySettings = async () => {
       // 加载双因素认证状态等安全设置
       try {
-        const response = await axios.get('/api/user/security-settings')
-        if (response.data) {
-          securitySettings.two_factor_enabled = response.data.two_factor_enabled || false
+        const body = await request({ method: 'get', url: '/user/security-settings' })
+        if (body) {
+          securitySettings.two_factor_enabled = body.two_factor_enabled || false
         }
       } catch (error) {
         console.error('加载安全设置失败:', error)
@@ -784,12 +788,16 @@ export default {
       }
       
       try {
-        const response = await axios.post('/api/user/change-password', {
-          old_password: passwordChange.old_password,
-          new_password: passwordChange.new_password
+        const body = await request({
+          method: 'post',
+          url: '/user/change-password',
+          data: {
+            old_password: passwordChange.old_password,
+            new_password: passwordChange.new_password,
+          },
         })
         
-        if (response.data.success) {
+        if (body.success) {
           alert('密码修改成功')
           passwordChange.old_password = ''
           passwordChange.new_password = ''
@@ -804,8 +812,10 @@ export default {
     // 切换双因素认证
     const toggleTwoFactor = async () => {
       try {
-        await axios.put('/api/user/two-factor', {
-          enabled: securitySettings.two_factor_enabled
+        await request({
+          method: 'put',
+          url: '/user/two-factor',
+          data: { enabled: securitySettings.two_factor_enabled },
         })
         alert(securitySettings.two_factor_enabled ? '双因素认证已启用' : '双因素认证已禁用')
       } catch (error) {
@@ -862,11 +872,11 @@ export default {
       
       try {
         // 重新登录获取新 token（或调用专门的 refresh token API）
-        const response = await axios.post('/api/auth/token/refresh')
+        const body = await request({ method: 'post', url: '/auth/token/refresh' })
         
-        if (response.data.access_token) {
-          apiToken.value = response.data.access_token
-          localStorage.setItem('access_token', response.data.access_token)
+        if (body.access_token) {
+          apiToken.value = body.access_token
+          localStorage.setItem('access_token', body.access_token)
           tokenSuccess.value = '✓ Token 生成成功！请立即复制保存'
           tokenRevealed.value = true
           calculateTokenExpiry()
@@ -902,7 +912,7 @@ export default {
       tokenGenerating.value = true
       
       try {
-        await axios.post('/api/auth/token/revoke')
+        await request({ method: 'post', url: '/auth/token/revoke' })
         apiToken.value = ''
         tokenSuccess.value = 'Token 已撤销'
       } catch (err) {
@@ -931,16 +941,16 @@ export default {
     const loadAIConfig = async () => {
       try {
         // 获取激活的配置ID
-        const profileResponse = await axios.get('/api/user/profile')
-        if (profileResponse.data && profileResponse.data.user) {
-          const user = profileResponse.data.user
+        const profileBody = await request({ method: 'get', url: '/user/profile' })
+        if (profileBody && profileBody.user) {
+          const user = profileBody.user
           activeAIConfigId.value = user.active_llm_config_id || null
         }
         
         // 获取所有LLM配置
-        const response = await axios.get('/api/user/llm-configs')
-        if (response.data) {
-          aiConfigs.value = response.data
+        const body = await request({ method: 'get', url: '/user/llm-configs' })
+        if (body) {
+          aiConfigs.value = body
         }
       } catch (error) {
         console.error('加载AI配置失败:', error)
@@ -1016,7 +1026,7 @@ export default {
       
       try {
         const config = aiConfigs.value[index]
-        await axios.delete(`/api/user/llm-configs/${config.id}`)
+        await request({ method: 'delete', url: `/user/llm-configs/${config.id}` })
         aiConfigs.value.splice(index, 1)
         
         // 如果删除的是激活的配置，取消激活
@@ -1034,22 +1044,24 @@ export default {
     // 激活配置
     const activateConfig = async (configId) => {
       try {
-        const response = await axios.post(`/api/user/llm-configs/${configId}/activate`)
+        const body = await request({ method: 'post', url: `/user/llm-configs/${configId}/activate` })
         activeAIConfigId.value = configId
         
         // 根据后端返回的消息显示不同的提示
-        if (response.data.message && response.data.message.includes('已经是激活状态')) {
+        if (body.message && body.message.includes('已经是激活状态')) {
           alert('配置已经是激活状态')
         } else {
           alert('配置激活成功')
         }
         
         // 激活之后重新加载用户下载地的active_llm_config_id以确保后续检查昐样
-        const profileResponse = await axios.get('/api/user/profile', {
-          params: { t: Date.now() }
+        const profileBody = await request({
+          method: 'get',
+          url: '/user/profile',
+          params: { t: Date.now() },
         })
-        if (profileResponse.data && profileResponse.data.user) {
-          activeAIConfigId.value = profileResponse.data.user.active_llm_config_id || null
+        if (profileBody && profileBody.user) {
+          activeAIConfigId.value = profileBody.user.active_llm_config_id || null
           console.log('[激活配置] 成功更新active_llm_config_id:', activeAIConfigId.value)
         }
       } catch (error) {
@@ -1069,27 +1081,35 @@ export default {
         if (editingConfigIndex.value !== null) {
           // 更新现有配置
           const configId = aiConfigs.value[editingConfigIndex.value].id
-          const response = await axios.put(`/api/user/llm-configs/${configId}`, {
-            name: currentConfig.name,
-            provider: currentConfig.provider,
-            api_key: currentConfig.api_key || undefined, // 如果为空则不更新API密钥
-            base_url: currentConfig.base_url,
-            model: currentConfig.model
+          const body = await request({
+            method: 'put',
+            url: `/user/llm-configs/${configId}`,
+            data: {
+              name: currentConfig.name,
+              provider: currentConfig.provider,
+              api_key: currentConfig.api_key || undefined, // 如果为空则不更新API密钥
+              base_url: currentConfig.base_url,
+              model: currentConfig.model,
+            },
           })
           
           // 更新本地数组
-          Object.assign(aiConfigs.value[editingConfigIndex.value], response.data)
+          Object.assign(aiConfigs.value[editingConfigIndex.value], body)
         } else {
           // 创建新配置
-          const response = await axios.post('/api/user/llm-configs', {
-            name: currentConfig.name,
-            provider: currentConfig.provider,
-            api_key: currentConfig.api_key,
-            base_url: currentConfig.base_url,
-            model: currentConfig.model
+          const body = await request({
+            method: 'post',
+            url: '/user/llm-configs',
+            data: {
+              name: currentConfig.name,
+              provider: currentConfig.provider,
+              api_key: currentConfig.api_key,
+              base_url: currentConfig.base_url,
+              model: currentConfig.model,
+            },
           })
           
-          aiConfigs.value.push(response.data)
+          aiConfigs.value.push(body)
         }
         
         alert(editingConfigIndex.value !== null ? '配置更新成功' : '配置保存成功')
@@ -1141,8 +1161,8 @@ export default {
     // 加载证券账户
     const loadSecuritiesAccounts = async () => {
       try {
-        const response = await axios.get('/api/user/securities_accounts')
-        securitiesAccounts.value = response.data || []
+        const body = await request({ method: 'get', url: '/user/securities_accounts' })
+        securitiesAccounts.value = body || []
         
         // 调试：打印账户数据
         console.log('=== 证券账户加载成功 ===')
@@ -1280,7 +1300,11 @@ export default {
           if (currentAccount.account_type === 'real') {
             updateData.account_id = currentAccount.account_id
           }
-          response = await axios.put(`/api/user/securities_accounts/${currentAccount.id}`, updateData)
+          response = await request({
+            method: 'put',
+            url: `/user/securities_accounts/${currentAccount.id}`,
+            data: updateData,
+          })
         } else {
           // 创建新账户
           const createData = {
@@ -1298,10 +1322,14 @@ export default {
             createData.initial_cash = currentAccount.initial_cash || 1000000
           }
           
-          response = await axios.post('/api/user/securities_accounts', createData)
+          response = await request({
+            method: 'post',
+            url: '/user/securities_accounts',
+            data: createData,
+          })
         }
         
-        if (response.data) {
+        if (response) {
           alert(editingAccount.value ? '账户更新成功' : '账户添加成功')
           closeModal()
           loadSecuritiesAccounts() // 重新加载账户列表
@@ -1319,7 +1347,7 @@ export default {
       }
       
       try {
-        await axios.delete(`/api/user/securities_accounts/${accountId}`)
+        await request({ method: 'delete', url: `/user/securities_accounts/${accountId}` })
         alert('账户删除成功')
         loadSecuritiesAccounts() // 重新加载账户列表
       } catch (error) {
@@ -1372,9 +1400,9 @@ export default {
       // 同时加载AI配置信息（获取激活配置ID和所有配置）
       try {
         // 首先获取激活配置ID
-        const profileResponse = await axios.get('/api/user/profile')
-        if (profileResponse.data && profileResponse.data.user) {
-          const user = profileResponse.data.user
+        const profileBody = await request({ method: 'get', url: '/user/profile' })
+        if (profileBody && profileBody.user) {
+          const user = profileBody.user
           activeAIConfigId.value = user.active_llm_config_id || null
         }
         

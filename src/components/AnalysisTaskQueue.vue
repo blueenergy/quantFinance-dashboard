@@ -101,7 +101,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 
 const loading = ref(false)
 const error = ref('')
@@ -112,11 +112,6 @@ let pollTimer = null
 
 const hasRunningTasks = computed(() => items.value.some(item => ['pending', 'processing'].includes(item.status)))
 const hasOwnerColumn = computed(() => items.value.some(item => item.created_by_username || item.created_by_user_id))
-
-function authHeaders() {
-  const token = localStorage.getItem('access_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
 
 function statusLabel(status) {
   return {
@@ -159,13 +154,14 @@ async function fetchQueue() {
   loading.value = true
   error.value = ''
   try {
-    const { data } = await axios.get('/api/analysis-tasks/queue', {
-      headers: authHeaders(),
+    const body = await request({
+      method: 'get',
+      url: '/analysis-tasks/queue',
       params: { limit: 80 },
     })
-    summary.value = data?.global || {}
-    items.value = Array.isArray(data?.items) ? data.items : []
-    processingTasks.value = Array.isArray(data?.processing_tasks) ? data.processing_tasks : []
+    summary.value = body?.global || {}
+    items.value = Array.isArray(body?.items) ? body.items : []
+    processingTasks.value = Array.isArray(body?.processing_tasks) ? body.processing_tasks : []
     resetPolling()
   } catch (err) {
     error.value = err.response?.data?.detail || err.message || '任务队列加载失败'

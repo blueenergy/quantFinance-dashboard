@@ -167,7 +167,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import request from '../utils/request'
 import Pagination from './Pagination.vue'
 import UsersTable from './UsersTable.vue'
 import LoginLogsTable from './LoginLogsTable.vue'
@@ -271,18 +271,18 @@ export default {
     },
     // 通用 GET 请求助手：成功返回 data.data 部分，失败抛出错误
     async apiGet(url, params = {}) {
-      const response = await axios.get(url, { params })
-      if (!response.data || response.data.success !== true) {
-        const msg = response.data?.message || '请求失败'
+      const body = await request({ method: 'get', url, params })
+      if (!body || body.success !== true) {
+        const msg = body?.message || '请求失败'
         throw new Error(msg)
       }
-      return response.data.data
+      return body.data
     },
     // 加载统计数据
     async loadStatistics() {
       try {
         this.loading = true
-        const data = await this.apiGet('/api/admin/statistics')
+        const data = await this.apiGet('/admin/statistics')
         this.statistics = data
       } catch (error) {
         console.error('加载统计数据失败:', error)
@@ -298,7 +298,7 @@ export default {
         this.loading = true
         const params = { page, page_size: 20 }
         if (this.userSearch) params.search = this.userSearch.trim()
-        const data = await this.apiGet('/api/admin/users', params)
+        const data = await this.apiGet('/admin/users', params)
         this.users = data.users
         this.usersPagination = data.pagination
       } catch (error) {
@@ -332,12 +332,14 @@ export default {
       
       try {
         this.loading = true
-        const response = await axios.put(`/api/admin/users/${user.id}/status`, {
-          is_active: !user.is_active
+        const body = await request({
+          method: 'put',
+          url: `/admin/users/${user.id}/status`,
+          data: { is_active: !user.is_active },
         })
         
-        if (response.data.success) {
-          alert(response.data.message)
+        if (body.success) {
+          alert(body.message)
           await this.loadUsers(this.usersPagination?.page || 1)
           await this.loadStatistics()
         }
@@ -353,10 +355,10 @@ export default {
     async viewUserDetail(user) {
       try {
         this.loading = true
-        const response = await axios.get(`/api/admin/users/${user.id}`)
-        if (response.data.success) {
-          this.selectedUser = response.data.data.user
-          this.selectedUserStats = response.data.data.statistics
+        const body = await request({ method: 'get', url: `/admin/users/${user.id}` })
+        if (body.success) {
+          this.selectedUser = body.data.user
+          this.selectedUserStats = body.data.statistics
         }
       } catch (error) {
         console.error('获取用户详情失败:', error)
@@ -378,8 +380,8 @@ export default {
       try {
         this.loading = true
         this.reminderResult = null
-        const response = await axios.post('/api/admin/users/notify-never-logged-in')
-        this.reminderResult = response.data
+        const body = await request({ method: 'post', url: '/admin/users/notify-never-logged-in' })
+        this.reminderResult = body
       } catch (error) {
         this.reminderResult = {
           success: false,
@@ -396,8 +398,8 @@ export default {
       try {
         this.loading = true
         this.reminderResult = null
-        const response = await axios.post(`/api/admin/users/${user.id}/send-reminder`)
-        this.reminderResult = response.data
+        const body = await request({ method: 'post', url: `/admin/users/${user.id}/send-reminder` })
+        this.reminderResult = body
       } catch (error) {
         this.reminderResult = {
           success: false,
@@ -414,7 +416,7 @@ export default {
       try {
         this.loading = true
         const params = { page, page_size: 50, success_only: this.showSuccessOnly }
-        const data = await this.apiGet('/api/admin/login-logs', params)
+        const data = await this.apiGet('/admin/login-logs', params)
         this.loginLogs = data.logs
         this.logsPagination = data.pagination
       } catch (error) {
@@ -429,7 +431,7 @@ export default {
     async loadAdminLogs(page = 1) {
       try {
         this.loading = true
-        const data = await this.apiGet('/api/admin/actions', { page, page_size: 50 })
+        const data = await this.apiGet('/admin/actions', { page, page_size: 50 })
         this.adminLogs = data.actions
         this.adminLogsPagination = data.pagination
       } catch (error) {

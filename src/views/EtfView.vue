@@ -144,7 +144,7 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import EtfChart from '../components/EtfChart.vue'
 
 const props = defineProps({
@@ -153,9 +153,6 @@ const props = defineProps({
     default: null,
   },
 })
-
-/** 与 .env 的 VITE_API_BASE 一致时，可直连后端便于排查；默认 /api 走 Vite 代理到 localhost:3001 */
-const etfApiBase = (import.meta.env.VITE_API_BASE || '/api').toString().replace(/\/$/, '') || '/api'
 
 const PAGE_SIZE = 50
 
@@ -235,25 +232,25 @@ async function fetchList({ append = false } = {}) {
   try {
     const q = searchQuery.value.trim()
     if (q) {
-      const res = await axios.get(`${etfApiBase}/etf/list`, {
+      const body = await request.get('/etf/list', {
         params: { q, limit: 200 },
       })
-      etfList.value = res.data.data || []
+      etfList.value = body.data || []
       listTradeDate.value = null
-      listTotal.value = res.data.count || etfList.value.length
+      listTotal.value = body.count || etfList.value.length
     } else {
       const offset = append ? etfList.value.length : 0
-      const res = await axios.get(`${etfApiBase}/etf/list`, {
+      const body = await request.get('/etf/list', {
         params: {
           sort: 'total_share',
           limit: PAGE_SIZE,
           offset,
         },
       })
-      const rows = res.data.data || []
+      const rows = body.data || []
       etfList.value = append ? [...etfList.value, ...rows] : rows
-      listTradeDate.value = res.data.trade_date || null
-      listTotal.value = res.data.total != null ? res.data.total : rows.length
+      listTradeDate.value = body.trade_date || null
+      listTotal.value = body.total != null ? body.total : rows.length
     }
   } catch (e) {
     error.value = '获取ETF列表失败: ' + (e.message || String(e))
@@ -310,14 +307,14 @@ function _pickEtfRow(rows, queryRaw) {
   return rowsOk[0]
 }
 
-/** Detail mode: same box as list search; uses /api/etf/list?q=… */
+/** Detail mode: same box as list search; uses /etf/list?q=… */
 async function switchToEtfFromSharedSearch() {
   const raw = searchQuery.value.trim()
   if (!raw || switchingEtf.value) return
   switchingEtf.value = true
   try {
-    const res = await axios.get(`${etfApiBase}/etf/list`, { params: { q: raw, limit: 30 } })
-    const pick = _pickEtfRow(res.data.data, raw)
+    const body = await request.get('/etf/list', { params: { q: raw, limit: 30 } })
+    const pick = _pickEtfRow(body.data, raw)
     if (!pick || !pick.ts_code) {
       alert('未找到该 ETF，请检查代码或名称后重试')
       return
@@ -342,13 +339,13 @@ async function loadEtfKline (tsCode, tfForRequest) {
   const myGen = ++klineLoadGen
   klineLoading.value = true
   try {
-    const res = await axios.get(`${etfApiBase}/etf/${tsCode}/kline`, {
+    const body = await request.get(`/etf/${tsCode}/kline`, {
       params: { limit: 250, tf },
       signal,
     })
     if (myGen !== klineLoadGen) return
-    if (res.data?.success) {
-      chartRecords.value = res.data.data || []
+    if (body?.success) {
+      chartRecords.value = body.data || []
     } else {
       chartRecords.value = []
     }
@@ -392,8 +389,8 @@ async function openEtfBySymbol(rawSymbol, fallbackName = '') {
       return
     }
 
-    const res = await axios.get(`${etfApiBase}/etf/list`, { params: { q: raw, limit: 30 } })
-    const pick = _pickEtfRow(res.data.data, raw)
+    const body = await request.get('/etf/list', { params: { q: raw, limit: 30 } })
+    const pick = _pickEtfRow(body.data, raw)
     if (!pick?.ts_code) {
       alert(`未找到 ETF ${raw}，请在 ETF淘金中手动搜索。`)
       return
@@ -441,12 +438,12 @@ watch(
 
 const fetchLatestAnalysis = async (symbol) => {
   try {
-    const res = await axios.get(`${etfApiBase}/etf/${symbol}/analysis`)
-    if (res.data.success && res.data.analysis) {
-      analysisResult.value = res.data.analysis
+    const body = await request.get(`/etf/${symbol}/analysis`)
+    if (body.success && body.analysis) {
+      analysisResult.value = body.analysis
       analysisMeta.value = {
-        created_at: res.data.created_at,
-        trade_date: res.data.trade_date,
+        created_at: body.created_at,
+        trade_date: body.trade_date,
       }
     }
   } catch (e) {
@@ -459,13 +456,13 @@ const triggerAnalysis = async () => {
 
   analyzing.value = true
   try {
-    const res = await axios.post(`${etfApiBase}/etf/analyze`, {
+    const body = await request.post('/etf/analyze', {
       symbol: selectedEtf.value.ts_code,
       force: true,
     })
 
-    if (res.data.success && res.data.task_id) {
-      pollTaskStatus(res.data.task_id)
+    if (body.success && body.task_id) {
+      pollTaskStatus(body.task_id)
     }
   } catch (e) {
     alert('触发分析失败: ' + e.message)
@@ -478,18 +475,18 @@ const pollTaskStatus = (taskId) => {
 
   pollingTimer.value = setInterval(async () => {
     try {
-      const res = await axios.get(`${etfApiBase}/etf/task/${taskId}`)
-      if (res.data.status === 'completed') {
+      const body = await request.get(`/etf/task/${taskId}`)
+      if (body.status === 'completed') {
         clearInterval(pollingTimer.value)
-        analysisResult.value = res.data.analysis
+        analysisResult.value = body.analysis
         analysisMeta.value = {
-          completed_at: res.data.completed_at,
-          trade_date: res.data.trade_date,
+          completed_at: body.completed_at,
+          trade_date: body.trade_date,
         }
         analyzing.value = false
-      } else if (res.data.status === 'failed') {
+      } else if (body.status === 'failed') {
         clearInterval(pollingTimer.value)
-        alert('分析任务失败: ' + res.data.error)
+        alert('分析任务失败: ' + body.error)
         analyzing.value = false
       }
     } catch (e) {

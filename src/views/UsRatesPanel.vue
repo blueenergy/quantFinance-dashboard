@@ -290,7 +290,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import * as echarts from 'echarts'
 
 const doc = ref(null)
@@ -394,21 +394,19 @@ async function refreshPage() {
 async function loadRawSnapshot() {
   rawLoading.value = true
   try {
-    const token = localStorage.getItem('access_token')
-    const headers = { Authorization: `Bearer ${token}` }
     const [tycr, trycr, tbr, tltr, trltr] = await Promise.all([
-      axios.get('/api/macro/raw-data/us-rates', { params: { data_type: 'tycr', days: 10 }, headers }),
-      axios.get('/api/macro/raw-data/us-rates', { params: { data_type: 'trycr', days: 10 }, headers }),
-      axios.get('/api/macro/raw-data/us-rates', { params: { data_type: 'tbr', days: 10 }, headers }),
-      axios.get('/api/macro/raw-data/us-rates', { params: { data_type: 'tltr', days: 10 }, headers }),
-      axios.get('/api/macro/raw-data/us-rates', { params: { data_type: 'trltr', days: 10 }, headers }),
+      request({ method: 'get', url: '/macro/raw-data/us-rates', params: { data_type: 'tycr', days: 10 } }),
+      request({ method: 'get', url: '/macro/raw-data/us-rates', params: { data_type: 'trycr', days: 10 } }),
+      request({ method: 'get', url: '/macro/raw-data/us-rates', params: { data_type: 'tbr', days: 10 } }),
+      request({ method: 'get', url: '/macro/raw-data/us-rates', params: { data_type: 'tltr', days: 10 } }),
+      request({ method: 'get', url: '/macro/raw-data/us-rates', params: { data_type: 'trltr', days: 10 } }),
     ])
     rawSnapshot.value = {
-      tycr: latestRow(tycr.data?.data),
-      trycr: latestRow(trycr.data?.data),
-      tbr: latestRow(tbr.data?.data),
-      tltr: latestRow(tltr.data?.data),
-      trltr: latestRow(trltr.data?.data),
+      tycr: latestRow(tycr?.data),
+      trycr: latestRow(trycr?.data),
+      tbr: latestRow(tbr?.data),
+      tltr: latestRow(tltr?.data),
+      trltr: latestRow(trltr?.data),
     }
   } catch (e) {
     errorMsg.value = e.response?.data?.detail || e.message || '加载美国利率原始数据失败'
@@ -421,11 +419,8 @@ async function loadAnalysis() {
   loading.value = true
   errorMsg.value = ''
   try {
-    const token = localStorage.getItem('access_token')
-    const res = await axios.get('/api/macro/analysis/us_macro', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    doc.value = res.data
+    const res = await request({ method: 'get', url: '/macro/analysis/us_macro' })
+    doc.value = res
   } catch (e) {
     if (e.response?.status === 404) {
       doc.value = null
@@ -440,12 +435,12 @@ async function loadAnalysis() {
 async function loadHistory() {
   historyLoading.value = true
   try {
-    const token = localStorage.getItem('access_token')
-    const res = await axios.get('/api/macro/analysis/us_macro/history', {
+    const res = await request({
+      method: 'get',
+      url: '/macro/analysis/us_macro/history',
       params: { limit: 30 },
-      headers: { Authorization: `Bearer ${token}` },
     })
-    history.value = res.data?.data || []
+    history.value = res?.data || []
   } catch {
     // 历史加载失败静默处理
   } finally {
@@ -457,10 +452,7 @@ async function triggerAnalysis() {
   triggering.value = true
   errorMsg.value = ''
   try {
-    const token = localStorage.getItem('access_token')
-    await axios.post('/api/macro/analysis/us_macro/trigger', null, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    await request({ method: 'post', url: '/macro/analysis/us_macro/trigger' })
     setTimeout(loadAnalysis, 5000)
   } catch (e) {
     errorMsg.value = e.response?.data?.detail || e.message || '触发失败'
@@ -517,15 +509,13 @@ async function toggleCharts() {
 async function loadCharts() {
   chartLoading.value = true
   try {
-    const token = localStorage.getItem('access_token')
-    const headers = { Authorization: `Bearer ${token}` }
     const [r1, r2] = await Promise.all([
-      axios.get('/api/macro/raw-data/us-rates', { params: { data_type: 'tycr',  days: chartDays.value }, headers }),
-      axios.get('/api/macro/raw-data/us-rates', { params: { data_type: 'trycr', days: chartDays.value }, headers }),
+      request({ method: 'get', url: '/macro/raw-data/us-rates', params: { data_type: 'tycr', days: chartDays.value } }),
+      request({ method: 'get', url: '/macro/raw-data/us-rates', params: { data_type: 'trycr', days: chartDays.value } }),
     ])
 
     // Chart 1: 2Y / 10Y yields + spread
-    const rows1  = r1.data?.data || []
+    const rows1  = r1?.data || []
     const dates1 = rows1.map(r => String(r.date).slice(0, 10))
     const y2     = rows1.map(r => r.y2  != null ? +r.y2  : null)
     const y10    = rows1.map(r => r.y10 != null ? +r.y10 : null)
@@ -562,7 +552,7 @@ async function loadCharts() {
     }
 
     // Chart 2: TIPS 10Y real rate
-    const rows2  = r2.data?.data || []
+    const rows2  = r2?.data || []
     const dates2 = rows2.map(r => String(r.date).slice(0, 10))
     const tips10 = rows2.map(r => r.y10 != null ? +r.y10 : null)
     if (chartTips.value) {

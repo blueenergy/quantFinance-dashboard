@@ -1,15 +1,6 @@
 // Simple user API client
 import request from '../utils/request'
 
-const API_BASE = import.meta.env.VITE_API_BASE || '/api'
-
-function authHeaders() {
-  const token = localStorage.getItem('access_token')
-  const headers = { 'Content-Type': 'application/json' }
-  if (token) headers.Authorization = `Bearer ${token}`
-  return headers
-}
-
 export async function getWatchlist() {
   return request({
     url: '/user/watchlist',
@@ -91,6 +82,3 @@ export async function changePassword(oldPassword, newPassword) {
     throw new Error(message)
   }
 }
-
-// Kept for WatchlistStrategyTable inline fetch calls (out of scope for this migration)
-export { API_BASE, authHeaders }

@@ -177,7 +177,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 
 const loading = ref(false)
 const error = ref('')
@@ -205,26 +205,26 @@ function setError(err, fallback) {
 }
 
 async function loadPositions() {
-  const res = await axios.get('/api/intraday-t0/positions', {
+  const body = await request.get('/intraday-t0/positions', {
     params: { source: source.value, trade_date: compactDate() },
   })
-  positions.value = res.data?.data || []
-  actualSource.value = res.data?.source || source.value
-  market.value = res.data?.market || null
+  positions.value = body?.data || []
+  actualSource.value = body?.source || source.value
+  market.value = body?.market || null
 }
 
 async function loadSignals() {
-  const res = await axios.get('/api/intraday-t0/signals', {
+  const body = await request.get('/intraday-t0/signals', {
     params: { trade_date: compactDate(), limit: 200 },
   })
-  signals.value = res.data?.data || []
+  signals.value = body?.data || []
 }
 
 async function loadPerformance() {
-  const res = await axios.get('/api/intraday-t0/signals/performance', {
+  const body = await request.get('/intraday-t0/signals/performance', {
     params: { trade_date: compactDate() },
   })
-  performance.value = res.data?.data || []
+  performance.value = body?.data || []
 }
 
 async function loadAll() {
@@ -244,7 +244,7 @@ async function saveMockPosition() {
   loading.value = true
   error.value = ''
   try {
-    await axios.post('/api/intraday-t0/mock-positions', {
+    await request.post('/intraday-t0/mock-positions', {
       symbol: mockForm.symbol,
       quantity: mockForm.quantity,
       available_quantity: mockForm.quantity,
@@ -265,8 +265,8 @@ async function createFromWatchlist() {
   loading.value = true
   error.value = ''
   try {
-    const res = await axios.post('/api/intraday-t0/mock-positions/from-watchlist', { default_quantity: 100 })
-    message.value = `已生成 ${res.data?.count || 0} 条模拟仓位`
+    const body = await request.post('/intraday-t0/mock-positions/from-watchlist', { default_quantity: 100 })
+    message.value = `已生成 ${body?.count || 0} 条模拟仓位`
     source.value = 'mock'
     await loadAll()
   } catch (err) {
@@ -280,7 +280,7 @@ async function deleteMockPosition(id) {
   loading.value = true
   error.value = ''
   try {
-    await axios.delete(`/api/intraday-t0/mock-positions/${id}`)
+    await request.delete(`/intraday-t0/mock-positions/${id}`)
     message.value = '模拟仓位已删除'
     await loadAll()
   } catch (err) {
@@ -294,11 +294,11 @@ async function generateSignals() {
   loading.value = true
   error.value = ''
   try {
-    const res = await axios.post('/api/intraday-t0/signals/generate', {
+    const body = await request.post('/intraday-t0/signals/generate', {
       trade_date: compactDate(),
       source: source.value,
     })
-    message.value = `已生成 ${res.data?.signals_count || 0} 条信号`
+    message.value = `已生成 ${body?.signals_count || 0} 条信号`
     await Promise.all([loadSignals(), loadPerformance()])
   } catch (err) {
     setError(err, '生成信号失败')
@@ -311,10 +311,10 @@ async function evaluateSignals() {
   loading.value = true
   error.value = ''
   try {
-    const res = await axios.post('/api/intraday-t0/signals/evaluate', null, {
+    const body = await request.post('/intraday-t0/signals/evaluate', null, {
       params: { trade_date: compactDate() },
     })
-    message.value = `已写入 ${res.data?.evaluations_written || 0} 条评估`
+    message.value = `已写入 ${body?.evaluations_written || 0} 条评估`
     await loadPerformance()
   } catch (err) {
     setError(err, '评估信号失败')

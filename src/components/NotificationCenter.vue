@@ -178,7 +178,7 @@
 
 <script>
 import { ref, onMounted, onUnmounted } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 
 export default {
   name: 'NotificationCenter',
@@ -207,13 +207,15 @@ export default {
       loading.value = true
       try {
         const unreadOnly = activeTab.value === 'unread'
-        const response = await axios.get('/api/notifications', {
+        const body = await request({
+          method: 'get',
+          url: '/notifications',
           params: { unread_only: unreadOnly, limit: 50 }
         })
         
-        if (response.data.success) {
-          notifications.value = response.data.data.notifications
-          unreadCount.value = response.data.data.unread_count
+        if (body.success) {
+          notifications.value = body.data.notifications
+          unreadCount.value = body.data.unread_count
         }
       } catch (error) {
         console.error('Failed to load notifications:', error)
@@ -224,9 +226,9 @@ export default {
 
     const loadSettings = async () => {
       try {
-        const response = await axios.get('/api/notifications/settings')
-        if (response.data.success) {
-          settings.value = { ...settings.value, ...response.data.data }
+        const body = await request({ method: 'get', url: '/notifications/settings' })
+        if (body.success) {
+          settings.value = { ...settings.value, ...body.data }
         }
       } catch (error) {
         console.error('Failed to load settings:', error)
@@ -235,7 +237,7 @@ export default {
 
     const saveSettings = async () => {
       try {
-        await axios.put('/api/notifications/settings', settings.value)
+        await request({ method: 'put', url: '/notifications/settings', data: settings.value })
       } catch (error) {
         console.error('Failed to save settings:', error)
       }
@@ -263,7 +265,7 @@ export default {
     const handleNotificationClick = async (notification) => {
       if (!notification.is_read) {
         try {
-          await axios.post(`/api/notifications/${notification._id}/read`)
+          await request({ method: 'post', url: `/notifications/${notification._id}/read` })
           notification.is_read = true
           unreadCount.value = Math.max(0, unreadCount.value - 1)
         } catch (error) {
@@ -292,7 +294,7 @@ export default {
 
     const markAllRead = async () => {
       try {
-        await axios.post('/api/notifications/read-all')
+        await request({ method: 'post', url: '/notifications/read-all' })
         notifications.value.forEach(n => n.is_read = true)
         unreadCount.value = 0
       } catch (error) {
@@ -302,7 +304,7 @@ export default {
 
     const deleteNotification = async (id) => {
       try {
-        await axios.delete(`/api/notifications/${id}`)
+        await request({ method: 'delete', url: `/notifications/${id}` })
         notifications.value = notifications.value.filter(n => n._id !== id)
       } catch (error) {
         console.error('Failed to delete notification:', error)
@@ -314,8 +316,8 @@ export default {
       testEmailResult.value = ''
       
       try {
-        const response = await axios.post('/api/notifications/test-email')
-        if (response.data.success) {
+        const body = await request({ method: 'post', url: '/notifications/test-email' })
+        if (body.success) {
           testEmailResult.value = '✅ 测试邮件已发送'
         }
       } catch (error) {

@@ -280,7 +280,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import SectorContributorsPanel from './SectorContributorsPanel.vue'
 import LimitUpReasoningDialog from './LimitUpReasoningDialog.vue'
 import { useLimitUpReasoningDialog } from '../composables/useLimitUpReasoningDialog'
@@ -553,8 +553,11 @@ async function fetchOverlay() {
   const sd = ymd(startDate.value)
   const ed = ymd(endDate.value)
   try {
-    const res = await axios.get(`/api/kline-series?symbol=${overlaySymbol.value}&start_date=${sd}&end_date=${ed}&limit=2000`)
-    overlayData.value = res.data?.data || []
+    const body = await request({
+      method: 'get',
+      url: `/kline-series?symbol=${overlaySymbol.value}&start_date=${sd}&end_date=${ed}&limit=2000`,
+    })
+    overlayData.value = body?.data || []
   } catch (e) {
     console.error('获取叠加指数失败', e)
     overlayData.value = []
@@ -576,10 +579,10 @@ async function fetchSectorSpectrum() {
   sectorLoading.value = true
   try {
     const url = mode.value === 'minute'
-      ? `/api/market-spectrum/realtime-sectors?start_time=${latestDate}&end_time=${latestDate}&level=${sectorLevel.value}&ma_period=5&limit=120`
-      : `/api/market-spectrum/sectors?start_date=${latestDate}&end_date=${latestDate}&level=${sectorLevel.value}&ma_period=5&limit=120`
-    const res = await axios.get(url)
-    const arr = Array.isArray(res.data?.data) ? res.data.data : []
+      ? `/market-spectrum/realtime-sectors?start_time=${latestDate}&end_time=${latestDate}&level=${sectorLevel.value}&ma_period=5&limit=120`
+      : `/market-spectrum/sectors?start_date=${latestDate}&end_date=${latestDate}&level=${sectorLevel.value}&ma_period=5&limit=120`
+    const body = await request({ method: 'get', url })
+    const arr = Array.isArray(body?.data) ? body.data : []
     arr.sort((a, b) => String(a.trade_date).localeCompare(String(b.trade_date)) || String(a.sector_code).localeCompare(String(b.sector_code)))
     sectorRecords.value = arr
     if (!arr.some(row => row.sector_code === selectedSectorCode.value)) {
@@ -618,13 +621,13 @@ async function fetchSectorContributors() {
     const tn = contributorTopN
     let url
     if (mode.value === 'minute') {
-      url = `/api/market-spectrum/sector-contributors?mode=realtime&level=${lv}&sector_code=${code}&snapshot_time=${latestDate}&ma_period=${mp}&top_n=${tn}`
+      url = `/market-spectrum/sector-contributors?mode=realtime&level=${lv}&sector_code=${code}&snapshot_time=${latestDate}&ma_period=${mp}&top_n=${tn}`
     } else {
       const td = String(latestDate).replace(/-/g, '').slice(0, 8)
-      url = `/api/market-spectrum/sector-contributors?mode=daily&level=${lv}&sector_code=${code}&trade_date=${td}&ma_period=${mp}&top_n=${tn}`
+      url = `/market-spectrum/sector-contributors?mode=daily&level=${lv}&sector_code=${code}&trade_date=${td}&ma_period=${mp}&top_n=${tn}`
     }
-    const res = await axios.get(url)
-    contributorsPayload.value = res.data
+    const body = await request({ method: 'get', url })
+    contributorsPayload.value = body
   } catch (e) {
     console.error('获取板块贡献股失败', e)
     contributorsError.value = e?.response?.data?.detail || e.message || '加载失败'
@@ -644,14 +647,14 @@ async function fetchSelectedSectorSeries(code) {
     let url
     if (mode.value === 'minute') {
       const { start, end } = buildMinuteRange()
-      url = `/api/market-spectrum/realtime-sectors?start_time=${start}&end_time=${end}&level=${sectorLevel.value}&ma_period=5&limit=300&sector_code=${encodeURIComponent(code)}`
+      url = `/market-spectrum/realtime-sectors?start_time=${start}&end_time=${end}&level=${sectorLevel.value}&ma_period=5&limit=300&sector_code=${encodeURIComponent(code)}`
     } else {
       const sd = ymd(startDate.value)
       const ed = ymd(endDate.value)
-      url = `/api/market-spectrum/sectors?start_date=${sd}&end_date=${ed}&level=${sectorLevel.value}&ma_period=5&limit=300&sector_code=${encodeURIComponent(code)}`
+      url = `/market-spectrum/sectors?start_date=${sd}&end_date=${ed}&level=${sectorLevel.value}&ma_period=5&limit=300&sector_code=${encodeURIComponent(code)}`
     }
-    const res = await axios.get(url)
-    const arr = Array.isArray(res.data?.data) ? res.data.data : []
+    const body = await request({ method: 'get', url })
+    const arr = Array.isArray(body?.data) ? body.data : []
     arr.sort((a, b) => String(a.trade_date).localeCompare(String(b.trade_date)))
     selectedSectorSeries.value = arr
   } catch (e) {
@@ -677,13 +680,13 @@ async function fetchSpectrum() {
   try {
     let url
     if (mode.value === 'daily') {
-      url = `/api/market-spectrum?start_date=${ymd(startDate.value)}&end_date=${ymd(endDate.value)}`
+      url = `/market-spectrum?start_date=${ymd(startDate.value)}&end_date=${ymd(endDate.value)}`
     } else {
       const { start, end } = buildMinuteRange()
-      url = `/api/market-spectrum-minute?start_time=${start}&end_time=${end}&ma_period=5`
+      url = `/market-spectrum-minute?start_time=${start}&end_time=${end}&ma_period=5`
     }
-    const resp = await axios.get(url)
-    const arr = Array.isArray(resp.data?.data) ? resp.data.data : []
+    const body = await request({ method: 'get', url })
+    const arr = Array.isArray(body?.data) ? body.data : []
     // 按日期升序排序，确保图表顺序
     arr.sort((a,b) => a.trade_date.localeCompare(b.trade_date))
     records.value = arr

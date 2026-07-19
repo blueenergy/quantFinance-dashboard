@@ -250,7 +250,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, reactive } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import { buildShenwanKlineOption } from '../utils/echarts/shenwanKlineOption.js'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
 import MoneyFlowPanel from '../components/MoneyFlowPanel.vue'
@@ -305,10 +305,8 @@ async function loadMembers (indexCode) {
   memberError.value = ''
   memberList.value = []
   try {
-    const token = localStorage.getItem('access_token')
-    const { data } = await axios.get('/api/shenwan-index/members', {
+    const data = await request.get('/shenwan-index/members', {
       params: { index_code: indexCode, src: SRC, current_only: true },
-      headers: { Authorization: `Bearer ${token}` },
     })
     memberList.value = data?.data || []
   } catch (e) {
@@ -330,10 +328,8 @@ async function loadIndustryMoneyFlow (indexCode) {
   industryMoneyRows.value = []
   industryMoneySummary.value = {}
   try {
-    const token = localStorage.getItem('access_token')
-    const { data } = await axios.get('/api/shenwan-index/money-flow', {
+    const data = await request.get('/shenwan-index/money-flow', {
       params: { index_code: indexCode, src: SRC, days: moneyFlowDaysForTf(tf.value), current_only: true },
-      headers: { Authorization: `Bearer ${token}` },
     })
     industryMoneyRows.value = Array.isArray(data?.data) ? data.data : []
     industryMoneySummary.value = data?.summary || {}
@@ -412,10 +408,8 @@ const industryAnalysisAgeText = computed(() => {
 async function loadLatestIndustryAnalysis (indexCode) {
   if (!indexCode) return
   try {
-    const token = localStorage.getItem('access_token')
-    const { data } = await axios.get('/api/shenwan-index/industry-analysis/latest', {
+    const data = await request.get('/shenwan-index/industry-analysis/latest', {
       params: { index_code: indexCode },
-      headers: { Authorization: `Bearer ${token}` },
     })
     if (data?.success && data.analysis) {
       industryAnalysisResult.value = { ...data.analysis, _index_code: indexCode }
@@ -435,10 +429,8 @@ async function submitIndustryAnalysis () {
   industryPollCount = 0
   clearInterval(industryPollTimer)
   try {
-    const token = localStorage.getItem('access_token')
-    const { data } = await axios.post('/api/shenwan-index/industry-analysis',
+    const data = await request.post('/shenwan-index/industry-analysis',
       { index_code: code },
-      { headers: { Authorization: `Bearer ${token}` } },
     )
     if (!data?.task_id) throw new Error('未返回 task_id')
     const taskId = data.task_id
@@ -452,9 +444,7 @@ async function submitIndustryAnalysis () {
         return
       }
       try {
-        const { data: td } = await axios.get(`/api/analyze/task/${taskId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const td = await request.get(`/analyze/task/${taskId}`)
         if (td.status === 'completed') {
           clearInterval(industryPollTimer)
           industryAnalysisLoading.value = false
@@ -757,7 +747,7 @@ async function reloadKline () {
     const ed = ymdFromInput(endD.value)
     if (sd) params.start = sd
     if (ed) params.end = ed
-    const { data } = await axios.get('/api/shenwan-index/kline', { params })
+    const data = await request.get('/shenwan-index/kline', { params })
     if (data && data.data) {
       klineData.value = data.data
       if (data.message) klineMsg.value = data.message
@@ -792,7 +782,7 @@ async function loadL1 () {
   l1Loading.value = true
   treeError.value = ''
   try {
-    const { data } = await axios.get('/api/shenwan-index/tree', { params: { src: SRC, level: 'L1' } })
+    const data = await request.get('/shenwan-index/tree', { params: { src: SRC, level: 'L1' } })
     l1List.value = (data && data.data) || []
     if (data && data.message && !l1List.value.length) {
       treeError.value = data.message
@@ -806,7 +796,7 @@ async function loadL1 () {
 }
 
 async function loadChildren (parent) {
-  const { data } = await axios.get('/api/shenwan-index/children', {
+  const data = await request.get('/shenwan-index/children', {
     params: { src: SRC, parent_code: parent }
   })
   return (data && data.data) || []

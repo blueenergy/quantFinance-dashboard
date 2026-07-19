@@ -84,7 +84,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 
 let echarts
 
@@ -186,8 +186,8 @@ async function loadWatchlist() {
   if (watchlistLoading.value) return
   watchlistLoading.value = true
   try {
-    const res = await axios.get('/api/user/watchlist-stocks')
-    const stocks = res.data?.data || []
+    const body = await request({ method: 'get', url: '/user/watchlist-stocks' })
+    const stocks = body?.data || []
     watchlistSymbols.value = stocks.map(s => {
       const name = s.name || s.stock_name || s.company_name || s.title || ''
       return { symbol: s.symbol, label: name ? `${name} (${s.symbol})` : s.symbol }
@@ -218,8 +218,11 @@ function setRange(days) {
 async function fetchSeries(symbol) {
   const sd = startDate.value.replace(/-/g, '')
   const ed = endDate.value.replace(/-/g, '')
-  const res = await axios.get(`/api/kline-series?symbol=${symbol}&start_date=${sd}&end_date=${ed}&limit=2000`)
-  return res.data?.data || []
+  const body = await request({
+    method: 'get',
+    url: `/kline-series?symbol=${symbol}&start_date=${sd}&end_date=${ed}&limit=2000`,
+  })
+  return body?.data || []
 }
 
 async function fetchAll() {

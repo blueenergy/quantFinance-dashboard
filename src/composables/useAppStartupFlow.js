@@ -1,5 +1,5 @@
 import { onMounted, ref } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 
 export function useAppStartupFlow({
   user,
@@ -43,13 +43,10 @@ export function useAppStartupFlow({
     window.currentSourceInfo = null
 
     let ids = null
-    const navReq = axios
-      .get('/api/user/navigation-tabs', {
-        headers: { Authorization: `Bearer ${authData.access_token}` },
-      })
-      .then((res) => {
-        if (res.data?.success && Array.isArray(res.data.data?.visible_tab_ids)) {
-          ids = res.data.data.visible_tab_ids
+    const navReq = request({ url: '/user/navigation-tabs', method: 'get' })
+      .then((body) => {
+        if (body?.success && Array.isArray(body.data?.visible_tab_ids)) {
+          ids = body.data.visible_tab_ids
         }
       })
       .catch((e) => {

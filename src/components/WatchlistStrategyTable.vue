@@ -372,7 +372,8 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import { VExpansionPanels, VExpansionPanel, VExpansionPanelTitle, VExpansionPanelText } from 'vuetify/components'
-import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies, API_BASE, authHeaders} from '../api/user'
+import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies } from '../api/user'
+import request from '../utils/request'
 import { mdiViewColumn, mdiViewList, mdiCog, mdiInformation, mdiLock } from '@mdi/js'
 
 // ============================================================================
@@ -511,9 +512,9 @@ async function loadData() {
     getWatchlist(),
     getWatchlistStrategies(),
     getAvailableStrategies(),
-    fetch(`${API_BASE}/user/watchlist-stocks`, { headers: authHeaders() }).then(r => r.json()),
-    fetch(`${API_BASE}/strategy/templates`).then(r => r.json()),
-    fetch(`${API_BASE}/user/profile`, { headers: authHeaders() }).then(r => r.json()).catch(() => null),
+    request({ url: '/user/watchlist-stocks', method: 'get' }),
+    request({ url: '/strategy/templates', method: 'get' }),
+    request({ url: '/user/profile', method: 'get' }).catch(() => null),
   ])
   
   // Set user service level (default free)

@@ -141,7 +141,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 
 function todayYmdDash() {
   const d = new Date()
@@ -188,11 +188,11 @@ async function fetchSubscriptions() {
     return
   }
   try {
-    const token = localStorage.getItem('access_token')
-    const res = await axios.get('/api/user/theme-lag-validation-subscriptions', {
-      headers: { Authorization: `Bearer ${token}` },
+    const body = await request({
+      method: 'get',
+      url: '/user/theme-lag-validation-subscriptions',
     })
-    subscriptions.value = res.data?.data?.items || []
+    subscriptions.value = body?.data?.items || []
   } catch {
     subscriptions.value = []
   }
@@ -207,12 +207,11 @@ async function subscribeCurrent() {
   subActionLoading.value = true
   error.value = ''
   try {
-    const token = localStorage.getItem('access_token')
-    await axios.post(
-      '/api/user/theme-lag-validation-subscriptions',
-      { index_store_key: indexStoreKey.value, enabled: true },
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
+    await request({
+      method: 'post',
+      url: '/user/theme-lag-validation-subscriptions',
+      data: { index_store_key: indexStoreKey.value, enabled: true },
+    })
     await fetchSubscriptions()
   } catch (e) {
     const msg = e.response?.data?.detail || e.message || String(e)
@@ -230,10 +229,10 @@ async function unsubscribeCurrent() {
   subActionLoading.value = true
   error.value = ''
   try {
-    const token = localStorage.getItem('access_token')
     const sk = encodeURIComponent(indexStoreKey.value)
-    await axios.delete(`/api/user/theme-lag-validation-subscriptions/${sk}`, {
-      headers: { Authorization: `Bearer ${token}` },
+    await request({
+      method: 'delete',
+      url: `/user/theme-lag-validation-subscriptions/${sk}`,
     })
     await fetchSubscriptions()
   } catch (e) {
@@ -407,18 +406,18 @@ async function loadPanel() {
   narrativeBlock.value = null
   resolvedTradeDate.value = ''
   try {
-    const token = localStorage.getItem('access_token')
     const td = selectedDate.value
     const sk = indexStoreKey.value
-    const res = await axios.get('/api/theme-lag-panel', {
+    const body = await request({
+      method: 'get',
+      url: '/theme-lag-panel',
       params: { trade_date: td, index_store_key: sk },
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
     if (seq !== themeLagLoadSeq) {
       return
     }
-    if (!res.data?.success) {
-      error.value = res.data?.error || res.data?.detail || '加载失败'
+    if (!body?.success) {
+      error.value = body?.error || body?.detail || '加载失败'
       candidates.value = []
       narrativeBlock.value = null
       return
@@ -426,9 +425,9 @@ async function loadPanel() {
     if (seq !== themeLagLoadSeq) {
       return
     }
-    resolvedTradeDate.value = res.data.trade_date || td.replace(/-/g, '')
-    candidates.value = Array.isArray(res.data.candidates) ? res.data.candidates : []
-    narrativeBlock.value = res.data.narrative || null
+    resolvedTradeDate.value = body.trade_date || td.replace(/-/g, '')
+    candidates.value = Array.isArray(body.candidates) ? body.candidates : []
+    narrativeBlock.value = body.narrative || null
   } catch (e) {
     if (seq !== themeLagLoadSeq) {
       return

@@ -300,7 +300,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import * as echarts from 'echarts'
 
 const doc = ref(null)
@@ -400,23 +400,21 @@ async function refreshPage() {
 async function loadRawSnapshot() {
   rawLoading.value = true
   try {
-    const token = localStorage.getItem('access_token')
-    const headers = { Authorization: `Bearer ${token}` }
     const [shibor, lpr, pmi, cpi, ppi, gdp] = await Promise.all([
-      axios.get('/api/macro/raw-data/cn-rates', { params: { data_type: 'shibor', days: 10 }, headers }),
-      axios.get('/api/macro/raw-data/cn-rates', { params: { data_type: 'shibor_lpr', days: 10 }, headers }),
-      axios.get('/api/macro/raw-data/cn-monthly', { params: { data_type: 'pmi', months: 12 }, headers }),
-      axios.get('/api/macro/raw-data/cn-monthly', { params: { data_type: 'cpi', months: 12 }, headers }),
-      axios.get('/api/macro/raw-data/cn-monthly', { params: { data_type: 'ppi', months: 12 }, headers }),
-      axios.get('/api/macro/raw-data/cn-quarterly', { params: { quarters: 8 }, headers }),
+      request({ method: 'get', url: '/macro/raw-data/cn-rates', params: { data_type: 'shibor', days: 10 } }),
+      request({ method: 'get', url: '/macro/raw-data/cn-rates', params: { data_type: 'shibor_lpr', days: 10 } }),
+      request({ method: 'get', url: '/macro/raw-data/cn-monthly', params: { data_type: 'pmi', months: 12 } }),
+      request({ method: 'get', url: '/macro/raw-data/cn-monthly', params: { data_type: 'cpi', months: 12 } }),
+      request({ method: 'get', url: '/macro/raw-data/cn-monthly', params: { data_type: 'ppi', months: 12 } }),
+      request({ method: 'get', url: '/macro/raw-data/cn-quarterly', params: { quarters: 8 } }),
     ])
     rawSnapshot.value = {
-      shibor: latestRow(shibor.data?.data),
-      lpr: latestRow(lpr.data?.data),
-      pmi: latestRow(pmi.data?.data),
-      cpi: latestRow(cpi.data?.data),
-      ppi: latestRow(ppi.data?.data),
-      gdp: latestRow(gdp.data?.data),
+      shibor: latestRow(shibor?.data),
+      lpr: latestRow(lpr?.data),
+      pmi: latestRow(pmi?.data),
+      cpi: latestRow(cpi?.data),
+      ppi: latestRow(ppi?.data),
+      gdp: latestRow(gdp?.data),
     }
   } catch (e) {
     errorMsg.value = e.response?.data?.detail || e.message || '加载宏观原始数据失败'
@@ -429,11 +427,8 @@ async function loadAnalysis() {
   loading.value = true
   errorMsg.value = ''
   try {
-    const token = localStorage.getItem('access_token')
-    const res = await axios.get('/api/macro/analysis/china_macro', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    doc.value = res.data
+    const res = await request({ method: 'get', url: '/macro/analysis/china_macro' })
+    doc.value = res
   } catch (e) {
     if (e.response?.status === 404) {
       doc.value = null
@@ -448,12 +443,12 @@ async function loadAnalysis() {
 async function loadHistory() {
   historyLoading.value = true
   try {
-    const token = localStorage.getItem('access_token')
-    const res = await axios.get('/api/macro/analysis/china_macro/history', {
+    const res = await request({
+      method: 'get',
+      url: '/macro/analysis/china_macro/history',
       params: { limit: 30 },
-      headers: { Authorization: `Bearer ${token}` },
     })
-    history.value = res.data?.data || []
+    history.value = res?.data || []
   } catch {
     // 历史加载失败静默处理
   } finally {
@@ -465,10 +460,7 @@ async function triggerAnalysis() {
   triggering.value = true
   errorMsg.value = ''
   try {
-    const token = localStorage.getItem('access_token')
-    await axios.post('/api/macro/analysis/china_macro/trigger', null, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    await request({ method: 'post', url: '/macro/analysis/china_macro/trigger' })
     // 5 秒后刷新，给 worker 一点时间
     setTimeout(loadAnalysis, 5000)
   } catch (e) {
@@ -527,15 +519,13 @@ async function toggleCharts() {
 async function loadCharts() {
   chartLoading.value = true
   try {
-    const token = localStorage.getItem('access_token')
-    const headers = { Authorization: `Bearer ${token}` }
     const [r1, r2] = await Promise.all([
-      axios.get('/api/macro/raw-data/cn-rates', { params: { data_type: 'shibor',     days: chartDays.value }, headers }),
-      axios.get('/api/macro/raw-data/cn-rates', { params: { data_type: 'shibor_lpr', days: chartDays.value }, headers }),
+      request({ method: 'get', url: '/macro/raw-data/cn-rates', params: { data_type: 'shibor', days: chartDays.value } }),
+      request({ method: 'get', url: '/macro/raw-data/cn-rates', params: { data_type: 'shibor_lpr', days: chartDays.value } }),
     ])
 
     // Chart 1: Shibor ON / 1W / 1M / 3M
-    const rows1  = r1.data?.data || []
+    const rows1  = r1?.data || []
     const dates1 = rows1.map(r => String(r.date).slice(0, 10))
     if (chartShibor.value) {
       if (!ecShibor) ecShibor = echarts.init(chartShibor.value)
@@ -567,7 +557,7 @@ async function loadCharts() {
     }
 
     // Chart 2: LPR 1Y / 5Y (step line — only changes on policy dates)
-    const rows2  = r2.data?.data || []
+    const rows2  = r2?.data || []
     const dates2 = rows2.map(r => String(r.date).slice(0, 10))
     if (chartLpr.value) {
       if (!ecLpr) ecLpr = echarts.init(chartLpr.value)

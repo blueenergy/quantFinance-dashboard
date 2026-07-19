@@ -153,7 +153,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import StockChart from './StockChart.vue'
 
 const emit = defineEmits(['view-chart'])
@@ -361,16 +361,16 @@ const fetchParams = async () => {
 
   try {
     console.log('[StrategyPool] Fetching params for:', { strategy: selectedStrategy.value, preset: selectedPreset.value })
-    let url = `/api/strategy-pool/params?strategy=${selectedStrategy.value}`
+    let url = `/strategy-pool/params?strategy=${selectedStrategy.value}`
     if (selectedPreset.value) {
       url += `&preset=${selectedPreset.value}`
     }
 
-    const res = await axios.get(url)
-    console.log('[StrategyPool] Params response:', res.data)
+    const body = await request({ method: 'get', url })
+    console.log('[StrategyPool] Params response:', body)
 
-    if (res.data && res.data.success && res.data.found && res.data.params) {
-      backendParams.value = res.data.params
+    if (body && body.success && body.found && body.params) {
+      backendParams.value = body.params
     } else {
       backendParams.value = null
     }
@@ -385,10 +385,13 @@ const fetchPresets = async () => {
   
   try {
     console.log('[StrategyPool] Fetching presets for strategy:', selectedStrategy.value)
-    const res = await axios.get(`/api/strategy-pool/presets?strategy=${selectedStrategy.value}`)
-    console.log('[StrategyPool] Presets response:', res.data)
-    if (res.data.success) {
-      availablePresets.value = res.data.presets || []
+    const body = await request({
+      method: 'get',
+      url: `/strategy-pool/presets?strategy=${selectedStrategy.value}`,
+    })
+    console.log('[StrategyPool] Presets response:', body)
+    if (body.success) {
+      availablePresets.value = body.presets || []
       // Ensure selectedPreset is always a valid choice for the current strategy.
       if (availablePresets.value.length === 0) {
         selectedPreset.value = ''
@@ -412,15 +415,15 @@ const fetchDates = async () => {
     error.value = null
     console.log('[StrategyPool] Fetching dates for strategy:', selectedStrategy.value, 'preset:', selectedPreset.value)
     
-    let url = `/api/strategy-pool/dates?strategy=${selectedStrategy.value}`
+    let url = `/strategy-pool/dates?strategy=${selectedStrategy.value}`
     if (selectedPreset.value) {
       url += `&preset=${selectedPreset.value}`
     }
     
-    const res = await axios.get(url)
-    console.log('[StrategyPool] Dates response:', res.data)
-    if (res.data.success) {
-      availableDates.value = res.data.dates
+    const body = await request({ method: 'get', url })
+    console.log('[StrategyPool] Dates response:', body)
+    if (body.success) {
+      availableDates.value = body.dates
       
       // Always select the most recent date for the new strategy/preset
       // regardless of the current selected date
@@ -454,15 +457,15 @@ const fetchStocks = async () => {
       preset: selectedPreset.value 
     })
     
-    let url = `/api/strategy-pool/stocks?date=${selectedDate.value}&strategy=${selectedStrategy.value}`
+    let url = `/strategy-pool/stocks?date=${selectedDate.value}&strategy=${selectedStrategy.value}`
     if (selectedPreset.value) {
       url += `&preset=${selectedPreset.value}`
     }
     
-    const res = await axios.get(url)
-    console.log('[StrategyPool] Stocks response:', res.data)
-    if (res.data.success) {
-      stocks.value = res.data.stocks
+    const body = await request({ method: 'get', url })
+    console.log('[StrategyPool] Stocks response:', body)
+    if (body.success) {
+      stocks.value = body.stocks
     }
   } catch (err) {
     console.error('Failed to fetch stocks:', err)

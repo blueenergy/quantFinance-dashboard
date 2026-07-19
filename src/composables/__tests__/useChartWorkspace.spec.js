@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref, nextTick } from 'vue'
-import axios from 'axios'
+import request from '../../utils/request'
 import { useChartWorkspace } from '../useChartWorkspace.js'
 
-vi.mock('axios', () => ({
-  default: {
-    get: vi.fn(),
-  },
+vi.mock('../../utils/request', () => ({
+  default: vi.fn(),
 }))
 
 describe('useChartWorkspace', () => {
@@ -21,22 +19,21 @@ describe('useChartWorkspace', () => {
   })
 
   it('keeps chart symbols independent from loaded watchlist data', async () => {
-    axios.get.mockImplementation((url) => {
-      if (url === '/api/user/watchlist-stocks') {
+    request.mockImplementation((config) => {
+      const url = config.url
+      if (url === '/user/watchlist-stocks') {
         return Promise.resolve({
-          data: {
-            success: true,
-            data: [{ symbol: '000001.SZ' }],
-          },
+          success: true,
+          data: [{ symbol: '000001.SZ' }],
         })
       }
-      if (String(url).startsWith('/api/records/')) {
-        return Promise.resolve({ data: [] })
+      if (String(url).startsWith('/records/')) {
+        return Promise.resolve([])
       }
-      if (String(url).startsWith('/api/strategy-pool/trade-history')) {
-        return Promise.resolve({ data: { success: true, data: { trades: [] } } })
+      if (String(url).startsWith('/strategy-pool/trade-history')) {
+        return Promise.resolve({ success: true, data: { trades: [] } })
       }
-      return Promise.resolve({ data: {} })
+      return Promise.resolve({})
     })
 
     const activeTab = ref('chart')
@@ -61,7 +58,7 @@ describe('useChartWorkspace', () => {
   })
 
   it('does not load watchlist data when entering the chart tab', async () => {
-    axios.get.mockResolvedValue({ data: { success: true, data: [] } })
+    request.mockResolvedValue({ success: true, data: [] })
 
     const activeTab = ref('')
     useChartWorkspace({
@@ -75,9 +72,8 @@ describe('useChartWorkspace', () => {
     activeTab.value = 'chart'
     await nextTick()
 
-    expect(axios.get).not.toHaveBeenCalledWith(
-      '/api/user/watchlist-stocks',
-      expect.anything()
+    expect(request).not.toHaveBeenCalledWith(
+      expect.objectContaining({ url: '/user/watchlist-stocks' }),
     )
   })
 })

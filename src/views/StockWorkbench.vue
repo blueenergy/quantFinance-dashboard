@@ -1463,7 +1463,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import * as echarts from 'echarts'
 import {
   collectStockWorkbenchSignals,
@@ -3028,11 +3028,8 @@ function clearAnalysisPolling() {
 async function selectAnalysisHistory(item) {
   if (!item?.id) return
   try {
-    const token = localStorage.getItem('access_token')
-    const res = await axios.get(`/api/analysis-history/${item.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    const full = res.data?.data || item
+    const body = await request.get(`/analysis-history/${item.id}`)
+    const full = body?.data || item
     payload.value = {
       ...(payload.value || {}),
       deep_analysis: full,
@@ -3071,20 +3068,18 @@ async function submitDeepAnalysis() {
   analysisSubmitting.value = true
   analysisSubmitError.value = ''
   analysisSubmitStatus.value = ''
-  const token = localStorage.getItem('access_token')
   try {
-    const res = await axios.post(
-      '/api/analyze/deep-analysis',
+    const body = await request.post(
+      '/analyze/deep-analysis',
       { symbol, priority: 30, analysis_mode: analysisMode.value },
-      { headers: { Authorization: `Bearer ${token}` } },
     )
-    if (!res.data?.success) {
-      analysisSubmitError.value = res.data?.message || '提交失败'
+    if (!body?.success) {
+      analysisSubmitError.value = body?.message || '提交失败'
       analysisSubmitting.value = false
       return
     }
-    const taskId = res.data.task_id
-    analysisSubmitStatus.value = `已提交，前方 ${res.data.queue_ahead ?? '?'} 个任务。${res.data.wait_hint || '分析中…'}`
+    const taskId = body.task_id
+    analysisSubmitStatus.value = `已提交，前方 ${body.queue_ahead ?? '?'} 个任务。${body.wait_hint || '分析中…'}`
     let tries = 0
     analysisPollTimer = setInterval(async () => {
       tries += 1
@@ -3095,22 +3090,20 @@ async function submitDeepAnalysis() {
         return
       }
       try {
-        const poll = await axios.get(`/api/analyze/task/${taskId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const status = poll.data?.status
+        const poll = await request.get(`/analyze/task/${taskId}`)
+        const status = poll?.status
         if (status === 'completed') {
           clearAnalysisPolling()
           analysisSubmitting.value = false
           analysisSubmitStatus.value = '分析完成，已更新当前工作台。'
-          const analysis = poll.data?.analysis || {}
+          const analysis = poll?.analysis || {}
           const nextDeepAnalysis = {
             id: taskId,
             symbol,
             stock_name: analysis.stock_name || stockName.value || '',
-            analysis_mode: poll.data?.analysis_mode || analysis.analysis_mode || analysisMode.value,
+            analysis_mode: poll?.analysis_mode || analysis.analysis_mode || analysisMode.value,
             analysis,
-            model: poll.data?.model,
+            model: poll?.model,
             created_at: new Date().toISOString(),
           }
           payload.value = {
@@ -3130,11 +3123,11 @@ async function submitDeepAnalysis() {
           clearAnalysisPolling()
           analysisSubmitting.value = false
           analysisSubmitStatus.value = ''
-          analysisSubmitError.value = poll.data?.error || '分析失败'
+          analysisSubmitError.value = poll?.error || '分析失败'
         } else if (status === 'pending') {
-          analysisSubmitStatus.value = `排队中，前方 ${poll.data?.queue_ahead ?? '?'} 个任务。${poll.data?.wait_hint || '预计等待时间计算中'}`
+          analysisSubmitStatus.value = `排队中，前方 ${poll?.queue_ahead ?? '?'} 个任务。${poll?.wait_hint || '预计等待时间计算中'}`
         } else if (status === 'processing') {
-          analysisSubmitStatus.value = poll.data?.wait_hint || '正在分析，LLM 响应时间可能有波动'
+          analysisSubmitStatus.value = poll?.wait_hint || '正在分析，LLM 响应时间可能有波动'
         }
       } catch (_) {
         // Keep polling through transient network/server hiccups.

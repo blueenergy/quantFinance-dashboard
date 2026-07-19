@@ -62,7 +62,7 @@
 
 <script setup>
 import { ref, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 
 const props = defineProps({
   records: { type: Array, default: () => [] },
@@ -134,11 +134,11 @@ async function fetchMinuteData() {
   try {
     const dStr = selectedMinuteDate.value.replace(/-/g, '')
     const [bRes, sRes] = await Promise.all([
-      axios.get('/api/minute-bars/', { params: { symbol: props.symbol, start_date: dStr, end_date: dStr, limit: 1000 } }),
-      axios.get('/api/trade-signals/', { params: { symbol: props.symbol, start_date: selectedMinuteDate.value, end_date: selectedMinuteDate.value } })
+      request({ method: 'get', url: '/minute-bars/', params: { symbol: props.symbol, start_date: dStr, end_date: dStr, limit: 1000 } }),
+      request({ method: 'get', url: '/trade-signals/', params: { symbol: props.symbol, start_date: selectedMinuteDate.value, end_date: selectedMinuteDate.value } })
     ])
-    minuteBars.value = bRes.data.data || []
-    tradeSignals.value = sRes.data.data || []
+    minuteBars.value = bRes.data || []
+    tradeSignals.value = sRes.data || []
     drawChart()
   } catch (e) {
     error.value = '加载失败'

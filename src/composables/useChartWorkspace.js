@@ -1,5 +1,5 @@
 import { computed, nextTick, ref, watch } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 
 function normalizeDateForComparison(dateStr) {
   if (!dateStr) return ''
@@ -28,13 +28,12 @@ function normalizeDateForComparison(dateStr) {
 
 async function fetchMoneyFlowRecords(symbol) {
   try {
-    const token = localStorage.getItem('access_token')
-    const res = await fetch(`/api/money-flow-records?symbol=${symbol}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+    const body = await request({
+      url: '/money-flow-records',
+      method: 'get',
+      params: { symbol },
     })
-    return (await res.json()).data
+    return body.data || []
   } catch (err) {
     console.error('获取资金流向数据时出错:', err)
     return []
@@ -69,12 +68,9 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
     }
     appChartWatchlistInFlight = (async () => {
       try {
-        const token = localStorage.getItem('access_token')
-        const res = await axios.get('/api/user/watchlist-stocks', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (res.data && res.data.success && Array.isArray(res.data.data)) {
-          watchlist.value = res.data.data.map((stock) => stock.symbol)
+        const body = await request({ url: '/user/watchlist-stocks', method: 'get' })
+        if (body && body.success && Array.isArray(body.data)) {
+          watchlist.value = body.data.map((stock) => stock.symbol)
         } else {
           watchlist.value = ['000001', '000002', '000003']
         }
@@ -111,14 +107,14 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
       const startDate = toYmd(start)
       const endDate = toYmd(end)
 
-      const klineUrl = `/api/records/?limit=500&sort=-trade_date&symbol=${symbol}&start_date=${startDate}&end_date=${endDate}`
-      const klineReq = axios.get(klineUrl, { timeout: 10000 })
+      const klineUrl = `/records/?limit=500&sort=-trade_date&symbol=${symbol}&start_date=${startDate}&end_date=${endDate}`
+      const klineReq = request({ url: klineUrl, method: 'get', timeout: 10000 })
       const moneyFlowReq = fetchMoneyFlowRecords(symbol)
 
       let tradeHistoryReq = Promise.resolve({ data: { trades: [] } })
       if (symbol) {
         console.log('准备获取交易历史，symbol:', symbol, 'currentStrategy:', currentStrategy.value)
-        let tradeUrl = `/api/strategy-pool/trade-history?symbol=${symbol}`
+        let tradeUrl = `/strategy-pool/trade-history?symbol=${symbol}`
         if (currentStrategy.value) {
           tradeUrl += `&strategy=${currentStrategy.value}`
           if (currentPreset.value) {
@@ -129,11 +125,11 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
         }
 
         console.log('正在请求交易历史:', tradeUrl)
-        tradeHistoryReq = axios.get(tradeUrl, { timeout: 5000 })
-          .then((response) => {
-            console.log('交易历史API响应:', response.data)
-            console.log('完整的响应对象:', response)
-            return response.data
+        tradeHistoryReq = request({ url: tradeUrl, method: 'get', timeout: 5000 })
+          .then((body) => {
+            console.log('交易历史API响应:', body)
+            console.log('完整的响应对象:', body)
+            return body
           })
           .catch((err) => {
             console.warn('获取交易历史失败:', err)
@@ -195,11 +191,11 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
         || adjustedEndDate !== normalizeDateForComparison(endDate)
       ) {
         console.log(`调整日期范围以包含交易记录: ${adjustedStartDate} 到 ${adjustedEndDate}`)
-        const adjustedKlineUrl = `/api/records/?limit=500&sort=-trade_date&symbol=${symbol}&start_date=${adjustedStartDate}&end_date=${adjustedEndDate}`
-        const adjustedKlineRes = await axios.get(adjustedKlineUrl, { timeout: 10000 })
-        chartRecords.value = adjustedKlineRes.data
+        const adjustedKlineUrl = `/records/?limit=500&sort=-trade_date&symbol=${symbol}&start_date=${adjustedStartDate}&end_date=${adjustedEndDate}`
+        const adjustedKlineRes = await request({ url: adjustedKlineUrl, method: 'get', timeout: 10000 })
+        chartRecords.value = adjustedKlineRes
       } else {
-        chartRecords.value = klineRes.data
+        chartRecords.value = klineRes
       }
 
       moneyFlowRecords.value = moneyFlowRes
@@ -237,15 +233,18 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
       const toYmd = (date) => date.toISOString().slice(0, 10).replace(/-/g, '')
       const startDateStr = toYmd(prevStart)
       const endDateStr = earliestDate.replace(/-/g, '')
-      const klineUrl = `/api/records/?limit=1000&sort=-trade_date&symbol=${symbol}&start_date=${startDateStr}&end_date=${endDateStr}`
+      const klineUrl = `/records/?limit=1000&sort=-trade_date&symbol=${symbol}&start_date=${startDateStr}&end_date=${endDateStr}`
 
       const [klineRes, moneyFlowRes] = await Promise.all([
-        axios.get(klineUrl, { timeout: 15000 }),
-        axios.get(`/api/money-flow-records?symbol=${symbol}&start_date=${startDateStr}&end_date=${endDateStr}`),
+        request({ url: klineUrl, method: 'get', timeout: 15000 }),
+        request({
+          url: `/money-flow-records?symbol=${symbol}&start_date=${startDateStr}&end_date=${endDateStr}`,
+          method: 'get',
+        }),
       ])
 
-      const newRecords = klineRes.data || []
-      const newMoneyFlow = moneyFlowRes.data.data || []
+      const newRecords = klineRes || []
+      const newMoneyFlow = moneyFlowRes.data || []
       if (newRecords.length === 0) {
         return
       }

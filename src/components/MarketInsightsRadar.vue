@@ -375,7 +375,7 @@
 
 <script setup>
 import { computed, inject, onMounted, ref, watch } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import SectorContributorsPanel from './SectorContributorsPanel.vue'
 import LimitUpReasoningDialog from './LimitUpReasoningDialog.vue'
 import { useLimitUpReasoningDialog } from '../composables/useLimitUpReasoningDialog'
@@ -552,10 +552,10 @@ async function loadInsightsSectorContributors() {
   sectorContributorsLoading.value = true
   sectorContributorsError.value = ''
   try {
-    const res = await axios.get('/api/market-spectrum/sector-contributors', { params })
-    sectorContributorsPayload.value = res.data
-    if (!res.data?.success) {
-      sectorContributorsError.value = res.data?.error || res.data?.detail || '加载失败'
+    const res = await request({ method: 'get', url: '/market-spectrum/sector-contributors', params })
+    sectorContributorsPayload.value = res
+    if (!res?.success) {
+      sectorContributorsError.value = res?.error || res?.detail || '加载失败'
     }
   } catch (err) {
     sectorContributorsPayload.value = null
@@ -610,22 +610,22 @@ function setError(err, fallback) {
 }
 
 async function loadOverview() {
-  const res = await axios.get('/api/market-insights/overview', { params: { trade_date: compactDate() } })
-  overview.value = res.data
+  const res = await request({ method: 'get', url: '/market-insights/overview', params: { trade_date: compactDate() } })
+  overview.value = res
 }
 
 async function loadEventTypes() {
   try {
-    const res = await axios.get('/api/market-insights/event-types')
-    eventTypeMeta.value = res.data?.data || {}
+    const res = await request({ method: 'get', url: '/market-insights/event-types' })
+    eventTypeMeta.value = res?.data || {}
   } catch (err) {
     eventTypeMeta.value = fallbackEventTypeMeta
   }
 }
 
 async function loadFocus() {
-  const res = await axios.get('/api/market-insights/focus', { params: { trade_date: compactDate(), limit: 5 } })
-  focusItems.value = res.data?.data || []
+  const res = await request({ method: 'get', url: '/market-insights/focus', params: { trade_date: compactDate(), limit: 5 } })
+  focusItems.value = res?.data || []
 }
 
 async function loadEvents() {
@@ -634,27 +634,31 @@ async function loadEvents() {
   if (eventCategory.value) params.category = eventCategory.value
   if (eventSeverity.value) params.severity = eventSeverity.value
   if (minConfidence.value) params.min_confidence = Number(minConfidence.value)
-  const res = await axios.get('/api/market-insights/events', { params })
-  events.value = res.data?.data || []
+  const res = await request({ method: 'get', url: '/market-insights/events', params })
+  events.value = res?.data || []
   if (!selectedEvent.value || !events.value.some((e) => e._id === selectedEvent.value?._id)) {
     selectedEvent.value = events.value[0] || null
   }
 }
 
 async function loadSectorStrength() {
-  const res = await axios.get('/api/market-insights/sector-strength', {
+  const res = await request({
+    method: 'get',
+    url: '/market-insights/sector-strength',
     params: { trade_date: compactDate(), level: sectorLevel.value, window: 15, limit: 50 },
   })
-  sectorStrength.value = res.data?.data || []
+  sectorStrength.value = res?.data || []
   selectedSectorSeries.value = []
   selectedSectorSeriesSimulated.value = false
 }
 
 async function loadQuality() {
-  const res = await axios.get('/api/market-insights/quality', {
+  const res = await request({
+    method: 'get',
+    url: '/market-insights/quality',
     params: { dimension: qualityDimension.value, limit: 20 },
   })
-  qualityItems.value = res.data?.data || []
+  qualityItems.value = res?.data || []
 }
 
 async function loadSecondaryPanels() {
@@ -694,8 +698,12 @@ async function generateEvents() {
   loading.value = true
   error.value = ''
   try {
-    const res = await axios.post('/api/market-insights/generate', null, { params: { trade_date: compactDate() } })
-    message.value = `已生成/更新 ${res.data?.written || 0} 条洞察事件`
+    const res = await request({
+      method: 'post',
+      url: '/market-insights/generate',
+      params: { trade_date: compactDate() },
+    })
+    message.value = `已生成/更新 ${res?.written || 0} 条洞察事件`
     await loadAll()
   } catch (err) {
     setError(err, '生成洞察事件失败')
@@ -708,10 +716,12 @@ async function reviewFocus() {
   loading.value = true
   error.value = ''
   try {
-    const res = await axios.post('/api/market-insights/focus/review', null, {
+    const res = await request({
+      method: 'post',
+      url: '/market-insights/focus/review',
       params: { trade_date: compactDate(), horizon_minutes: 60 },
     })
-    message.value = `已验证 ${res.data?.written || 0} 个焦点`
+    message.value = `已验证 ${res?.written || 0} 个焦点`
     await Promise.all([loadFocus(), loadQuality()])
   } catch (err) {
     setError(err, '验证焦点失败')
@@ -724,8 +734,8 @@ async function refreshQuality() {
   loading.value = true
   error.value = ''
   try {
-    const res = await axios.post('/api/market-insights/quality/refresh')
-    message.value = `已刷新 ${res.data?.count || 0} 条质量评分`
+    const res = await request({ method: 'post', url: '/market-insights/quality/refresh' })
+    message.value = `已刷新 ${res?.count || 0} 条质量评分`
     await loadQuality()
   } catch (err) {
     setError(err, '刷新复盘质量评分失败')
@@ -818,12 +828,16 @@ async function submitFocusFeedback(item, action) {
   if (!item.focus_key) return
   error.value = ''
   try {
-    const res = await axios.post('/api/market-insights/focus/feedback', {
-      focus_key: item.focus_key,
-      action,
-      trade_date: compactDate(),
+    const res = await request({
+      method: 'post',
+      url: '/market-insights/focus/feedback',
+      data: {
+        focus_key: item.focus_key,
+        action,
+        trade_date: compactDate(),
+      },
     })
-    item.feedback = res.data?.data || { action, label: feedbackActionLabel(action) }
+    item.feedback = res?.data || { action, label: feedbackActionLabel(action) }
     message.value = `已标记为${feedbackActionLabel(action)}`
     await loadFocus()
   } catch (err) {
@@ -832,7 +846,9 @@ async function submitFocusFeedback(item, action) {
 }
 
 async function loadSectorSeries(row) {
-  const res = await axios.get('/api/market-insights/sector-strength/series', {
+  const res = await request({
+    method: 'get',
+    url: '/market-insights/sector-strength/series',
     params: {
       trade_date: compactDate(),
       level: row.level || sectorLevel.value,
@@ -841,8 +857,8 @@ async function loadSectorSeries(row) {
       simulate_if_sparse: true,
     },
   })
-  selectedSectorSeries.value = res.data?.data || []
-  selectedSectorSeriesSimulated.value = !!res.data?.is_simulated
+  selectedSectorSeries.value = res?.data || []
+  selectedSectorSeriesSimulated.value = !!res?.is_simulated
 }
 
 async function selectSector(row) {

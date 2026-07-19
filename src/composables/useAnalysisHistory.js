@@ -1,7 +1,7 @@
 // useAnalysisHistory.js
 // 可插拔的历史分析逻辑 composable
 import { ref } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import { useAuth } from '../services/auth.js'
 
 export function useAnalysisHistory() {
@@ -17,13 +17,13 @@ export function useAnalysisHistory() {
     if (isAuthenticated?.value) {
       // 登录状态下从后端获取
       try {
-        const token = localStorage.getItem('access_token')
-        const resp = await axios.get('/api/analysis-history', {
-          headers: { Authorization: `Bearer ${token}` },
+        const body = await request({
+          url: '/analysis-history',
+          method: 'get',
           params: { symbol, include_full: true },
         })
-        console.log(`[loadHistory] API 响应:`, resp.data)
-        const raw = resp.data?.data || []
+        console.log(`[loadHistory] API 响应:`, body)
+        const raw = body?.data || []
         console.log(`[loadHistory] 解析后的数据数量: ${raw.length}`)
         analysisHistory.value[symbol] = raw.map((h) => {
           const ar = h.analysis_result || {}

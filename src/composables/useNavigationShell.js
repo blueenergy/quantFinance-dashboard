@@ -1,5 +1,5 @@
 import { computed, ref, watch } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 
 const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v5'
 const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v2'
@@ -167,9 +167,9 @@ export function useNavigationShell({ user, isAuthenticated }) {
       return
     }
     try {
-      const res = await axios.get('/api/user/navigation-tabs')
-      if (res.data?.success && Array.isArray(res.data.data?.visible_tab_ids)) {
-        serverVisibleTabIds.value = res.data.data.visible_tab_ids
+      const body = await request({ url: '/user/navigation-tabs', method: 'get' })
+      if (body?.success && Array.isArray(body.data?.visible_tab_ids)) {
+        serverVisibleTabIds.value = body.data.visible_tab_ids
         const username = user.value?.username
         if (username) writeNavCache(serverVisibleTabIds.value, username)
       } else {

@@ -167,7 +167,7 @@
 
 <script>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 
 export default {
   name: 'WorkerMonitor',
@@ -214,10 +214,10 @@ export default {
 
     const fetchWorkerStatus = async () => {
       try {
-        const response = await axios.get('/api/worker/status')
-        if (response.data.success) {
-          activeWorkers.value = response.data.data.active_workers
-          marketStatus.value = response.data.data.market_status
+        const body = await request({ method: 'get', url: '/worker/status' })
+        if (body.success) {
+          activeWorkers.value = body.data.active_workers
+          marketStatus.value = body.data.market_status
         }
       } catch (error) {
         console.error('Failed to fetch worker status:', error)
@@ -226,11 +226,11 @@ export default {
 
     const fetchTodayActivity = async () => {
       try {
-        const response = await axios.get('/api/worker/activity/today')
-        if (response.data.success) {
-          todaySummary.value = response.data.data.summary
-          timeline.value = response.data.data.timeline
-          recentActivities.value = response.data.data.activities
+        const body = await request({ method: 'get', url: '/worker/activity/today' })
+        if (body.success) {
+          todaySummary.value = body.data.summary
+          timeline.value = body.data.timeline
+          recentActivities.value = body.data.activities
         }
       } catch (error) {
         console.error('Failed to fetch today activity:', error)

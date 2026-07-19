@@ -125,6 +125,7 @@
 
 <script>
 import { authService } from '../services/auth.js'
+import request from '../utils/request'
 
 export default {
   name: 'StrategyWorkers',
@@ -214,9 +215,7 @@ export default {
     },
     
     async openHistoryLogs(worker) {
-      const apiUrl = import.meta.env.VITE_WORKER_API || '/api/strategy/workers'
-      const baseUrl = apiUrl.replace('/workers', '')
-      const logUrl = `${baseUrl}/workers/${worker.key}/logs?tail=1000`
+      const logPath = `/strategy/workers/${worker.key}/logs`
       
       try {
         // 获取 token
@@ -226,55 +225,42 @@ export default {
           return
         }
         
-        console.log('📋 准备打开历史日志:', logUrl)
+        console.log('📋 准备打开历史日志:', logPath)
         console.log('🔑 使用 token:', token.substring(0, 20) + '...')
         
-        // 使用 axios 检查日志是否存在（会自动带上 Authorization header）
-        const axios = (await import('axios')).default
-        
         try {
-          const response = await axios.get(logUrl, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            },
-            validateStatus: (status) => status < 500  // 不要在 4xx 时抛出异常
+          const body = await request.get(logPath, {
+            params: { tail: 1000 },
           })
-          
-          if (response.status === 200) {
-            // 日志存在，构建带 token 的 URL（通过 query 参数或新标签页）
-            console.log('✅ 日志可用，打开新标签页')
-            
-            // 方案1: 直接在新标签页打开（浏览器会自动带上 cookie，但不会带 token）
-            // 所以我们需要用另一种方式
-            
-            // 方案2: 创建一个临时页面来显示日志内容
-            const logWindow = window.open('', '_blank')
-            logWindow.document.write(`
+          console.log('✅ 日志可用，打开新标签页')
+          const logWindow = window.open('', '_blank')
+          logWindow.document.write(`
               <html>
                 <head><title>历史日志 - ${worker.key}</title></head>
                 <body style="margin:0;padding:20px;font-family:monospace;background:#1e1e1e;color:#d4d4d4;">
-                  <pre style="white-space:pre-wrap;word-wrap:break-word;">${response.data}</pre>
+                  <pre style="white-space:pre-wrap;word-wrap:break-word;">${body}</pre>
                 </body>
               </html>
             `)
-            logWindow.document.close()
-          } else if (response.status === 404) {
-            // 日志文件不存在
-            const errorMessage = response.data?.detail || '日志文件尚未生成'
+          logWindow.document.close()
+        } catch (reqError) {
+          const status = reqError.response?.status
+          const detail = reqError.response?.data?.detail
+          if (status === 404) {
+            const errorMessage = detail || '日志文件尚未生成'
             alert(
               `📂 历史日志暂不可用\n\n` +
               `${errorMessage}\n\n` +
               `💡 建议：请先使用「实时日志」功能`
             )
-          } else if (response.status === 401 || response.status === 403) {
-            // 认证/授权失败
-            alert(`❌ 认证失败 (HTTP ${response.status})\n\n请重新登录`)
+          } else if (status === 401 || status === 403) {
+            alert(`❌ 认证失败 (HTTP ${status})\n\n请重新登录`)
+          } else if (status) {
+            alert(`❌ 获取日志失败 (HTTP ${status})\n\n${detail || '请稍后重试'}`)
           } else {
-            alert(`❌ 获取日志失败 (HTTP ${response.status})\n\n${response.data?.detail || '请稍后重试'}`)
+            console.error('Request failed:', reqError)
+            alert(`❌ 请求失败: ${reqError.message}\n\n请检查网络连接`)
           }
-        } catch (axiosError) {
-          console.error('Axios request failed:', axiosError)
-          alert(`❌ 请求失败: ${axiosError.message}\n\n请检查网络连接`)
         }
       } catch (error) {
         console.error('Error opening history logs:', error)

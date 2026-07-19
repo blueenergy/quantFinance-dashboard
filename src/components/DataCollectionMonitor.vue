@@ -226,7 +226,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import PipelineDag from './PipelineDag.vue'
 
 const loading = ref(false)
@@ -256,8 +256,8 @@ const expectedHint = computed(() => overviewData.value?.expected_trade_date_hint
 async function loadOverview() {
   loadingOverview.value = true
   try {
-    const response = await axios.get('/api/admin/data-monitoring/overview')
-    overviewData.value = response.data.data
+    const body = await request({ method: 'get', url: '/admin/data-monitoring/overview' })
+    overviewData.value = body.data
   } catch (error) {
     console.error('获取数据监控总览失败:', error)
   } finally {
@@ -268,8 +268,8 @@ async function loadOverview() {
 async function refreshData() {
   loading.value = true
   try {
-    const response = await axios.get('/api/admin/data-collection/status')
-    const data = response.data.data
+    const body = await request({ method: 'get', url: '/admin/data-collection/status' })
+    const data = body.data
     summary.value = data.summary
     stocks.value = data.stocks
   } catch (error) {
@@ -306,8 +306,11 @@ async function loadDag() {
   loadingDag.value = true
   try {
     const d = dagDate.value?.replace(/-/g, '') || ''
-    const res = await axios.get(`/api/data-pulse/dag${d ? '?date=' + d : ''}`)
-    dagData.value = res.data
+    const body = await request({
+      method: 'get',
+      url: `/data-pulse/dag${d ? '?date=' + d : ''}`,
+    })
+    dagData.value = body
   } catch (e) {
     console.error('DAG load failed', e)
   } finally {

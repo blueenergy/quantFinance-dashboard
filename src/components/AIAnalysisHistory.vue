@@ -375,7 +375,7 @@
 </template>
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import AnalysisDetailContent from './AnalysisDetailContent.vue'
 import StockSearchInput from './StockSearchInput.vue'
 import { searchStocks } from '../api/stock'
@@ -433,13 +433,13 @@ let industryDebounceTimer = null
 
 async function fetchStockIndustry (sym) {
   if (!sym || sym.length < 4) { stockIndustry.value = null; return }
-  const token = localStorage.getItem('access_token')
   try {
-    const res = await axios.get('/api/shenwan-index/stock-industry', {
+    const res = await request({
+      method: 'get',
+      url: '/shenwan-index/stock-industry',
       params: { symbol: sym },
-      headers: { Authorization: `Bearer ${token}` },
     })
-    stockIndustry.value = res.data?.success ? res.data : null
+    stockIndustry.value = res?.success ? res : null
   } catch (_) {
     stockIndustry.value = null
   }
@@ -471,7 +471,6 @@ async function submitAnalysis() {
   submitError.value = ''
   submitStatusMsg.value = ''
   liveResult.value = null
-  const token = localStorage.getItem('access_token')
   try {
     const sym = await resolveStockInput(rawInput)
     if (!sym) {
@@ -480,19 +479,19 @@ async function submitAnalysis() {
       return
     }
     inputSymbol.value = sym
-    const res = await axios.post(
-      '/api/analyze/deep-analysis',
-      { symbol: sym, priority: 30, analysis_mode: inputMode.value },
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-    if (!res.data?.success) {
-      submitError.value = res.data?.message || '提交失败'
+    const res = await request({
+      method: 'post',
+      url: '/analyze/deep-analysis',
+      data: { symbol: sym, priority: 30, analysis_mode: inputMode.value },
+    })
+    if (!res?.success) {
+      submitError.value = res?.message || '提交失败'
       submitLoading.value = false
       return
     }
-    const taskId = res.data.task_id
-    const ahead = res.data.queue_ahead
-    const waitHint = res.data.wait_hint
+    const taskId = res.task_id
+    const ahead = res.queue_ahead
+    const waitHint = res.wait_hint
     submitStatusMsg.value = `已提交，前方 ${ahead ?? '?'} 个任务。${waitHint || '分析中…'}`
     let tries = 0
     livePollTimer = setInterval(async () => {
@@ -504,16 +503,14 @@ async function submitAnalysis() {
         return
       }
       try {
-        const poll = await axios.get(`/api/analyze/task/${taskId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const st = poll.data?.status
+        const poll = await request({ method: 'get', url: `/analyze/task/${taskId}` })
+        const st = poll?.status
         if (st === 'completed') {
           clearInterval(livePollTimer)
           submitStatusMsg.value = ''
           submitLoading.value = false
-          const analysis = poll.data?.analysis || {}
-          const analysisMode = poll.data?.analysis_mode || analysis.analysis_mode || 'classic'
+          const analysis = poll?.analysis || {}
+          const analysisMode = poll?.analysis_mode || analysis.analysis_mode || 'classic'
           liveResult.value = {
             stock_code: sym,
             stock_name: analysis.stock_name || '',
@@ -525,13 +522,13 @@ async function submitAnalysis() {
           loadHistory()
         } else if (st === 'failed' || st === 'completed_with_parse_error') {
           clearInterval(livePollTimer)
-          submitError.value = poll.data?.error || '分析失败'
+          submitError.value = poll?.error || '分析失败'
           submitStatusMsg.value = ''
           submitLoading.value = false
         } else if (st === 'pending') {
-          submitStatusMsg.value = `排队中，前方 ${poll.data?.queue_ahead ?? '?'} 个任务。${poll.data?.wait_hint || '预计等待时间计算中'}`
+          submitStatusMsg.value = `排队中，前方 ${poll?.queue_ahead ?? '?'} 个任务。${poll?.wait_hint || '预计等待时间计算中'}`
         } else if (st === 'processing') {
-          submitStatusMsg.value = poll.data?.wait_hint || '正在分析，LLM 响应时间可能有波动'
+          submitStatusMsg.value = poll?.wait_hint || '正在分析，LLM 响应时间可能有波动'
         }
       } catch (_) { /* 继续轮询 */ }
     }, 3000)
@@ -927,24 +924,23 @@ ${riskReport ? textBlock(riskReport) : listBlock(divergence)}
 async function triggerReanalysis(item) {
   if (!item) return
   reanalysisLoading.value = true
-  const token = localStorage.getItem('access_token')
   try {
-    const res = await axios.post(
-      '/api/analyze/deep-analysis',
-      {
+    const res = await request({
+      method: 'post',
+      url: '/analyze/deep-analysis',
+      data: {
         symbol: item.stock_code,
         priority: 30,
         analysis_mode: item.analysis_mode || 'classic',
       },
-      { headers: { Authorization: `Bearer ${token}` } },
-    )
-    if (res.data?.success) {
-      const remaining = res.data.quota_remaining
-      const pos = res.data.position_in_queue
+    })
+    if (res?.success) {
+      const remaining = res.quota_remaining
+      const pos = res.position_in_queue
       const modeText = (item.analysis_mode === 'multi_expert_v1') ? '多专家' : '经典'
       alert(`已重新提交「${item.stock_code}」${modeText}分析。排队约 ${pos} 位，剩余配额 ${remaining}。完成后可在列表中刷新查看。`)
     } else {
-      alert(`提交失败：${res.data?.message || '未知错误'}`)
+      alert(`提交失败：${res?.message || '未知错误'}`)
     }
   } catch (e) {
     alert(`提交失败：${e.response?.data?.detail || e.message}`)
@@ -961,14 +957,11 @@ function stopPolling() {
 }
 
 async function loadExistingEvaluation(historyId) {
-  const token = localStorage.getItem('access_token')
-  if (!token) return
+  if (!localStorage.getItem('access_token')) return
   try {
-    const res = await axios.get(`/api/analysis/evaluations/${historyId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (res.data) {
-      evaluationResult.value = res.data
+    const res = await request({ method: 'get', url: `/analysis/evaluations/${historyId}` })
+    if (res) {
+      evaluationResult.value = res
     }
   } catch (_) {
     // 404 is normal when not yet evaluated
@@ -982,13 +975,12 @@ async function triggerEvaluation(item) {
   evaluationError.value = ''
   evaluationResult.value = null
 
-  const token = localStorage.getItem('access_token')
   try {
-    await axios.post(
-      '/api/analysis/evaluate',
-      { history_id: item.id, force: true },
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
+    await request({
+      method: 'post',
+      url: '/analysis/evaluate',
+      data: { history_id: item.id, force: true },
+    })
   } catch (e) {
     evaluationLoading.value = false
     evaluationError.value = e.response?.data?.detail || '提交评估失败'
@@ -1006,16 +998,14 @@ async function triggerEvaluation(item) {
       return
     }
     try {
-      const res = await axios.get(`/api/analysis/evaluations/${item.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const status = res.data?.evaluation_status
+      const res = await request({ method: 'get', url: `/analysis/evaluations/${item.id}` })
+      const status = res?.evaluation_status
       if (status === 'completed') {
         stopPolling()
-        evaluationResult.value = res.data
+        evaluationResult.value = res
         evaluationLoading.value = false
         // Update list badge immediately without full reload
-        const review = res.data?.llm_review || {}
+        const review = res?.llm_review || {}
         if (review.outcome_accuracy) {
           evalBadges.value = {
             ...evalBadges.value,
@@ -1075,12 +1065,9 @@ function mapHistoryItem(item) {
 }
 
 async function fetchHistoryDetail(item) {
-  const token = localStorage.getItem('access_token')
-  if (!token || !item?.id) return item
-  const res = await axios.get(`/api/analysis-history/${item.id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  const row = res.data?.data
+  if (!localStorage.getItem('access_token') || !item?.id) return item
+  const res = await request({ method: 'get', url: `/analysis-history/${item.id}` })
+  const row = res?.data
   return row ? mapHistoryItem(row) : item
 }
 
@@ -1120,11 +1107,8 @@ function closeDetails() {
 async function deleteHistory(item) {
   if (!confirm(`确认删除「${item.stock_code}」的这条分析记录？此操作不可恢复。`)) return
   deletingId.value = item.id
-  const token = localStorage.getItem('access_token')
   try {
-    await axios.delete(`/api/analysis/history/${item.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    await request({ method: 'delete', url: `/analysis/history/${item.id}` })
     historyList.value = historyList.value.filter(h => h.id !== item.id)
     delete evalBadges.value[item.id]
     if (selectedItem.value?.id === item.id) closeDetails()
@@ -1143,15 +1127,14 @@ function clearError() { error.value = '' }
 
 async function loadEvalBadges(ids) {
   if (!ids.length) return
-  const token = localStorage.getItem('access_token')
-  if (!token) return
+  if (!localStorage.getItem('access_token')) return
   try {
-    const res = await axios.post(
-      '/api/analysis/evaluations/batch',
-      ids,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-    evalBadges.value = res.data || {}
+    const res = await request({
+      method: 'post',
+      url: '/analysis/evaluations/batch',
+      data: ids,
+    })
+    evalBadges.value = res || {}
   } catch (_) {
     // non-critical; badges just won't show
   }
@@ -1166,21 +1149,21 @@ async function loadHistory({ reset = true } = {}) {
   }
   error.value = ''
   try {
-    const token = localStorage.getItem('access_token')
-    if (!token) {
+    if (!localStorage.getItem('access_token')) {
       throw new Error('未登录，无法加载历史记录')
     }
 
     const page = reset ? 1 : historyPage.value + 1
-    const response = await axios.get('/api/analysis-history', {
-      headers: { Authorization: `Bearer ${token}` },
+    const response = await request({
+      method: 'get',
+      url: '/analysis-history',
       params: {
         page,
         limit: HISTORY_PAGE_SIZE,
       },
     })
 
-    const rawData = response.data?.data || []
+    const rawData = response?.data || []
     const mapped = rawData.map(mapHistoryItem)
 
     if (reset) {
@@ -1190,9 +1173,9 @@ async function loadHistory({ reset = true } = {}) {
     }
 
     historyPage.value = page
-    historyTotal.value = response.data?.total ?? historyList.value.length
+    historyTotal.value = response?.total ?? historyList.value.length
     hasMoreHistory.value = Boolean(
-      response.data?.has_more ?? (historyList.value.length < historyTotal.value),
+      response?.has_more ?? (historyList.value.length < historyTotal.value),
     )
 
     if (reset) {

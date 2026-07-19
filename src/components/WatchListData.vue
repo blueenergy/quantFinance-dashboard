@@ -229,7 +229,7 @@
 
 <script setup>
 import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 import { useAuth } from '../services/auth.js'
 import { watchlistService } from '../services/watchlist.js'
 import { useAnalysisHistory } from '../composables/useAnalysisHistory'
@@ -616,12 +616,10 @@ async function removeStock(symbol) {
       // Check if the stock has any active strategies
       const authHeaders = watchlistService.getAuthHeaders()
       try {
-        const stratCheckResponse = await axios.get('/api/user/watchlist/strategies', {
-          headers: authHeaders
-        })
+        const body = await request.get('/user/watchlist/strategies')
         
-        if (stratCheckResponse.data.success) {
-          const activeStrategies = stratCheckResponse.data.data
+        if (body.success) {
+          const activeStrategies = body.data
             .filter(s => s.symbol === symbol && s.enabled === true)
           
           if (activeStrategies.length > 0) {
@@ -719,11 +717,8 @@ function startDeepAnalysisTaskPoll(taskId, symbol, assetType = 'stock') {
       showAppSnackbar(`「${label}」分析等待超时，请稍后在「历史分析」中查看。`, 'warning', 6000)
       return
     }
-    const token = localStorage.getItem('access_token')
     try {
-      const { data } = await axios.get(`/api/analyze/task/${taskId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const data = await request.get(`/analyze/task/${taskId}`)
       const st = (data.status || '').toLowerCase()
       if (st === 'pending' || st === 'processing') {
         if (attempts === 1 || attempts % 4 === 0) {
@@ -806,30 +801,23 @@ async function deepAnalyzeStock(stock) {
   
   try {
     deepAnalyzingStock.value = symbol
-    const token = localStorage.getItem('access_token')
     const analysisMode = deepAnalysisMode.value
 
-    const requestConfig = {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    }
-    const response = assetType === 'etf'
-      ? await axios.post('/api/etf/analyze', {
+    const body = assetType === 'etf'
+      ? await request.post('/etf/analyze', {
         symbol: symbol,
         force: true
-      }, requestConfig)
-      : await axios.post('/api/analyze/deep-analysis', {
+      })
+      : await request.post('/analyze/deep-analysis', {
         symbol: symbol,
         priority: 30,
         analysis_mode: analysisMode
-      }, requestConfig)
+      })
     
-    if (response.data && response.data.success) {
-      const remaining = response.data.quota_remaining
-      const ahead = response.data.queue_ahead
-      const waitHint = response.data.wait_hint
+    if (body && body.success) {
+      const remaining = body.quota_remaining
+      const ahead = body.queue_ahead
+      const waitHint = body.wait_hint
       const label = formatStockLabel(symbol)
       const modeText = assetType === 'etf'
         ? 'ETF'
@@ -843,12 +831,12 @@ async function deepAnalyzeStock(stock) {
         'success',
         7000
       )
-      const taskId = response.data.task_id
+      const taskId = body.task_id
       if (taskId) {
         startDeepAnalysisTaskPoll(taskId, symbol, assetType)
       }
     } else {
-      showAppSnackbar(`提交失败: ${response.data?.message || '未知错误'}`, 'error', 5000)
+      showAppSnackbar(`提交失败: ${body?.message || '未知错误'}`, 'error', 5000)
     }
     
   } catch (error) {
@@ -908,8 +896,7 @@ function toggleHistoryModalMaximized() {
 // 获取单个股票的最新数据
 async function fetchStockData(symbol) {
   try {
-    const response = await axios.get(`/api/records/?symbol=${symbol}&limit=2&sort=-trade_date`)
-    const records = response.data
+    const records = await request.get(`/records/?symbol=${symbol}&limit=2&sort=-trade_date`)
     
     if (records.length > 0) {
       const latest = records[0]
@@ -999,10 +986,10 @@ async function refreshAll() {
     } else {
       // 未登录，使用传统批量API
       const symbolsStr = watchList.value.join(',')
-      const response = await axios.get(`/api/watchlist-stocks?symbols=${symbolsStr}`)
+      const body = await request.get(`/watchlist-stocks?symbols=${symbolsStr}`)
       
-      if (response.data && response.data.success) {
-        stocksData.value = response.data.data.map(stock => ({
+      if (body && body.success) {
+        stocksData.value = body.data.map(stock => ({
           symbol: stock.symbol,
           name: stock.name,
           asset_type: stock.asset_type,
@@ -1019,7 +1006,7 @@ async function refreshAll() {
           date: stock.trade_date
         }))
       } else {
-        console.error('获取自选股数据失败:', response.data?.message)
+        console.error('获取自选股数据失败:', body?.message)
         // Fallback to individual requests
         const promises = watchList.value.map(symbol => fetchStockData(symbol))
         await Promise.all(promises)

@@ -169,7 +169,7 @@
 
 <script setup>
 import { reactive, watch, ref } from 'vue'
-import axios from 'axios' 
+import request from '../utils/request'
 import AnalysisDetailContent from './AnalysisDetailContent.vue'
 
 const props = defineProps({
@@ -192,9 +192,7 @@ watch(() => props.history, async (newVal) => {
        const ids = unread.map(h => h._id || h.id)
        try {
            // We need to call the mark-read API.
-           // Assuming authentication header is handled by axios interceptor
-           // If not, we might need token.
-           // Let's assume standard axios setup.
+           // Authentication header is handled by request interceptor
            // NOTE: We should wait a bit or do it silently.
            await markRead(ids)
            // Update local state to remove badge after successful mark
@@ -211,10 +209,7 @@ watch(() => props.history, async (newVal) => {
 
 async function markRead(ids) {
     // Call backend
-    const token = localStorage.getItem('token') // Simplified
-    await axios.post(`${import.meta.env.VITE_API_BASE || '/api'}/analyze/mark-read`, ids, {
-        headers: { Authorization: `Bearer ${token}` }
-    })
+    await request({ method: 'post', url: '/analyze/mark-read', data: ids })
 }
 
 function formatDateTime(timestamp) {

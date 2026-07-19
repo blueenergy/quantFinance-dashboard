@@ -91,7 +91,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import request from '../utils/request'
 
 const jobs = ref([])
 const loading = ref(false)
@@ -105,23 +105,15 @@ const editForm = ref({
   config: {}
 })
 
-// Replace with your actual admin token method if centralized
-const authHeaders = () => {
-  const token = localStorage.getItem('token')
-  return { Authorization: `Bearer ${token}` }
-}
-
 const fetchJobs = async () => {
   loading.value = true
   error.value = ''
   try {
-    const response = await axios.get('/api/admin/scheduler/jobs', {
-      headers: authHeaders()
-    })
-    if (response.data.success) {
-      jobs.value = response.data.data
+    const body = await request({ method: 'get', url: '/admin/scheduler/jobs' })
+    if (body.success) {
+      jobs.value = body.data
     } else {
-      error.value = response.data.detail || '获取数据失败'
+      error.value = body.detail || '获取数据失败'
     }
   } catch (err) {
     console.error('Fetch error:', err)
@@ -166,15 +158,17 @@ const saveJob = async () => {
       payload.config.minute = parseInt(payload.config.minute)
     }
 
-    const response = await axios.put(`/api/admin/scheduler/jobs/${editingJob.value.job_id}`, payload, {
-      headers: authHeaders()
+    const body = await request({
+      method: 'put',
+      url: `/admin/scheduler/jobs/${editingJob.value.job_id}`,
+      data: payload,
     })
     
-    if (response.data.success) {
+    if (body.success) {
       closeModal()
       fetchJobs() // refresh the list
     } else {
-      alert(response.data.detail || '保存失败')
+      alert(body.detail || '保存失败')
     }
   } catch (err) {
     alert(err.response?.data?.detail || err.message || '保存报错')
