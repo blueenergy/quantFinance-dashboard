@@ -104,38 +104,6 @@ defineProps({
 </script>
 
 <style scoped>
-.panel-grid {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
-}
-.workbench-card {
-  background: rgba(15, 23, 42, 0.76);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 18px;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
-  margin-bottom: 16px;
-  padding: 20px;
-}
-h3 {
-  margin: 0;
-}
-.card-title-row {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-.muted,
-.muted-block {
-  color: #94a3b8;
-}
-.muted-block {
-  background: rgba(30, 41, 59, .56);
-  border-radius: 12px;
-  padding: 18px;
-}
 .nine-turn-summary {
   background: rgba(30, 41, 59, .62);
   border: 1px solid rgba(148, 163, 184, .18);
@@ -166,48 +134,5 @@ h3 {
   font-size: 13px;
   line-height: 1.5;
   padding: 10px 12px;
-}
-.is-up {
-  color: #ef4444;
-}
-.is-down {
-  color: #22c55e;
-}
-.quote-table-wrap {
-  margin-top: 14px;
-  overflow-x: auto;
-}
-.quote-table {
-  border-collapse: collapse;
-  min-width: 680px;
-  width: 100%;
-}
-.quote-table th,
-.quote-table td {
-  border-bottom: 1px solid rgba(148, 163, 184, .16);
-  color: #cbd5e1;
-  font-size: 13px;
-  padding: 10px 8px;
-  text-align: right;
-  white-space: nowrap;
-}
-.quote-table th:first-child,
-.quote-table td:first-child {
-  text-align: left;
-}
-.quote-table th {
-  color: #94a3b8;
-  font-weight: 600;
-}
-.quote-table td.is-up {
-  color: #ef4444;
-}
-.quote-table td.is-down {
-  color: #22c55e;
-}
-@media (max-width: 980px) {
-  .panel-grid {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

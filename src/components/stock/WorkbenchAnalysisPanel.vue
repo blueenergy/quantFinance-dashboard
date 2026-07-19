@@ -228,75 +228,6 @@ function accuracyLabel(value) {
 </script>
 
 <style scoped>
-.workbench-analysis-panel {
-  color: #e2e8f0;
-}
-
-.workbench-card {
-  background: rgba(15, 23, 42, 0.76);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 18px;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
-  margin-bottom: 16px;
-  padding: 20px;
-}
-
-h3 {
-  margin: 0;
-}
-
-.muted,
-.muted-block {
-  color: #94a3b8;
-}
-
-.muted-block {
-  background: rgba(30, 41, 59, .56);
-  border-radius: 12px;
-  padding: 18px;
-}
-
-.card-title-row {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-
-.financial-metrics {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.financial-metrics div {
-  background: rgba(30, 41, 59, .78);
-  border-radius: 14px;
-  padding: 14px;
-}
-
-.financial-metrics span {
-  color: #94a3b8;
-  display: block;
-  font-size: 12px;
-}
-
-.financial-metrics strong {
-  color: #f8fafc;
-  display: block;
-  font-size: 22px;
-  margin: 4px 0;
-}
-
-.analysis-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
 .analysis-mode-select {
   min-width: 140px;
 }
@@ -446,18 +377,18 @@ h3 {
 }
 
 @media (max-width: 700px) {
-  .card-title-row {
+  .workbench-analysis-panel .card-title-row {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .analysis-actions {
+  .workbench-analysis-panel .analysis-actions {
     justify-content: flex-start;
     width: 100%;
   }
 
-  .financial-metrics,
-  .analysis-history-item {
+  .workbench-analysis-panel .financial-metrics,
+  .workbench-analysis-panel .analysis-history-item {
     grid-template-columns: 1fr;
   }
 }

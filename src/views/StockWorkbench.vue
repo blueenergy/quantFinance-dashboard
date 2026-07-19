@@ -1070,26 +1070,4 @@ function valuationMultipleWithPercentile(field, suffix = '') {
 }
 </script>
 
-<style scoped>
-.stock-workbench {
-  color: #e2e8f0;
-  padding: 6px;
-}
-
-.empty-state {
-  background: rgba(15, 23, 42, 0.76);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 18px;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
-  padding: 44px;
-  text-align: center;
-}
-
-.empty-state p {
-  color: #94a3b8;
-}
-
-.workbench-tabs {
-  margin-bottom: 14px;
-}
-</style>
+<style src="../assets/styles/stock-workbench.css"></style>

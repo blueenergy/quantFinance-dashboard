@@ -501,18 +501,19 @@ watch(
   gap: 16px;
 }
 
-.card-title-row {
+.swot-panel .card-title-row {
   align-items: flex-start;
   display: flex;
   gap: 12px;
   justify-content: space-between;
+  margin-bottom: 0;
 }
 
-.card-title-row h3 {
+.swot-panel .card-title-row h3 {
   margin: 0;
 }
 
-.card-title-row p {
+.swot-panel .card-title-row p {
   margin: 4px 0 0;
 }
 
@@ -908,7 +909,7 @@ watch(
 }
 
 @media (max-width: 900px) {
-  .card-title-row {
+  .swot-panel .card-title-row {
     flex-direction: column;
   }
 
