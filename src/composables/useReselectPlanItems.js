@@ -25,6 +25,7 @@ function formatApiDetail(detail) {
  */
 export function useReselectPlanItems({
   getPlanId,
+  getContextKey = getPlanId,
   getItems,
   getExcluded,
   runTask,
@@ -37,10 +38,19 @@ export function useReselectPlanItems({
   const reselectStatus = ref({ state: 'idle', text: '' })
   const reselectTaskMeta = ref({ taskId: '', status: '' })
   const selectedReselectSymbols = ref(new Set())
+  let operationEpoch = 0
 
   const reselectBusy = computed(() => reselectStatus.value.state === 'running')
   const selectedReselectCount = computed(() => selectedReselectSymbols.value.size)
   const selectedPlanExcluded = computed(() => getExcluded?.() || [])
+
+  function isCurrentOperation(epoch, contextKey) {
+    return operationEpoch === epoch && getContextKey?.() === contextKey
+  }
+
+  function isCurrentPlanOperation(epoch, planId, contextKey) {
+    return isCurrentOperation(epoch, contextKey) && getPlanId?.() === planId
+  }
 
   function canSelectReselectItem(item) {
     return Boolean(item?.symbol && item.rank != null && !selectedPlanExcluded.value.includes(item.symbol))
@@ -94,6 +104,8 @@ export function useReselectPlanItems({
 
   /** Full reset when switching plans or leaving review context. */
   function clearReselectUi() {
+    operationEpoch += 1
+    actionLoading.value = false
     resetReselectSelection()
     lastReselectSummary.value = ''
     reselectStatus.value = { state: 'idle', text: '' }
@@ -126,10 +138,14 @@ export function useReselectPlanItems({
     selectedReselectSymbols.value = next
   }
 
-  async function finishTaskRun(taskId, pendingSnapshot) {
+  async function finishTaskRun(taskId, pendingSnapshot, epoch, planId, contextKey) {
+    if (!isCurrentPlanOperation(epoch, planId, contextKey)) return { cancelled: true }
     reselectTaskMeta.value = { taskId, status: 'running' }
     try {
       const result = await runTask(taskId, pendingSnapshot)
+      if (result?.cancelled || !isCurrentOperation(epoch, contextKey)) {
+        return { cancelled: true }
+      }
       const summary = describeReselectResult(pendingSnapshot)
       lastReselectSummary.value = summary
       reselectStatus.value = { state: 'success', text: summary }
@@ -138,6 +154,7 @@ export function useReselectPlanItems({
       resetReselectSelection()
       return result
     } catch (error) {
+      if (!isCurrentOperation(epoch, contextKey)) return { cancelled: true }
       const detailText = formatApiDetail(error?.response?.data?.detail)
       const errText = detailText || error?.message || '重选任务失败'
       reselectStatus.value = { state: 'error', text: `重选任务失败：${errText}` }
@@ -150,17 +167,21 @@ export function useReselectPlanItems({
   async function reselectItem(symbol, restore = false) {
     const planId = getPlanId?.()
     if (!planId || !symbol || reselectBusy.value) return
+    const contextKey = getContextKey?.()
     if (restore && !selectedPlanExcluded.value.includes(symbol)) {
       const txt = `无需恢复：${symbol} 当前不在已排除列表中`
       reselectStatus.value = { state: 'success', text: txt }
       lastReselectSummary.value = txt
       return
     }
+    const epoch = ++operationEpoch
     actionLoading.value = true
     const beforeTargets = targetSymbols(getItems?.())
+    let taskStarted = false
     try {
       const apiCall = restore ? restorePortfolioPlanItem : rejectPortfolioPlanItem
       const res = await apiCall(planId, symbol)
+      if (!isCurrentPlanOperation(epoch, planId, contextKey)) return
       const task = res.data?.task
       if (task?.task_id) {
         lastReselectSummary.value = ''
@@ -178,7 +199,9 @@ export function useReselectPlanItems({
           false,
         )
         await onTaskEnqueued?.(task)
-        await finishTaskRun(task.task_id, pendingSnapshot)
+        if (!isCurrentPlanOperation(epoch, planId, contextKey)) return
+        taskStarted = true
+        await finishTaskRun(task.task_id, pendingSnapshot, epoch, planId, contextKey)
       } else if (res.data?.operation_log?.status === 'noop') {
         const noopMsg = res.data?.operation_log?.message || `无需恢复：${symbol}`
         reselectStatus.value = { state: 'success', text: noopMsg }
@@ -189,25 +212,35 @@ export function useReselectPlanItems({
         reselectTaskMeta.value = { taskId: '', status: 'create_failed' }
       }
     } catch (error) {
+      const isCurrent = taskStarted
+        ? isCurrentOperation(epoch, contextKey)
+        : isCurrentPlanOperation(epoch, planId, contextKey)
+      if (!isCurrent) return
       const detailText = formatApiDetail(error.response?.data?.detail)
       const errText = detailText || error.message || '重选失败'
       reselectStatus.value = { state: 'error', text: `重选失败：${errText}` }
       reselectTaskMeta.value = { taskId: '', status: 'request_failed' }
       setMessage?.(errText, true)
     } finally {
-      actionLoading.value = false
-      pendingReselect.value = null
+      if (isCurrentOperation(epoch, contextKey)) {
+        actionLoading.value = false
+        pendingReselect.value = null
+      }
     }
   }
 
   async function bulkReselectItems() {
     const planId = getPlanId?.()
     if (!planId || reselectBusy.value || !selectedReselectCount.value) return
+    const contextKey = getContextKey?.()
     const symbols = [...selectedReselectSymbols.value]
+    const epoch = ++operationEpoch
     actionLoading.value = true
     const beforeTargets = targetSymbols(getItems?.())
+    let taskStarted = false
     try {
       const res = await bulkRejectPortfolioPlanItems(planId, symbols)
+      if (!isCurrentPlanOperation(epoch, planId, contextKey)) return
       const task = res.data?.task
       if (task?.task_id) {
         lastReselectSummary.value = ''
@@ -221,20 +254,28 @@ export function useReselectPlanItems({
         }
         setMessage?.(`已排除 ${symbols.join('、')}，正在批量重选补位…`, false)
         await onTaskEnqueued?.(task)
-        await finishTaskRun(task.task_id, pendingSnapshot)
+        if (!isCurrentPlanOperation(epoch, planId, contextKey)) return
+        taskStarted = true
+        await finishTaskRun(task.task_id, pendingSnapshot, epoch, planId, contextKey)
       } else {
         reselectStatus.value = { state: 'error', text: '批量重选任务创建失败：未返回 task_id' }
         reselectTaskMeta.value = { taskId: '', status: 'create_failed' }
       }
     } catch (error) {
+      const isCurrent = taskStarted
+        ? isCurrentOperation(epoch, contextKey)
+        : isCurrentPlanOperation(epoch, planId, contextKey)
+      if (!isCurrent) return
       const detailText = formatApiDetail(error.response?.data?.detail)
       const errText = detailText || error.message || '批量重选失败'
       reselectStatus.value = { state: 'error', text: `批量重选失败：${errText}` }
       reselectTaskMeta.value = { taskId: '', status: 'request_failed' }
       setMessage?.(errText, true)
     } finally {
-      actionLoading.value = false
-      pendingReselect.value = null
+      if (isCurrentOperation(epoch, contextKey)) {
+        actionLoading.value = false
+        pendingReselect.value = null
+      }
     }
   }
 

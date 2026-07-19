@@ -14,6 +14,7 @@ vi.mock('../src/api/portfolioPlans', () => ({
 
 function setupHarness(overrides = {}) {
   const planId = ref('plan-1')
+  const contextKey = ref('lineage-1')
   const items = ref([
     { symbol: '600000.SH', name: '浦发银行', rank: 1, current_shares: 0, ai_risk: { severity: 'high' } },
     { symbol: '600001.SH', name: '邯郸钢铁', rank: 2, current_shares: 100, ai_risk: { severity: 'low' } },
@@ -30,6 +31,7 @@ function setupHarness(overrides = {}) {
 
   const api = useReselectPlanItems({
     getPlanId: () => planId.value,
+    getContextKey: () => contextKey.value,
     getItems: () => items.value,
     getExcluded: () => excluded.value,
     runTask,
@@ -37,7 +39,7 @@ function setupHarness(overrides = {}) {
     ...overrides,
   })
 
-  return { planId, items, excluded, messages, runTask, ...api }
+  return { planId, contextKey, items, excluded, messages, runTask, ...api }
 }
 
 beforeEach(() => {
@@ -97,5 +99,49 @@ describe('useReselectPlanItems', () => {
     pendingReselect.value = before
     await reselectItem('600000.SH', false)
     expect(describeReselectResult(before)).toContain('补位换为 600002.SH(补位股)')
+  })
+
+  it('keeps the result when reselect advances the plan in the same lineage', async () => {
+    const harness = setupHarness({
+      runTask: vi.fn(async () => {
+        harness.planId.value = 'plan-2'
+        harness.items.value = [
+          { symbol: '600002.SH', name: '补位股', rank: 1, current_shares: 0 },
+          { symbol: '600001.SH', name: '邯郸钢铁', rank: 2, current_shares: 100 },
+        ]
+        return { status: 'completed', plan_id: 'plan-2' }
+      }),
+    })
+
+    await harness.reselectItem('600000.SH', false)
+
+    expect(harness.reselectStatus.value.state).toBe('success')
+    expect(harness.lastReselectSummary.value).toContain('补位换为 600002.SH(补位股)')
+    expect(harness.actionLoading.value).toBe(false)
+  })
+
+  it('ignores a cancelled task after the selected plan changes', async () => {
+    let resolveTask
+    const runTask = vi.fn(() => new Promise((resolve) => {
+      resolveTask = resolve
+    }))
+    const harness = setupHarness({ runTask })
+
+    const reselectPromise = harness.reselectItem('600000.SH', false)
+    await vi.waitFor(() => expect(runTask).toHaveBeenCalledWith(
+      'task-1',
+      expect.objectContaining({ symbol: '600000.SH' }),
+    ))
+
+    harness.planId.value = 'plan-2'
+    harness.clearReselectUi()
+    resolveTask({ cancelled: true })
+    await expect(reselectPromise).resolves.toBeUndefined()
+
+    expect(harness.reselectStatus.value).toEqual({ state: 'idle', text: '' })
+    expect(harness.reselectTaskMeta.value).toEqual({ taskId: '', status: '' })
+    expect(harness.lastReselectSummary.value).toBe('')
+    expect(harness.actionLoading.value).toBe(false)
+    expect(harness.messages.some(({ isError }) => isError)).toBe(false)
   })
 })

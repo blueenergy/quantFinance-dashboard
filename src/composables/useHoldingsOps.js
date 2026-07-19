@@ -79,6 +79,7 @@ export function useHoldingsOps({
   const externalManualReason = ref('miniQMT manual operation')
   const externalManualBatchId = ref('')
   let externalManualRowSeq = 0
+  let holdingsRiskRequestEpoch = 0
 
   const benchData = ref(null)
   const benchLoading = ref(false)
@@ -87,6 +88,10 @@ export function useHoldingsOps({
   const benchLlmRiskLoading = ref(false)
   const benchExpanded = ref(false)
   const reconcileData = ref(null)
+  let benchRequestEpoch = 0
+  let benchLoadingRequestEpoch = 0
+  let benchRiskRequestEpoch = 0
+  let benchLlmRiskRequestEpoch = 0
 
   const showSwapModal = ref(false)
   const swapStarter = ref(null)
@@ -242,11 +247,18 @@ export function useHoldingsOps({
     const planId = selectedLatestPlanId.value
     if (!planId) return
     if (!force && holdingsRisk.value) return
+    const requestEpoch = ++holdingsRiskRequestEpoch
+    const isCurrent = () => (
+      holdingsRiskRequestEpoch === requestEpoch
+      && selectedLatestPlanId.value === planId
+    )
     riskLoading.value = true
     try {
       const res = await enqueuePortfolioHoldingsRisk(planId)
+      if (!isCurrent()) return
       const meta = res.data || {}
       const task = await pollGenerationTask(meta.task_id)
+      if (!task || task.cancelled || !isCurrent()) return
       holdingsRisk.value = {
         ...(task.result || {}),
         paused: meta.paused,
@@ -254,9 +266,11 @@ export function useHoldingsOps({
         anchor_plan_id: meta.anchor_plan_id,
       }
     } catch (error) {
-      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '持仓风控加载失败', true)
+      if (isCurrent()) {
+        onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '持仓风控加载失败', true)
+      }
     } finally {
-      riskLoading.value = false
+      if (isCurrent()) riskLoading.value = false
     }
   }
 
@@ -402,47 +416,89 @@ export function useHoldingsOps({
     }
   }
 
-  async function loadBench({ resetRisk = true, silent = false } = {}) {
-    const planId = benchPlanId.value
+  async function loadBench({
+    resetRisk = true,
+    silent = false,
+    planId = benchPlanId.value,
+    isCurrent: isExternalCurrent = () => true,
+  } = {}) {
+    const requestEpoch = ++benchRequestEpoch
+    const loadingEpoch = silent ? null : ++benchLoadingRequestEpoch
+    const isCurrent = () => (
+      benchRequestEpoch === requestEpoch
+      && benchPlanId.value === planId
+      && isExternalCurrent()
+    )
+    const isCurrentLoading = () => (
+      benchLoadingRequestEpoch === loadingEpoch
+      && benchPlanId.value === planId
+    )
     if (!planId) {
-      benchData.value = null
+      if (
+        benchRequestEpoch === requestEpoch
+        && !benchPlanId.value
+        && isExternalCurrent()
+      ) {
+        benchData.value = null
+        if (!silent && isCurrentLoading()) benchLoading.value = false
+      }
       return
     }
-    if (!silent) benchLoading.value = true
-    if (resetRisk) benchRisk.value = null
+    if (!silent && isCurrent()) benchLoading.value = true
+    if (resetRisk && isCurrent()) benchRisk.value = null
     try {
       const res = await getPortfolioPlanBench(planId, { bench_multiplier: 1.5 })
-      benchData.value = res.data || null
+      if (isCurrent()) benchData.value = res.data || null
     } catch (error) {
-      if (!silent) {
+      if (!silent && isCurrent()) {
         benchData.value = null
         onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '加载阵容失败', true)
       }
     } finally {
-      if (!silent) benchLoading.value = false
+      if (!silent && isCurrentLoading()) benchLoading.value = false
     }
   }
 
   async function loadBenchRisk() {
     const planId = benchPlanId.value
     if (!planId) return
+    const requestEpoch = ++benchRiskRequestEpoch
+    const isCurrent = () => (
+      benchRiskRequestEpoch === requestEpoch
+      && benchPlanId.value === planId
+    )
     benchRiskLoading.value = true
     onMessage('', false)
     try {
       const res = await enqueuePortfolioBenchRisk(planId, { bench_multiplier: 1.5 })
+      if (!isCurrent()) return
       const task = await pollGenerationTask(res.data?.task_id)
+      if (!task || task.cancelled || !isCurrent()) return
       benchRisk.value = task.result || {}
     } catch (error) {
-      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '替补风控加载失败', true)
+      if (isCurrent()) {
+        onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '替补风控加载失败', true)
+      }
     } finally {
-      benchRiskLoading.value = false
+      if (isCurrent()) benchRiskLoading.value = false
     }
   }
 
-  async function pollBenchLlmRiskRun(planId, runId, { attempts = 90, intervalMs = 2000, onProgress = null } = {}) {
+  async function pollBenchLlmRiskRun(
+    planId,
+    runId,
+    {
+      attempts = 90,
+      intervalMs = 2000,
+      onProgress = null,
+      isCurrent = () => true,
+    } = {},
+  ) {
     let lastCompleted = -1
     for (let i = 0; i < attempts; i += 1) {
+      if (!isCurrent()) return { cancelled: true }
       const res = await getPortfolioLlmRiskRun(planId, runId, { target_scope: 'bench' })
+      if (!isCurrent()) return { cancelled: true }
       const run = res.data || {}
       const completed = Number(run.completed || 0)
       if (completed > 0 && completed !== lastCompleted) {
@@ -458,6 +514,11 @@ export function useHoldingsOps({
   async function loadBenchLlmRisk() {
     const planId = benchPlanId.value
     if (!planId) return
+    const requestEpoch = ++benchLlmRiskRequestEpoch
+    const isCurrent = () => (
+      benchLlmRiskRequestEpoch === requestEpoch
+      && benchPlanId.value === planId
+    )
     benchLlmRiskLoading.value = true
     onMessage('', false)
     try {
@@ -465,13 +526,21 @@ export function useHoldingsOps({
         target_scope: 'bench',
         bench_multiplier: 1.5,
       })
+      if (!isCurrent()) return
       const runId = res.data?.run_id
       if (runId) {
         const run = await pollBenchLlmRiskRun(planId, runId, {
+          isCurrent,
           onProgress: async () => {
-            await loadBench({ resetRisk: false, silent: true })
+            await loadBench({
+              resetRisk: false,
+              silent: true,
+              planId,
+              isCurrent,
+            })
           },
         })
+        if (run.cancelled || !isCurrent()) return
         const summaryText = run.partial_summary || ''
         if (run.status === 'failed') {
           onMessage(
@@ -487,13 +556,23 @@ export function useHoldingsOps({
           run.status === 'completed_with_failures',
         )
       } else {
-        onMessage('替补 AI 风险/机会分析已提交，但未返回 run_id；请稍后刷新查看任务状态。', true)
+        if (isCurrent()) {
+          onMessage('替补 AI 风险/机会分析已提交，但未返回 run_id；请稍后刷新查看任务状态。', true)
+        }
       }
-      await loadBench({ resetRisk: false })
+      if (isCurrent()) {
+        await loadBench({
+          resetRisk: false,
+          planId,
+          isCurrent,
+        })
+      }
     } catch (error) {
-      onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '替补 AI 风险/机会分析加载失败', true)
+      if (isCurrent()) {
+        onMessage(formatApiDetail(error.response?.data?.detail) || error.message || '替补 AI 风险/机会分析加载失败', true)
+      }
     } finally {
-      benchLlmRiskLoading.value = false
+      if (isCurrent()) benchLlmRiskLoading.value = false
     }
   }
 
@@ -719,14 +798,31 @@ export function useHoldingsOps({
   }
 
   function resetHoldingsOpsState() {
+    holdingsRiskRequestEpoch += 1
+    benchRequestEpoch += 1
+    benchLoadingRequestEpoch += 1
+    benchRiskRequestEpoch += 1
+    benchLlmRiskRequestEpoch += 1
     holdingsRisk.value = null
     manualTargets.value = {}
+    showManualModal.value = false
+    manualSubmitting.value = false
+    riskLoading.value = false
+    benchLoading.value = false
+    benchRiskLoading.value = false
+    benchLlmRiskLoading.value = false
     showLiquidateModal.value = false
+    liquidateSubmitting.value = false
     liquidateTargets.value = []
     showExternalManualModal.value = false
+    externalManualSubmitting.value = false
     externalManualRows.value = []
     showSwapModal.value = false
+    swapStarter.value = null
+    swapError.value = ''
     showFastActionModal.value = false
+    fastActionSubmitting.value = false
+    fastActionPreview.value = { title: '', description: '', targets: {}, items: [], blocked: false }
     benchData.value = null
     benchRisk.value = null
     reconcileData.value = null
