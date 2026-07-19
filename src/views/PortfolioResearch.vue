@@ -96,15 +96,30 @@
 
     <section class="layout">
       <aside class="card jobs-card">
-        <div class="section-header">
+        <div class="section-header jobs-header">
           <h3>研究任务</h3>
-          <select v-model="statusFilter" @change="loadJobs">
-            <option value="">全部</option>
-            <option value="pending">pending</option>
-            <option value="running">running</option>
-            <option value="completed">completed</option>
-            <option value="failed">failed</option>
-          </select>
+          <div class="job-filters">
+            <select v-model="statusFilter" @change="loadJobs" title="状态">
+              <option value="">全部状态</option>
+              <option value="pending">pending</option>
+              <option value="running">running</option>
+              <option value="completed">completed</option>
+              <option value="failed">failed</option>
+            </select>
+            <select v-model="universeFilter" @change="loadJobs" title="universe">
+              <option value="">全部 universe</option>
+              <option v-for="universe in universeOptions" :key="universe.value" :value="universe.value">
+                {{ universe.value }}
+              </option>
+            </select>
+            <input
+              v-model="growthCycleWeightFilter"
+              class="weight-filter"
+              placeholder="growth:cycle 如 30:70"
+              @change="loadJobs"
+              @keyup.enter="loadJobs"
+            />
+          </div>
         </div>
         <p v-if="loading" class="muted">加载中...</p>
         <p v-else-if="!jobs.length" class="muted">暂无研究任务。</p>
@@ -117,6 +132,7 @@
         >
           <strong>{{ job.name || job.job_id }}</strong>
           <span>{{ job.status }} · {{ job.universe_index || job.params?.universe_index || '-' }}</span>
+          <small v-if="jobWeightLabel(job)">{{ jobWeightLabel(job) }}</small>
           <small v-if="jobElapsedLabel(job)">{{ jobElapsedLabel(job) }}</small>
           <small v-if="jobProgressStageLabel(job)" class="progress-stage">{{ jobProgressStageLabel(job) }}</small>
           <small>{{ compactDate(job.start_date) }} → {{ compactDate(job.end_date) }}</small>
@@ -407,6 +423,8 @@ const selectedJob = ref(null)
 const resultDetail = ref(null)
 const selectedJobId = ref('')
 const statusFilter = ref('')
+const universeFilter = ref('')
+const growthCycleWeightFilter = ref('')
 const message = ref('')
 const errorMessage = ref('')
 const createCollapsed = ref(false)
@@ -569,6 +587,17 @@ function formatDurationMs(ms) {
   const days = Math.floor(totalHours / 24)
   const hours = totalHours % 24
   return hours ? `${days} 天 ${hours} 小时` : `${days} 天`
+}
+
+function jobWeightLabel(job) {
+  const weights = job?.params?.growth_cycle_weights
+  if (Array.isArray(weights) && weights.length) {
+    return weights.join(', ')
+  }
+  if (typeof weights === 'string' && weights.trim()) {
+    return weights.trim()
+  }
+  return ''
 }
 
 function jobElapsedLabel(job) {
@@ -838,6 +867,9 @@ async function loadJobs() {
   try {
     const params = {}
     if (statusFilter.value) params.status = statusFilter.value
+    if (universeFilter.value) params.universe_index = universeFilter.value
+    const weight = String(growthCycleWeightFilter.value || '').trim()
+    if (weight) params.growth_cycle_weight = weight
     const res = await listPortfolioResearchJobs(params)
     jobs.value = res.data || []
     if (selectedJobId.value && jobs.value.some((job) => job.job_id === selectedJobId.value)) {
@@ -972,6 +1004,34 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
+}
+
+.jobs-header {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.job-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.job-filters select,
+.job-filters .weight-filter {
+  min-width: 0;
+  flex: 1 1 110px;
+  padding: 6px 8px;
+  border: 1px solid #d7dde7;
+  border-radius: 8px;
+  background: #fff;
+  color: #172033;
+  font-size: 12px;
+}
+
+.job-filters .weight-filter {
+  flex: 1 1 140px;
 }
 
 .page-header > div,
