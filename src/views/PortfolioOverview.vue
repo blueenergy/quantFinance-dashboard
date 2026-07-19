@@ -36,38 +36,12 @@
         @resume-lineage="resumeLineageAction"
       />
 
-      <section v-if="holdingsOutOfSync" class="reconcile-banner">
-        <div class="reconcile-head">
-          <strong>⚠ 系统账本与券商实时持仓不一致</strong>
-          <button type="button" :disabled="!isLivePortfolio" @click="openExternalManualModal">补录 miniQMT 手工操作</button>
-        </div>
-        <p class="muted">
-          可能是 miniQMT 端手工买卖后系统尚未记录。补录后账本即可与券商对齐。
-          <span v-if="reconcileData?.account_synced_at"> · 券商同步于 {{ formatSyncedAt(reconcileData.account_synced_at) }}</span>
-        </p>
-        <div class="table-wrap">
-          <table class="lineup-table">
-            <thead>
-              <tr>
-                <th>代码</th>
-                <th>名称</th>
-                <th>账本股数</th>
-                <th>券商股数</th>
-                <th>差异</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in reconcileData.diffs" :key="row.symbol">
-                <td>{{ row.symbol }}</td>
-                <td>{{ row.name || '-' }}</td>
-                <td>{{ row.ledger_shares }}</td>
-                <td>{{ row.account_shares }}</td>
-                <td :class="row.diff > 0 ? 'pos' : 'neg'">{{ formatShareDelta(row.diff) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <PortfolioReconcileBanner
+        v-if="holdingsOutOfSync"
+        :reconcile-data="reconcileData"
+        :is-live-portfolio="isLivePortfolio"
+        @open-external-manual="openExternalManualModal"
+      />
 
       <CurrentPeriodStatus
         :timeline-data="timelineData"
@@ -197,26 +171,11 @@
         :equity-caveat="equityCaveat"
       />
 
-      <section class="summary-cards" v-if="positionSummary">
-        <div class="card">
-          <div class="label">持仓市值</div>
-          <div class="value">{{ money(positionSummary.total_market_value) }}</div>
-        </div>
-        <div class="card">
-          <div class="label">已实现盈亏</div>
-          <div class="value">{{ signedMoney(latestHoldingsPnlSummary.realized) }}</div>
-        </div>
-        <div class="card">
-          <div class="label">总盈亏</div>
-          <div class="value" :title="latestHoldingsPnlTitle">
-            {{ signedMoney(latestHoldingsPnlSummary.total) }}
-          </div>
-        </div>
-        <div class="card">
-          <div class="label">持仓标的数</div>
-          <div class="value">{{ positionSummary.holding_count }}</div>
-        </div>
-      </section>
+      <PortfolioSummaryCards
+        :position-summary="positionSummary"
+        :pnl-summary="latestHoldingsPnlSummary"
+        :total-pnl-title="latestHoldingsPnlTitle"
+      />
 
       <HoldingsPanel
         :selected-latest-plan-id="selectedLatestPlanId"
@@ -342,6 +301,8 @@ import LineageTimeline from '../components/portfolio/LineageTimeline.vue'
 import ExecutionsPanel from '../components/portfolio/ExecutionsPanel.vue'
 import HoldingsPanel from '../components/portfolio/HoldingsPanel.vue'
 import PortfolioEquityChart from '../components/portfolio/PortfolioEquityChart.vue'
+import PortfolioReconcileBanner from '../components/portfolio/PortfolioReconcileBanner.vue'
+import PortfolioSummaryCards from '../components/portfolio/PortfolioSummaryCards.vue'
 import SwapModal from '../components/portfolio/SwapModal.vue'
 import FastActionModal from '../components/portfolio/FastActionModal.vue'
 import ManualRebalanceModal from '../components/portfolio/ManualRebalanceModal.vue'
@@ -359,13 +320,9 @@ import {
 } from '../composables/usePortfolioPlanViewModel'
 import { usePortfolioOverviewWorkbench } from '../composables/usePortfolioOverviewWorkbench'
 import {
-  formatShareDelta,
-} from '../composables/usePortfolioPlanFormat'
-import {
   cycleProgressPct as calculateCycleProgressPct,
   executionVenueLabel,
   foldedTimeline as foldTimeline,
-  formatSyncedAt,
   portfolioKey,
   portfolioOptionLabel,
   trailingStopDefaultExpanded as shouldExpandTrailingStop,
@@ -742,18 +699,6 @@ const tradesBySymbol = computed(() => {
   return map
 })
 
-function money(value) {
-  if (value === null || value === undefined || value === '') return '-'
-  const number = Number(value)
-  return Number.isFinite(number) ? number.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) : '-'
-}
-
-function num(value) {
-  if (value === null || value === undefined || value === '') return '-'
-  const number = Number(value)
-  return Number.isFinite(number) ? number.toFixed(2) : '-'
-}
-
 function signedMoney(value) {
   if (value === null || value === undefined || value === '') return '-'
   const number = Number(value)
@@ -880,64 +825,6 @@ button:disabled {
   color: #7f1d1d;
 }
 
-.summary-cards {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  margin: 16px 0;
-}
-
-.summary-cards .card {
-  background: #fff;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 12px 14px;
-}
-
-.summary-cards .label {
-  color: #374151;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.summary-cards .value {
-  color: #111827;
-  font-size: 18px;
-  font-weight: 700;
-  margin-top: 6px;
-}
-
-.table-wrap {
-  background: #fff;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  overflow-x: auto;
-}
-
-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-th,
-td {
-  border-bottom: 1px solid #e5e7eb;
-  color: #111827;
-  padding: 10px 12px;
-  text-align: left;
-}
-
-th {
-  background: #f3f4f6;
-  color: #111827;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-tbody tr:hover td {
-  background: #f9fafb;
-}
-
 .spinner {
   animation: spin 0.8s linear infinite;
   border: 2px solid #d1d5db;
@@ -961,33 +848,4 @@ button {
   font-weight: 500;
 }
 
-.reconcile-banner {
-  margin-bottom: 16px;
-  padding: 14px 16px;
-  border: 1px solid #fca5a5;
-  border-radius: 10px;
-  background: #fef2f2;
-}
-
-.reconcile-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 6px;
-}
-
-.reconcile-head strong {
-  color: #b91c1c;
-}
-
-.reconcile-banner .pos {
-  color: #047857;
-  font-weight: 600;
-}
-
-.reconcile-banner .neg {
-  color: #b91c1c;
-  font-weight: 600;
-}
 </style>
