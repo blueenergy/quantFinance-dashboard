@@ -60,56 +60,17 @@
 
       <v-window v-model="activePanel">
         <v-window-item value="overview">
-          <section class="panel-grid panel-grid--overview">
-            <article class="workbench-card">
-              <div class="card-title-row">
-                <h3>评分雷达</h3>
-                <span class="muted">按维度展示最新量化评分</span>
-              </div>
-              <div ref="radarRef" class="score-radar"></div>
-            </article>
-
-            <article class="workbench-card">
-              <h3>AI 研究摘要</h3>
-              <div v-if="deepAnalysis" class="analysis-summary">
-                <p class="summary-line">{{ analysisSummary }}</p>
-                <div class="summary-meta">
-                  <span>模式：{{ deepAnalysis.analysis_mode || 'classic' }}</span>
-                  <span>时间：{{ deepAnalysis.created_at || '-' }}</span>
-                </div>
-                <ul v-if="analysisPoints.length">
-                  <li v-for="(point, idx) in analysisPoints" :key="idx">{{ point }}</li>
-                </ul>
-              </div>
-              <div v-else class="muted-block">暂无该股票的 AI 深度分析记录。</div>
-            </article>
-
-            <article class="workbench-card">
-              <div class="card-title-row">
-                <h3>行情资金快照</h3>
-                <button type="button" class="text-link-button" @click="activePanel = 'quote'">查看详情</button>
-              </div>
-              <div class="financial-metrics">
-                <div v-for="metric in overviewQuoteMetrics" :key="metric.label">
-                  <span>{{ metric.label }}</span>
-                  <strong :class="metric.className">{{ metric.value }}</strong>
-                </div>
-              </div>
-              <div v-if="!quoteDailyRows.length && !latestMoneyFlow && !Object.keys(latestDailyBasic).length" class="muted-block">
-                暂无行情资金分区数据。
-              </div>
-            </article>
-
-            <article class="workbench-card">
-              <h3>核心状态</h3>
-              <div class="status-grid">
-                <div v-for="item in statusItems" :key="item.label">
-                  <span>{{ item.label }}</span>
-                  <strong>{{ item.value }}</strong>
-                </div>
-              </div>
-            </article>
-          </section>
+          <WorkbenchOverviewPanel
+            :score-items="scoreItems"
+            :deep-analysis="deepAnalysis"
+            :analysis-summary="analysisSummary"
+            :analysis-points="analysisPoints"
+            :overview-quote-metrics="overviewQuoteMetrics"
+            :status-items="statusItems"
+            :quote-data-available="overviewQuoteDataAvailable"
+            :active="activePanel === 'overview'"
+            @goto-panel="activePanel = $event"
+          />
         </v-window-item>
 
         <v-window-item value="quote">
@@ -349,61 +310,11 @@
         </v-window-item>
 
         <v-window-item value="scores">
-          <section class="workbench-card">
-            <div class="card-title-row">
-              <h3>量化评分详情</h3>
-              <span class="muted">
-                来自最新 `stock_scores` 文档
-                <template v-if="scoreHistory.length"> · 最近 {{ scoreHistory.length }} 条历史</template>
-                <template v-if="sectionLoading.scores"> · 刷新中…</template>
-              </span>
-            </div>
-            <div class="score-grid">
-              <article v-for="item in scoreItems" :key="item.key" class="score-card">
-                <div class="score-card__head">
-                  <span>{{ item.label }}</span>
-                  <strong>{{ fmtNumber(item.score) }}</strong>
-                </div>
-                <div class="score-bar"><i :style="{ width: `${scorePercent(item.score)}%` }"></i></div>
-                <details>
-                  <summary>查看详情</summary>
-                  <pre>{{ formatDetail(item.details) }}</pre>
-                </details>
-              </article>
-            </div>
-            <div class="score-history-block">
-              <h4>评分历史</h4>
-              <div v-if="scoreHistory.length" class="quote-table-wrap">
-                <table class="quote-table">
-                  <thead>
-                    <tr>
-                      <th>日期</th>
-                      <th>综合</th>
-                      <th>技术</th>
-                      <th>基本面</th>
-                      <th>价值</th>
-                      <th>成长</th>
-                      <th>资金流</th>
-                      <th>动量</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in scoreHistory.slice(0, 12)" :key="row.score_date">
-                      <td>{{ row.score_date || '-' }}</td>
-                      <td>{{ fmtNumber(scoreRowComposite(row)) }}</td>
-                      <td>{{ fmtNumber(row.technical_score) }}</td>
-                      <td>{{ fmtNumber(row.fundamental_score) }}</td>
-                      <td>{{ fmtNumber(row.value_score) }}</td>
-                      <td>{{ fmtNumber(row.growth_score) }}</td>
-                      <td>{{ fmtNumber(row.money_flow_score) }}</td>
-                      <td>{{ fmtNumber(row.cycle_score) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div v-else class="muted-block">暂无评分历史。</div>
-            </div>
-          </section>
+          <WorkbenchScoresPanel
+            :score-items="scoreItems"
+            :score-history="scoreHistory"
+            :loading="sectionLoading.scores"
+          />
         </v-window-item>
 
         <v-window-item value="financial">
@@ -1405,7 +1316,9 @@ import MoneyFlowPanel from '../components/MoneyFlowPanel.vue'
 import StockKLineChart from '../components/StockKLineChart.vue'
 import StockWorkbenchSwotPanel from '../components/stock/StockWorkbenchSwotPanel.vue'
 import WorkbenchHero from '../components/stock/WorkbenchHero.vue'
+import WorkbenchOverviewPanel from '../components/stock/WorkbenchOverviewPanel.vue'
 import WorkbenchSearchBar from '../components/stock/WorkbenchSearchBar.vue'
+import WorkbenchScoresPanel from '../components/stock/WorkbenchScoresPanel.vue'
 import {
   blankDash,
   calcYoy,
@@ -1425,7 +1338,6 @@ import {
   fmtStatementAmount,
   fmtWanAmount,
   formatCheck,
-  formatDetail,
   holderTrendClass,
   inDeLabel,
   isFutureDate,
@@ -1435,8 +1347,6 @@ import {
   reportQuarter,
   reportRcTargetRange,
   reportYear,
-  scorePercent,
-  scoreRowComposite,
   signedPctPoint,
   signedRelativePct,
   statementPeriod,
@@ -1482,10 +1392,8 @@ const shareholderTradesExpanded = ref(false)
 const shareFloatExpanded = ref(false)
 const valuationHelpOpen = ref(false)
 const valuationHelpTopic = ref('ddm')
-const radarRef = ref(null)
 const holderNumberChartRef = ref(null)
 const hkHoldChartRef = ref(null)
-let radarChart = null
 let holderNumberChart = null
 let hkHoldChart = null
 let analysisPollTimer = null
@@ -1541,14 +1449,6 @@ const {
     holderNumberTableExpanded.value = false
     shareholderTradesExpanded.value = false
     shareFloatExpanded.value = false
-  },
-  async onAfterShellReady() {
-    await nextTick()
-    renderRadar()
-  },
-  async onScoresLoaded() {
-    await nextTick()
-    renderRadar()
   },
   async onShareholdersLoaded() {
     await nextTick()
@@ -2263,12 +2163,11 @@ const overviewQuoteMetrics = computed(() => [
   { label: 'PB', value: fmtNumber(latestDailyBasic.value.pb) },
   { label: '主力净额', value: fmtWanAmount(moneyFlowSummary.value.main_net_today ?? latestMoneyFlow.value?.net_mf_amount), className: valueClass(moneyFlowSummary.value.main_net_today ?? latestMoneyFlow.value?.net_mf_amount) },
 ])
-
-watch([scoreItems, activePanel], async () => {
-  if (activePanel.value !== 'overview') return
-  await nextTick()
-  renderRadar()
-}, { deep: true })
+const overviewQuoteDataAvailable = computed(() => Boolean(
+  quoteDailyRows.value.length
+  || latestMoneyFlow.value
+  || Object.keys(latestDailyBasic.value).length,
+))
 
 function clearCollectPolling() {
   if (signalCollectionTimer) {
@@ -2628,35 +2527,6 @@ async function submitDeepAnalysis() {
   }
 }
 
-function renderRadar() {
-  if (!radarRef.value || !scoreItems.value.length) return
-  if (!radarChart) radarChart = echarts.init(radarRef.value)
-  const items = scoreItems.value.filter((item) => item.score != null)
-  radarChart.setOption({
-    backgroundColor: 'transparent',
-    tooltip: { trigger: 'item' },
-    radar: {
-      indicator: items.map((item) => ({ name: item.label, max: 100 })),
-      radius: '62%',
-      splitLine: { lineStyle: { color: 'rgba(148,163,184,.35)' } },
-      splitArea: { areaStyle: { color: ['rgba(15,23,42,.25)', 'rgba(30,41,59,.35)'] } },
-      axisName: { color: '#cbd5e1' },
-      axisLine: { lineStyle: { color: 'rgba(148,163,184,.35)' } },
-    },
-    series: [{
-      type: 'radar',
-      data: [{
-        name: '评分',
-        value: items.map((item) => Number(item.score || 0)),
-        areaStyle: { color: 'rgba(96,165,250,.25)' },
-        lineStyle: { color: '#60a5fa', width: 2 },
-        itemStyle: { color: '#93c5fd' },
-      }],
-    }],
-  })
-  radarChart.resize()
-}
-
 function renderShareholderCharts() {
   renderHolderNumberChart()
   renderHkHoldChart()
@@ -2791,10 +2661,6 @@ function holderNumQoq(idx) {
 onBeforeUnmount(() => {
   clearAnalysisPolling()
   clearSignalCollectionPolling()
-  if (radarChart) {
-    radarChart.dispose()
-    radarChart = null
-  }
 })
 </script>
 
@@ -2829,13 +2695,6 @@ h1, h2, h3 {
 .muted-block {
   color: #94a3b8;
 }
-.summary-meta span {
-  background: rgba(96, 165, 250, .12);
-  border: 1px solid rgba(96, 165, 250, .24);
-  border-radius: 999px;
-  color: #bfdbfe;
-  padding: 5px 10px;
-}
 .text-link-button {
   background: transparent;
   border: 0;
@@ -2847,19 +2706,16 @@ h1, h2, h3 {
 .text-link-button:hover {
   color: #bfdbfe;
 }
-.status-grid div,
 .financial-metrics div {
   background: rgba(30, 41, 59, .78);
   border-radius: 14px;
   padding: 14px;
 }
-.status-grid span,
 .financial-metrics span {
   color: #94a3b8;
   display: block;
   font-size: 12px;
 }
-.status-grid strong,
 .financial-metrics strong {
   color: #f8fafc;
   display: block;
@@ -2879,9 +2735,6 @@ h1, h2, h3 {
   display: grid;
   gap: 16px;
   grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
-}
-.panel-grid--overview {
-  grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr);
 }
 .workbench-card {
   margin-bottom: 16px;
@@ -3063,10 +2916,6 @@ h1, h2, h3 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.score-radar {
-  height: 360px;
-  min-height: 360px;
-}
 .financial-mode-toggle {
   margin: 14px 0 10px;
 }
@@ -3143,29 +2992,12 @@ h1, h2, h3 {
 .quality-card--warn {
   border-color: rgba(239, 68, 68, .35);
 }
-.summary-line {
-  color: #f8fafc;
-  font-size: 18px;
-  line-height: 1.7;
-}
-.summary-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 12px 0;
-}
-.analysis-summary ul {
-  color: #cbd5e1;
-  margin: 12px 0 0;
-  padding-left: 18px;
-}
 .analysis-points-list {
   color: #cbd5e1;
   margin: 12px 0 0;
   padding-left: 18px;
   line-height: 1.7;
 }
-.status-grid,
 .financial-metrics {
   display: grid;
   gap: 12px;
@@ -3235,58 +3067,9 @@ h1, h2, h3 {
   line-height: 1.6;
   margin: 12px 0 0;
 }
-.score-grid {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-.score-card {
-  background: rgba(30, 41, 59, .72);
-  border: 1px solid rgba(148, 163, 184, .16);
-  border-radius: 14px;
-  padding: 16px;
-}
-.score-card__head {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-}
-.score-card__head strong {
-  color: #93c5fd;
-  font-size: 24px;
-}
-.score-history-block {
-  margin-top: 22px;
-}
-.score-history-block h4 {
-  color: #e2e8f0;
-  margin: 0 0 12px;
-}
-.score-bar {
-  background: rgba(148, 163, 184, .18);
-  border-radius: 999px;
-  height: 8px;
-  margin: 12px 0;
-  overflow: hidden;
-}
-.score-bar i {
-  background: linear-gradient(90deg, #38bdf8, #818cf8);
-  display: block;
-  height: 100%;
-}
 details summary {
   color: #bfdbfe;
   cursor: pointer;
-}
-pre {
-  background: rgba(2, 6, 23, .68);
-  border-radius: 10px;
-  color: #cbd5e1;
-  margin: 10px 0 0;
-  max-height: 360px;
-  overflow: auto;
-  padding: 12px;
-  white-space: pre-wrap;
 }
 .quote-table-wrap {
   margin-top: 14px;
@@ -3507,8 +3290,7 @@ pre {
   padding: 18px;
 }
 @media (max-width: 980px) {
-  .panel-grid,
-  .panel-grid--overview {
+  .panel-grid {
     grid-template-columns: 1fr;
   }
 }
