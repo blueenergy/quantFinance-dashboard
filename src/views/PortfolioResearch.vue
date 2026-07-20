@@ -16,52 +16,19 @@
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
     <section class="workspace">
-      <aside class="card jobs-card" :class="{ 'mobile-hidden': isNarrow && mobileShowDetail }">
-        <div class="jobs-toolbar">
-          <h3>研究任务</h3>
-          <div class="job-filters">
-            <select v-model="statusFilter" @change="loadJobs" title="状态">
-              <option value="">全部状态</option>
-              <option value="pending">pending</option>
-              <option value="running">running</option>
-              <option value="completed">completed</option>
-              <option value="failed">failed</option>
-            </select>
-            <select v-model="universeFilter" @change="loadJobs" title="universe">
-              <option value="">全部 universe</option>
-              <option v-for="universe in universeOptions" :key="universe.value" :value="universe.value">
-                {{ universe.value }}
-              </option>
-            </select>
-            <input
-              v-model="growthCycleWeightFilter"
-              class="weight-filter"
-              placeholder="growth:cycle 如 30:70"
-              @change="loadJobs"
-              @keyup.enter="loadJobs"
-            />
-          </div>
-        </div>
-        <div class="jobs-list">
-          <p v-if="loading" class="muted">加载中...</p>
-          <p v-else-if="!jobs.length" class="muted">暂无研究任务。</p>
-          <button
-            v-for="job in jobs"
-            :key="job.job_id"
-            class="job-row"
-            :class="{ active: selectedJobId === job.job_id }"
-            @click="selectJob(job.job_id, { scrollDetail: true })"
-          >
-            <strong>{{ job.name || job.job_id }}</strong>
-            <span>{{ job.status }} · {{ job.universe_index || job.params?.universe_index || '-' }}</span>
-            <small v-if="jobWeightLabel(job)">{{ jobWeightLabel(job) }}</small>
-            <small v-if="jobElapsedLabel(job)">{{ jobElapsedLabel(job) }}</small>
-            <small v-if="jobProgressStageLabel(job)" class="progress-stage">{{ jobProgressStageLabel(job) }}</small>
-            <small>{{ compactDate(job.start_date) }} → {{ compactDate(job.end_date) }}</small>
-            <small v-if="job.best_row">best {{ pct(job.best_row.index_excess_cumulative_return) }} excess</small>
-          </button>
-        </div>
-      </aside>
+      <ResearchJobList
+        :jobs="jobs"
+        :loading="loading"
+        :selected-job-id="selectedJobId"
+        :universe-options="universeOptions"
+        :now-ms="nowMs"
+        :mobile-hidden="isNarrow && mobileShowDetail"
+        v-model:status-filter="statusFilter"
+        v-model:universe-filter="universeFilter"
+        v-model:growth-cycle-weight-filter="growthCycleWeightFilter"
+        @load="loadJobs"
+        @select-job="(jobId) => selectJob(jobId, { scrollDetail: true })"
+      />
 
       <main v-if="!selectedJob" class="card detail-card" :class="{ 'mobile-hidden': isNarrow && !mobileShowDetail }">
         <p class="muted detail-empty">请选择一个研究任务。</p>
@@ -467,10 +434,8 @@ import {
 import {
   UNIVERSE_OPTIONS,
   buildResearchParamRows,
-  compactDate,
   jobElapsedLabel as formatJobElapsedLabel,
   jobProgressStageLabel,
-  jobWeightLabel,
   money,
   num,
   pct,
@@ -478,6 +443,7 @@ import {
   universeName,
 } from '../utils/portfolioResearchView'
 import { buildCandidateConfigFromRow, formatAxisValue, resolveComboTrailingStopPct } from '../utils/sweepResultView'
+import ResearchJobList from '../components/portfolio/ResearchJobList.vue'
 import SweepResultPanel from '../components/portfolio/SweepResultPanel.vue'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
@@ -1228,40 +1194,6 @@ onUnmounted(() => {
   flex: none;
 }
 
-.jobs-toolbar {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.jobs-toolbar h3 {
-  margin: 0;
-}
-
-.job-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.job-filters select,
-.job-filters .weight-filter {
-  min-width: 0;
-  flex: 1 1 110px;
-  padding: 6px 8px;
-  border: 1px solid #d7dde7;
-  border-radius: 8px;
-  background: #fff;
-  color: #172033;
-  font-size: 12px;
-}
-
-.job-filters .weight-filter {
-  flex: 1 1 140px;
-}
-
 .page-header > div,
 .section-header > div {
   min-width: 0;
@@ -1410,7 +1342,6 @@ button.secondary-btn {
   overscroll-behavior: contain;
 }
 
-.jobs-card,
 .detail-card {
   min-width: 0;
   min-height: 0;
@@ -1420,7 +1351,6 @@ button.secondary-btn {
   padding: 16px;
 }
 
-.jobs-list,
 .detail-body {
   flex: 1;
   min-height: 0;
@@ -1459,23 +1389,6 @@ button.secondary-btn {
   color: #334155;
 }
 
-.job-row {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
-  border: 1px solid #e6eaf0;
-  background: #fbfcfe;
-  color: #172033;
-  text-align: left;
-}
-
-.job-row.active {
-  border-color: #0f6bdc;
-  background: #eef6ff;
-}
-
 .info-grid > div {
   border: 1px solid #edf0f5;
   border-radius: 10px;
@@ -1495,18 +1408,6 @@ button.secondary-btn {
   min-width: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
-}
-
-.job-row strong,
-.job-row span,
-.job-row small {
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.progress-stage {
-  color: #0f6bdc;
-  font-weight: 600;
 }
 
 .candidate,
