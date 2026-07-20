@@ -151,6 +151,99 @@ export function signClass(value) {
   return number > 0 ? 'pos' : 'neg'
 }
 
+export function buildComboSummaryCards(summary = {}) {
+  const values = summary || {}
+  return [
+    { k: '累计收益(净)', v: pct(values.cumulative_return), cls: signClass(values.cumulative_return) },
+    { k: 'Sharpe', v: num(values.sharpe), cls: '' },
+    { k: '最大回撤', v: pct(values.max_drawdown), cls: 'neg' },
+    {
+      k: '超额(对指数)',
+      v: pct(values.index_excess_cumulative_return),
+      cls: signClass(values.index_excess_cumulative_return),
+    },
+    { k: '平均换手', v: pct(values.average_turnover), cls: '' },
+    { k: '调仓期数', v: num(values.periods, 0), cls: '' },
+  ]
+}
+
+export function filterAndSortTrades(
+  trades = [],
+  {
+    dateFilter = '',
+    symFilter = '',
+    sortKey = 'score_date',
+    sortDir = 1,
+  } = {},
+) {
+  const df = dateFilter
+  const sf = String(symFilter || '').trim()
+  let rows = trades.slice()
+  if (df) rows = rows.filter((row) => String(row.score_date) === df)
+  if (sf) {
+    rows = rows.filter((row) =>
+      String(row.symbol || '').includes(sf) || String(row.name || '').includes(sf))
+  }
+  rows.sort((a, b) => {
+    let x = a[sortKey]
+    let y = b[sortKey]
+    if (typeof x === 'string' || typeof y === 'string') {
+      x = String(x)
+      y = String(y)
+      return sortDir * (x < y ? -1 : x > y ? 1 : 0)
+    }
+    x = x == null || Number.isNaN(Number(x)) ? -Infinity : Number(x)
+    y = y == null || Number.isNaN(Number(y)) ? -Infinity : Number(y)
+    return sortDir * (x - y)
+  })
+  return rows
+}
+
+export function buildEquityChart(periods = []) {
+  if (!Array.isArray(periods) || !periods.length) return null
+  const w = 1100
+  const h = 300
+  const padL = 52
+  const padR = 16
+  const padT = 14
+  const padB = 28
+  const stratEq = [1]
+  const idxEq = [1]
+  for (const period of periods) {
+    const portfolioReturn = period.portfolio_return_net ?? period.portfolio_return ?? 0
+    stratEq.push(stratEq[stratEq.length - 1] * (1 + portfolioReturn))
+    const indexReturn = period.index_benchmark_return ?? null
+    idxEq.push(idxEq[idxEq.length - 1] * (1 + (indexReturn == null ? 0 : indexReturn)))
+  }
+  const hasIdx = periods.some((period) => period.index_benchmark_return != null)
+  const all = stratEq.concat(hasIdx ? idxEq : [])
+  const mn = Math.min(...all)
+  const mx = Math.max(...all)
+  const n = stratEq.length - 1
+  const X = (i) => padL + (w - padL - padR) * (n === 0 ? 0 : i / n)
+  const Y = (value) => padT + (h - padT - padB) * (1 - (value - mn) / ((mx - mn) || 1))
+  const poly = (values) =>
+    values.map((value, index) => `${X(index).toFixed(1)},${Y(value).toFixed(1)}`).join(' ')
+  const ticks = 4
+  const grid = []
+  for (let i = 0; i <= ticks; i++) {
+    const value = mn + ((mx - mn) * i) / ticks
+    grid.push({ y: Y(value), label: `${value.toFixed(2)}x` })
+  }
+  return {
+    w,
+    h,
+    padL,
+    padR,
+    grid,
+    hasIdx,
+    stratPoints: poly(stratEq),
+    idxPoints: poly(idxEq),
+    firstDate: periods[0].score_date,
+    lastDate: periods[periods.length - 1].score_date,
+  }
+}
+
 export function buildResearchParamRows(job, options = UNIVERSE_OPTIONS) {
   if (!job) return []
   const params = job.params || {}

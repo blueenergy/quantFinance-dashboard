@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildEquityChart,
   buildResearchParamRows,
+  filterAndSortTrades,
   formatDurationMs,
   jobElapsedLabel,
   jobProgressStageLabel,
@@ -94,5 +96,46 @@ describe('pct / signClass', () => {
     expect(signClass(1)).toBe('pos')
     expect(signClass(-0.5)).toBe('neg')
     expect(signClass(0)).toBe('mut')
+  })
+})
+
+describe('filterAndSortTrades', () => {
+  it('filters by score date and sorts the matching rows', () => {
+    const trades = [
+      { score_date: '2024-01-02', symbol: '600001.SH', score_value: 70 },
+      { score_date: '2024-01-01', symbol: '600002.SH', score_value: 80 },
+      { score_date: '2024-01-02', symbol: '600003.SH', score_value: 90 },
+    ]
+
+    expect(filterAndSortTrades(trades, {
+      dateFilter: '2024-01-02',
+      sortKey: 'score_value',
+      sortDir: -1,
+    })).toEqual([
+      trades[2],
+      trades[0],
+    ])
+  })
+})
+
+describe('buildEquityChart', () => {
+  it('returns null for empty periods', () => {
+    expect(buildEquityChart([])).toBeNull()
+  })
+
+  it('builds chart points for one period', () => {
+    const chart = buildEquityChart([{
+      score_date: '2024-01-02',
+      portfolio_return_net: 0.1,
+      index_benchmark_return: 0.05,
+    }])
+
+    expect(chart).toMatchObject({
+      hasIdx: true,
+      firstDate: '2024-01-02',
+      lastDate: '2024-01-02',
+    })
+    expect(chart.stratPoints.split(' ')).toHaveLength(2)
+    expect(chart.idxPoints.split(' ')).toHaveLength(2)
   })
 })

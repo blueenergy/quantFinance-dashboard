@@ -214,112 +214,14 @@
       @universe-change="syncDefaultName"
     />
 
-    <div v-if="comboModalOpen" class="combo-overlay" @click.self="closeComboDetail">
-      <div class="combo-modal">
-        <header class="combo-head">
-          <div>
-            <h3>{{ comboTitle }}</h3>
-            <p class="muted">{{ comboSubtitle }}</p>
-            <div v-if="comboDetail" class="combo-params">
-              <span><strong>移动止盈</strong>{{ comboTrailingStopLabel }}</span>
-              <span><strong>成交价</strong>后复权 · next_open</span>
-              <span v-if="comboTrailingStopEnabled"><strong>卖出规则</strong>峰值回撤触发后次日开盘卖，否则持满 {{ comboMeta.horizon || comboMeta.rebalance_interval_days }} 日</span>
-            </div>
-          </div>
-          <button class="link-btn" @click="closeComboDetail">关闭 ✕</button>
-        </header>
-
-        <p v-if="comboLoading" class="muted">加载成交明细中…</p>
-        <p v-else-if="comboError" class="error">{{ comboError }}</p>
-
-        <template v-else-if="comboDetail">
-          <div class="combo-cards">
-            <div v-for="card in comboSummaryCards" :key="card.k" class="combo-card">
-              <span class="k">{{ card.k }}</span>
-              <strong class="v" :class="card.cls">{{ card.v }}</strong>
-            </div>
-          </div>
-
-          <h4 class="combo-h">净值曲线（扣费净收益，复利）</h4>
-          <div class="combo-chart-panel">
-            <svg v-if="equityChart" :viewBox="`0 0 ${equityChart.w} ${equityChart.h}`" width="100%" preserveAspectRatio="xMidYMid meet">
-              <line
-                v-for="(g, gi) in equityChart.grid"
-                :key="`g${gi}`"
-                :x1="equityChart.padL" :y1="g.y" :x2="equityChart.w - equityChart.padR" :y2="g.y"
-                stroke="#e6eaf0" stroke-width="1"
-              />
-              <text
-                v-for="(g, gi) in equityChart.grid"
-                :key="`gt${gi}`"
-                :x="equityChart.padL - 6" :y="g.y + 3" fill="#94a3b8" font-size="11" text-anchor="end"
-              >{{ g.label }}</text>
-              <polyline v-if="equityChart.hasIdx" fill="none" stroke="#94a3b8" stroke-width="1.5" :points="equityChart.idxPoints" />
-              <polyline fill="none" stroke="#0f6bdc" stroke-width="2" :points="equityChart.stratPoints" />
-              <text :x="equityChart.padL" :y="equityChart.h - 8" fill="#94a3b8" font-size="11">{{ equityChart.firstDate }}</text>
-              <text :x="equityChart.w - equityChart.padR" :y="equityChart.h - 8" fill="#94a3b8" font-size="11" text-anchor="end">{{ equityChart.lastDate }}</text>
-            </svg>
-            <p v-else class="muted">无净值数据</p>
-            <div class="combo-legend">
-              <span><i class="sw" style="background:#0f6bdc"></i>策略（净）</span>
-              <span><i class="sw" style="background:#94a3b8"></i>指数基准</span>
-            </div>
-          </div>
-
-          <h4 class="combo-h">模拟成交明细 <span class="muted">（{{ filteredTrades.length }} 笔 / 共 {{ comboTrades.length }}）</span></h4>
-          <div class="combo-toolbar">
-            <label>调仓日
-              <select v-model="tradeDateFilter">
-                <option value="">全部</option>
-                <option v-for="d in tradeDates" :key="d" :value="d">{{ d }}</option>
-              </select>
-            </label>
-            <label>代码/名称 <input v-model="tradeSymFilter" placeholder="如 600000" /></label>
-            <span class="muted">点击表头排序</span>
-          </div>
-          <div class="combo-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th v-for="col in tradeCols" :key="col.k" @click="sortTrades(col.k)">
-                    {{ col.t }}<span v-if="tradeSortKey === col.k">{{ tradeSortDir > 0 ? ' ▲' : ' ▼' }}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(t, ti) in filteredTrades" :key="`${t.symbol}-${t.score_date}-${ti}`">
-                  <td>{{ t.score_date }}</td>
-                  <td>{{ t.symbol }}</td>
-                  <td>{{ t.name || '' }}</td>
-                  <td>{{ num(t.score_value, 1) }}</td>
-                  <td>{{ t.buy_date || '' }}</td>
-                  <td>{{ num(t.buy_price) }}</td>
-                  <td>{{ t.sell_date || '' }}</td>
-                  <td>{{ num(t.sell_price) }}</td>
-                  <td>{{ money(t.quantity) }}</td>
-                  <td>{{ money(t.buy_amount) }}</td>
-                  <td :class="signClass(t.holding_return)">{{ pct(t.holding_return) }}</td>
-                  <td :class="signClass(t.net_pnl)">{{ money(t.net_pnl) }}</td>
-                  <td>{{ money(t.estimated_transaction_cost) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p class="muted combo-note">
-            <template v-if="comboTrailingStopEnabled">
-              移动止盈（{{ comboTrailingStopLabel }}）：持仓期内跟踪最高价，若某日收盘价 ≤ 峰值×(1−止盈比例)，则于次日开盘价卖出；否则持有满 {{ comboMeta.horizon || comboMeta.rebalance_interval_days }} 个交易日后按开盘价卖出（next_open；遇一字跌停顺延，见 sell_delayed_days）。价格为后复权 OHLC。
-            </template>
-            <template v-else>
-              成交价口径：买入 = 调仓日「次日开盘价」(next_open)，卖出 = 持有 {{ comboMeta.horizon || comboMeta.rebalance_interval_days }} 个交易日后那天的开盘价（next_open；遇一字跌停顺延，见 sell_delayed_days），open-to-open。价格为后复权 OHLC。
-            </template>
-            等权建仓、整手取整、含费用模型；无期内再平衡、无额外滑点。
-          </p>
-          <p class="muted combo-note">
-            末端截断：某期需「持有期满日」的卖出价才能结算，最后一笔卖出之后若再开仓的持有期已超出回测数据窗口（如 end_date 之后），该期无法计算收益、不展示——属正常现象，不是漏单。该「未结算的最新持仓」对应实盘推荐，不在历史成交回测内。
-          </p>
-        </template>
-      </div>
-    </div>
+    <ResearchComboModal
+      :open="comboModalOpen"
+      :loading="comboLoading"
+      :error="comboError"
+      :detail="comboDetail"
+      :context-row="comboContextRow"
+      @close="closeComboDetail"
+    />
   </section>
 </template>
 
@@ -348,10 +250,10 @@ import {
   money,
   num,
   pct,
-  signClass,
   universeName,
 } from '../utils/portfolioResearchView'
-import { buildCandidateConfigFromRow, formatAxisValue, resolveComboTrailingStopPct } from '../utils/sweepResultView'
+import { buildCandidateConfigFromRow } from '../utils/sweepResultView'
+import ResearchComboModal from '../components/portfolio/ResearchComboModal.vue'
 import ResearchCreateDrawer from '../components/portfolio/ResearchCreateDrawer.vue'
 import ResearchJobList from '../components/portfolio/ResearchJobList.vue'
 import SweepResultPanel from '../components/portfolio/SweepResultPanel.vue'
@@ -386,6 +288,7 @@ const detailBodyRef = ref(null)
 const newJobBtnRef = ref(null)
 const loadParamsBtnRef = ref(null)
 let selectSeq = 0
+let comboSeq = 0
 let narrowMql = null
 let drawerFocusEl = null
 
@@ -405,26 +308,6 @@ const comboLoading = ref(false)
 const comboError = ref('')
 const comboDetail = ref(null)
 const comboContextRow = ref(null)
-const tradeDateFilter = ref('')
-const tradeSymFilter = ref('')
-const tradeSortKey = ref('score_date')
-const tradeSortDir = ref(1)
-
-const tradeCols = [
-  { k: 'score_date', t: '调仓日' },
-  { k: 'symbol', t: '代码' },
-  { k: 'name', t: '名称' },
-  { k: 'score_value', t: '分值' },
-  { k: 'buy_date', t: '买入日' },
-  { k: 'buy_price', t: '买价' },
-  { k: 'sell_date', t: '卖出日' },
-  { k: 'sell_price', t: '卖价' },
-  { k: 'quantity', t: '数量' },
-  { k: 'buy_amount', t: '买入额' },
-  { k: 'holding_return', t: '持有收益' },
-  { k: 'net_pnl', t: '净盈亏' },
-  { k: 'estimated_transaction_cost', t: '费用' },
-]
 
 const universeOptions = UNIVERSE_OPTIONS
 
@@ -689,124 +572,6 @@ function syncSelectedResultRow() {
     || null
 }
 
-const comboMeta = computed(() => comboDetail.value?.meta || {})
-const comboSummary = computed(() => comboDetail.value?.summary || {})
-const comboTrades = computed(() => comboDetail.value?.trades || [])
-
-const comboTitle = computed(() => {
-  const m = comboMeta.value
-  if (!m.construction_mode) return '组合成交明细'
-  return `${m.score_variant || m.score_column || ''} · ${m.variant || m.construction_mode} · Top-${m.top_n}`
-})
-
-const comboSubtitle = computed(() => {
-  const m = comboMeta.value
-  const parts = []
-  if (m.construction_mode) parts.push(`构建 ${m.construction_mode}`)
-  if (m.max_industry_weight != null) parts.push(`行业上限 ${pct(m.max_industry_weight)}`)
-  if (m.horizon) parts.push(`调仓 ${m.horizon}d`)
-  if (m.index_benchmark_symbol) parts.push(`基准 ${m.index_benchmark_symbol}`)
-  return parts.join(' · ')
-})
-
-const comboTrailingStopPct = computed(() => resolveComboTrailingStopPct({
-  meta: comboMeta.value,
-  row: comboContextRow.value,
-  comboKey: comboMeta.value?.combo_key || comboContextRow.value?.combo_key,
-}))
-
-const comboTrailingStopLabel = computed(() => formatAxisValue('trailing_stop_pct', comboTrailingStopPct.value))
-
-const comboTrailingStopEnabled = computed(() => comboTrailingStopPct.value != null)
-
-const comboSummaryCards = computed(() => {
-  const s = comboSummary.value
-  return [
-    { k: '累计收益(净)', v: pct(s.cumulative_return), cls: signClass(s.cumulative_return) },
-    { k: 'Sharpe', v: num(s.sharpe), cls: '' },
-    { k: '最大回撤', v: pct(s.max_drawdown), cls: 'neg' },
-    { k: '超额(对指数)', v: pct(s.index_excess_cumulative_return), cls: signClass(s.index_excess_cumulative_return) },
-    { k: '平均换手', v: pct(s.average_turnover), cls: '' },
-    { k: '调仓期数', v: num(s.periods, 0), cls: '' },
-  ]
-})
-
-const tradeDates = computed(() =>
-  Array.from(new Set(comboTrades.value.map((t) => String(t.score_date)))).sort()
-)
-
-const filteredTrades = computed(() => {
-  const df = tradeDateFilter.value
-  const sf = tradeSymFilter.value.trim()
-  let rows = comboTrades.value.slice()
-  if (df) rows = rows.filter((r) => String(r.score_date) === df)
-  if (sf) rows = rows.filter((r) => String(r.symbol || '').includes(sf) || String(r.name || '').includes(sf))
-  const key = tradeSortKey.value
-  const dir = tradeSortDir.value
-  rows.sort((a, b) => {
-    let x = a[key]
-    let y = b[key]
-    if (typeof x === 'string' || typeof y === 'string') {
-      x = String(x)
-      y = String(y)
-      return dir * (x < y ? -1 : x > y ? 1 : 0)
-    }
-    x = x == null || Number.isNaN(Number(x)) ? -Infinity : Number(x)
-    y = y == null || Number.isNaN(Number(y)) ? -Infinity : Number(y)
-    return dir * (x - y)
-  })
-  return rows
-})
-
-const equityChart = computed(() => {
-  const periods = comboDetail.value?.periods || []
-  if (!periods.length) return null
-  const w = 1100
-  const h = 300
-  const padL = 52
-  const padR = 16
-  const padT = 14
-  const padB = 28
-  const stratEq = [1]
-  const idxEq = [1]
-  for (const p of periods) {
-    const r = p.portfolio_return_net ?? p.portfolio_return ?? 0
-    stratEq.push(stratEq[stratEq.length - 1] * (1 + r))
-    const ir = p.index_benchmark_return ?? null
-    idxEq.push(idxEq[idxEq.length - 1] * (1 + (ir == null ? 0 : ir)))
-  }
-  const hasIdx = periods.some((p) => p.index_benchmark_return != null)
-  const all = stratEq.concat(hasIdx ? idxEq : [])
-  const mn = Math.min(...all)
-  const mx = Math.max(...all)
-  const n = stratEq.length - 1
-  const X = (i) => padL + (w - padL - padR) * (n === 0 ? 0 : i / n)
-  const Y = (v) => padT + (h - padT - padB) * (1 - (v - mn) / ((mx - mn) || 1))
-  const poly = (arr) => arr.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')
-  const ticks = 4
-  const grid = []
-  for (let i = 0; i <= ticks; i++) {
-    const v = mn + ((mx - mn) * i) / ticks
-    grid.push({ y: Y(v), label: `${v.toFixed(2)}x` })
-  }
-  return {
-    w, h, padL, padR, grid, hasIdx,
-    stratPoints: poly(stratEq),
-    idxPoints: poly(idxEq),
-    firstDate: periods[0].score_date,
-    lastDate: periods[periods.length - 1].score_date,
-  }
-})
-
-function sortTrades(key) {
-  if (tradeSortKey.value === key) {
-    tradeSortDir.value *= -1
-  } else {
-    tradeSortKey.value = key
-    tradeSortDir.value = 1
-  }
-}
-
 async function openComboDetail(row) {
   if (!selectedJobId.value || !row?.combo_key) return
   detailMaximized.value = false
@@ -815,21 +580,24 @@ async function openComboDetail(row) {
   comboError.value = ''
   comboDetail.value = null
   comboContextRow.value = row
-  tradeDateFilter.value = ''
-  tradeSymFilter.value = ''
-  tradeSortKey.value = 'score_date'
-  tradeSortDir.value = 1
+  const seq = ++comboSeq
   try {
-    comboDetail.value = await getPortfolioResearchComboDetail(selectedJobId.value, row.combo_key)
+    const detail = await getPortfolioResearchComboDetail(selectedJobId.value, row.combo_key)
+    if (seq !== comboSeq) return
+    comboDetail.value = detail
   } catch (err) {
+    if (seq !== comboSeq) return
     comboError.value = formatResearchApiError(err, '加载成交明细失败')
   } finally {
-    comboLoading.value = false
+    if (seq === comboSeq) comboLoading.value = false
   }
 }
 
 function closeComboDetail() {
+  comboSeq += 1
   comboModalOpen.value = false
+  comboLoading.value = false
+  comboError.value = ''
   comboDetail.value = null
   comboContextRow.value = null
 }
@@ -1432,162 +1200,8 @@ th {
   color: #b91c1c;
 }
 
-/* A股配色：盈利/上涨=红，亏损/下跌=绿 */
-.pos { color: #d4380d; font-weight: 700; }
-.neg { color: #389e0d; font-weight: 700; }
-.mut { color: #94a3b8; }
-
 .detail-cell {
   text-align: left;
-}
-
-.link-btn {
-  border: none;
-  background: transparent;
-  color: #0f6bdc;
-  padding: 2px 4px;
-  cursor: pointer;
-  font: inherit;
-  text-decoration: underline;
-}
-
-.combo-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: rgba(15, 23, 42, .45);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 32px 16px;
-  overflow: auto;
-}
-
-.combo-modal {
-  background: #fff;
-  border-radius: 14px;
-  width: min(1180px, 100%);
-  padding: 22px 24px 26px;
-  box-shadow: 0 12px 40px rgba(15, 23, 42, .25);
-}
-
-.combo-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.combo-head h3 {
-  overflow-wrap: anywhere;
-}
-
-.combo-params {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  margin-top: 8px;
-  font-size: 13px;
-  color: #334155;
-}
-
-.combo-params strong {
-  color: #64748b;
-  font-weight: 600;
-  margin-right: 4px;
-}
-
-.combo-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
-  margin: 8px 0 18px;
-}
-
-.combo-card {
-  border: 1px solid #edf0f5;
-  border-radius: 10px;
-  padding: 12px;
-  background: #fbfcfe;
-}
-
-.combo-card .k {
-  display: block;
-  color: #64748b;
-  font-size: 12px;
-}
-
-.combo-card .v {
-  display: block;
-  font-size: 20px;
-  margin-top: 3px;
-}
-
-.combo-h {
-  margin: 22px 0 10px;
-  padding-left: 9px;
-  border-left: 4px solid #0f6bdc;
-}
-
-.combo-chart-panel {
-  border: 1px solid #e6eaf0;
-  border-radius: 12px;
-  padding: 14px;
-  background: #fff;
-}
-
-.combo-legend {
-  font-size: 12px;
-  color: #64748b;
-  margin-top: 8px;
-  display: flex;
-  gap: 16px;
-}
-
-.combo-legend .sw {
-  display: inline-block;
-  width: 11px;
-  height: 11px;
-  border-radius: 2px;
-  vertical-align: middle;
-  margin-right: 5px;
-}
-
-.combo-toolbar {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-  font-size: 13px;
-}
-
-.combo-toolbar label {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
-
-.combo-table-wrap {
-  max-height: 520px;
-  overflow: auto;
-  border: 1px solid #e6eaf0;
-  border-radius: 10px;
-}
-
-.combo-table-wrap thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  cursor: pointer;
-  user-select: none;
-}
-
-.combo-note {
-  margin-top: 12px;
-  font-size: 12px;
 }
 
 @media (max-width: 900px) {
