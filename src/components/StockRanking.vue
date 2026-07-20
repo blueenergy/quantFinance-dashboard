@@ -197,18 +197,6 @@ const emit = defineEmits(['view-chart'])
 const DEBUG = import.meta.env?.DEV === true
 function dlog(...args) { if (DEBUG) { try { console.debug('[StockRanking]', ...args) } catch(e) {} } }
 
-function getIndexSymbolsForMode(mode) {
-  const lists = {
-    hs300: hs300Stocks,
-    csi500: csi500Stocks,
-    csi1000: csi1000Stocks,
-    csi2000: csi2000Stocks,
-    a500: a500Stocks,
-    star50: star50Stocks,
-  }
-  return (lists[mode]?.value || []).map(stock => stock.symbol)
-}
-
 const {
   rankings,
   rankingDataViewMode,
@@ -237,10 +225,28 @@ const {
   fetchRankings,
   rankingPrevPage,
   rankingNextPage,
+  indexStateMap,
+  hs300Stocks,
+  hs300Loading,
+  a500Stocks,
+  a500Loading,
+  csi500Stocks,
+  csi500Loading,
+  csi1000Stocks,
+  csi1000Loading,
+  csi2000Stocks,
+  csi2000Loading,
+  star50Stocks,
+  star50Loading,
+  fetchIndexConstituents,
+  fetchWatchlist,
+  isInWatchlist,
+  toggleWatchlist,
+  clearWatchlist,
+  viewWatchlistStocks,
 } = useStockRanking({
   dlog,
   isUserLoggedIn,
-  getIndexSymbols: getIndexSymbolsForMode,
 })
 
 const stockInput = ref('')
@@ -351,24 +357,6 @@ const pickingForSymbol = ref('')
 // Score detail modal
 const showScoreDetail = ref(false)
 const selectedStock = ref(null)
-
-// 🆕 添加沪深300相关状态变量
-const hs300Stocks = ref([]) // 沪深300成分股列表
-const hs300Loading = ref(false) // 加载状态
-// 🆕 添加科创50相关状态变量
-const star50Stocks = ref([])
-const star50Loading = ref(false)
-// 🆕 添加中证A500相关状态变量
-const a500Stocks = ref([])
-const a500Loading = ref(false)
-// 🆕 添加中证500相关状态变量
-// 指数成分股 ref：快选等用；指数 Tab 排行榜走 GET by-index，不依赖此处是否已加载。
-const csi500Stocks = ref([])
-const csi500Loading = ref(false)
-const csi1000Stocks = ref([])
-const csi1000Loading = ref(false)
-const csi2000Stocks = ref([])
-const csi2000Loading = ref(false)
 
 // ✅ 检查用户是否已登录
 function isUserLoggedIn() {
@@ -841,175 +829,6 @@ function downloadCSV(content, filename) {
 }
 
 
-// ✅ 获取用户自选股列表
-async function fetchWatchlist() {
-  if (!isUserLoggedIn()) {
-    dlog('skip watchlist fetch (not logged in)')
-    return
-  }
-  
-  try {
-    const response = await request({ method: 'get', url: '/user/watchlist' })
-    dlog('watchlist response', response)
-    
-    if (response.success && response.data) {
-      watchlist.value = response.data.symbols || []
-    }
-  } catch (error) {
-    console.error('获取自选股失败:', error)
-    if (error.response?.status === 401) {
-      dlog('auth failed while fetching watchlist')
-    }
-  }
-}
-
-// ✅ 统一的自选股切换方法
-async function toggleWatchlist(symbol) {
-  if (!isUserLoggedIn()) {
-    alert('❌ 请先登录后再操作自选股')
-    return
-  }
-  
-  if (isInWatchlist(symbol)) {
-    await removeFromWatchlist(symbol)
-  } else {
-    await addToWatchlist(symbol)
-  }
-}
-
-// ✅ 修改添加到自选股功能
-async function addToWatchlist(symbol) {
-  try {
-    const response = await request({
-      method: 'post',
-      url: '/user/watchlist/add',
-      data: { symbol: symbol },
-    })
-    
-  dlog('add watchlist response', response)
-    
-    if (response.success) {
-      watchlist.value.push(symbol)
-      alert(`✅ 已将 ${symbol} 添加到自选股`)
-    } else {
-      alert('❌ 添加自选股失败')
-    }
-    
-  } catch (error) {
-    console.error('添加自选股失败:', error)
-    alert('❌ 添加自选股失败: ' + (error.response?.data?.detail || error.message))
-  }
-}
-
-// ✅ 添加从自选股移除功能
-async function removeFromWatchlist(symbol) {
-  try {
-    // Check if the stock has any active strategies
-    const stratCheckResponse = await request({ method: 'get', url: '/user/watchlist/strategies' })
-    
-    if (stratCheckResponse.success) {
-      const activeStrategies = stratCheckResponse.data
-        .filter(s => s.symbol === symbol && s.enabled === true)
-      
-      if (activeStrategies.length > 0) {
-        const strategyNames = activeStrategies.map(s => s.strategy_key).join(', ')
-        alert(`❌ 无法删除：该股票还有 ${activeStrategies.length} 个策略处于激活状态 (${strategyNames})\n\n请先在“策略配置”页面停用相关策略，然后再删除股票。`)
-        return
-      }
-    }
-    
-    const response = await request({ method: 'delete', url: `/user/watchlist/remove/${symbol}` })
-    
-    if (response.success) {
-      watchlist.value = watchlist.value.filter(s => s !== symbol)
-      alert(`✅ 已将 ${symbol} 从自选股中移除`)
-      
-      // 如果当前是自选股模式，刷新数据
-      if (viewMode.value === 'watchlist') {
-        fetchRankings()
-      }
-    } else {
-      alert('❌ 移除失败')
-    }
-    
-  } catch (error) {
-    console.error('移除自选股失败:', error)
-    alert('❌ 移除自选股失败: ' + (error.response?.data?.detail || error.message))
-  }
-}
-
-// ✅ 查看自选股详细信息
-async function viewWatchlistStocks() {
-  if (!isUserLoggedIn()) {
-    alert('❌ 请先登录后查看自选股')
-    return
-  }
-  
-  try {
-    const response = await request({ method: 'get', url: '/user/watchlist-stocks' })
-    dlog('watchlist stocks detail', response)
-    
-    if (response.success) {
-      const stocks = response.data
-      if (stocks.length === 0) {
-        alert('📝 自选股列表为空')
-      } else {
-        const stockInfo = stocks.map(stock => 
-          `${stock.symbol} ${stock.name}: ¥${stock.close || 'N/A'} (${stock.change_percent ? stock.change_percent.toFixed(2) + '%' : 'N/A'})`
-        ).join('\n')
-        alert(`📋 自选股详细信息:\n${stockInfo}`)
-      }
-    } else {
-      alert('❌ 获取自选股信息失败')
-    }
-    
-  } catch (error) {
-    console.error('获取自选股详细信息失败:', error)
-    alert('❌ 获取自选股信息失败: ' + (error.response?.data?.detail || error.message))
-  }
-}
-
-// ✅ 检查股票是否在自选股中
-function isInWatchlist(symbol) {
-  return watchlist.value.includes(symbol)
-}
-
-// ✅ 修改清空自选股功能
-async function clearWatchlist() {
-  if (!isUserLoggedIn()) {
-    alert('❌ 请先登录')
-    return
-  }
-  
-  if (!confirm('确定要清空自选股列表吗?')) {
-    return
-  }
-  
-  try {
-    const response = await request({
-      method: 'put',
-      url: '/user/watchlist',
-      data: { symbols: [] },
-    })
-    
-    if (response.success) {
-      watchlist.value = []
-      alert('🗑️ 自选股列表已清空')
-      
-      // 如果当前是自选股模式，刷新数据
-      if (viewMode.value === 'watchlist') {
-        fetchRankings()
-      }
-    } else {
-      alert('❌ 清空失败')
-    }
-    
-  } catch (error) {
-    console.error('清空自选股失败:', error)
-    alert('❌ 清空自选股失败: ' + (error.response?.data?.detail || error.message))
-  }
-}
-
 function getRankClass(stock, rank) {
   if (viewMode.value === 'ranking') {
     if (rank <= 3) return 'rank-top-three'
@@ -1144,69 +963,6 @@ function onRankingStrategyChange() {
 function onRankingSortChange() {
   rankingPageOffset.value = 0
   fetchRankings()
-}
-
-// =============================
-// ✅ 指数成分股通用工具
-// =============================
-const indexStateMap = {
-  hs300: { list: hs300Stocks, loading: hs300Loading, path: '/index/hs300/constituents', fallback: [
-    { symbol: '000001.SZ', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.85 },
-    { symbol: '000002.SZ', name: '万科A', industry: '房地产开发', market_cap: 250000000000, weight: 0.78 }
-  ] },
-  a500: { list: a500Stocks, loading: a500Loading, path: '/index/a500/constituents', fallback: [
-    { symbol: '600519.SH', name: '贵州茅台', industry: '白酒', market_cap: 2500000000000, weight: 2.50 },
-    { symbol: '000333.SZ', name: '美的集团', industry: '家电', market_cap: 450000000000, weight: 1.20 }
-  ] },
-  // 修复: 中证500 应使用自身 loading ref 且提供更贴近该指数的示例成分
-  csi500: { list: csi500Stocks, loading: csi500Loading, path: '/index/csi500/constituents', fallback: [
-    { symbol: '000001.SZ', name: '平安银行', industry: '银行', market_cap: 280000000000, weight: 0.35 },
-    { symbol: '600036.SH', name: '招商银行', industry: '银行', market_cap: 340000000000, weight: 0.40 },
-    { symbol: '002415.SZ', name: '海康威视', industry: '电子', market_cap: 310000000000, weight: 0.45 }
-  ] },
-  csi1000: { list: csi1000Stocks, loading: csi1000Loading, path: '/index/csi1000/constituents', fallback: [
-    { symbol: '300014.SZ', name: '亿纬锂能', industry: '电力设备', market_cap: 80000000000, weight: 0.32 },
-    { symbol: '002304.SZ', name: '洋河股份', industry: '食品饮料', market_cap: 120000000000, weight: 0.28 },
-    { symbol: '600887.SH', name: '伊利股份', industry: '食品饮料', market_cap: 150000000000, weight: 0.30 }
-  ] },
-  csi2000: { list: csi2000Stocks, loading: csi2000Loading, path: '/index/csi2000/constituents', fallback: [
-    { symbol: '300014.SZ', name: '亿纬锂能', industry: '电力设备', market_cap: 80000000000, weight: 0.20 },
-    { symbol: '002304.SZ', name: '洋河股份', industry: '食品饮料', market_cap: 120000000000, weight: 0.18 },
-    { symbol: '603986.SH', name: '兆易创新', industry: '电子', market_cap: 90000000000, weight: 0.16 }
-  ] },
-  star50: { list: star50Stocks, loading: star50Loading, path: '/index/star50/constituents', fallback: [
-    { symbol: '688001.SH', name: '华兴源创', industry: '半导体', market_cap: 45000000000, weight: 1.10 },
-    { symbol: '688012.SH', name: '中微公司', industry: '半导体设备', market_cap: 120000000000, weight: 2.20 }
-  ] }
-}
-
-async function fetchIndexConstituents(indexKey) {
-  const st = indexStateMap[indexKey]
-  if (!st) throw new Error(`未知指数: ${indexKey}`)
-  if (st.list.value.length > 0) return st.list.value
-  st.loading.value = true
-  try {
-    const resp = await request({ method: 'get', url: st.path })
-    // 注意：[] 在 JS 中为 truthy，不能写 `if (resp.data)`，否则 success + 空列表会误采纳、且不走 fallback
-    const rows = Array.isArray(resp?.data) ? resp.data : null
-    if (resp?.success && rows && rows.length > 0) {
-      st.list.value = rows
-      console.log(`📊 获取到 ${st.list.value.length} 只 ${indexKey} 成分股`)
-      return st.list.value
-    }
-    if (resp?.success && rows && rows.length === 0) {
-      console.warn(`获取 ${indexKey} 成分股返回空列表，使用本地 fallback`)
-      st.list.value = [...st.fallback]
-      return st.list.value
-    }
-    throw new Error('API返回数据格式错误')
-  } catch (e) {
-    console.warn(`获取 ${indexKey} 成分股失败，使用本地数据:`, e.message)
-    st.list.value = [...st.fallback]
-    return st.list.value
-  } finally {
-    st.loading.value = false
-  }
 }
 
 </script>

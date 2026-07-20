@@ -18,6 +18,8 @@ import {
   writeStockRankingCache,
 } from '../utils/stockRankingCache.js'
 import { useCancellableRequest } from './useCancellableRequest.js'
+import { useRankingIndexConstituents } from './useRankingIndexConstituents.js'
+import { useRankingWatchlist } from './useRankingWatchlist.js'
 
 const INDEX_RANKING_VIEW_MODES = new Set([
   'hs300',
@@ -132,8 +134,12 @@ export function useStockRanking(options = {}) {
   const requestClient = options.requestClient || request
   const notify = options.notify || ((message) => globalThis.alert?.(message))
   const isUserLoggedIn = options.isUserLoggedIn || (() => localStorage.getItem('access_token') !== null)
-  const getIndexSymbols = options.getIndexSymbols || (() => [])
   const dlog = options.dlog || (() => {})
+  const indexConstituents = useRankingIndexConstituents({
+    requestClient,
+    warn: options.warn,
+  })
+  const getIndexSymbols = options.getIndexSymbols || indexConstituents.getIndexSymbols
 
   const prefs = loadStockRankingPrefs()
   const rankings = ref([])
@@ -152,12 +158,21 @@ export function useStockRanking(options = {}) {
       ? { ...prefs.perStockStrategies }
       : {}
   )
-  const watchlist = ref([])
   const refreshKey = ref(0)
   const loadingMessage = ref('')
   const lastUpdateTime = ref('')
   const rankingPageOffset = ref(0)
   const rankingTotal = ref(0)
+  const watchlistOps = useRankingWatchlist({
+    requestClient,
+    isUserLoggedIn,
+    notify,
+    confirmAction: options.confirmAction,
+    dlog,
+    getViewMode: () => viewMode.value,
+    onRankingRefresh: () => fetchRankings(),
+  })
+  const { watchlist } = watchlistOps
 
   const hasCurrentModeRankings = computed(
     () => rankings.value.length > 0 && rankingDataViewMode.value === viewMode.value
@@ -515,6 +530,8 @@ export function useStockRanking(options = {}) {
   })
 
   return {
+    ...indexConstituents,
+    ...watchlistOps,
     rankings,
     rankingDataViewMode,
     loading,
@@ -527,7 +544,6 @@ export function useStockRanking(options = {}) {
     sortBy,
     rankingWeights,
     perStockStrategies,
-    watchlist,
     refreshKey,
     loadingMessage,
     lastUpdateTime,
