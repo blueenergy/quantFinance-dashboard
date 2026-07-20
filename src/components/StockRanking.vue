@@ -230,29 +230,18 @@
       </div>
     </div>
 
-    <!-- ✅ 可用评分日期模态框（在指定股票模式且选择单只股票时弹出） -->
-    <div v-if="showAvailableDatesModal" class="modal-overlay" @click="closeAvailableDatesModal">
-  <div class="modal-content" @click.stop style="max-width:520px;">
-        <h4>选择 {{ pickingForSymbol }} 的可用评分日期</h4>
-  <div class="scroll-box mt-sm" style="max-height:320px;">
-            <div v-if="availableDatesForSymbol.length === 0">未找到可用日期。</div>
-            <div v-else>
-              <div class="flex-row gap-sm mb-sm">
-                <button @click="selectAllAvailableDates" class="btn-base btn-sm btn-gradient-green">全选</button>
-                <button @click="deselectAllAvailableDates" class="btn-base btn-sm btn-gradient-gray">全不选</button>
-              </div>
-              <label v-for="d in availableDatesForSymbol" :key="d" class="flex-row-center gap-sm pad-xs">
-                <input type="checkbox" :value="d" v-model="availableDatesSelection" />
-                <span>{{ formatDateDisplay(d) }}</span>
-              </label>
-            </div>
-        </div>
-        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
-          <button @click="applyAvailableDatesSelection(availableDatesSelection || [])" class="btn-base btn-md btn-gradient-green">应用 ({{ (availableDatesSelection || []).length }})</button>
-          <button @click="closeAvailableDatesModal" class="btn-base btn-md btn-gradient-gray">取消</button>
-        </div>
-      </div>
-    </div>
+    <AvailableDatesModal
+      :show="showAvailableDatesModal"
+      :symbol="pickingForSymbol"
+      :available-dates="availableDatesForSymbol"
+      :selected="availableDatesSelection"
+      :format-date-display="formatDateDisplay"
+      @select-all="selectAllAvailableDates"
+      @deselect-all="deselectAllAvailableDates"
+      @toggle="toggleAvailableDate"
+      @apply="applyAvailableDatesSelection"
+      @close="closeAvailableDatesModal"
+    />
 
     <!-- ✅ 评分详情弹窗 (保持原有功能并增强；支持全屏阅读，交互对齐连板天梯 AI 思考过程) -->
     <div
@@ -313,6 +302,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import AppLink from './common/AppLink.vue'
+import AvailableDatesModal from './AvailableDatesModal.vue'
 import ScoreDetailView from './ranking/ScoreDetailView.vue'
 import StockRankingControls from './StockRankingControls.vue'
 import RankingTable from './RankingTable.vue'
@@ -1116,6 +1106,17 @@ function selectAllAvailableDates() {
 
 function deselectAllAvailableDates() {
   availableDatesSelection.value = []
+}
+
+function toggleAvailableDate(date, checked) {
+  if (checked) {
+    if (!availableDatesSelection.value.includes(date)) {
+      availableDatesSelection.value = [...availableDatesSelection.value, date]
+    }
+    return
+  }
+
+  availableDatesSelection.value = availableDatesSelection.value.filter(item => item !== date)
 }
 
 function applyAvailableDatesSelection(selectedArray) {
