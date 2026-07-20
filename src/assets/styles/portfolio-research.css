@@ -1,0 +1,279 @@
+/* Portfolio research shell styles. Child panels own their scoped styles. */
+:where(.portfolio-research) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+  color: #172033;
+}
+
+:where(.portfolio-research) > .page-header,
+:where(.portfolio-research, .detail-fullscreen-shell) :where(.candidate, .research-params) > .section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+:where(.portfolio-research) > .page-header > div,
+:where(.portfolio-research, .detail-fullscreen-shell) :where(.candidate, .research-params) > .section-header > div {
+  min-width: 0;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) :where(.candidate, .research-params) > .section-header {
+  flex-wrap: wrap;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) :where(.candidate, .research-params) > .section-header :where(h3, h4, .muted) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+:where(.portfolio-research) .header-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+:where(.portfolio-research) .eyebrow {
+  margin: 0 0 4px;
+  color: #64748b;
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+:where(.portfolio-research) > .page-header h2,
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-title h3,
+:where(.portfolio-research, .detail-fullscreen-shell) :where(.candidate, .research-params) h4 {
+  margin: 0 0 8px;
+}
+
+:where(.portfolio-research) > .page-header .subtitle,
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-title .muted,
+:where(.portfolio-research, .detail-fullscreen-shell) :where(.candidate, .research-params) .muted,
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-body > .muted,
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-empty {
+  color: #64748b;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-card {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid #e6eaf0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+:where(.portfolio-research) > .page-header button,
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-toolbar button,
+:where(.portfolio-research, .detail-fullscreen-shell) .candidate > .section-header button {
+  padding: 8px 12px;
+  border: 1px solid #0f6bdc;
+  border-radius: 8px;
+  background: #0f6bdc;
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+:where(.portfolio-research) > .page-header button:disabled,
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-toolbar button:disabled,
+:where(.portfolio-research, .detail-fullscreen-shell) .candidate > .section-header button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-toolbar button.danger {
+  border-color: #b42318;
+  background: #b42318;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-toolbar button.danger:disabled {
+  opacity: .45;
+}
+
+:where(.portfolio-research) .workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 16px;
+  height: min(75dvh, calc(100dvh - 12rem));
+  min-height: 480px;
+  overflow: hidden;
+}
+
+:where(.portfolio-research) .detail-inline-shell {
+  display: contents;
+  min-width: 0;
+}
+
+:where(.detail-fullscreen-shell) {
+  position: fixed;
+  z-index: 3000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+:where(.detail-fullscreen-shell) > .detail-fullscreen-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+:where(.detail-fullscreen-shell) > .detail-card--maximized {
+  position: relative;
+  z-index: 1;
+  width: min(96vw, 1680px);
+  height: min(92vh, 100%);
+  max-height: 92vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.28);
+}
+
+:where(.detail-fullscreen-shell) > .detail-card--maximized .detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-empty {
+  margin: 0;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-toolbar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-title {
+  min-width: 180px;
+  flex: 1;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-title h3 {
+  margin-bottom: 4px;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .detail-toolbar .back-btn {
+  flex: none;
+  border-color: #d9e1ec;
+  background: #fff;
+  color: #334155;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .info-grid > div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 10px;
+  background: #fbfcfe;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .info-grid span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .info-grid strong {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) :where(.candidate, .research-params) {
+  min-width: 0;
+  margin: 20px 0;
+  padding: 18px;
+  border: 1px solid #e6eaf0;
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .config-grid span {
+  min-width: 0;
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+  border: 1px solid #edf0f5;
+  border-radius: 10px;
+  background: #fff;
+  color: #172033;
+  word-break: break-word;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .config-grid strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+:where(.portfolio-research, .detail-fullscreen-shell) .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+:where(.portfolio-research) > .message {
+  color: #047857;
+}
+
+:where(.portfolio-research) > .error {
+  color: #b91c1c;
+}
+
+@media (max-width: 900px) {
+  :where(.portfolio-research) {
+    padding: 18px;
+  }
+
+  :where(.portfolio-research) .workspace {
+    grid-template-columns: 1fr;
+    height: min(78dvh, calc(100dvh - 10rem));
+    min-height: 420px;
+  }
+
+  :where(.portfolio-research, .detail-fullscreen-shell) .detail-card.mobile-hidden {
+    display: none !important;
+  }
+}
