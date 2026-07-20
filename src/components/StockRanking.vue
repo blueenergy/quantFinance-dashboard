@@ -116,119 +116,34 @@
       </div>
     </div>
 
-    <!-- ✅ 快速选择模态框 -->
-    <div v-if="showQuickSelect" class="modal-overlay" @click="closeQuickSelect">
-      <div class="modal-content quick-select-modal" @click.stop>
-        <h4>快速选择热门股票</h4>
-        <div class="quick-select-tabs-wrapper">
-          <button v-if="showTabsScrollLeft" class="tabs-nav left" @click="scrollTabs('left')">‹</button>
-          <div class="quick-select-tabs" ref="tabsScrollRef" @scroll="updateTabsScrollState">
-            <button 
-              v-for="category in quickSelectCategories" 
-              :key="category.key"
-              @click="selectedCategory = category.key"
-              :class="['tab-btn', { active: selectedCategory === category.key }]"
-            >
-              <span class="tab-label">{{ category.name }}</span>
-              <span 
-                v-if="getCategorySelectedCount(category.key) > 0" 
-                class="tab-badge"
-                :title="formatCategoryBadgeTitle(category.key)"
-              >{{ getCategorySelectedCount(category.key) }}</span>
-            </button>
-          </div>
-          <button v-if="showTabsScrollRight" class="tabs-nav right" @click="scrollTabs('right')">›</button>
-        </div>
-        <div class="quick-select-content">
-          <!-- HS300 loading state -->
-          <div v-if="selectedCategory === 'hs300' && hs300Loading" class="center-block text-bold color-primary-dark">
-            正在加载沪深300成分股...
-          </div>
-          <!-- HS300 empty state -->
-          <div v-else-if="selectedCategory === 'hs300' && !hs300Loading && getCurrentCategoryStocks.length === 0" class="center-block text-subtle">
-            未获取到成分股数据。
-            <button @click="manualReloadHS300" class="btn-primary-lite ml-sm">重新加载</button>
-          </div>
-          <!-- Stock list -->
-          <div v-else>
-            <!-- 🆕 HS300 批量操作条 -->
-            <div v-if="selectedCategory === 'hs300' && hs300Stocks.length > 0" class="bulk-select-bar">
-              <button @click="() => selectAllIndex('hs300')" class="btn-base btn-sm btn-gradient-green" :disabled="hs300SelectedCount === hs300Stocks.length">
-                全选沪深300 ({{ hs300Stocks.length }})
-              </button>
-              <button @click="() => deselectAllIndex('hs300')" class="btn-base btn-sm btn-gradient-gray" :disabled="hs300SelectedCount === 0">
-                取消选择
-              </button>
-              <span class="bulk-selected-count">已选 {{ hs300SelectedCount }} / {{ hs300Stocks.length }}</span>
-            </div>
-            <!-- 🆕 A500 批量操作条 -->
-            <div v-if="selectedCategory === 'a500' && a500Stocks.length > 0" class="bulk-select-bar">
-              <button @click="() => selectAllIndex('a500')" class="btn-base btn-sm btn-gradient-green" :disabled="a500SelectedCount === a500Stocks.length">
-                全选中证A500 ({{ a500Stocks.length }})
-              </button>
-              <button @click="() => deselectAllIndex('a500')" class="btn-base btn-sm btn-gradient-gray" :disabled="a500SelectedCount === 0">
-                取消选择
-              </button>
-              <span class="bulk-selected-count">已选 {{ a500SelectedCount }} / {{ a500Stocks.length }}</span>
-            </div>
-            <!-- 🆕 CSI500 批量操作条 -->
-            <div v-if="selectedCategory === 'csi500' && csi500Stocks.length > 0" class="bulk-select-bar">
-              <button @click="() => selectAllIndex('csi500')" class="btn-base btn-sm btn-gradient-green" :disabled="csi500SelectedCount === csi500Stocks.length">
-                全选中证500 ({{ csi500Stocks.length }})
-              </button>
-              <button @click="() => deselectAllIndex('csi500')" class="btn-base btn-sm btn-gradient-gray" :disabled="csi500SelectedCount === 0">
-                取消选择
-              </button>
-              <span class="bulk-selected-count">已选 {{ csi500SelectedCount }} / {{ csi500Stocks.length }}</span>
-            </div>
-            <!-- 🆕 CSI1000 批量操作条 -->
-            <div v-if="selectedCategory === 'csi1000' && csi1000Stocks.length > 0" class="bulk-select-bar">
-              <button @click="() => selectAllIndex('csi1000')" class="btn-base btn-sm btn-gradient-green" :disabled="csi1000SelectedCount === csi1000Stocks.length">
-                全选中证1000 ({{ csi1000Stocks.length }})
-              </button>
-              <button @click="() => deselectAllIndex('csi1000')" class="btn-base btn-sm btn-gradient-gray" :disabled="csi1000SelectedCount === 0">
-                取消选择
-              </button>
-              <span class="bulk-selected-count">已选 {{ csi1000SelectedCount }} / {{ csi1000Stocks.length }}</span>
-            </div>
-            <!-- 中证2000 批量操作条 -->
-            <div v-if="selectedCategory === 'csi2000' && csi2000Stocks.length > 0" class="bulk-select-bar">
-              <button @click="() => selectAllIndex('csi2000')" class="btn-base btn-sm btn-gradient-green" :disabled="csi2000SelectedCount === csi2000Stocks.length">
-                全选中证2000 ({{ csi2000Stocks.length }})
-              </button>
-              <button @click="() => deselectAllIndex('csi2000')" class="btn-base btn-sm btn-gradient-gray" :disabled="csi2000SelectedCount === 0">
-                取消选择
-              </button>
-              <span class="bulk-selected-count">已选 {{ csi2000SelectedCount }} / {{ csi2000Stocks.length }}</span>
-            </div>
-            <!-- 🆕 STAR50 批量操作条 -->
-            <div v-if="selectedCategory === 'star50' && star50Stocks.length > 0" class="bulk-select-bar">
-              <button @click="() => selectAllIndex('star50')" class="btn-base btn-sm btn-gradient-green" :disabled="star50SelectedCount === star50Stocks.length">
-                全选科创50 ({{ star50Stocks.length }})
-              </button>
-              <button @click="() => deselectAllIndex('star50')" class="btn-base btn-sm btn-gradient-gray" :disabled="star50SelectedCount === 0">
-                取消选择
-              </button>
-              <span class="bulk-selected-count">已选 {{ star50SelectedCount }} / {{ star50Stocks.length }}</span>
-            </div>
-            <div 
-              v-for="stock in getCurrentCategoryStocks" 
-              :key="stock.symbol"
-              @click="toggleQuickSelectStock(stock.symbol)"
-              :class="['quick-stock-item', { selected: isSelectedStock(stock.symbol) }]"
-            >
-              <span class="quick-stock-symbol">{{ stock.symbol }}</span>
-              <span class="quick-stock-name">{{ stock.name }}</span>
-              <span v-if="isSelectedStock(stock.symbol)" class="selected-indicator">✓</span>
-            </div>
-          </div>
-        </div>
-        <div class="quick-select-actions">
-          <button @click="applyQuickSelection" class="btn-base btn-md btn-gradient-green">应用选择 ({{ selectedStocks.length }})</button>
-          <button @click="closeQuickSelect" class="btn-base btn-md btn-gradient-gray">取消</button>
-        </div>
-      </div>
-    </div>
+    <RankingQuickSelectModal
+      v-model:selected-category="selectedCategory"
+      :show="showQuickSelect"
+      :categories="quickSelectCategories"
+      :selected-stocks="selectedStocks"
+      :index-stocks="{
+        hs300: hs300Stocks,
+        a500: a500Stocks,
+        csi500: csi500Stocks,
+        csi1000: csi1000Stocks,
+        csi2000: csi2000Stocks,
+        star50: star50Stocks
+      }"
+      :index-loading="{
+        hs300: hs300Loading,
+        a500: a500Loading,
+        csi500: csi500Loading,
+        csi1000: csi1000Loading,
+        csi2000: csi2000Loading,
+        star50: star50Loading
+      }"
+      @toggle-stock="toggleQuickSelectStock"
+      @select-all-index="selectAllIndex"
+      @deselect-all-index="deselectAllIndex"
+      @reload-index="reloadIndex"
+      @apply="applyQuickSelection"
+      @close="closeQuickSelect"
+    />
 
     <AvailableDatesModal
       :show="showAvailableDatesModal"
@@ -300,9 +215,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import AppLink from './common/AppLink.vue'
 import AvailableDatesModal from './AvailableDatesModal.vue'
+import RankingQuickSelectModal from './ranking/RankingQuickSelectModal.vue'
 import ScoreDetailView from './ranking/ScoreDetailView.vue'
 import StockRankingControls from './StockRankingControls.vue'
 import RankingTable from './RankingTable.vue'
@@ -592,50 +508,6 @@ const csi1000Stocks = ref([])
 const csi1000Loading = ref(false)
 const csi2000Stocks = ref([])
 const csi2000Loading = ref(false)
-// Tabs horizontal scroll helpers
-const tabsScrollRef = ref(null)
-const showTabsScrollLeft = ref(false)
-const showTabsScrollRight = ref(false)
-
-function updateTabsScrollState() {
-  const el = tabsScrollRef.value
-  if (!el) return
-  showTabsScrollLeft.value = el.scrollLeft > 5
-  showTabsScrollRight.value = el.scrollWidth - el.clientWidth - el.scrollLeft > 5
-}
-
-function scrollTabs(direction) {
-  const el = tabsScrollRef.value
-  if (!el) return
-  const delta = Math.round(el.clientWidth * 0.6)
-  const target = direction === 'left' ? el.scrollLeft - delta : el.scrollLeft + delta
-  el.scrollTo({ left: target, behavior: 'smooth' })
-}
-
-// ✅ 计算属性
-const getCurrentCategoryStocks = computed(() => {
-  // if user selected the HS300 tab, return the dynamic hs300Stocks list
-  if (selectedCategory.value === 'hs300') {
-    return hs300Stocks.value || []
-  }
-  if (selectedCategory.value === 'star50') {
-    return star50Stocks.value || []
-  }
-  if (selectedCategory.value === 'a500') {
-    return a500Stocks.value || []
-  }
-  if (selectedCategory.value === 'csi500') {
-    return csi500Stocks.value || []
-  }
-  if (selectedCategory.value === 'csi1000') {
-    return csi1000Stocks.value || []
-  }
-  if (selectedCategory.value === 'csi2000') {
-    return csi2000Stocks.value || []
-  }
-  const category = quickSelectCategories.value.find(cat => cat.key === selectedCategory.value)
-  return category ? category.stocks : []
-})
 
 // ✅ 检查用户是否已登录
 function isUserLoggedIn() {
@@ -1373,24 +1245,15 @@ function deselectAllIndex(indexKey) {
   selectedStocks.value = selectedStocks.value.filter(s => !removeSet.has(s))
 }
 
-// Manual reload button handler for HS300 inside quick select modal
-async function manualReloadHS300() {
+async function reloadIndex(indexKey) {
+  const state = indexStateMap[indexKey]
+  if (!state) return
   try {
-    hs300Stocks.value = []
-    await fetchIndexConstituents('hs300')
+    state.list.value = []
+    await fetchIndexConstituents(indexKey)
   } catch (e) {
-    console.error('manualReloadHS300 failed', e)
+    console.error(`reloadIndex ${indexKey} failed`, e)
     alert('重新加载失败: ' + (e.message || e))
-  }
-}
-
-// defensive helper used by template to avoid calling .includes on undefined
-function isSelectedStock(symbol) {
-  try {
-    return Array.isArray(selectedStocks.value) && selectedStocks.value.includes(symbol)
-  } catch (e) {
-    console.warn('isSelectedStock check failed', e)
-    return false
   }
 }
 
@@ -1710,37 +1573,6 @@ function showScoreDetailModal(stock) {
   fetchScoreDetails(stock, 'composite')
 }
 
-// 分类已选数量统计（含动态指数分类）
-function getCategorySelectedCount(key) {
-  if (key === 'hs300') return hs300SelectedCount.value
-  if (key === 'a500') return a500SelectedCount.value
-  if (key === 'csi500') return csi500SelectedCount.value
-  if (key === 'csi1000') return csi1000SelectedCount.value
-  if (key === 'csi2000') return csi2000SelectedCount.value
-  if (key === 'star50') return star50SelectedCount.value
-  const cat = quickSelectCategories.value.find(c => c.key === key)
-  if (!cat) return 0
-  const set = new Set(selectedStocks.value)
-  return (cat.stocks || []).filter(s => set.has(s.symbol)).length
-}
-
-function getCategoryTotalCount(key) {
-  if (key === 'hs300') return hs300Stocks.value.length
-  if (key === 'a500') return a500Stocks.value.length
-  if (key === 'csi500') return csi500Stocks.value.length
-  if (key === 'csi1000') return csi1000Stocks.value.length
-  if (key === 'csi2000') return csi2000Stocks.value.length
-  if (key === 'star50') return star50Stocks.value.length
-  const cat = quickSelectCategories.value.find(c => c.key === key)
-  return cat && Array.isArray(cat.stocks) ? cat.stocks.length : 0
-}
-
-function formatCategoryBadgeTitle(key) {
-  const sel = getCategorySelectedCount(key)
-  const total = getCategoryTotalCount(key)
-  return `已选 ${sel} / 总 ${total}`
-}
-
 function onScoreDetailOverlayClick() {
   if (scoreDetailMaximized.value) {
     scoreDetailMaximized.value = false
@@ -1831,16 +1663,8 @@ watch(selectedCategory, async (val) => {
 onMounted(() => {
   fetchRankings()
   fetchWatchlist()
-  // next tick update scroll state
-  setTimeout(updateTabsScrollState, 0)
-  // window resize listener to recompute
-  window.addEventListener('resize', updateTabsScrollState)
 })
 
-// cleanup (optional)
-try {
-  onUnmounted(() => { window.removeEventListener('resize', updateTabsScrollState) })
-} catch (e) {}
 function onRankingStrategyChange() {
   const serverSortedModes = new Set([
     'ranking',
@@ -1953,45 +1777,6 @@ const displayRows = computed(() => {
   })
 })
 
-// 🆕 计算已选中沪深300数量
-const hs300SelectedCount = computed(() => {
-  if (!hs300Stocks.value || hs300Stocks.value.length === 0) return 0
-  const set = new Set(selectedStocks.value)
-  return hs300Stocks.value.filter(s => set.has(s.symbol)).length
-})
-
-// 🆕 A500 已选数量
-const a500SelectedCount = computed(() => {
-  if (!a500Stocks.value || a500Stocks.value.length === 0) return 0
-  const set = new Set(selectedStocks.value)
-  return a500Stocks.value.filter(s => set.has(s.symbol)).length
-})
-// 🆕 CSI500 已选数量
-const csi500SelectedCount = computed(() => {
-  if (!csi500Stocks.value || csi500Stocks.value.length === 0) return 0
-  const set = new Set(selectedStocks.value)
-  return csi500Stocks.value.filter(s => set.has(s.symbol)).length
-})
-
-const csi1000SelectedCount = computed(() => {
-  if (!csi1000Stocks.value || csi1000Stocks.value.length === 0) return 0
-  const set = new Set(selectedStocks.value)
-  return csi1000Stocks.value.filter(s => set.has(s.symbol)).length
-})
-
-const csi2000SelectedCount = computed(() => {
-  if (!csi2000Stocks.value || csi2000Stocks.value.length === 0) return 0
-  const set = new Set(selectedStocks.value)
-  return csi2000Stocks.value.filter(s => set.has(s.symbol)).length
-})
-
-const star50SelectedCount = computed(() => {
-  if (!star50Stocks.value || star50Stocks.value.length === 0) return 0
-  const set = new Set(selectedStocks.value)
-  return star50Stocks.value.filter(s => set.has(s.symbol)).length
-})
-
-
 </script>
 
 <style scoped>
@@ -2021,32 +1806,6 @@ const star50SelectedCount = computed(() => {
 .no-data-icon {
   font-size: 48px;
   margin-bottom: 20px;
-}
-
-.quick-select-modal h4 {
-  font-size: 24px;
-  font-weight: 900;
-  letter-spacing: 1.5px;
-  background: linear-gradient(90deg,#ff9800,#ffb300,#ffd54f);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0 2px 12px rgba(255,152,0,0.35), 0 1px 0 #fff;
-  margin-bottom: 16px;
-  position: relative;
-  padding-left: 6px;
-}
-.quick-select-modal h4::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 70%;
-  background: linear-gradient(180deg,#ffb300,#ff8c00);
-  border-radius: 2px;
-  box-shadow: 0 0 6px rgba(255,140,0,0.6);
 }
 
 .mode-header {
@@ -2129,257 +1888,6 @@ const star50SelectedCount = computed(() => {
   margin: 0 2px;
   cursor: pointer;
   font-size: 12px;
-}
-
-/* ✅ 快速选择模态框样式 */
-.quick-select-modal {
-  max-width: 600px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.quick-select-tabs {
-  display: flex;
-  margin-bottom: 15px;
-  border-bottom: 1px solid #ddd;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #9ca3af transparent;
-  scroll-behavior: smooth;
-}
-
-.quick-select-tabs::-webkit-scrollbar {
-  height: 8px;
-}
-.quick-select-tabs::-webkit-scrollbar-track {
-  background: transparent;
-}
-.quick-select-tabs::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.25);
-  border-radius: 4px;
-}
-.quick-select-tabs::-webkit-scrollbar-thumb:hover {
-  background: rgba(0,0,0,0.4);
-}
-
-.quick-select-tabs-wrapper {
-  position: relative;
-  display: flex;
-  align-items: stretch;
-  gap: 4px;
-}
-
-.tabs-nav {
-  background: linear-gradient(135deg,#0466c8,#0353a4);
-  color: #fff;
-  border: none;
-  width: 34px;
-  border-radius: 8px;
-  font-size: 20px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-  transition: background .18s, transform .18s;
-}
-.tabs-nav:hover { transform: translateY(-2px); }
-.tabs-nav:active { transform: translateY(0); }
-.tabs-nav.left { order: -1; }
-.tabs-nav.right { order: 2; }
-
-.tab-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 6px;
-  background: linear-gradient(135deg,#ff6b6b,#ff3d3d);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 12px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.25);
-  letter-spacing: .5px;
-}
-@media (prefers-color-scheme: dark) {
-  .tab-badge { background: linear-gradient(135deg,#f87171,#dc2626); }
-}
-
-.tab-btn {
-  padding: 8px 16px;
-  border: none;
-  background: rgba(255,255,255,0.85);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  font-size: 14px;
-  color: #0f172a; /* 深色高对比度 */
-  font-weight: 600;
-  position: relative;
-  border-radius: 8px 8px 0 0;
-  margin-right: 4px;
-  transition: background .18s ease, color .18s ease, transform .18s ease, box-shadow .18s ease;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
-}
-
-.tab-btn.active {
-  border-bottom-color: #0466c8;
-  background: linear-gradient(135deg,#e3f2ff,#ffffff);
-  color: #023e8a;
-  font-weight: 800;
-  box-shadow: 0 3px 10px rgba(4,102,200,0.25), 0 1px 2px rgba(0,0,0,0.08);
-}
-
-.tab-btn:not(.active):hover {
-  background: #f1f5f9;
-  color: #0353a4;
-  transform: translateY(-2px);
-}
-
-.tab-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(4,102,200,0.45);
-}
-
-@media (prefers-color-scheme: dark) {
-  .tab-btn {
-    background: rgba(30,41,59,0.85);
-    color: #f1f5f9;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-  }
-  .tab-btn.active {
-    background: linear-gradient(135deg,#0f3d66,#1e3a8a);
-    color: #ffffff;
-    border-bottom-color: #60a5fa;
-  }
-  .tab-btn:not(.active):hover {
-    background: #1e293b;
-    color: #60a5fa;
-  }
-}
-
-.quick-select-content {
-  max-height: 300px;
-  overflow-y: auto;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  margin-bottom: 15px;
-}
-
-/* 🆕 HS300 批量操作条样式 */
-.bulk-select-bar {
-  position: sticky;
-  top: 0;
-  background: linear-gradient(90deg,#fdfdfd,#f6f9ff);
-  border-bottom: 1px solid #e2e8f0;
-  padding: 8px 10px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  z-index: 2;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
-}
-.btn-bulk-select, .btn-bulk-deselect {
-  border: none;
-  padding: 6px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: .5px;
-  transition: background .18s, transform .18s;
-}
-.btn-bulk-select {
-  background: linear-gradient(135deg,#28a745,#20c997);
-  color: #fff;
-}
-.btn-bulk-select:disabled {
-  background: linear-gradient(135deg,#9fb9a6,#8aa596);
-  cursor: not-allowed;
-  opacity: .8;
-}
-.btn-bulk-deselect {
-  background: linear-gradient(135deg,#6c757d,#545b62);
-  color: #fff;
-}
-.btn-bulk-deselect:disabled {
-  background: linear-gradient(135deg,#c0c4c7,#a2a7aa);
-  cursor: not-allowed;
-  opacity: .8;
-}
-.btn-bulk-select:not(:disabled):hover, .btn-bulk-deselect:not(:disabled):hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.12);
-}
-.bulk-selected-count {
-  margin-left: auto;
-  font-size: 12px;
-  font-weight: 600;
-  color: #334155;
-  background: #eef6ff;
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid #d0e3f8;
-}
-
-.quick-stock-item {
-  display: flex;
-  align-items: center;
-  padding: 10px;
-  cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
-  transition: background-color 0.12s, transform 0.12s;
-  background: #ffffff;
-  color: #0f172a; /* high contrast base text */
-  font-weight: 600;
-}
-
-.quick-stock-item:hover {
-  background-color: #eef6ff; /* higher contrast hover */
-  transform: translateY(-1px);
-}
-
-.quick-stock-item.selected {
-  background-color: #cfe8ff; /* stronger, still light */
-  border-left: 4px solid #0466c8;
-  color: #0b2540;
-}
-
-.quick-stock-symbol {
-  font-weight: 700;
-  margin-right: 10px;
-  min-width: 80px;
-  background: linear-gradient(135deg, #0466c8, #0353a4);
-  color: #ffffff !important;
-  padding: 4px 10px;
-  border-radius: 6px;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 4px rgba(3,83,164,0.25);
-}
-
-.quick-stock-name {
-  flex: 1;
-  color: #102a43; /* accessible dark blue-gray */
-  font-weight: 600;
-}
-
-.selected-indicator {
-  color: #03467a;
-  font-weight: 800;
-}
-
-/* Optional high-contrast override hook */
-.force-high-contrast .quick-stock-item { background:#fff !important; color:#0a0f18 !important; }
-.force-high-contrast .quick-stock-item.selected { background:#bcdfff !important; }
-
-.quick-select-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
 }
 
 .selected-dates {
@@ -2610,11 +2118,6 @@ const star50SelectedCount = computed(() => {
     font-size: 11px;
   }
   
-  .quick-select-modal {
-    width: 95%;
-    max-height: 90vh;
-  }
-
   .date-input {
     padding: 6px 12px;
     border: 1px solid #ddd;
