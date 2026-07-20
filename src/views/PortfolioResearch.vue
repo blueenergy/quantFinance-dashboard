@@ -234,10 +234,10 @@ import {
   getPortfolioResearchJob,
   getPortfolioResearchResults,
   getPortfolioResearchResultRows,
-  listPortfolioResearchJobs,
   publishPortfolioResearchResult,
   rerunPortfolioResearchJob,
 } from '../api/portfolioResearch'
+import { usePortfolioResearchJobs } from '../composables/usePortfolioResearchJobs'
 import {
   buildPortfolioResearchPayload,
   formatResearchApiError,
@@ -261,28 +261,37 @@ import SweepResultPanel from '../components/portfolio/SweepResultPanel.vue'
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 const NARROW_MQ = '(max-width: 900px)'
 
-const loading = ref(false)
 const submitting = ref(false)
 const deleteLoading = ref(false)
 const publishLoading = ref(false)
 const artifactLoading = ref(false)
 const detailMaximized = ref(false)
 const nameTouched = ref(false)
-const jobs = ref([])
 const selectedJob = ref(null)
 const resultDetail = ref(null)
 const selectedResultRow = ref(null)
 const selectedJobId = ref('')
-const statusFilter = ref('')
-const universeFilter = ref('')
-const growthCycleWeightFilter = ref('')
-const message = ref('')
-const errorMessage = ref('')
+const {
+  jobs,
+  statusFilter,
+  universeFilter,
+  growthCycleWeightFilter,
+  loading,
+  message,
+  errorMessage,
+  nowMs,
+  loadJobs,
+  refreshAll,
+} = usePortfolioResearchJobs({
+  selectedJobId,
+  selectedJob,
+  resultDetail,
+  refreshSelected: (jobId) => selectJob(jobId, { scrollDetail: false }),
+})
 const drawerOpen = ref(false)
 const drawerMode = ref('create') // 'create' | 'rerun'
 /** When set, submit goes through rerun API for this source job. */
 const formSourceJobId = ref('')
-const nowMs = ref(Date.now())
 const isNarrow = ref(typeof window !== 'undefined' ? window.matchMedia(NARROW_MQ).matches : false)
 const detailBodyRef = ref(null)
 const newJobBtnRef = ref(null)
@@ -291,15 +300,6 @@ let selectSeq = 0
 let comboSeq = 0
 let narrowMql = null
 let drawerFocusEl = null
-
-let clockTimer = null
-let pollTimer = null
-
-const hasActiveJobs = computed(() =>
-  jobs.value.some((job) => job.status === 'running' || job.status === 'pending')
-    || selectedJob.value?.status === 'running'
-    || selectedJob.value?.status === 'pending',
-)
 
 const mobileShowDetail = computed(() => Boolean(selectedJobId.value))
 
@@ -533,35 +533,6 @@ function withRerunNameSuffix(baseName) {
   return `${name} (rerun)`
 }
 
-function startActiveJobTimers() {
-  if (!clockTimer) {
-    clockTimer = setInterval(() => {
-      nowMs.value = Date.now()
-    }, 1000)
-  }
-  if (!pollTimer) {
-    pollTimer = setInterval(() => {
-      refreshAll()
-    }, 30000)
-  }
-}
-
-function stopActiveJobTimers() {
-  if (clockTimer) {
-    clearInterval(clockTimer)
-    clockTimer = null
-  }
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}
-
-watch(hasActiveJobs, (active) => {
-  if (active) startActiveJobTimers()
-  else stopActiveJobTimers()
-})
-
 function onSelectResultRow(row) {
   selectedResultRow.value = row
 }
@@ -600,31 +571,6 @@ function closeComboDetail() {
   comboError.value = ''
   comboDetail.value = null
   comboContextRow.value = null
-}
-
-async function loadJobs() {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const params = {}
-    if (statusFilter.value) params.status = statusFilter.value
-    if (universeFilter.value) params.universe_index = universeFilter.value
-    const weight = String(growthCycleWeightFilter.value || '').trim()
-    if (weight) params.growth_cycle_weight = weight
-    const res = await listPortfolioResearchJobs(params)
-    jobs.value = res.data || []
-    if (selectedJobId.value && jobs.value.some((job) => job.job_id === selectedJobId.value)) {
-      selectedJob.value = jobs.value.find((job) => job.job_id === selectedJobId.value)
-    } else if (selectedJobId.value) {
-      selectedJobId.value = ''
-      selectedJob.value = null
-      resultDetail.value = null
-    }
-  } catch (err) {
-    errorMessage.value = formatResearchApiError(err, '加载研究任务失败')
-  } finally {
-    loading.value = false
-  }
 }
 
 async function loadResearchResultDetail(jobId) {
@@ -827,22 +773,15 @@ async function openArtifact(jobId) {
   }
 }
 
-async function refreshAll() {
-  await loadJobs()
-  if (selectedJobId.value) await selectJob(selectedJobId.value, { scrollDetail: false })
-}
-
 onMounted(async () => {
   narrowMql = window.matchMedia(NARROW_MQ)
   isNarrow.value = narrowMql.matches
   narrowMql.addEventListener('change', onNarrowChange)
   window.addEventListener('keydown', onGlobalKeydown)
   await refreshAll()
-  if (hasActiveJobs.value) startActiveJobTimers()
 })
 
 onUnmounted(() => {
-  stopActiveJobTimers()
   window.removeEventListener('keydown', onGlobalKeydown)
   window.removeEventListener('keydown', onDetailFullscreenKeydown, true)
   document.body.style.overflow = ''
