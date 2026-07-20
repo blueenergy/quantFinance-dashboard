@@ -3,7 +3,6 @@
   <div>
   <h3 class="ranking-title">股票评分排行榜</h3>
     <div style="margin-bottom: 20px;">
-      <!-- Use extracted controls component (original control-section kept but hidden for safe review) -->
   <StockRankingControls
     :viewMode="viewMode"
     :selectedDate="selectedDate"
@@ -2023,48 +2022,6 @@ const star50SelectedCount = computed(() => {
   margin-bottom: 20px;
 }
 
-.btn-quick-select {
-  position: relative;
-  background: linear-gradient(135deg, #ffb300, #ff8c00);
-  color: #212121;
-  border: none;
-  padding: 12px 26px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  margin-top: 18px;
-  box-shadow: 0 4px 12px rgba(255,140,0,0.45), 0 2px 4px rgba(0,0,0,0.18);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.6);
-  transition: transform .18s ease, box-shadow .18s ease, background .25s;
-}
-.btn-quick-select::after {
-  content: '★';
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  background: radial-gradient(circle at 30% 30%, #fff6d5, #ffb300);
-  color: #b34700;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  font-weight: 900;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-  pointer-events: none;
-}
-.btn-quick-select:hover {
-  transform: translateY(-3px) scale(1.03);
-  box-shadow: 0 6px 16px rgba(255,140,0,0.55), 0 3px 6px rgba(0,0,0,0.25);
-}
-.btn-quick-select:active {
-  transform: translateY(0) scale(0.99);
-  box-shadow: 0 3px 10px rgba(255,140,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
-}
 .quick-select-modal h4 {
   font-size: 24px;
   font-weight: 900;
@@ -2139,12 +2096,6 @@ const star50SelectedCount = computed(() => {
   display: inline-block;
   box-shadow: 0 1px 0 rgba(0,0,0,0.04);
   border: 1px solid rgba(15,23,36,0.06);
-}
-
-/* 控制区内的标签（例如“选择日期：”）更醒目 */
-.control-section .control-group label {
-  color: #1f2937; /* 深灰/接近黑色 */
-  font-weight: 700;
 }
 
 /* 多日期标签中的日期文本 */
@@ -2630,10 +2581,6 @@ const star50SelectedCount = computed(() => {
 
 /* ✅ 响应式设计 */
 @media (max-width: 768px) {
-  .control-section {
-    padding: 10px;
-  }
-  
   .control-group {
     flex-direction: column;
     align-items: flex-start;

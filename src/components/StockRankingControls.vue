@@ -14,7 +14,6 @@
             :menu-props="{ maxHeight: 320 }"
           />
         </div>
-  <div class="mt-xs text-muted info-inline">(child viewMode: <strong>{{ viewMode }}</strong>)</div>
       </v-col>
 
       <v-col
@@ -185,7 +184,7 @@
 </template>
 
 <script setup>
-import { toRefs, computed, onMounted, ref } from 'vue'
+import { toRefs, computed, ref } from 'vue'
 
 // define emits explicitly so we can call them from safe handlers
 const emit = defineEmits([
@@ -292,8 +291,6 @@ const addStockCb = refs.addStockCb
 const onSelectSuggestion = refs.onSelectSuggestion
 const onAddStock = refs.onAddStock
 
-// No runtime debug probes in production build
-
 // Defensive emit helpers: extract value whether caller passes an Event or a primitive
 function extractEventValue(e) {
   try {
@@ -378,7 +375,6 @@ const displayLimitOptions = [
 ]
 function handleMaybeOpenAvailableDatesTop() { emit('maybe-open-available-dates-top') }
 function handleSelectSuggestion(suggestion) { try { emit('select-suggestion', suggestion) } catch (e) { console.error('emit select-suggestion failed', e) } }
-// debug helper: log when suggestion clicked (templates call this)
 function handleSuggestionClick(suggestion) {
   // prefer direct callback if provided by parent
   try {
@@ -402,12 +398,10 @@ function handleSuggestionClick(suggestion) {
 function handleAddStock() {
   try {
     if (addStockCb && addStockCb.value) {
-      try { console.debug('[StockRankingControls] calling addStockCb') } catch (err) {}
       addStockCb.value()
       return
     }
     if (onAddStock && onAddStock.value) {
-      try { console.debug('[StockRankingControls] calling onAddStock') } catch (err) {}
       onAddStock.value()
       return
     }
@@ -420,10 +414,6 @@ function handleRemoveStock(symbol) { try { emit('remove-stock', symbol) } catch 
 function handleOpenAvailableDates() { try { emit('open-available-dates-selected') } catch (e) { console.error('emit open-available-dates-selected failed', e) } }
 function handleClearSelectedDates() { try { emit('clear-selected-dates') } catch (e) { console.error('emit clear-selected-dates failed', e) } }
 function handleRemoveDate(date) { try { emit('remove-date', date) } catch (e) { console.error('emit remove-date failed', e) } }
-
-onMounted(() => {
-  // (cleanup) debug overlay removed
-})
 </script>
 
 <style scoped>
@@ -636,7 +626,6 @@ onMounted(() => {
 
 /* New utility mappings for extracted inline styles */
 .label-fixed { min-width:72px; }
-.info-inline { font-size:13px; }
 .date-chip { display:flex; align-items:center; }
 
 /* C1: composite demoted to an overview label */
