@@ -6,6 +6,7 @@ export function usePortfolioResearchJobs({
   selectedJobId = ref(''),
   selectedJob = ref(null),
   resultDetail = ref(null),
+  selectedResultRow = ref(null),
   refreshSelected = async () => {},
 } = {}) {
   const jobs = ref([])
@@ -43,6 +44,7 @@ export function usePortfolioResearchJobs({
         selectedJobId.value = ''
         selectedJob.value = null
         resultDetail.value = null
+        selectedResultRow.value = null
       }
     } catch (err) {
       errorMessage.value = formatResearchApiError(err, '加载研究任务失败')

@@ -226,17 +226,13 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import {
   createPortfolioResearchJob,
-  deletePortfolioResearchJob,
   getPortfolioResearchComboDetail,
-  getPortfolioResearchJob,
-  getPortfolioResearchResults,
-  getPortfolioResearchResultRows,
-  publishPortfolioResearchResult,
   rerunPortfolioResearchJob,
 } from '../api/portfolioResearch'
+import { usePortfolioResearchDetail } from '../composables/usePortfolioResearchDetail'
 import { usePortfolioResearchJobs } from '../composables/usePortfolioResearchJobs'
 import {
   buildPortfolioResearchPayload,
@@ -244,7 +240,6 @@ import {
 } from '../utils/portfolioResearchPayload'
 import {
   UNIVERSE_OPTIONS,
-  buildResearchParamRows,
   jobElapsedLabel as formatJobElapsedLabel,
   jobProgressStageLabel,
   money,
@@ -252,25 +247,53 @@ import {
   pct,
   universeName,
 } from '../utils/portfolioResearchView'
-import { buildCandidateConfigFromRow } from '../utils/sweepResultView'
 import ResearchComboModal from '../components/portfolio/ResearchComboModal.vue'
 import ResearchCreateDrawer from '../components/portfolio/ResearchCreateDrawer.vue'
 import ResearchJobList from '../components/portfolio/ResearchJobList.vue'
 import SweepResultPanel from '../components/portfolio/SweepResultPanel.vue'
 
-const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 const NARROW_MQ = '(max-width: 900px)'
 
 const submitting = ref(false)
-const deleteLoading = ref(false)
-const publishLoading = ref(false)
-const artifactLoading = ref(false)
-const detailMaximized = ref(false)
 const nameTouched = ref(false)
-const selectedJob = ref(null)
-const resultDetail = ref(null)
-const selectedResultRow = ref(null)
-const selectedJobId = ref('')
+let jobsApi
+const {
+  selectedJobId,
+  selectedJob,
+  resultDetail,
+  selectedResultRow,
+  deleteLoading,
+  publishLoading,
+  artifactLoading,
+  detailMaximized,
+  detailBodyRef,
+  mobileShowDetail,
+  resultRows,
+  candidateConfig,
+  researchParamRows,
+  hasPublishedPreset,
+  publishedPresetLabel,
+  publishActionLabel,
+  deleteDisabledReason,
+  universePitQualityLabel,
+  loadParamsHint,
+  onSelectResultRow,
+  toggleDetailFullscreen,
+  exitDetailFullscreen,
+  backToList,
+  selectJob,
+  deleteJob,
+  publish,
+  openArtifact,
+} = usePortfolioResearchDetail({
+  loadJobs: (...args) => jobsApi.loadJobs(...args),
+  setMessage: (value) => {
+    jobsApi.message.value = value
+  },
+  setErrorMessage: (value) => {
+    jobsApi.errorMessage.value = value
+  },
+})
 const {
   jobs,
   statusFilter,
@@ -282,26 +305,23 @@ const {
   nowMs,
   loadJobs,
   refreshAll,
-} = usePortfolioResearchJobs({
+} = (jobsApi = usePortfolioResearchJobs({
   selectedJobId,
   selectedJob,
   resultDetail,
+  selectedResultRow,
   refreshSelected: (jobId) => selectJob(jobId, { scrollDetail: false }),
-})
+}))
 const drawerOpen = ref(false)
 const drawerMode = ref('create') // 'create' | 'rerun'
 /** When set, submit goes through rerun API for this source job. */
 const formSourceJobId = ref('')
 const isNarrow = ref(typeof window !== 'undefined' ? window.matchMedia(NARROW_MQ).matches : false)
-const detailBodyRef = ref(null)
 const newJobBtnRef = ref(null)
 const loadParamsBtnRef = ref(null)
-let selectSeq = 0
 let comboSeq = 0
 let narrowMql = null
 let drawerFocusEl = null
-
-const mobileShowDetail = computed(() => Boolean(selectedJobId.value))
 
 const comboModalOpen = ref(false)
 const comboLoading = ref(false)
@@ -335,34 +355,6 @@ function defaultFormState() {
 
 const form = ref(defaultFormState())
 
-const resultRows = computed(() => resultDetail.value?.rows || [])
-const candidateConfig = computed(() => {
-  if (selectedResultRow.value) {
-    return buildCandidateConfigFromRow(
-      selectedResultRow.value,
-      selectedJob.value || {},
-      selectedJob.value?.params || resultDetail.value?.params || {},
-    )
-  }
-  return resultDetail.value?.candidate_strategy_config || selectedJob.value?.candidate_strategy_config
-})
-const researchParamRows = computed(() => buildResearchParamRows(selectedJob.value))
-const publishedPresetId = computed(() => resultDetail.value?.published_preset_id || selectedJob.value?.published_preset_id || '')
-const publishedStatus = computed(() => resultDetail.value?.published_status || selectedJob.value?.published_status || '')
-const publishAction = computed(() => resultDetail.value?.publish_action || selectedJob.value?.publish_action || '')
-const hasPublishedPreset = computed(() => Boolean(publishedPresetId.value))
-const publishedPresetLabel = computed(() => {
-  if (!publishedPresetId.value) return '-'
-  return publishedStatus.value ? `${publishedPresetId.value} (${publishedStatus.value})` : publishedPresetId.value
-})
-const publishActionLabel = computed(() => {
-  const labels = {
-    preset_published: '新建 preset',
-    evidence_attached: '作为 evidence 附加',
-  }
-  return labels[publishAction.value] || '-'
-})
-const loadParamsHint = '将当前任务参数填入侧栏，可调整后提交重跑（保留来源链路）'
 const drawerTitle = computed(() => (
   drawerMode.value === 'rerun' ? '基于原参数调整后重跑' : '新建研究任务'
 ))
@@ -375,23 +367,6 @@ const drawerSubtitle = computed(() => {
 const submitButtonLabel = computed(() => (
   drawerMode.value === 'rerun' ? '提交重跑' : '提交研究任务'
 ))
-const deleteDisabledReason = computed(() => {
-  const status = selectedJob.value?.status
-  if (status === 'pending' || status === 'running') {
-    return '任务仍在排队或运行中，完成后可删除'
-  }
-  if (selectedJob.value?.published_preset_id || publishedPresetId.value) {
-    return '删除报告与产物；已发布的参数预设会保留'
-  }
-  return '删除任务、结果与 HTML/combos 产物'
-})
-const universePitQualityLabel = computed(() => {
-  const quality = selectedJob.value?.data_watermark?.universe_pit_quality
-    || resultDetail.value?.data_watermark?.universe_pit_quality
-  if (quality === 'point_in_time') return 'Point-in-time（当时成分）'
-  if (quality === 'latest_only') return 'Latest-only（幸存者近似，需复核）'
-  return '-'
-})
 
 function defaultResearchName(universeValue) {
   return `${universeName(universeValue)} growth-cycle research`
@@ -447,59 +422,14 @@ function openCreateDrawer() {
 }
 
 function onGlobalKeydown(event) {
-  if (event.key === 'Escape' && detailMaximized.value) {
-    event.preventDefault()
-    exitDetailFullscreen()
-    return
-  }
   if (event.key === 'Escape' && drawerOpen.value) {
     event.preventDefault()
     closeDrawer()
   }
 }
 
-function toggleDetailFullscreen() {
-  detailMaximized.value = !detailMaximized.value
-}
-
-function exitDetailFullscreen() {
-  detailMaximized.value = false
-}
-
-function onDetailFullscreenKeydown(event) {
-  if (event.key === 'Escape' && detailMaximized.value) {
-    event.preventDefault()
-    event.stopPropagation()
-    exitDetailFullscreen()
-  }
-}
-
-watch(detailMaximized, (value) => {
-  document.body.style.overflow = value ? 'hidden' : ''
-  if (value) {
-    window.addEventListener('keydown', onDetailFullscreenKeydown, true)
-  } else {
-    window.removeEventListener('keydown', onDetailFullscreenKeydown, true)
-  }
-})
-
-watch(selectedJobId, () => {
-  detailMaximized.value = false
-})
-
 function onNarrowChange(event) {
   isNarrow.value = event.matches
-}
-
-function backToList() {
-  detailMaximized.value = false
-  selectedJobId.value = ''
-  selectedJob.value = null
-  resultDetail.value = null
-}
-
-function scrollDetailToTop() {
-  if (detailBodyRef.value) detailBodyRef.value.scrollTop = 0
 }
 
 function toDateInputValue(value) {
@@ -533,16 +463,6 @@ function withRerunNameSuffix(baseName) {
   return `${name} (rerun)`
 }
 
-function onSelectResultRow(row) {
-  selectedResultRow.value = row
-}
-
-function syncSelectedResultRow() {
-  selectedResultRow.value = resultDetail.value?.best_row
-    || resultDetail.value?.rows?.[0]
-    || null
-}
-
 async function openComboDetail(row) {
   if (!selectedJobId.value || !row?.combo_key) return
   detailMaximized.value = false
@@ -571,60 +491,6 @@ function closeComboDetail() {
   comboError.value = ''
   comboDetail.value = null
   comboContextRow.value = null
-}
-
-async function loadResearchResultDetail(jobId) {
-  const resultRes = await getPortfolioResearchResults(jobId)
-  const detail = resultRes.data
-  if (!detail) return null
-  try {
-    const rowsRes = await getPortfolioResearchResultRows(jobId, { page: 1, page_size: 500 })
-    const fullRows = rowsRes.data?.rows
-    if (Array.isArray(fullRows) && fullRows.length) {
-      detail.rows = fullRows
-      if (rowsRes.data?.total) {
-        detail.row_count_total = rowsRes.data.total
-      }
-    }
-  } catch {
-    // Keep mongo preview rows when artifact pagination is unavailable.
-  }
-  return detail
-}
-
-async function selectJob(jobId, { scrollDetail = false } = {}) {
-  if (!jobId) return
-  const seq = ++selectSeq
-  selectedJobId.value = jobId
-  if (scrollDetail) resultDetail.value = null
-  try {
-    const jobRes = await getPortfolioResearchJob(jobId)
-    if (seq !== selectSeq) return
-    selectedJob.value = jobRes.data
-    if (selectedJob.value?.result_id || selectedJob.value?.status === 'completed') {
-      try {
-        const detail = await loadResearchResultDetail(jobId)
-        if (seq !== selectSeq) return
-        resultDetail.value = detail
-        syncSelectedResultRow()
-      } catch (err) {
-        if (seq !== selectSeq) return
-        if (selectedJob.value?.status === 'completed') {
-          errorMessage.value = formatResearchApiError(err, '加载研究结果失败')
-        }
-      }
-    } else if (scrollDetail) {
-      resultDetail.value = null
-      selectedResultRow.value = null
-    }
-    if (scrollDetail) {
-      await nextTick()
-      if (seq === selectSeq) scrollDetailToTop()
-    }
-  } catch (err) {
-    if (seq !== selectSeq) return
-    errorMessage.value = formatResearchApiError(err, '加载研究任务失败')
-  }
 }
 
 async function submitJobForm() {
@@ -695,84 +561,6 @@ function loadParamsFromSelectedJob() {
   openDrawer('rerun')
 }
 
-async function deleteJob() {
-  if (!selectedJobId.value || !selectedJob.value) return
-  const name = selectedJob.value.name || selectedJobId.value
-  const presetNote = (selectedJob.value.published_preset_id || publishedPresetId.value)
-    ? '\n已发布的参数预设会保留，不会一并删除。'
-    : ''
-  const confirmed = window.confirm(
-    `确认删除研究报告「${name}」？\n将删除任务、结果与 HTML/combos 产物，且不可恢复。${presetNote}`
-  )
-  if (!confirmed) return
-
-  deleteLoading.value = true
-  message.value = ''
-  errorMessage.value = ''
-  try {
-    const res = await deletePortfolioResearchJob(selectedJobId.value)
-    const kept = res.data?.published_preset_kept
-    message.value = kept
-      ? `已删除研究报告 ${selectedJobId.value}（预设 ${kept} 已保留）`
-      : `已删除研究报告 ${selectedJobId.value}`
-    selectedJobId.value = ''
-    selectedJob.value = null
-    resultDetail.value = null
-    await loadJobs()
-  } catch (err) {
-    errorMessage.value = formatResearchApiError(err, '删除研究报告失败')
-  } finally {
-    deleteLoading.value = false
-  }
-}
-
-async function publish(status) {
-  if (!resultDetail.value?.result_id) return
-  publishLoading.value = true
-  message.value = ''
-  errorMessage.value = ''
-  try {
-    const res = await publishPortfolioResearchResult(resultDetail.value.result_id, {
-      status,
-      selected_row: selectedResultRow.value || resultDetail.value?.best_row || null,
-    })
-    if (res.data?.attached_to_existing) {
-      message.value = `参数已存在，已作为 evidence 附加到预设 ${res.data?.preset?.preset_id}`
-    } else {
-      message.value = `已保存参数预设 ${res.data?.preset?.preset_id}`
-    }
-    await selectJob(selectedJobId.value, { scrollDetail: false })
-    await loadJobs()
-  } catch (err) {
-    errorMessage.value = formatResearchApiError(err, '发布策略失败')
-  } finally {
-    publishLoading.value = false
-  }
-}
-
-async function openArtifact(jobId) {
-  artifactLoading.value = true
-  errorMessage.value = ''
-  try {
-    const token = localStorage.getItem('access_token')
-    const response = await fetch(`${API_BASE}/portfolio-research/jobs/${jobId}/artifact`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(text || `HTTP ${response.status}`)
-    }
-    const blob = await response.blob()
-    const url = URL.createObjectURL(blob)
-    window.open(url, '_blank', 'noopener,noreferrer')
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
-  } catch (err) {
-    errorMessage.value = err.message || '打开报告失败'
-  } finally {
-    artifactLoading.value = false
-  }
-}
-
 onMounted(async () => {
   narrowMql = window.matchMedia(NARROW_MQ)
   isNarrow.value = narrowMql.matches
@@ -783,8 +571,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onGlobalKeydown)
-  window.removeEventListener('keydown', onDetailFullscreenKeydown, true)
-  document.body.style.overflow = ''
   narrowMql?.removeEventListener('change', onNarrowChange)
 })
 </script>
