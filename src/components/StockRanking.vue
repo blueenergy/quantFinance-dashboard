@@ -1,6 +1,6 @@
 <!-- dashboard/src/components/StockRanking.vue -->
 <template>
-  <div>
+  <div class="stock-ranking">
   <h3 class="ranking-title">股票评分排行榜</h3>
     <div style="margin-bottom: 20px;">
   <StockRankingControls
@@ -117,6 +117,7 @@
     </div>
 
     <RankingQuickSelectModal
+      v-if="showQuickSelect"
       v-model:selected-category="selectedCategory"
       :show="showQuickSelect"
       :categories="quickSelectCategories"
@@ -146,6 +147,7 @@
     />
 
     <AvailableDatesModal
+      v-if="showAvailableDatesModal"
       :show="showAvailableDatesModal"
       :symbol="pickingForSymbol"
       :available-dates="availableDatesForSymbol"
@@ -159,6 +161,7 @@
     />
 
     <RankingScoreDetailModal
+      v-if="showScoreDetail"
       :show="showScoreDetail"
       :stock="selectedStock"
       :category="scoreDetailCategory"
@@ -175,10 +178,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
-import AvailableDatesModal from './AvailableDatesModal.vue'
-import RankingQuickSelectModal from './ranking/RankingQuickSelectModal.vue'
-import RankingScoreDetailModal from './ranking/RankingScoreDetailModal.vue'
+import { defineAsyncComponent, ref, onMounted, onUnmounted, watch } from 'vue'
 import StockRankingControls from './StockRankingControls.vue'
 import RankingTable from './RankingTable.vue'
 import { useStockRanking } from '../composables/useStockRanking.js'
@@ -190,6 +190,14 @@ import {
   normalizeRankingWeights,
 } from '../utils/scoreUtils.js'
 import { STOCK_RANKINGS_PAGE_SIZE } from '../utils/stockRankingCache.js'
+
+const AvailableDatesModal = defineAsyncComponent(() => import('./AvailableDatesModal.vue'))
+const RankingQuickSelectModal = defineAsyncComponent(
+  () => import('./ranking/RankingQuickSelectModal.vue')
+)
+const RankingScoreDetailModal = defineAsyncComponent(
+  () => import('./ranking/RankingScoreDetailModal.vue')
+)
 
 const emit = defineEmits(['view-chart'])
 
@@ -967,198 +975,4 @@ function onRankingSortChange() {
 
 </script>
 
-<style scoped>
-/* Control styles moved to StockRankingControls.vue (scoped). */
-
-.loading-container, .no-data-container {
-  text-align: center;
-  padding: 40px 20px;
-}
-
-.loading-spinner {
-  display: inline-block;
-  width: 30px;
-  height: 30px;
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #007bff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-right: 10px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.no-data-icon {
-  font-size: 48px;
-  margin-bottom: 20px;
-}
-
-.mode-header {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 15px;
-  padding: 10px 0;
-  border-bottom: 2px solid #e9ecef;
-}
-
-.mode-header-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-}
-
-.ranking-pager {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pager-meta {
-  font-size: 13px;
-  color: #555;
-}
-
-.stock-count {
-  color: #666;
-  font-size: 14px;
-}
-
-.th-date { width: 120px; }
-.td-date { text-align: center; }
-
-/* 提升日期相关文本的对比度，使“日期”更醒目 */
-.td-date span {
-  color: #0f1724; /* 更深的近黑色，常态更醒目 */
-  font-weight: 800;
-  font-size: 15px;
-  background: linear-gradient(180deg, #ffffff, #f7f9fc);
-  padding: 6px 10px;
-  border-radius: 6px;
-  display: inline-block;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
-  border: 1px solid rgba(15,23,36,0.06);
-}
-
-/* 多日期标签中的日期文本 */
-.date-chip strong {
-  color: #0f1724;
-  font-weight: 800;
-  padding-right: 6px;
-}
-
-.clickable {
-  cursor: pointer;
-}
-
-.clickable:hover {
-  opacity: 0.8;
-  transform: scale(1.05);
-}
-
-.btn-watch-active {
-  background: linear-gradient(135deg, #ffc107, #e0a800) !important;
-  color: #000 !important;
-}
-
-.btn-remove {
-  background: linear-gradient(135deg, #dc3545, #c82333);
-  color: white;
-  border: none;
-  padding: 6px 10px;
-  border-radius: 4px;
-  margin: 0 2px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.selected-dates {
-  margin-top: 8px;
-}
-
-.date-chip select {
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 4px 6px;
-}
-
-/* 宽表：保证右侧列仍在可视区内（可横向滚动），避免被父级裁切 */
-.ranking-table-scroll {
-  max-width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* ✅ 保持原有表格样式 */
-
-/* 表格样式改由 RankingTable.vue 维护，避免重复定义 */
-
-
-/* modal overlay and modal-content moved to
-   src/assets/styles/stock-ranking-tokens.css */
-
-/* 更亮的排行榜标题样式 */
-.ranking-title {
-  color: #fffbe8;
-  font-size: 2.1rem;
-  font-weight: 900;
-  letter-spacing: 2px;
-  text-shadow: 0 2px 16px #ffd700, 0 1px 0 #fff, 0 0 8px #ffb300;
-  background: linear-gradient(90deg, #ffb300 0%, #ffd700 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 18px;
-}
-
-/* ✅ 响应式设计 */
-@media (max-width: 768px) {
-  .control-group {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .input-row {
-    flex-direction: column;
-  }
-  
-  .stock-input {
-    width: 100%;
-    margin-bottom: 10px;
-  }
-  
-  .ranking-table {
-    font-size: 12px;
-  }
-  
-  .symbol-text, .name-text {
-    padding: 2px 4px;
-    font-size: 11px;
-  }
-  
-  .cycle-score, .fundamental-score, .technical-score, .money-score {
-    padding: 2px 4px;
-    font-size: 11px;
-  }
-  
-  .date-input {
-    padding: 6px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
-    margin-left: 8px;
-    margin-right: 8px;
-  }
-
-  .helper-text {
-    color: #6c757d;
-    font-size: 12px;
-  }
-}
-</style>
+<style src="../assets/styles/stock-ranking.css"></style>

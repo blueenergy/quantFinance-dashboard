@@ -77,10 +77,11 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import AppLink from '../common/AppLink.vue'
-import ScoreDetailView from './ScoreDetailView.vue'
 import { translateScoreCategory } from '../../utils/scoreDetail.js'
+
+const ScoreDetailView = defineAsyncComponent(() => import('./ScoreDetailView.vue'))
 
 const props = defineProps({
   show: { type: Boolean, default: false },

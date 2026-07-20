@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shallowMount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import RankingScoreDetailModal from '../src/components/ranking/RankingScoreDetailModal.vue'
 import ScoreDetailView from '../src/components/ranking/ScoreDetailView.vue'
 
@@ -9,7 +9,7 @@ const weights = { 动量: 0.25 }
 const dimensions = [{ key: 'cycle', name: '动量', score: 88 }]
 
 function mountModal(overrides = {}) {
-  return shallowMount(RankingScoreDetailModal, {
+  return mount(RankingScoreDetailModal, {
     props: {
       show: true,
       stock,
@@ -29,8 +29,9 @@ function buttonByText(wrapper, text) {
 }
 
 describe('RankingScoreDetailModal', () => {
-  it('renders the fullscreen shell and embeds ScoreDetailView', () => {
+  it('renders the fullscreen shell and embeds ScoreDetailView', async () => {
     const wrapper = mountModal()
+    await flushPromises()
     const detailView = wrapper.findComponent(ScoreDetailView)
 
     expect(wrapper.text()).toContain('600519.SH - 贵州茅台 评分详情')
@@ -48,6 +49,7 @@ describe('RankingScoreDetailModal', () => {
 
   it('emits actions and exits fullscreen before closing from the backdrop', async () => {
     const wrapper = mountModal()
+    await flushPromises()
 
     await buttonByText(wrapper, '查看走势图').trigger('click')
     await buttonByText(wrapper, '从自选股移除').trigger('click')

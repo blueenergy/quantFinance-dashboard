@@ -1,0 +1,189 @@
+/* Stock ranking shell styles. Keep every selector scoped to the feature root. */
+:where(.stock-ranking) .loading-container,
+:where(.stock-ranking) .no-data-container {
+  padding: 40px 20px;
+  text-align: center;
+}
+
+:where(.stock-ranking) .loading-spinner {
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+  margin-right: 10px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #007bff;
+  border-radius: 50%;
+  animation: stock-ranking-spin 1s linear infinite;
+}
+
+@keyframes stock-ranking-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+:where(.stock-ranking) .no-data-icon {
+  margin-bottom: 20px;
+  font-size: 48px;
+}
+
+:where(.stock-ranking) .mode-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 15px;
+  padding: 10px 0;
+  border-bottom: 2px solid #e9ecef;
+}
+
+:where(.stock-ranking) .mode-header-row {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+:where(.stock-ranking) .ranking-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+:where(.stock-ranking) .pager-meta {
+  color: #555;
+  font-size: 13px;
+}
+
+:where(.stock-ranking) .stock-count {
+  color: #666;
+  font-size: 14px;
+}
+
+:where(.stock-ranking) .th-date {
+  width: 120px;
+}
+
+:where(.stock-ranking) .td-date {
+  text-align: center;
+}
+
+:where(.stock-ranking) .td-date span {
+  display: inline-block;
+  padding: 6px 10px;
+  border: 1px solid rgba(15, 23, 36, 0.06);
+  border-radius: 6px;
+  background: linear-gradient(180deg, #fff, #f7f9fc);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+  color: #0f1724;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+:where(.stock-ranking) .date-chip strong {
+  padding-right: 6px;
+  color: #0f1724;
+  font-weight: 800;
+}
+
+:where(.stock-ranking) .clickable {
+  cursor: pointer;
+}
+
+:where(.stock-ranking) .clickable:hover {
+  opacity: 0.8;
+  transform: scale(1.05);
+}
+
+:where(.stock-ranking) .btn-watch-active {
+  background: linear-gradient(135deg, #ffc107, #e0a800) !important;
+  color: #000 !important;
+}
+
+:where(.stock-ranking) .btn-remove {
+  margin: 0 2px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+:where(.stock-ranking) .selected-dates {
+  margin-top: 8px;
+}
+
+:where(.stock-ranking) .date-chip select {
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+:where(.stock-ranking) .ranking-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+:where(.stock-ranking) .ranking-title {
+  margin-bottom: 18px;
+  background: linear-gradient(90deg, #ffb300 0%, #ffd700 100%);
+  background-clip: text;
+  color: #fffbe8;
+  font-size: 2.1rem;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 16px #ffd700, 0 1px 0 #fff, 0 0 8px #ffb300;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@media (max-width: 768px) {
+  :where(.stock-ranking) .control-group {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  :where(.stock-ranking) .input-row {
+    flex-direction: column;
+  }
+
+  :where(.stock-ranking) .stock-input {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+
+  :where(.stock-ranking) .ranking-table {
+    font-size: 12px;
+  }
+
+  :where(.stock-ranking) .symbol-text,
+  :where(.stock-ranking) .name-text {
+    padding: 2px 4px;
+    font-size: 11px;
+  }
+
+  :where(.stock-ranking) .cycle-score,
+  :where(.stock-ranking) .fundamental-score,
+  :where(.stock-ranking) .technical-score,
+  :where(.stock-ranking) .money-score {
+    padding: 2px 4px;
+    font-size: 11px;
+  }
+
+  :where(.stock-ranking) .date-input {
+    margin-right: 8px;
+    margin-left: 8px;
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+
+  :where(.stock-ranking) .helper-text {
+    color: #6c757d;
+    font-size: 12px;
+  }
+}
