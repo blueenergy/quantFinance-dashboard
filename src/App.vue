@@ -114,7 +114,7 @@
 
           <!-- 每个 Tab 首次被点击时才 mount，之后仅用 v-show 切换，避免反复加载 -->
             <template v-for="tabView in renderableTabViews" :key="tabView.id">
-              <template v-if="mountedTabs.has(tabView.id) && (!tabView.adminOnly || user?.is_admin)">
+              <template v-if="shouldMountTabView(tabView.id) && (!tabView.adminOnly || user?.is_admin)">
                 <div v-show="activeTab === tabView.id" :class="tabView.wrapperClass || undefined">
                   <Suspense>
                     <template #default>
@@ -153,6 +153,7 @@ import SiteIcpFooter from './components/common/SiteIcpFooter.vue'
 import { computed, ref, watch, onMounted, onUnmounted, nextTick, provide } from 'vue'
 import { getRenderableTabViews, getTabProps as buildTabProps, getTabListeners as buildTabListeners } from './utils/tabViews.js'
 import { parseDeepLinkFromUrl, buildDeepLinkHref, isModifiedClick } from './utils/appDeepLinks.js'
+import { nextRankingTabMountedState } from './utils/rankingTabMountGate.js'
 import { useAppStartupFlow } from './composables/useAppStartupFlow.js'
 import { useHomeSummaries } from './composables/useHomeSummaries.js'
 import { useChartWorkspace } from './composables/useChartWorkspace.js'
@@ -297,6 +298,12 @@ const {
 const renderableTabViews = computed(() => {
   return getRenderableTabViews(adminTabs.value)
 })
+
+function shouldMountTabView(tabId) {
+  const alreadyMounted = mountedTabs.value.has(tabId)
+  if (tabId !== 'ranking') return alreadyMounted
+  return nextRankingTabMountedState(alreadyMounted, activeTab.value)
+}
 
 const DEFAULT_DOCUMENT_TITLE = '悟空量化金融智能助手'
 
