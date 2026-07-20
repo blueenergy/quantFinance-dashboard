@@ -125,4 +125,28 @@ describe('request', () => {
       requestOrNull({ url: '/market-regime/latest', method: 'get' }),
     ).rejects.toBeTruthy()
   })
+
+  it('does not log canceled requests as response errors', async () => {
+    mockAdapter.mockRejectedValue({
+      config: {
+        metadata: { startTime: Date.now() },
+        method: 'get',
+        url: '/stock-rankings/by-index/hs300',
+        baseURL: '/api',
+      },
+      code: 'ERR_CANCELED',
+      name: 'CanceledError',
+      message: 'canceled',
+    })
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const request = (await import('../request.js')).default
+    await expect(request({ url: '/stock-rankings/by-index/hs300', method: 'get' })).rejects.toBeTruthy()
+
+    const canceledLogs = consoleError.mock.calls.filter(
+      ([label, diagnostic]) => label === 'Response error:' && diagnostic?.code === 'ERR_CANCELED',
+    )
+    expect(canceledLogs).toHaveLength(0)
+    consoleError.mockRestore()
+  })
 })

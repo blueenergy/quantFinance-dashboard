@@ -31,6 +31,16 @@ function handleUnauthorized() {
   window.location.href = '/login'
 }
 
+/** Intentional AbortController / axios cancel — not a failed request. */
+export function isRequestCanceled(error) {
+  if (!error) return false
+  return (
+    error.code === 'ERR_CANCELED'
+    || error.name === 'CanceledError'
+    || error.name === 'AbortError'
+  )
+}
+
 // 请求拦截器
 service.interceptors.request.use(
   (config) => {
@@ -71,7 +81,7 @@ service.interceptors.response.use(
     if (error.response?.status === 401) {
       handleUnauthorized()
     }
-    if (!error.config?.silentErrorLog) {
+    if (!error.config?.silentErrorLog && !isRequestCanceled(error)) {
       console.error('Response error:', diagnostic, error)
     }
     return Promise.reject(error)

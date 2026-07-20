@@ -1,5 +1,5 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
-import request from '../utils/request'
+import request, { isRequestCanceled } from '../utils/request'
 import {
   DEFAULT_RANKING_WEIGHTS,
   deduplicateStocksByLatestDate,
@@ -495,7 +495,7 @@ export function useStockRanking(options = {}) {
         })
       }
     } catch (error) {
-      if (error.name === 'CanceledError' || error.name === 'AbortError') {
+      if (isRequestCanceled(error)) {
         dlog('request canceled')
         return
       }
