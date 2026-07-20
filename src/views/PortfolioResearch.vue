@@ -199,111 +199,20 @@
       </Teleport>
     </section>
 
-    <div
-      v-if="drawerOpen"
-      class="drawer-overlay"
-      @click.self="closeDrawer"
-    >
-      <aside
-        class="drawer-panel"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="drawerTitle"
-        @keydown.esc.stop="closeDrawer"
-      >
-        <header class="drawer-head">
-          <div>
-            <h3>{{ drawerTitle }}</h3>
-            <p class="muted">{{ drawerSubtitle }}</p>
-          </div>
-          <button type="button" class="link-btn" @click="closeDrawer">关闭 ✕</button>
-        </header>
-        <div class="drawer-body">
-          <div class="form-grid">
-            <label>
-              名称
-              <input v-model="form.name" @input="nameTouched = true" />
-            </label>
-            <label>
-              universe
-              <select v-model="form.universe_index" @change="syncDefaultName">
-                <option v-for="universe in universeOptions" :key="universe.value" :value="universe.value">
-                  {{ universe.label }}
-                </option>
-              </select>
-            </label>
-            <label>
-              start_date
-              <input v-model="form.start_date" type="date" />
-            </label>
-            <label>
-              end_date
-              <input v-model="form.end_date" type="date" />
-            </label>
-            <label>
-              score_column
-              <input v-model="form.score_column" />
-            </label>
-            <label>
-              growth:cycle 权重
-              <input v-model="form.growth_cycle_weights" placeholder="30:70,40:60" />
-              <small class="field-hint">逗号分隔可对比多组，如 30:70,60:40</small>
-            </label>
-            <label>
-              Top N
-              <input v-model="form.top_n_values" placeholder="10,20,50" />
-            </label>
-            <label>
-              rebalance_days
-              <input v-model.number="form.horizon" type="number" min="1" />
-            </label>
-            <label>
-              active caps
-              <input v-model="form.active_caps" placeholder="0.2,0.25,0.3" />
-            </label>
-            <label>
-              legacy transaction_cost
-              <input v-model.number="form.transaction_cost" type="number" min="0" step="0.0001" />
-            </label>
-            <label>
-              buy commission
-              <input v-model.number="form.buy_commission_rate" type="number" min="0" step="0.00001" />
-            </label>
-            <label>
-              sell commission
-              <input v-model.number="form.sell_commission_rate" type="number" min="0" step="0.00001" />
-            </label>
-            <label>
-              min commission
-              <input v-model.number="form.min_commission" type="number" min="0" step="0.1" />
-            </label>
-            <label>
-              stamp tax
-              <input v-model.number="form.stamp_tax_rate" type="number" min="0" step="0.00001" />
-            </label>
-            <label>
-              initial capital
-              <input v-model.number="form.initial_capital" type="number" min="0" step="10000" />
-            </label>
-            <label>
-              浮动止盈
-              <input v-model="form.trailing_stop_pcts" placeholder="0,0.1,0.15,0.2" />
-              <small class="field-hint">逗号分隔多档 A/B，0 表示关闭；与 CLI --trailing-stop-pcts 一致</small>
-            </label>
-          </div>
-        </div>
-        <footer class="drawer-footer">
-          <button type="button" class="secondary-btn" @click="closeDrawer">取消</button>
-          <button
-            type="button"
-            :disabled="submitting || !form.start_date || !form.end_date"
-            @click="submitJobForm"
-          >
-            {{ submitting ? '提交中...' : submitButtonLabel }}
-          </button>
-        </footer>
-      </aside>
-    </div>
+    <ResearchCreateDrawer
+      :open="drawerOpen"
+      :form="form"
+      :universe-options="universeOptions"
+      :submitting="submitting"
+      :title="drawerTitle"
+      :subtitle="drawerSubtitle"
+      :submit-label="submitButtonLabel"
+      @close="closeDrawer"
+      @submit="submitJobForm"
+      @update:form="onDrawerFormUpdate"
+      @name-touched="nameTouched = true"
+      @universe-change="syncDefaultName"
+    />
 
     <div v-if="comboModalOpen" class="combo-overlay" @click.self="closeComboDetail">
       <div class="combo-modal">
@@ -443,6 +352,7 @@ import {
   universeName,
 } from '../utils/portfolioResearchView'
 import { buildCandidateConfigFromRow, formatAxisValue, resolveComboTrailingStopPct } from '../utils/sweepResultView'
+import ResearchCreateDrawer from '../components/portfolio/ResearchCreateDrawer.vue'
 import ResearchJobList from '../components/portfolio/ResearchJobList.vue'
 import SweepResultPanel from '../components/portfolio/SweepResultPanel.vue'
 
@@ -608,9 +518,13 @@ function jobElapsedLabel(job) {
   return formatJobElapsedLabel(job, nowMs.value)
 }
 
-function syncDefaultName() {
+function syncDefaultName(universeIndex = form.value.universe_index) {
   if (nameTouched.value) return
-  form.value.name = defaultResearchName(form.value.universe_index)
+  form.value.name = defaultResearchName(universeIndex)
+}
+
+function onDrawerFormUpdate(next) {
+  form.value = next
 }
 
 function todayInputDate() {
@@ -1676,52 +1590,6 @@ th {
   font-size: 12px;
 }
 
-.drawer-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1100;
-  background: rgba(15, 23, 42, .4);
-  display: flex;
-  justify-content: flex-end;
-}
-
-.drawer-panel {
-  width: min(640px, 100%);
-  height: 100%;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-  box-shadow: -8px 0 24px rgba(15, 23, 42, .12);
-}
-
-.drawer-head,
-.drawer-footer {
-  flex: none;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 18px 20px;
-  border-bottom: 1px solid #eef2f7;
-}
-
-.drawer-footer {
-  border-bottom: 0;
-  border-top: 1px solid #eef2f7;
-  justify-content: flex-end;
-}
-
-.drawer-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 8px 20px 20px;
-}
-
-.drawer-head h3 {
-  margin: 0 0 4px;
-}
-
 @media (max-width: 900px) {
   .portfolio-research {
     padding: 18px;
@@ -1735,10 +1603,6 @@ th {
 
   .mobile-hidden {
     display: none !important;
-  }
-
-  .drawer-panel {
-    width: 100%;
   }
 }
 </style>
