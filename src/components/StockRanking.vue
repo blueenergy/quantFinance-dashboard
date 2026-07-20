@@ -158,68 +158,27 @@
       @close="closeAvailableDatesModal"
     />
 
-    <!-- ✅ 评分详情弹窗 (保持原有功能并增强；支持全屏阅读，交互对齐连板天梯 AI 思考过程) -->
-    <div
-      v-if="showScoreDetail"
-      class="modal-overlay score-detail-modal-overlay"
-      :class="{ 'score-detail-modal-overlay--raised': scoreDetailMaximized }"
-      @click="onScoreDetailOverlayClick"
-    >
-      <div
-        class="modal-content score-detail-modal"
-        :class="{ 'score-detail-modal--maximized': scoreDetailMaximized }"
-        @click.stop
-        ref="scoreDetailModalRef"
-      >
-        <div class="score-detail-modal-toolbar">
-          <h4 class="score-detail-modal-title flex-row-center gap-md wrap">
-            <span>{{ selectedStock?.symbol }} - {{ selectedStock?.name }} 评分详情</span>
-            <span v-if="scoreDetailCategory" class="category-chip">{{ translateCategory(scoreDetailCategory) }}</span>
-          </h4>
-          <button
-            type="button"
-            class="btn-base btn-sm btn-gradient-teal score-detail-fullscreen-btn"
-            @click.stop="scoreDetailMaximized = !scoreDetailMaximized"
-          >
-            {{ scoreDetailMaximized ? '退出全屏' : '全屏' }}
-          </button>
-        </div>
-        <div class="score-detail-content">
-          <ScoreDetailView
-            :category="scoreDetailCategory"
-            :details="scoreDetailData"
-            :weights="scoreDetailWeights"
-            :dimensions="scoreDetailDimensions"
-            :loading="loadingDetail"
-            :maximized="scoreDetailMaximized"
-          />
-          <div class="score-detail-actions">
-            <AppLink
-              v-if="selectedStock?.symbol"
-              tab="stock-workbench"
-              :params="{ symbol: selectedStock.symbol }"
-              class="btn-base btn-md btn-gradient-blue"
-            >
-              打开工作台
-            </AppLink>
-            <button @click="viewChart(selectedStock?.symbol)" class="btn-base btn-md btn-gradient-teal">查看走势图</button>
-            <button @click="toggleWatchlist(selectedStock?.symbol)" class="btn-base btn-md btn-gradient-green">
-              {{ isInWatchlist(selectedStock?.symbol) ? '从自选股移除' : '添加到自选股' }}
-            </button>
-          </div>
-        </div>
-        <button type="button" @click="closeScoreDetail" class="btn-base btn-md btn-gradient-gray score-detail-close-footer">关闭</button>
-      </div>
-    </div>
+    <RankingScoreDetailModal
+      :show="showScoreDetail"
+      :stock="selectedStock"
+      :category="scoreDetailCategory"
+      :details="scoreDetailData"
+      :weights="scoreDetailWeights"
+      :dimensions="scoreDetailDimensions"
+      :loading="loadingDetail"
+      :in-watchlist="isInWatchlist(selectedStock?.symbol)"
+      @view-chart="viewChart"
+      @toggle-watchlist="toggleWatchlist"
+      @close="closeScoreDetail"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
-import AppLink from './common/AppLink.vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import AvailableDatesModal from './AvailableDatesModal.vue'
 import RankingQuickSelectModal from './ranking/RankingQuickSelectModal.vue'
-import ScoreDetailView from './ranking/ScoreDetailView.vue'
+import RankingScoreDetailModal from './ranking/RankingScoreDetailModal.vue'
 import StockRankingControls from './StockRankingControls.vue'
 import RankingTable from './RankingTable.vue'
 import request from '../utils/request'
@@ -279,6 +238,8 @@ const scoreDetailData = ref(null)
 const scoreDetailWeights = ref({})
 const scoreDetailDimensions = ref([])
 const loadingDetail = ref(false)
+const scoreDetailRequestSeq = ref(0)
+let scoreDetailRequestController = null
 
 // 获取当前股票有效策略（优先单股票策略，其次全局策略）
 function getEffectiveStrategyFor(symbol) {
@@ -286,6 +247,15 @@ function getEffectiveStrategyFor(symbol) {
 }
 
 async function fetchScoreDetails(row, category) {
+  const requestId = ++scoreDetailRequestSeq.value
+  scoreDetailRequestController?.abort()
+  const controller = new AbortController()
+  scoreDetailRequestController = controller
+  const requestStillCurrent = () => (
+    scoreDetailRequestSeq.value === requestId
+    && scoreDetailRequestController === controller
+  )
+
   try {
     loadingDetail.value = true
     scoreDetailCategory.value = category
@@ -293,9 +263,6 @@ async function fetchScoreDetails(row, category) {
     scoreDetailData.value = null
     scoreDetailWeights.value = {}
     scoreDetailDimensions.value = []
-    // 强制刷新弹窗：隐藏后下一帧显示
-    showScoreDetail.value = false
-    await Promise.resolve()
     showScoreDetail.value = true
 
     const params = { symbol: row.symbol, category }
@@ -305,7 +272,10 @@ async function fetchScoreDetails(row, category) {
       url: '/stock-score-detail',
       method: 'get',
       params,
+      signal: controller.signal,
     })
+    if (!requestStillCurrent()) return
+
     if (json && json.success) {
       scoreDetailData.value = json.data.details
       scoreDetailWeights.value = json.data.weights || {}
@@ -327,25 +297,19 @@ async function fetchScoreDetails(row, category) {
       scoreDetailDimensions.value = []
     }
   } catch (e) {
+    if (!requestStillCurrent()) return
+    if (e?.code === 'ERR_CANCELED' || e?.name === 'CanceledError' || e?.name === 'AbortError') {
+      return
+    }
     scoreDetailData.value = { 错误: e.message || '请求异常' }
     scoreDetailWeights.value = {}
     scoreDetailDimensions.value = []
   } finally {
-    loadingDetail.value = false
+    if (requestStillCurrent()) {
+      scoreDetailRequestController = null
+      loadingDetail.value = false
+    }
   }
-}
-
-function translateCategory(cat) {
-  const map = {
-    cycle: '动量评分',
-    growth: '成长评分',
-    fundamental: '基本面评分',
-    value: '价值评分',
-    technical: '技术面评分',
-    money_flow: '资金流评分',
-    industry_rs: '行业相对强度',
-  }
-  return map[cat] || cat
 }
 
 // Date / multi-date selections
@@ -488,7 +452,6 @@ const pickingForSymbol = ref('')
 
 // Score detail modal
 const showScoreDetail = ref(false)
-const scoreDetailMaximized = ref(false)
 const selectedStock = ref(null)
 
 // 🆕 添加沪深300相关状态变量
@@ -1567,22 +1530,11 @@ function viewChart(symbol) {
   emit('view-chart', symbol)
 }
 
-function showScoreDetailModal(stock) {
-  // 保留兼容：若只是查看不含细节，通过总分构造展示
-  selectedStock.value = stock
-  fetchScoreDetails(stock, 'composite')
-}
-
-function onScoreDetailOverlayClick() {
-  if (scoreDetailMaximized.value) {
-    scoreDetailMaximized.value = false
-    return
-  }
-  closeScoreDetail()
-}
-
 function closeScoreDetail() {
-  scoreDetailMaximized.value = false
+  scoreDetailRequestSeq.value += 1
+  scoreDetailRequestController?.abort()
+  scoreDetailRequestController = null
+  loadingDetail.value = false
   showScoreDetail.value = false
   selectedStock.value = null
 }
@@ -1610,34 +1562,6 @@ watch(perStockStrategies, () => {
   }
 }, { deep: true })
 
-// 评分详情：Esc 先退出全屏再关闭弹窗；打开时锁定主页面滚动
-function lockPageScroll() {
-  const targets = [document.documentElement, document.body]
-  const vApp = document.querySelector('.v-application')
-  if (vApp) targets.push(vApp)
-  const prev = targets.map((el) => ({ el, overflow: el.style.overflow }))
-  targets.forEach((el) => { el.style.overflow = 'hidden' })
-  return () => {
-    prev.forEach(({ el, overflow }) => { el.style.overflow = overflow })
-  }
-}
-
-watch(showScoreDetail, (open, _prev, onCleanup) => {
-  if (!open) return
-  const unlockScroll = lockPageScroll()
-  const onKey = (e) => {
-    if (e.key !== 'Escape') return
-    e.preventDefault()
-    if (scoreDetailMaximized.value) scoreDetailMaximized.value = false
-    else closeScoreDetail()
-  }
-  window.addEventListener('keydown', onKey)
-  onCleanup(() => {
-    window.removeEventListener('keydown', onKey)
-    unlockScroll()
-  })
-})
-
 // Load HS300 constituents automatically when user switches quick-select tab to hs300
 watch(selectedCategory, async (val) => {
   if (val === 'hs300' && (!hs300Stocks.value || hs300Stocks.value.length === 0) && !hs300Loading.value) {
@@ -1663,6 +1587,12 @@ watch(selectedCategory, async (val) => {
 onMounted(() => {
   fetchRankings()
   fetchWatchlist()
+})
+
+onUnmounted(() => {
+  scoreDetailRequestSeq.value += 1
+  scoreDetailRequestController?.abort()
+  scoreDetailRequestController = null
 })
 
 function onRankingStrategyChange() {
@@ -1900,165 +1830,6 @@ const displayRows = computed(() => {
   padding: 4px 6px;
 }
 
-
-/* ✅ 评分详情模态框增强样式 */
-.score-detail-modal-overlay {
-  overflow: hidden;
-  overscroll-behavior: contain;
-}
-
-.score-detail-modal-overlay--raised {
-  z-index: 2990;
-  background-color: rgba(0, 0, 0, 0.78);
-}
-
-.score-detail-modal {
-  max-width: 760px;
-  max-height: min(90vh, 920px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.score-detail-modal-toolbar {
-  flex-shrink: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 10px;
-}
-
-.score-detail-modal-title {
-  margin: 0;
-  flex: 1;
-  min-width: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-}
-
-.score-detail-fullscreen-btn {
-  flex-shrink: 0;
-}
-
-.score-detail-modal--maximized {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(96vw, 1400px);
-  height: min(92vh, 960px);
-  max-width: none !important;
-  max-height: none !important;
-  z-index: 3000;
-  margin: 0;
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
-  border-radius: 10px;
-}
-
-.score-detail-modal--maximized .score-detail-close-footer {
-  flex-shrink: 0;
-  margin-top: 4px;
-}
-
-.score-detail-close-footer {
-  flex-shrink: 0;
-}
-
-.score-detail-content {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  margin: 12px 0;
-}
-
-.score-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 15px;
-  padding: 10px;
-  border-radius: 6px;
-  background-color: #f8f9fa;
-}
-
-.score-item.total-score {
-  background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
-  border: 2px solid #2196f3;
-  font-size: 18px;
-  font-weight: bold;
-}
-
-.score-label {
-  flex: 1;
-  font-weight: bold;
-  color: #495057;
-}
-
-.score-value {
-  padding: 4px 12px;
-  border-radius: 12px;
-  color: white;
-  font-weight: bold;
-  min-width: 50px;
-  text-align: center;
-  margin-right: 10px;
-}
-
-
-.score-value.cycle {
-  background: linear-gradient(135deg, #42a5f5, #1976d2); /* 蓝色系，和周期相关 */
-}
-
-
-.score-value.growth {
-  background: linear-gradient(135deg, #43e97b, #38f9d7); /* 亮绿色-青色，突出成长 */
-  color: #222;
-}
-
-.score-value.fundamental {
-  background: linear-gradient(135deg, #ffa726, #fb8c00); /* 橙色系，基本面 */
-}
-
-
-.score-value.value {
-  background: linear-gradient(135deg, #ffd700, #ffb300); /* 金色系，突出价值 */
-  color: #222;
-}
-
-.score-value.technical {
-  background: linear-gradient(135deg, #26c6da, #00838f); /* 青色系，技术 */
-}
-
-.score-value.money {
-  background: linear-gradient(135deg, #ef5350, #b71c1c); /* 红色系，资金 */
-}
-
-.score-weight {
-  color: #6c757d;
-  font-size: 12px;
-}
-
-.score-breakdown {
-  border-top: 1px solid #ddd;
-  padding-top: 15px;
-}
-
-.score-detail-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid #ddd;
-}
-
-
 /* 宽表：保证右侧列仍在可视区内（可横向滚动），避免被父级裁切 */
 .ranking-table-scroll {
   max-width: 100%;
@@ -2132,26 +1903,4 @@ const displayRows = computed(() => {
     font-size: 12px;
   }
 }
-.category-chip {
-  background: linear-gradient(135deg, #ff9800, #f57c00);
-  color: #fff;
-  padding: 4px 10px;
-  border-radius: 16px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .5px;
-}
-.detail-inline-block {
-  background: #fafafa;
-  border: 1px solid #eee;
-  padding: 8px 10px;
-  border-radius: 6px;
-  margin-bottom: 8px;
-  max-height: 180px;
-  overflow: auto;
-}
-.detail-loading { color:#555; font-size:13px; }
-.detail-empty { color:#777; font-size:13px; }
-.detail-list { list-style:none; padding:0; margin:0; }
-.detail-list.compact li { padding:2px 0; font-size:13px; line-height:1.3; }
 </style>
