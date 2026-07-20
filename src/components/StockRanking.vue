@@ -175,32 +175,21 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import AvailableDatesModal from './AvailableDatesModal.vue'
 import RankingQuickSelectModal from './ranking/RankingQuickSelectModal.vue'
 import RankingScoreDetailModal from './ranking/RankingScoreDetailModal.vue'
 import StockRankingControls from './StockRankingControls.vue'
 import RankingTable from './RankingTable.vue'
+import { useStockRanking } from '../composables/useStockRanking.js'
 import request from '../utils/request'
 import {
-  DEFAULT_RANKING_WEIGHTS,
   getCompositeScore,
   formatDateDisplay,
   generateCSV as utilGenerateCSV,
-  deduplicateStocksByLatestDate,
   normalizeRankingWeights,
-  serializeRankingWeights,
-  weightedDimensionScore,
 } from '../utils/scoreUtils.js'
-import { computeDisplayRows } from '../utils/displayRows.js'
-import { loadStockRankingPrefs, saveStockRankingPrefs } from '../utils/stockRankingPrefs.js'
-import {
-  buildStockRankingCacheKey,
-  readStockRankingCache,
-  writeStockRankingCache,
-  scoreDateMatchesRequest,
-  STOCK_RANKINGS_PAGE_SIZE,
-} from '../utils/stockRankingCache.js'
+import { STOCK_RANKINGS_PAGE_SIZE } from '../utils/stockRankingCache.js'
 
 const emit = defineEmits(['view-chart'])
 
@@ -208,30 +197,54 @@ const emit = defineEmits(['view-chart'])
 const DEBUG = import.meta.env?.DEV === true
 function dlog(...args) { if (DEBUG) { try { console.debug('[StockRanking]', ...args) } catch(e) {} } }
 
-const _srp = loadStockRankingPrefs()
+function getIndexSymbolsForMode(mode) {
+  const lists = {
+    hs300: hs300Stocks,
+    csi500: csi500Stocks,
+    csi1000: csi1000Stocks,
+    csi2000: csi2000Stocks,
+    a500: a500Stocks,
+    star50: star50Stocks,
+  }
+  return (lists[mode]?.value || []).map(stock => stock.symbol)
+}
 
-// -------------------------
-// Reactive state (grouped and documented)
-// -------------------------
-// Core data
-// rankings: array of stock score objects returned from the backend.
-// Each item typically contains: { symbol, name, composite_score, score_date, per_date_scores?, per_date_fields?, ... }
-const rankings = ref([])
-const rankingDataViewMode = ref('')
-const loading = ref(false)
-const displayLimit = ref(_srp?.displayLimit ?? 30)
+const {
+  rankings,
+  rankingDataViewMode,
+  loading,
+  displayLimit,
+  viewMode,
+  selectedStocks,
+  selectedDate,
+  selectedDates,
+  rankingStrategy,
+  sortBy,
+  rankingWeights,
+  perStockStrategies,
+  watchlist,
+  refreshKey,
+  loadingMessage,
+  lastUpdateTime,
+  rankingPageOffset,
+  rankingTotal,
+  hasCurrentModeRankings,
+  maxDate,
+  usePagedRankingsFetch,
+  rankingPageLabel,
+  displayRows,
+  getEffectiveStrategyFor,
+  fetchRankings,
+  rankingPrevPage,
+  rankingNextPage,
+} = useStockRanking({
+  dlog,
+  isUserLoggedIn,
+  getIndexSymbols: getIndexSymbolsForMode,
+})
 
-// UI mode & inputs
-// viewMode: one of 'ranking' | 'selected' | 'watchlist'
-// stockInput / stockSuggestions: helpers for the stock input autocomplete
-// selectedStocks: array of selected symbols for 'selected' mode
-const viewMode = ref(_srp?.viewMode ?? 'ranking') // 'ranking' | 'selected' | 'watchlist'
 const stockInput = ref('')
 const stockSuggestions = ref([])
-const selectedStocks = ref(_srp?.selectedStocks?.length ? [..._srp.selectedStocks] : [])
-const hasCurrentModeRankings = computed(
-  () => rankings.value.length > 0 && rankingDataViewMode.value === viewMode.value
-)
 // 评分详情（单类别）
 const scoreDetailCategory = ref(null)
 const scoreDetailData = ref(null)
@@ -240,11 +253,6 @@ const scoreDetailDimensions = ref([])
 const loadingDetail = ref(false)
 const scoreDetailRequestSeq = ref(0)
 let scoreDetailRequestController = null
-
-// 获取当前股票有效策略（优先单股票策略，其次全局策略）
-function getEffectiveStrategyFor(symbol) {
-  return (perStockStrategies.value && perStockStrategies.value[symbol]) || rankingStrategy.value || 'balanced'
-}
 
 async function fetchScoreDetails(row, category) {
   const requestId = ++scoreDetailRequestSeq.value
@@ -312,63 +320,7 @@ async function fetchScoreDetails(row, category) {
   }
 }
 
-// Date / multi-date selections
-// selectedDate: single date input (ISO yyyy-mm-dd)
-// selectedDateInput: auxiliary input used when adding to selectedDates
-// selectedDates: array of selected yyyyMMdd strings used for multi-date flattening
-const selectedDate = ref(_srp?.selectedDate ?? '')
 const selectedDateInput = ref('')
-const selectedDates = ref(_srp?.selectedDates?.length ? [..._srp.selectedDates] : [])
-
-// Strategy controls
-// rankingStrategy: global strategy used across modes unless a per-stock override is set
-// perStockStrategies: map { SYMBOL: 'balanced'|'aggressive'|'conservative' } for per-symbol overrides
-const rankingStrategy = ref(_srp?.rankingStrategy ?? 'balanced')
-const sortBy = ref(_srp?.sortBy ?? 'composite')
-const rankingWeights = ref(normalizeRankingWeights(_srp?.rankingWeights || DEFAULT_RANKING_WEIGHTS))
-const perStockStrategies = ref(
-  _srp?.perStockStrategies && typeof _srp.perStockStrategies === 'object'
-    ? { ..._srp.perStockStrategies }
-    : {}
-)
-
-let _prefsSaveTimer = null
-function schedulePersistStockRankingPrefs() {
-  clearTimeout(_prefsSaveTimer)
-  _prefsSaveTimer = setTimeout(() => {
-    saveStockRankingPrefs({
-      viewMode: viewMode.value,
-      displayLimit: displayLimit.value,
-      rankingStrategy: rankingStrategy.value,
-      sortBy: sortBy.value,
-      rankingWeights: rankingWeights.value,
-      selectedDate: selectedDate.value,
-      selectedDates: [...selectedDates.value],
-      selectedStocks: [...selectedStocks.value],
-      perStockStrategies: { ...perStockStrategies.value },
-    })
-  }, 320)
-}
-
-watch(
-  [viewMode, displayLimit, rankingStrategy, sortBy, rankingWeights, selectedDate, selectedDates, selectedStocks, perStockStrategies],
-  schedulePersistStockRankingPrefs,
-  { deep: true }
-)
-
-// UI helpers / tokens
-// refreshKey: small integer token bumped to force expensive computed properties to re-evaluate
-// loadingMessage / lastUpdateTime: UI strings
-const refreshKey = ref(0) // bump to force computed refresh when needed
-const loadingMessage = ref('')
-const lastUpdateTime = ref('')
-// Date picker max: calendar today only. Do not use lastUpdateTime: in "latest per
-// symbol" mode, rows can have different score_date, and the top row's date may be
-// older than dates that still exist in DB, which would incorrectly block the picker.
-const maxDate = computed(() => new Date().toISOString().slice(0, 10))
-// AbortController for cancelling in-flight fetchRankings requests
-const currentRequestController = ref(null)
-const rankingRequestSeq = ref(0)
 
 // Modals / lists
 // Quick select modal state and sample categories (static fallback data)
@@ -389,60 +341,6 @@ const quickSelectCategories = ref([
   { key: 'star50', name: '科创50 成分股', stocks: [] }
 ])
 const selectedCategory = ref(quickSelectCategories.value[0].key)
-const watchlist = ref([])
-
-/** 服务端分页：offset + page_size；指数恒分页；自选股/指定股仅当标的数 > 每页条数 */
-const rankingPageOffset = ref(0)
-const rankingTotal = ref(0)
-const usePagedRankingsFetch = computed(() => {
-  const vm = viewMode.value
-  if (vm === 'hs300' || vm === 'csi500' || vm === 'csi1000' || vm === 'csi2000' || vm === 'a500' || vm === 'star50') return true
-  if (vm === 'watchlist' && (watchlist.value || []).length > STOCK_RANKINGS_PAGE_SIZE) return true
-  if (
-    vm === 'selected' &&
-    selectedDates.value.length === 0 &&
-    (selectedStocks.value || []).length > STOCK_RANKINGS_PAGE_SIZE
-  ) {
-    return true
-  }
-  return false
-})
-const rankingPageLabel = computed(
-  () => Math.floor(rankingPageOffset.value / STOCK_RANKINGS_PAGE_SIZE) + 1
-)
-
-const INDEX_RANKING_VIEW_MODES = new Set(['hs300', 'csi500', 'csi1000', 'csi2000', 'a500', 'star50'])
-
-function isIndexRankingViewMode(mode) {
-  return INDEX_RANKING_VIEW_MODES.has(String(mode || ''))
-}
-
-function rowsMatchIndexViewMode(rows, mode) {
-  if (!isIndexRankingViewMode(mode)) return true
-  if (!Array.isArray(rows) || rows.length === 0) return true
-  // New backend rows carry index_codes. If present, require every row to belong
-  // to the requested index before using cache / response data. Rows from older
-  // backends without index_codes are tolerated, but v4 cache avoids old polluted
-  // localStorage entries.
-  return rows.every((row) => {
-    const codes = row?.index_codes
-    if (!Array.isArray(codes) || codes.length === 0) return true
-    return codes.includes(mode)
-  })
-}
-
-function rankingPrevPage() {
-  rankingPageOffset.value = Math.max(0, rankingPageOffset.value - STOCK_RANKINGS_PAGE_SIZE)
-  fetchRankings()
-}
-
-function rankingNextPage() {
-  const next = rankingPageOffset.value + STOCK_RANKINGS_PAGE_SIZE
-  if (next < rankingTotal.value) {
-    rankingPageOffset.value = next
-    fetchRankings()
-  }
-}
 
 // Available-dates modal (used when picking dates for a single symbol)
 const showAvailableDatesModal = ref(false)
@@ -477,383 +375,6 @@ function isUserLoggedIn() {
   return localStorage.getItem('access_token') !== null
 }
 
-// -------------------------
-// Helper utilities (pure, small)
-// -------------------------
-// (removed duplicate getEffectiveStrategyFor; unified definition earlier)
-
-// getCompositeScore imported from utils
-
-const SORT_SCORE_FIELDS = {
-  cycle: 'cycle_score',
-  growth: 'growth_score',
-  fundamental: 'fundamental_score',
-  value: 'value_score',
-  technical: 'technical_score',
-  money_flow: 'money_flow_score',
-}
-
-function getSortScoreForRow(row, date = '') {
-  const key = sortBy.value || 'composite'
-  if (key === 'composite') {
-    const strategy = getEffectiveStrategyFor(row.symbol)
-    if (date && row.per_date_scores?.[date]) {
-      return Number(row.per_date_scores[date]?.[strategy] || 0)
-    }
-    return Number(getCompositeScore(row, strategy) || 0)
-  }
-  if (key === 'weighted') {
-    if (date && row.per_date_fields?.[date]) {
-      return weightedDimensionScore(row.per_date_fields[date], rankingWeights.value)
-    }
-    return Number(row.weighted_score ?? weightedDimensionScore(row, rankingWeights.value) ?? 0)
-  }
-  const field = SORT_SCORE_FIELDS[key]
-  if (!field) return 0
-  if (date && row.per_date_fields?.[date]) {
-    return Number(row.per_date_fields[date]?.[field] || 0)
-  }
-  return Number(row[field] || 0)
-}
-
-// ✅ 主数据获取方法 - 根据模式调用不同API
-async function fetchRankings() {
-  const requestId = ++rankingRequestSeq.value
-  const requestContext = {
-    viewMode: viewMode.value,
-    displayLimit: displayLimit.value,
-    rankingStrategy: rankingStrategy.value,
-    sortBy: sortBy.value,
-    rankingWeights: { ...(rankingWeights.value || {}) },
-    selectedDate: selectedDate.value,
-    selectedDates: [...(selectedDates.value || [])],
-    selectedStocks: [...(selectedStocks.value || [])],
-    watchlistSymbols: [...(watchlist.value || [])],
-    pageOffset: rankingPageOffset.value,
-    usePagedRankingsFetch: usePagedRankingsFetch.value,
-  }
-  dlog('fetchRankings start viewMode=', requestContext.viewMode, 'requestId=', requestId)
-  const abortThis = new AbortController()
-  const requestStillCurrent = () =>
-    rankingRequestSeq.value === requestId && currentRequestController.value === abortThis
-  try {
-    // cancel any previous in-flight request
-    try {
-      if (currentRequestController.value) {
-        currentRequestController.value.abort()
-      }
-    } catch (e) {
-      // no-op
-    }
-    currentRequestController.value = abortThis
-    const signal = abortThis.signal
-    let response
-    // 构造日期参数
-    let dateParam = ''
-    if (requestContext.selectedDate) {
-      // 期望格式：yyyyMMdd
-      const d = new Date(requestContext.selectedDate)
-      const yyyy = d.getFullYear()
-      const mm = String(d.getMonth() + 1).padStart(2, '0')
-      const dd = String(d.getDate()).padStart(2, '0')
-      dateParam = `${yyyy}${mm}${dd}`
-    }
-
-    function symbolsForIndexMode(vm) {
-      switch (vm) {
-        case 'hs300':
-          return (hs300Stocks.value || []).map((s) => s.symbol)
-        case 'csi500':
-          return (csi500Stocks.value || []).map((s) => s.symbol)
-        case 'csi1000':
-          return (csi1000Stocks.value || []).map((s) => s.symbol)
-        case 'csi2000':
-          return (csi2000Stocks.value || []).map((s) => s.symbol)
-        case 'a500':
-          return (a500Stocks.value || []).map((s) => s.symbol)
-        case 'star50':
-          return (star50Stocks.value || []).map((s) => s.symbol)
-        default:
-          return []
-      }
-    }
-
-    const cacheKey = buildStockRankingCacheKey({
-      viewMode: requestContext.viewMode,
-      displayLimit: requestContext.displayLimit,
-      rankingStrategy: requestContext.rankingStrategy,
-      sortBy: requestContext.sortBy,
-      rankingWeights: requestContext.rankingWeights,
-      dateParam,
-      selectedDates: requestContext.selectedDates,
-      selectedStocks: requestContext.selectedStocks,
-      watchlistSymbols: requestContext.watchlistSymbols,
-      indexSymbols: symbolsForIndexMode(requestContext.viewMode),
-      pageOffset: requestContext.usePagedRankingsFetch ? requestContext.pageOffset : 0,
-      pageSize: requestContext.usePagedRankingsFetch ? STOCK_RANKINGS_PAGE_SIZE : null,
-    })
-    const cached = readStockRankingCache(cacheKey)
-    let hadWarmCache = false
-    const cacheDateOk = scoreDateMatchesRequest(
-      dateParam,
-      cached?.primaryScoreDate
-    )
-    if (cached && cacheDateOk && rowsMatchIndexViewMode(cached.rankings, requestContext.viewMode)) {
-      rankings.value = JSON.parse(JSON.stringify(cached.rankings))
-      rankingDataViewMode.value = requestContext.viewMode
-      if (cached.lastUpdateTime) lastUpdateTime.value = cached.lastUpdateTime
-      hadWarmCache = true
-    } else if (cached && cacheDateOk) {
-      dlog('ranking cache ignored: index membership mismatch', {
-        key: cacheKey,
-        mode: requestContext.viewMode,
-      })
-    }
-    loading.value = !hadWarmCache
-    const weightsParam = requestContext.sortBy === 'weighted' ? serializeRankingWeights(requestContext.rankingWeights) : ''
-    const appendWeightedQuery = (parts) => {
-      if (weightsParam) parts.push(`weights=${encodeURIComponent(weightsParam)}`)
-    }
-    const appendRequestPageQuery = (url) => {
-      if (!requestContext.usePagedRankingsFetch) return url
-      const joiner = url.includes('?') ? '&' : '?'
-      return `${url}${joiner}offset=${requestContext.pageOffset}&page_size=${STOCK_RANKINGS_PAGE_SIZE}`
-    }
-
-    switch (requestContext.viewMode) {
-      case 'ranking': {
-        loadingMessage.value = `加载前 ${requestContext.displayLimit} 名股票评分...`
-        let url = `/stock-rankings?limit=${requestContext.displayLimit}`
-        // include selected ranking strategy so server can sort accordingly
-        if (requestContext.rankingStrategy) url += `&strategy=${encodeURIComponent(requestContext.rankingStrategy)}`
-        if (requestContext.sortBy) url += `&sort_by=${encodeURIComponent(requestContext.sortBy)}`
-        if (weightsParam) url += `&weights=${encodeURIComponent(weightsParam)}`
-        if (dateParam) url += `&date=${dateParam}`
-        response = await request({ method: 'get', url, signal })
-        break
-      }
-      case 'hs300':
-      case 'csi500':
-      case 'csi1000':
-      case 'csi2000':
-      case 'a500':
-      case 'star50': {
-        const indexLabels = {
-          hs300: '沪深300',
-          csi500: '中证500',
-          csi1000: '中证1000',
-          csi2000: '中证2000',
-          a500: '中证A500',
-          star50: '科创50',
-        }
-        loadingMessage.value = `加载${indexLabels[requestContext.viewMode]}指数成分股评分...`
-        let url = `/stock-rankings/by-index/${encodeURIComponent(requestContext.viewMode)}`
-        const qpIdx = []
-        if (requestContext.rankingStrategy) {
-          qpIdx.push(`strategy=${encodeURIComponent(requestContext.rankingStrategy)}`)
-        }
-        if (requestContext.sortBy) {
-          qpIdx.push(`sort_by=${encodeURIComponent(requestContext.sortBy)}`)
-        }
-        appendWeightedQuery(qpIdx)
-        if (dateParam) {
-          qpIdx.push(`date=${encodeURIComponent(dateParam)}`)
-        }
-        if (qpIdx.length) url += `?${qpIdx.join('&')}`
-        url = appendRequestPageQuery(url)
-        dlog('index rankings GET', url)
-        response = await request({ method: 'get', url, signal })
-        break
-      }
-      case 'selected': {
-        if (requestContext.selectedStocks.length === 0) {
-          rankings.value = []
-          rankingTotal.value = 0
-          loading.value = false
-          return
-        }
-        loadingMessage.value = `加载指定股票评分...`
-        const payload = { symbols: requestContext.selectedStocks }
-        dlog('selectedStocks', requestContext.selectedStocks)
-        // 如果有多日期，传递 dates 数组；否则继续使用单日期参数
-        let url = '/stock-rankings/selected'
-        // include strategy in payload so server can choose ranking method for selected fetch
-        payload.strategy = requestContext.rankingStrategy
-        if (requestContext.selectedDates.length > 0) {
-          payload.dates = requestContext.selectedDates
-          const qpSel = []
-          if (requestContext.rankingStrategy) qpSel.push(`strategy=${encodeURIComponent(requestContext.rankingStrategy)}`)
-          if (requestContext.sortBy) qpSel.push(`sort_by=${encodeURIComponent(requestContext.sortBy)}`)
-          appendWeightedQuery(qpSel)
-          if (qpSel.length) url += `?${qpSel.join('&')}`
-          url = appendRequestPageQuery(url)
-          dlog('posting with dates', payload.dates)
-          response = await request({ method: 'post', url, data: payload, signal })
-        } else {
-          const qpSel = []
-          if (dateParam) qpSel.push(`date=${dateParam}`)
-          if (requestContext.rankingStrategy) qpSel.push(`strategy=${encodeURIComponent(requestContext.rankingStrategy)}`)
-          if (requestContext.sortBy) qpSel.push(`sort_by=${encodeURIComponent(requestContext.sortBy)}`)
-          appendWeightedQuery(qpSel)
-          if (qpSel.length) url += `?${qpSel.join('&')}`
-          url = appendRequestPageQuery(url)
-          dlog('posting without dates url=', url)
-          response = await request({ method: 'post', url, data: payload, signal })
-        }
-        break
-      }
-      case 'watchlist': {
-        if (!isUserLoggedIn()) {
-          alert('请先登录后查看自选股评分')
-          viewMode.value = 'ranking'
-          await fetchRankings()
-          return
-        }
-        if (requestContext.watchlistSymbols.length === 0) {
-          rankings.value = []
-          rankingTotal.value = 0
-          loading.value = false
-          return
-        }
-        loadingMessage.value = `加载自选股评分...`
-        const payload = { symbols: requestContext.watchlistSymbols }
-        let url = '/stock-rankings/selected'
-        // include strategy and date as query parameters
-        const qp2 = []
-        if (dateParam) qp2.push(`date=${dateParam}`)
-        if (requestContext.rankingStrategy) qp2.push(`strategy=${encodeURIComponent(requestContext.rankingStrategy)}`)
-        if (requestContext.sortBy) qp2.push(`sort_by=${encodeURIComponent(requestContext.sortBy)}`)
-        appendWeightedQuery(qp2)
-        if (qp2.length) url += `?${qp2.join('&')}`
-        url = appendRequestPageQuery(url)
-        response = await request({ method: 'post', url, data: payload, signal })
-        break
-      }
-      default: {
-        throw new Error('无效的查看模式')
-      }
-    }
-    // 竞态防护：等待网络期间用户可能已切换模式并发起新请求。仅靠 abort 不够——
-    // 已经到达的响应仍可能正常 resolve，从而用旧数据（读取的是共享的 viewMode.value，
-    // 此时已是新模式）覆盖新请求结果、甚至写错缓存 key。若本请求已被更新的请求取代，直接丢弃。
-    if (!requestStillCurrent()) {
-      dlog('stale response dropped: superseded by a newer fetch', { requestId, mode: requestContext.viewMode })
-      return
-    }
-    dlog('response items=', Array.isArray(response?.data) ? response.data.length : (Array.isArray(response) ? response.length : 'n/a'))
-    // 处理响应数据（防御性检查）；request 已解包为 HTTP body
-    if (!response) {
-      console.error('[fetchRankings] empty response')
-      rankings.value = []
-      rankingTotal.value = 0
-    } else if (response && typeof response === 'object') {
-      if (response.success && response.data) {
-        rankings.value = response.data
-        const t = response.total
-        rankingTotal.value = typeof t === 'number' ? t : (response.data || []).length
-      } else if (Array.isArray(response)) {
-        rankings.value = response
-        rankingTotal.value = response.length
-      } else if (Array.isArray(response.data)) {
-        rankings.value = response.data
-        rankingTotal.value = response.data.length
-      } else {
-        // server returned object but not expected shape
-        rankings.value = []
-        rankingTotal.value = 0
-      }
-    } else if (Array.isArray(response)) {
-      // fallback if body is array directly
-      rankings.value = response
-      rankingTotal.value = response.length
-    } else {
-      rankings.value = []
-      rankingTotal.value = 0
-    }
-    if (!rowsMatchIndexViewMode(rankings.value, requestContext.viewMode)) {
-      dlog('ranking response ignored: index membership mismatch', {
-        mode: requestContext.viewMode,
-        symbols: (rankings.value || []).slice(0, 5).map((row) => row?.symbol),
-      })
-      rankings.value = []
-      rankingTotal.value = 0
-    }
-    rankingDataViewMode.value = requestContext.viewMode
-    dlog('rankings count after response', (rankings.value || []).length)
-      try {
-        if (!(requestContext.viewMode === 'selected' && requestContext.selectedDates.length > 0)) {
-          // console.log('[fetchRankings] calling deduplicateStocksByLatestDate')
-          rankings.value = deduplicateStocksByLatestDate(rankings.value)
-          // console.log('[fetchRankings] dedupe done, count now:', (rankings.value || []).length)
-        }
-      } catch (e) {
-        console.error('[fetchRankings] error during deduplication:', e)
-      }
-    // 排序处理
-  // 如果是多日期并且后端返回每个股票包含 per_date_scores 对象，按当前全局 rankingStrategy 对应某个日期合并排序（默认用首个日期）
-    if (requestContext.viewMode === 'selected' && requestContext.selectedDates.length > 0) {
-      const primaryDate = requestContext.selectedDates[0]
-      rankings.value.sort((a, b) => {
-        return getSortScoreForRow(b, primaryDate) - getSortScoreForRow(a, primaryDate)
-      })
-  } else {
-    rankings.value.sort((a, b) => getSortScoreForRow(b) - getSortScoreForRow(a))
-  }
-    // 更新时间
-    if (rankings.value.length > 0) {
-      const scoreDate = rankings.value[0].score_date
-      if (scoreDate) {
-        const year = scoreDate.substring(0, 4)
-        const month = scoreDate.substring(4, 6)
-        const day = scoreDate.substring(6, 8)
-        lastUpdateTime.value = `${year}-${month}-${day}`
-      } else {
-        lastUpdateTime.value = new Date().toLocaleDateString()
-      }
-    }
-
-    const writeKey = buildStockRankingCacheKey({
-      viewMode: requestContext.viewMode,
-      displayLimit: requestContext.displayLimit,
-      rankingStrategy: requestContext.rankingStrategy,
-      sortBy: requestContext.sortBy,
-      rankingWeights: requestContext.rankingWeights,
-      dateParam,
-      selectedDates: requestContext.selectedDates,
-      selectedStocks: requestContext.selectedStocks,
-      watchlistSymbols: requestContext.watchlistSymbols,
-      indexSymbols: symbolsForIndexMode(requestContext.viewMode),
-      pageOffset: requestContext.usePagedRankingsFetch ? requestContext.pageOffset : 0,
-      pageSize: requestContext.usePagedRankingsFetch ? STOCK_RANKINGS_PAGE_SIZE : null,
-    })
-    if (writeKey && rankings.value.length > 0) {
-      writeStockRankingCache(writeKey, {
-        rankings: rankings.value,
-        lastUpdateTime: lastUpdateTime.value,
-        primaryScoreDate: rankings.value[0]?.score_date,
-      })
-    }
-  } catch (error) {
-    // Ignore abort errors triggered by new requests
-    if (error.name === 'CanceledError' || error.name === 'AbortError') {
-      dlog('request canceled')
-      return
-    }
-    console.error('获取股票排行失败:', error)
-    console.error('错误详情:', error.response?.data)
-    if (error.response?.status === 404) {
-      rankings.value = []
-    } else {
-      alert('获取股票评分失败: ' + (error.response?.data?.detail || error.message))
-    }
-  } finally {
-    // 仅当本 invocation 仍是「当前」请求时收尾，避免被 abort 的旧任务清空新任务的 controller
-    if (requestStillCurrent()) {
-      currentRequestController.value = null
-      loading.value = false
-    }
-  }
-}
 // 日期选择变化时自动刷新
 function onDateChange() {
   fetchRankings()
@@ -1687,25 +1208,6 @@ async function fetchIndexConstituents(indexKey) {
     st.loading.value = false
   }
 }
-
-// 生成显示行：如果在指定模式并选择了多个日期，则为每个 symbol/date 生成单独行
-const displayRows = computed(() => {
-  // small reactive token to force re-evaluation when UI-level strategy changes
-  const _rk = refreshKey.value
-  if (rankings.value.length > 0 && rankingDataViewMode.value !== viewMode.value) {
-    return []
-  }
-  return computeDisplayRows({
-    rankings: rankings.value,
-    viewMode: viewMode.value,
-    selectedDates: selectedDates.value,
-    rankingStrategy: rankingStrategy.value,
-    sortBy: sortBy.value,
-    rankingWeights: rankingWeights.value,
-    perStockStrategies: perStockStrategies.value,
-    getCompositeScore
-  })
-})
 
 </script>
 
