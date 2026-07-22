@@ -8,6 +8,7 @@ import {
   jobProgressStageLabel,
   jobWeightLabel,
   pct,
+  pctTrailingStop,
   signClass,
   universeName,
 } from '../portfolioResearchView.js'
@@ -96,6 +97,12 @@ describe('pct / signClass', () => {
     expect(signClass(1)).toBe('pos')
     expect(signClass(-0.5)).toBe('neg')
     expect(signClass(0)).toBe('mut')
+  })
+
+  it('formats trailing stop ratios from decimals or legacy percent points', () => {
+    expect(pctTrailingStop(0.15)).toBe('15.00%')
+    expect(pctTrailingStop(15)).toBe('15.00%')
+    expect(pctTrailingStop(0)).toBe('关闭')
   })
 })
 

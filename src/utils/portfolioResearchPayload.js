@@ -35,6 +35,16 @@ function asOptionalNumber(value) {
   return Number.isFinite(num) ? num : undefined
 }
 
+function normalizeTrailingStopList(values) {
+  if (!Array.isArray(values)) return values
+  return values.map((value) => {
+    if (value == null || value === '' || Number(value) === 0) return 0
+    const number = Number(value)
+    if (!Number.isFinite(number) || number <= 0) return value
+    return number > 1 ? number / 100 : number
+  })
+}
+
 function omitEmpty(payload) {
   const next = { ...payload }
   for (const key of Object.keys(next)) {
@@ -60,7 +70,7 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
     growth_cycle_weights: parseCsvNumbers(form.growth_cycle_weights, String),
     top_n_values: parseCsvNumbers(form.top_n_values, Number).map((n) => Math.trunc(n)),
     active_caps: parseCsvNumbers(form.active_caps, Number),
-    trailing_stop_pcts: parseCsvNumbers(form.trailing_stop_pcts, Number),
+    trailing_stop_pcts: normalizeTrailingStopList(parseCsvNumbers(form.trailing_stop_pcts, Number)),
     force: true,
   }
 
@@ -71,8 +81,9 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
 
   for (const key of OPTIONAL_NUMBER_KEYS) {
     if (key === 'horizon') continue
-    const num = asOptionalNumber(form[key])
+    let num = asOptionalNumber(form[key])
     if (num == null) continue
+    if (key === 'trailing_stop_pct' && num > 1) num = num / 100
     if (key === 'initial_capital' && !(num > 0)) continue
     if (key === 'cash_buffer' && (num < 0 || num > 1)) continue
     payload[key] = num

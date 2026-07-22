@@ -177,7 +177,7 @@
                 <span><strong>benchmark</strong>{{ candidateConfig.index_benchmark_symbol || '-' }}</span>
                 <span><strong>initial capital</strong>{{ money(candidateConfig.initial_capital) }}</span>
                 <span><strong>cash buffer</strong>{{ pct(candidateConfig.cash_buffer) }}</span>
-                <span><strong>trailing stop</strong>{{ pct(candidateConfig.trailing_stop_pct) }}</span>
+                <span><strong>trailing stop</strong>{{ pctTrailingStop(candidateConfig.trailing_stop_pct) }}</span>
                 <span><strong>execution price</strong>{{ candidateConfig.execution_price || '-' }}</span>
               </div>
             </section>
@@ -242,6 +242,7 @@ import {
   money,
   num,
   pct,
+  pctTrailingStop,
 } from '../utils/portfolioResearchView'
 import ResearchJobList from '../components/portfolio/ResearchJobList.vue'
 import SweepResultPanel from '../components/portfolio/SweepResultPanel.vue'

@@ -1,5 +1,6 @@
 const AXIS_REGISTRY = [
   { key: 'trailing_stop_pct', label: '浮动止盈', rowKey: 'trailing_stop_pct', paramKeys: ['trailing_stop_pcts', 'trailing_stop_pct'] },
+  { key: 'path_gate', label: '路径闸门', rowKey: 'path_gate', paramKeys: ['path_gates'] },
   { key: 'score_variant', label: 'Score', rowKey: 'score_variant', paramKeys: ['growth_cycle_weights'] },
   { key: 'top_n', label: 'Top N', rowKey: 'top_n', paramKeys: ['top_n_values'] },
   { key: 'max_industry_weight', label: '行业上限', rowKey: 'max_industry_weight', paramKeys: ['active_caps'] },
@@ -7,11 +8,17 @@ const AXIS_REGISTRY = [
   { key: 'volatility_variant', label: '波动率', rowKey: 'volatility_variant', paramKeys: ['volatility_modes', 'target_vols'] },
 ]
 
+export function normalizeTrailingStopRatio(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number) || number <= 0) return null
+  const ratio = number > 1 ? number / 100 : number
+  if (ratio <= 0 || ratio > 1) return null
+  return ratio
+}
+
 export function normalizeAxisValue(key, value) {
   if (key === 'trailing_stop_pct') {
-    const number = Number(value)
-    if (!Number.isFinite(number) || number <= 0) return null
-    return number
+    return normalizeTrailingStopRatio(value)
   }
   if (key === 'top_n' || key === 'rebalance_interval_days') {
     const number = Number(value)
@@ -226,7 +233,7 @@ export function buildCandidateConfigFromRow(row, job = {}, params = {}) {
     execution_price: params.execution_price || 'next_open',
     cash_buffer: Number(params.cash_buffer ?? 0.03),
     initial_capital: Number(params.initial_capital ?? 1_000_000),
-    trailing_stop_pct: row?.trailing_stop_pct ?? params.trailing_stop_pct ?? null,
+    trailing_stop_pct: normalizeTrailingStopRatio(row?.trailing_stop_pct ?? params.trailing_stop_pct ?? null),
     candidate_pool_enabled: params.candidate_pool_enabled !== false,
     status: 'draft',
     version: 1,

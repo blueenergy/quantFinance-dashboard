@@ -74,6 +74,14 @@ describe('buildPortfolioResearchPayload', () => {
     expect(payload.cash_buffer).toBe(0.03)
     expect(payload.index_benchmark_symbol).toBe('000852.SH')
   })
+
+  it('normalizes percent-point trailing stop inputs on submit', () => {
+    const payload = buildPortfolioResearchPayload({
+      ...baseForm,
+      trailing_stop_pcts: '0,10,15,20',
+    })
+    expect(payload.trailing_stop_pcts).toEqual([0, 0.1, 0.15, 0.2])
+  })
 })
 
 describe('formatResearchApiError', () => {

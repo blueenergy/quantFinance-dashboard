@@ -4,6 +4,7 @@ import {
   buildSweepResultView,
   experimentSummary,
   filterRowsByFacet,
+  formatAxisValue,
   inferSweepAxes,
   paginateRows,
   parseTrailingStopFromComboKey,
@@ -57,6 +58,17 @@ describe('sweepResultView', () => {
     const candidate = buildCandidateConfigFromRow(sampleRows[2], { job_id: 'job-1' }, { universe_index: 'csi1000' })
     expect(candidate.trailing_stop_pct).toBe(0.15)
     expect(candidate.top_n).toBe(10)
+  })
+
+  it('normalizes legacy percent-point trailing stop values for display', () => {
+    expect(formatAxisValue('trailing_stop_pct', 10)).toBe('10%')
+    expect(formatAxisValue('trailing_stop_pct', 0.1)).toBe('10%')
+  })
+
+  it('normalizes legacy percent-point trailing stop in candidate config', () => {
+    const row = { ...sampleRows[2], trailing_stop_pct: 15 }
+    const candidate = buildCandidateConfigFromRow(row, { job_id: 'job-1' }, { universe_index: 'csi1000' })
+    expect(candidate.trailing_stop_pct).toBe(0.15)
   })
 
   it('parses trailing stop from combo key suffix', () => {

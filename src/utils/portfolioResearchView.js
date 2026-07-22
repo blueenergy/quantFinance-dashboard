@@ -112,6 +112,16 @@ export function pct(value) {
   return `${(number * 100).toFixed(2)}%`
 }
 
+/** Trailing-stop ratio: decimal (0.15) or legacy percent points (15). */
+export function pctTrailingStop(value) {
+  if (value == null || value === '' || value === 0 || value === 0.0) return '关闭'
+  const number = Number(value)
+  if (!Number.isFinite(number) || number <= 0) return '关闭'
+  const ratio = number > 1 ? number / 100 : number
+  if (ratio <= 0 || ratio > 1) return '-'
+  return `${(ratio * 100).toFixed(2)}%`
+}
+
 export function num(value, digits = 2) {
   const number = Number(value)
   if (!Number.isFinite(number)) return '-'
@@ -139,10 +149,10 @@ export function formatBool(value) {
 
 export function formatTrailingStopParamValue(params) {
   if (Array.isArray(params?.trailing_stop_pcts) && params.trailing_stop_pcts.length) {
-    return params.trailing_stop_pcts.map((value) => (value === 0 || value === 0.0 ? '关闭' : pct(value))).join(', ')
+    return params.trailing_stop_pcts.map((value) => pctTrailingStop(value)).join(', ')
   }
   if (params?.trailing_stop_pct == null) return '-'
-  return params.trailing_stop_pct === 0 ? '关闭' : pct(params.trailing_stop_pct)
+  return pctTrailingStop(params.trailing_stop_pct)
 }
 
 export function signClass(value) {
