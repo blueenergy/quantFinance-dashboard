@@ -8,6 +8,7 @@
           <th class="col-text">Variant</th>
           <th>TopN</th>
           <th>收益</th>
+          <th>年化</th>
           <th>超额</th>
           <th>Sharpe</th>
           <th>回撤</th>
@@ -31,6 +32,7 @@
           <td class="col-text">{{ row.variant || '-' }}</td>
           <td>{{ row.top_n }}</td>
           <td :class="signClass(row.cumulative_return)">{{ pct(row.cumulative_return) }}</td>
+          <td :class="signClass(row.annualized_return)">{{ pct(row.annualized_return) }}</td>
           <td :class="signClass(row.index_excess_cumulative_return)">{{ pct(row.index_excess_cumulative_return) }}</td>
           <td>{{ num(row.sharpe) }}</td>
           <td class="neg">{{ pct(row.max_drawdown) }}</td>

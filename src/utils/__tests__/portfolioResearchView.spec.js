@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildComboSummaryCards,
   buildEquityChart,
   buildResearchParamRows,
+  buildYearlyReturnRows,
   filterAndSortTrades,
   formatDurationMs,
   jobElapsedLabel,
@@ -121,6 +123,34 @@ describe('filterAndSortTrades', () => {
     })).toEqual([
       trades[2],
       trades[0],
+    ])
+  })
+})
+
+describe('buildComboSummaryCards', () => {
+  it('includes annualized return when present', () => {
+    const cards = buildComboSummaryCards({
+      cumulative_return: 0.5,
+      annualized_return: 0.2,
+      sharpe: 1.1,
+      max_drawdown: -0.1,
+      index_excess_cumulative_return: 0.08,
+      average_turnover: 0.3,
+      periods: 24,
+    })
+    expect(cards.map((card) => card.k)).toContain('年化收益')
+    expect(cards.find((card) => card.k === '年化收益')?.v).toBe('20.00%')
+  })
+})
+
+describe('buildYearlyReturnRows', () => {
+  it('sorts yearly returns and pairs index excess', () => {
+    expect(buildYearlyReturnRows({
+      yearly_returns: { 2024: 0.1, 2022: -0.05 },
+      yearly_index_excess: { 2022: 0.01, 2024: 0.02 },
+    })).toEqual([
+      { year: '2022', portfolioReturn: -0.05, indexExcess: 0.01 },
+      { year: '2024', portfolioReturn: 0.1, indexExcess: 0.02 },
     ])
   })
 })

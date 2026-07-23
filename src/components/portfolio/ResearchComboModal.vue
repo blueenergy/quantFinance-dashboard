@@ -28,6 +28,28 @@
           </div>
         </div>
 
+        <template v-if="yearlyReturnRows.length">
+          <h4 class="combo-h">分年收益</h4>
+          <div class="combo-yearly-wrap">
+            <table class="combo-yearly-table">
+              <thead>
+                <tr>
+                  <th>年份</th>
+                  <th>组合收益</th>
+                  <th>指数超额</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in yearlyReturnRows" :key="row.year">
+                  <td>{{ row.year }}</td>
+                  <td :class="signClass(row.portfolioReturn)">{{ pct(row.portfolioReturn) }}</td>
+                  <td :class="signClass(row.indexExcess)">{{ pct(row.indexExcess) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+
         <h4 class="combo-h">净值曲线（扣费净收益，复利）</h4>
         <div class="combo-chart-panel">
           <svg
@@ -166,6 +188,7 @@ import { computed, ref, watch } from 'vue'
 import {
   buildComboSummaryCards,
   buildEquityChart,
+  buildYearlyReturnRows,
   filterAndSortTrades,
   money,
   num,
@@ -231,6 +254,7 @@ const comboTrailingStopLabel = computed(() =>
   formatAxisValue('trailing_stop_pct', comboTrailingStopPct.value))
 const comboTrailingStopEnabled = computed(() => comboTrailingStopPct.value != null)
 const comboSummaryCards = computed(() => buildComboSummaryCards(props.detail?.summary))
+const yearlyReturnRows = computed(() => buildYearlyReturnRows(props.detail?.summary))
 const tradeDates = computed(() =>
   Array.from(new Set(comboTrades.value.map((trade) => String(trade.score_date)))).sort())
 const filteredTrades = computed(() => filterAndSortTrades(comboTrades.value, {
@@ -333,6 +357,36 @@ function sortTrades(key) {
   display: block;
   font-size: 20px;
   margin-top: 3px;
+}
+
+.combo-yearly-wrap {
+  border: 1px solid #e6eaf0;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.combo-yearly-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.combo-yearly-table th,
+.combo-yearly-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #edf0f5;
+  text-align: right;
+}
+
+.combo-yearly-table th:first-child,
+.combo-yearly-table td:first-child {
+  text-align: left;
+}
+
+.combo-yearly-table th {
+  background: #f8fafc;
+  color: #475569;
 }
 
 .combo-h {

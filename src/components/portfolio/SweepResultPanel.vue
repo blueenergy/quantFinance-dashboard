@@ -85,6 +85,7 @@
             <div class="facet-card-metrics">
               <span><em>TopN</em>{{ entry.row?.top_n ?? '-' }}</span>
               <span><em>收益</em>{{ pct(entry.row?.cumulative_return) }}</span>
+              <span><em>年化</em>{{ pct(entry.row?.annualized_return) }}</span>
               <span><em>超额</em>{{ pct(entry.row?.index_excess_cumulative_return) }}</span>
               <span><em>综合分</em>{{ num(entry.row?.risk_adjusted_score, 3) }}</span>
             </div>

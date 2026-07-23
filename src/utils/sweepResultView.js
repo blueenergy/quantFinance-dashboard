@@ -151,6 +151,7 @@ export function buildSweepResultView(resultDetail, jobParams = {}) {
     fixed_params: stored?.fixed_params || params,
     metric_keys: stored?.metric_keys || [
       'cumulative_return',
+      'annualized_return',
       'index_excess_cumulative_return',
       'sharpe',
       'max_drawdown',

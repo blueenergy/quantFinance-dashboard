@@ -165,6 +165,7 @@ export function buildComboSummaryCards(summary = {}) {
   const values = summary || {}
   return [
     { k: '累计收益(净)', v: pct(values.cumulative_return), cls: signClass(values.cumulative_return) },
+    { k: '年化收益', v: pct(values.annualized_return), cls: signClass(values.annualized_return) },
     { k: 'Sharpe', v: num(values.sharpe), cls: '' },
     { k: '最大回撤', v: pct(values.max_drawdown), cls: 'neg' },
     {
@@ -175,6 +176,18 @@ export function buildComboSummaryCards(summary = {}) {
     { k: '平均换手', v: pct(values.average_turnover), cls: '' },
     { k: '调仓期数', v: num(values.periods, 0), cls: '' },
   ]
+}
+
+export function buildYearlyReturnRows(summary = {}) {
+  const yearlyReturns = summary?.yearly_returns || {}
+  const yearlyExcess = summary?.yearly_index_excess || {}
+  return Object.keys(yearlyReturns)
+    .sort()
+    .map((year) => ({
+      year,
+      portfolioReturn: yearlyReturns[year],
+      indexExcess: yearlyExcess[year],
+    }))
 }
 
 export function filterAndSortTrades(
