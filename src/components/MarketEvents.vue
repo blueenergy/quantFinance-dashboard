@@ -31,9 +31,9 @@
 
     <div class="card-content">
       <div class="brief-rule-hint">
-        AI 简评范围：仅<strong>高重要日历事件（★4）</strong>；
-        时间窗为未来 14 天；跳过已有简评；单次最多 20 条。
-        针对事件本身（标题/指标/预期前值等），不针对相关新闻。
+        AI 简评范围：仅<strong>高重要日历事件（★4）</strong>。
+        事前：未来 14 天且尚无简评；事后：近 3 天已发生事件写入独立「事后简评」，不覆盖事前内容。
+        单次最多约 20 条；针对事件字段与事后新闻，不编造结果。
       </div>
 
       <div class="range-bar">
@@ -96,13 +96,13 @@
                   <span class="tz-tag">北京时间</span>
                 </span>
                 <v-chip
-                  v-if="ev.region"
+                  v-if="regionLabel(ev.region)"
                   size="x-small"
                   variant="tonal"
                   color="primary"
                   class="meta-chip"
                 >
-                  {{ ev.region }}
+                  {{ regionLabel(ev.region) }}
                 </v-chip>
                 <v-chip
                   size="x-small"
@@ -120,11 +120,30 @@
                 >
                   {{ categoryLabel(ev.category) }}
                 </v-chip>
+                <v-chip
+                  v-if="ev.status"
+                  size="x-small"
+                  variant="tonal"
+                  :color="ev.status === 'happened' ? 'success' : 'grey'"
+                  class="meta-chip"
+                >
+                  {{ statusLabel(ev.status) }}
+                </v-chip>
                 <span v-if="ev.symbol" class="symbol">{{ ev.symbol }}</span>
               </div>
             </div>
 
-            <div class="event-title">{{ ev.title }}</div>
+            <div class="event-title">
+              <a
+                v-if="eventArticleHref(ev)"
+                class="event-title-link"
+                :href="eventArticleHref(ev)"
+                target="_blank"
+                rel="noopener noreferrer"
+                :title="eventLinkTitle(ev)"
+              >{{ displayTitle(ev) }}</a>
+              <template v-else>{{ displayTitle(ev) }}</template>
+            </div>
 
             <div v-if="detailLine(ev)" class="detail-line">{{ detailLine(ev) }}</div>
 
@@ -133,17 +152,20 @@
             </div>
 
             <div v-if="sourceLine(ev)" class="source-line">
-              <template v-if="primaryUrl(ev)">
-                来源：
-                <a :href="primaryUrl(ev)" target="_blank" rel="noopener noreferrer">
-                  {{ sourceLine(ev) }}
-                </a>
+              来源：{{ sourceLine(ev) }}
+              <template v-if="eventArticleHref(ev)">
+                ·
+                <a
+                  :href="eventArticleHref(ev)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  :title="eventLinkTitle(ev)"
+                >{{ usesSearchFallback(primaryUrl(ev)) ? '标题搜索' : '查看原文' }}</a>
               </template>
-              <template v-else>来源：{{ sourceLine(ev) }}</template>
             </div>
 
             <div v-if="ev.llm_brief?.summary" class="brief-box">
-              <span class="brief-label">AI 简评</span>
+              <span class="brief-label">事前 AI 简评</span>
               <p class="brief-text">{{ ev.llm_brief.summary }}</p>
               <ul v-if="ev.llm_brief.watchpoints?.length" class="watchpoints">
                 <li v-for="(wp, idx) in ev.llm_brief.watchpoints" :key="idx">{{ wp }}</li>
@@ -157,26 +179,76 @@
               </div>
             </div>
 
+            <div v-if="ev.llm_brief_post?.summary" class="brief-box brief-box-post">
+              <span class="brief-label">事后 AI 简评</span>
+              <p class="brief-text">{{ ev.llm_brief_post.summary }}</p>
+              <ul v-if="ev.llm_brief_post.watchpoints?.length" class="watchpoints">
+                <li v-for="(wp, idx) in ev.llm_brief_post.watchpoints" :key="'p'+idx">{{ wp }}</li>
+              </ul>
+              <div v-if="ev.llm_brief_post.sectors?.length" class="brief-sectors">
+                <span
+                  v-for="sec in ev.llm_brief_post.sectors"
+                  :key="'ps'+sec"
+                  class="sector-chip"
+                >{{ sec }}</span>
+              </div>
+            </div>
+
             <div v-if="ev.related_news?.length" class="related-box">
-              <span class="related-label">相关新闻</span>
+              <span class="related-label">相关新闻（事前）</span>
               <div
                 v-for="(news, idx) in ev.related_news"
-                :key="idx"
+                :key="'r'+idx"
                 class="related-item"
               >
                 <a
-                  v-if="news.url"
+                  v-if="articleHref(news)"
                   class="related-title"
-                  :href="news.url"
+                  :href="articleHref(news)"
                   target="_blank"
                   rel="noopener noreferrer"
+                  :title="articleLinkTitle(news)"
                 >{{ news.title }}</a>
                 <div v-else class="related-title">{{ news.title }}</div>
                 <div v-if="news.summary" class="related-summary">{{ news.summary }}</div>
                 <div class="related-meta">
                   <span v-if="news.source">{{ news.source }}</span>
                   <span v-if="news.published">{{ news.published }}</span>
+                  <span v-if="usesSearchFallback(news.url)" class="link-hint">标题搜索</span>
                 </div>
+              </div>
+            </div>
+
+            <div
+              v-if="ev.outcome_news?.length || ev.status === 'happened'"
+              class="related-box outcome-box"
+            >
+              <span class="related-label">事后动态</span>
+              <template v-if="ev.outcome_news?.length">
+                <div
+                  v-for="(news, idx) in ev.outcome_news"
+                  :key="'o'+idx"
+                  class="related-item"
+                >
+                  <a
+                    v-if="articleHref(news)"
+                    class="related-title"
+                    :href="articleHref(news)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    :title="articleLinkTitle(news)"
+                  >{{ news.title }}</a>
+                  <div v-else class="related-title">{{ news.title }}</div>
+                  <div v-if="news.summary" class="related-summary">{{ news.summary }}</div>
+                  <div class="related-meta">
+                    <span v-if="news.source">{{ news.source }}</span>
+                    <span v-if="news.published">{{ news.published }}</span>
+                    <span v-if="usesSearchFallback(news.url)" class="link-hint">标题搜索</span>
+                  </div>
+                </div>
+              </template>
+              <div v-else class="related-summary">
+                事件已过，暂未匹配到事后报道；上方「相关新闻（事前）」仅为会前信息，请勿当作结果。
               </div>
             </div>
           </div>
@@ -355,11 +427,93 @@ function sourceLine(ev) {
   return [...new Set(names)].join(' / ')
 }
 
+const REGION_ZH = {
+  CN: '中国',
+  US: '美国',
+  EU: '欧元区',
+  JP: '日本',
+  UK: '英国',
+  KR: '韩国',
+  AU: '澳大利亚',
+  GLOBAL: '全球',
+}
+
+function regionLabel(region) {
+  const r = String(region || '').trim()
+  if (!r) return ''
+  const upper = r.toUpperCase()
+  if (REGION_ZH[upper]) return REGION_ZH[upper]
+  // Already Chinese / other free-text from source.
+  return r
+}
+
+/** Prefixed display title so global calendars show country at a glance. */
+function displayTitle(ev) {
+  const title = String(ev?.title || '').trim()
+  const label = regionLabel(ev?.region)
+  if (!title) return ''
+  if (!label || label === '全球') return title
+  if (title.includes(label) || title.startsWith(`【${label}】`) || title.startsWith(`[${label}]`)) {
+    return title
+  }
+  return `【${label}】${title}`
+}
+
 function primaryUrl(ev) {
   for (const s of ev.sources || []) {
     if (s?.url) return s.url
   }
   return ev.url || ''
+}
+
+/** Wall Street CN calendar deep-links often 404 (API still returns them). */
+function isUnreliableCalendarUrl(url) {
+  try {
+    const u = new URL(String(url || ''))
+    return (
+      /(^|\.)wallstreetcn\.com$/i.test(u.hostname)
+      && /\/calendar\/[^/]+\/overview\/?$/i.test(u.pathname)
+    )
+  } catch {
+    return false
+  }
+}
+
+function titleSearchUrl(title) {
+  const q = String(title || '').trim()
+  if (!q) return ''
+  return `https://www.baidu.com/s?wd=${encodeURIComponent(q)}`
+}
+
+function usesSearchFallback(url) {
+  const u = String(url || '').trim()
+  return !u || isUnreliableCalendarUrl(u)
+}
+
+function resolveExternalUrl(url, title) {
+  const u = String(url || '').trim()
+  if (u && !isUnreliableCalendarUrl(u)) return u
+  return titleSearchUrl(title)
+}
+
+function articleHref(news) {
+  return resolveExternalUrl(news?.url, news?.title)
+}
+
+function articleLinkTitle(news) {
+  return usesSearchFallback(news?.url)
+    ? '源站无可用原文链接，将用标题搜索'
+    : '打开原文'
+}
+
+function eventArticleHref(ev) {
+  return resolveExternalUrl(primaryUrl(ev), displayTitle(ev) || ev?.title)
+}
+
+function eventLinkTitle(ev) {
+  return usesSearchFallback(primaryUrl(ev))
+    ? '源站日历详情页常失效，将用标题搜索'
+    : '打开来源页'
 }
 
 function importanceColor(imp) {
@@ -386,6 +540,15 @@ function categoryLabel(cat) {
     other: '其他',
   }
   return map[cat] || cat
+}
+
+function statusLabel(status) {
+  const map = {
+    scheduled: '未开始',
+    happened: '已发生',
+    cancelled: '已取消',
+  }
+  return map[status] || status
 }
 
 async function loadEvents() {
@@ -669,6 +832,20 @@ onMounted(() => {
   line-height: 1.45;
 }
 
+.event-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.event-title-link:hover {
+  color: #2b6cb0;
+  text-decoration: underline;
+}
+
+.link-hint {
+  color: #dd6b20;
+}
+
 .detail-line,
 .metrics-line,
 .source-line {
@@ -699,9 +876,19 @@ onMounted(() => {
   color: #2a4365;
 }
 
+.brief-box-post {
+  background: #f0fff4;
+  border: 1px solid #9ae6b4;
+}
+
 .related-box {
   background: #f7fafc;
   border: 1px solid #e2e8f0;
+}
+
+.outcome-box {
+  background: #fffaf0;
+  border: 1px solid #fbd38d;
 }
 
 .brief-label,
