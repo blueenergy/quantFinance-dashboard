@@ -363,7 +363,13 @@ function selectRange(id) {
 
 function toShanghaiParts(iso) {
   if (!iso) return null
-  const d = new Date(iso)
+  // Mongo/API may emit naive UTC ("2026-07-23T16:30:00"). Browsers in CST
+  // would treat that as local Beijing time and shift display by +8h wrongly.
+  const raw = String(iso).trim()
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw)
+    ? raw
+    : `${raw}Z`
+  const d = new Date(normalized)
   if (Number.isNaN(d.getTime())) return null
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: SH_TZ,
@@ -375,9 +381,11 @@ function toShanghaiParts(iso) {
     hour12: false,
   })
   const parts = Object.fromEntries(fmt.formatToParts(d).map((p) => [p.type, p.value]))
+  // Some engines emit hour "24" for 00:xx under hour12:false.
+  const hour = parts.hour === '24' ? '00' : parts.hour
   return {
     date: `${parts.year}-${parts.month}-${parts.day}`,
-    time: `${parts.hour}:${parts.minute}`,
+    time: `${hour}:${parts.minute}`,
   }
 }
 
