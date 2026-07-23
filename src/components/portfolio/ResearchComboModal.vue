@@ -117,15 +117,19 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(trade, index) in filteredTrades" :key="`${trade.symbol}-${trade.score_date}-${index}`">
+              <tr v-for="(trade, index) in filteredTrades" :key="`${trade.symbol}-${trade.score_date}-${index}`" :class="{ 'open-trade-row': trade.is_unrealized }">
+                <td>
+                  <span v-if="trade.is_unrealized" class="tag-open">未平仓</span>
+                  <span v-else class="muted">已平仓</span>
+                </td>
                 <td>{{ trade.score_date }}</td>
                 <td>{{ trade.symbol }}</td>
                 <td>{{ trade.name || '' }}</td>
                 <td>{{ num(trade.score_value, 1) }}</td>
                 <td>{{ trade.buy_date || '' }}</td>
                 <td>{{ num(trade.buy_price) }}</td>
-                <td>{{ trade.sell_date || '' }}</td>
-                <td>{{ num(trade.sell_price) }}</td>
+                <td>{{ trade.is_unrealized ? '持有中' : (trade.sell_date || '') }}</td>
+                <td>{{ trade.is_unrealized ? num(trade.mark_price) : num(trade.sell_price) }}</td>
                 <td>{{ money(trade.quantity) }}</td>
                 <td>{{ money(trade.buy_amount) }}</td>
                 <td :class="signClass(trade.holding_return)">{{ pct(trade.holding_return) }}</td>
@@ -150,9 +154,7 @@
           等权建仓、整手取整、含费用模型；无期内再平衡、无额外滑点。
         </p>
         <p class="muted combo-note">
-          末端截断：某期需「持有期满日」的卖出价才能结算，最后一笔卖出之后若再开仓的持有期已超出回测数据窗口（如
-          end_date
-          之后），该期无法计算收益、不展示——属正常现象，不是漏单。该「未结算的最新持仓」对应实盘推荐，不在历史成交回测内。
+          末端未平仓：持有期未满、无法取得正式卖出价的调仓期，会以数据窗口内最后可用开盘价（next_open 口径）mark-to-market 显示为「未平仓」，浮盈浮亏为估算值（已预扣一次卖出费，含印花税）。该持仓对应实盘推荐，不计入上方净值曲线与累计收益。
         </p>
       </template>
     </div>
@@ -188,6 +190,7 @@ const tradeSortKey = ref('score_date')
 const tradeSortDir = ref(1)
 
 const tradeCols = [
+  { k: 'status', t: '状态' },
   { k: 'score_date', t: '调仓日' },
   { k: 'symbol', t: '代码' },
   { k: 'name', t: '名称' },
@@ -410,10 +413,10 @@ td {
   white-space: nowrap;
 }
 
-th:nth-child(2),
-td:nth-child(2),
 th:nth-child(3),
-td:nth-child(3) {
+td:nth-child(3),
+th:nth-child(4),
+td:nth-child(4) {
   text-align: left;
 }
 
@@ -433,6 +436,20 @@ th {
 .combo-note {
   margin-top: 12px;
   font-size: 12px;
+}
+
+.tag-open {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.open-trade-row td {
+  background: #fffbf5;
 }
 
 .link-btn {
