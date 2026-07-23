@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import request from '../utils/request'
 
-const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v5'
+const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v6'
 const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v2'
 const ACTIVE_TAB_KEY = 'activeTab_v2'
 const ACTIVE_TAB_USER_KEY = 'activeTab_username_v2'
@@ -11,6 +11,7 @@ const LEGACY_NAV_CACHE_KEYS = [
   'nav_visible_tab_ids_v2',
   'nav_visible_tab_ids_v3',
   'nav_visible_tab_ids_v4',
+  'nav_visible_tab_ids_v5',
 ]
 
 const LEGACY_NAV_CACHE_USER_KEYS = [
@@ -93,6 +94,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
 
   const adminTabs = computed(() => {
     const baseTabs = [
+      { id: 'market-events', name: '📅 交易日历' },
       { id: 'global-market-brief', name: '🌍 全球市场简报' },
       { id: 'data-pulse', name: '🛰️ 数据脉搏' },
       { id: 'market-analysis', name: '🤖 AI大盘分析' },

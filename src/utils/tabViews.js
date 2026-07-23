@@ -6,6 +6,7 @@ const StockChart = defineAsyncComponent(() => import('../components/StockChart.v
 const AIAnalysisHistory = defineAsyncComponent(() => import('../components/AIAnalysisHistory.vue'))
 const AnalysisTaskQueue = defineAsyncComponent(() => import('../components/AnalysisTaskQueue.vue'))
 const DataPulse = defineAsyncComponent(() => import('../components/DataPulse.vue'))
+const MarketEvents = defineAsyncComponent(() => import('../components/MarketEvents.vue'))
 const MarketAnalysisBulletin = defineAsyncComponent(() => import('../components/MarketAnalysisBulletin.vue'))
 const GlobalMarketBrief = defineAsyncComponent(() => import('../components/GlobalMarketBrief.vue'))
 const AdminDashboard = defineAsyncComponent(() => import('../components/AdminDashboard.vue'))
@@ -211,6 +212,12 @@ export const tabViewDefinitions = [
     component: StrategyStockPool,
     fallbackClass: 'skeleton-table',
     fallbackText: '策略股池加载中...',
+  },
+  {
+    id: 'market-events',
+    component: MarketEvents,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '交易日历加载中...',
   },
   {
     id: 'global-market-brief',

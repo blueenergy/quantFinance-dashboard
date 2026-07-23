@@ -15,6 +15,7 @@ export const SMOKE_USER = {
 }
 
 export const SMOKE_VISIBLE_TABS = [
+  'market-events',
   'watchlist',
   'ranking',
   'stock-workbench',
