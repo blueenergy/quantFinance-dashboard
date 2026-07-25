@@ -92,11 +92,20 @@ function formatCsvReturnSincePct(v) {
   return `${sign}${n.toFixed(2)}%`
 }
 
-export function generateCSV(data, selectedDates, getEffectiveStrategyFor, getCompositeScoreFn) {
+export function generateCSV(data, selectedDates, getEffectiveStrategyFor, getCompositeScoreFn, returnAsOf = '') {
   // data: array of stock records
   // selectedDates: array of yyyyMMdd strings
   // getEffectiveStrategyFor: function(symbol) -> strategyKey
   // getCompositeScoreFn: function(stock, strategyKey) -> number
+  // returnAsOf: optional ISO/YYYYMMDD end date for「至选中日涨跌」column label
+
+  const asOfLabel = (() => {
+    const raw = String(returnAsOf || '').trim()
+    if (raw) return formatDateDisplay(raw)
+    const fromRow = data?.find((s) => s?.price_latest_trade_date)?.price_latest_trade_date
+    return fromRow ? formatDateDisplay(fromRow) : '最新'
+  })()
+  const returnSinceHeader = `至选中日涨跌(${asOfLabel})`
 
   let headers = ['排名', '股票代码', '股票名称']
   const includePerDate = Array.isArray(selectedDates) && selectedDates.length > 0
@@ -105,12 +114,12 @@ export function generateCSV(data, selectedDates, getEffectiveStrategyFor, getCom
       headers.push(`总分(${formatDateDisplay(d)})`)
       headers.push(`评分日后10日涨跌(${formatDateDisplay(d)})`)
       headers.push(`评分日后20日涨跌(${formatDateDisplay(d)})`)
-      headers.push(`评分日以来涨跌(${formatDateDisplay(d)})`)
+      headers.push(`至选中日涨跌(${asOfLabel}|评分日${formatDateDisplay(d)})`)
     })
   } else {
     headers = headers.concat([
       '总分', '动量评分', '成长评分', '基本面评分', '价值评分', '技术面评分', '资金流评分',
-      '评分日后10日涨跌', '评分日后20日涨跌', '评分日以来涨跌',
+      '评分日后10日涨跌', '评分日后20日涨跌', returnSinceHeader,
     ])
   }
 

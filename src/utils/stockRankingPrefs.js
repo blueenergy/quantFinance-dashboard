@@ -121,6 +121,11 @@ export function loadStockRankingPrefs() {
       selectedDate = data.selectedDate
     }
 
+    let returnAsOf = ''
+    if (typeof data.returnAsOf === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.returnAsOf)) {
+      returnAsOf = data.returnAsOf
+    }
+
     /** @type {string[]} */
     const selectedDates = []
     if (Array.isArray(data.selectedDates)) {
@@ -144,7 +149,7 @@ export function loadStockRankingPrefs() {
     const perStockStrategies = sanitizePerStockStrategies(data.perStockStrategies)
     const rankingWeights = sanitizeRankingWeights(data.rankingWeights)
 
-    if (!viewMode && !displayLimit && !rankingStrategy && !sortBy && !selectedDate && selectedDates.length === 0 && selectedStocks.length === 0) {
+    if (!viewMode && !displayLimit && !rankingStrategy && !sortBy && !selectedDate && !returnAsOf && selectedDates.length === 0 && selectedStocks.length === 0) {
       return null
     }
 
@@ -154,6 +159,7 @@ export function loadStockRankingPrefs() {
       rankingStrategy: rankingStrategy || 'balanced',
       sortBy: sortBy || 'composite',
       selectedDate,
+      returnAsOf,
       selectedDates,
       selectedStocks,
       perStockStrategies,
@@ -174,6 +180,7 @@ export function saveStockRankingPrefs(prefs) {
       rankingStrategy: prefs.rankingStrategy,
       sortBy: prefs.sortBy,
       selectedDate: prefs.selectedDate ?? '',
+      returnAsOf: prefs.returnAsOf ?? '',
       selectedDates: Array.isArray(prefs.selectedDates) ? prefs.selectedDates : [],
       selectedStocks: Array.isArray(prefs.selectedStocks)
         ? prefs.selectedStocks.slice(0, STOCK_RANKING_PREFS_MAX_SYMBOLS)

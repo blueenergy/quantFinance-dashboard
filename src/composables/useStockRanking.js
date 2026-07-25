@@ -61,6 +61,7 @@ export function buildRankingRequestContext(state) {
     sortBy: state.sortBy,
     rankingWeights: { ...(state.rankingWeights || {}) },
     selectedDate: state.selectedDate,
+    returnAsOf: state.returnAsOf || '',
     selectedDates: [...(state.selectedDates || [])],
     selectedStocks: [...(state.selectedStocks || [])],
     watchlistSymbols: [...(state.watchlistSymbols || [])],
@@ -149,6 +150,7 @@ export function useStockRanking(options = {}) {
   const viewMode = ref(prefs?.viewMode ?? 'ranking')
   const selectedStocks = ref(prefs?.selectedStocks?.length ? [...prefs.selectedStocks] : [])
   const selectedDate = ref(prefs?.selectedDate ?? '')
+  const returnAsOf = ref(prefs?.returnAsOf ?? '')
   const selectedDates = ref(prefs?.selectedDates?.length ? [...prefs.selectedDates] : [])
   const rankingStrategy = ref(prefs?.rankingStrategy ?? 'balanced')
   const sortBy = ref(prefs?.sortBy ?? 'composite')
@@ -217,6 +219,7 @@ export function useStockRanking(options = {}) {
         sortBy: sortBy.value,
         rankingWeights: rankingWeights.value,
         selectedDate: selectedDate.value,
+        returnAsOf: returnAsOf.value,
         selectedDates: [...selectedDates.value],
         selectedStocks: [...selectedStocks.value],
         perStockStrategies: { ...perStockStrategies.value },
@@ -232,6 +235,7 @@ export function useStockRanking(options = {}) {
       sortBy,
       rankingWeights,
       selectedDate,
+      returnAsOf,
       selectedDates,
       selectedStocks,
       perStockStrategies,
@@ -260,6 +264,7 @@ export function useStockRanking(options = {}) {
       sortBy: sortBy.value,
       rankingWeights: rankingWeights.value,
       selectedDate: selectedDate.value,
+      returnAsOf: returnAsOf.value,
       selectedDates: selectedDates.value,
       selectedStocks: selectedStocks.value,
       watchlistSymbols: watchlist.value,
@@ -273,6 +278,7 @@ export function useStockRanking(options = {}) {
     try {
       let response
       const dateParam = dateParamFromIsoDate(requestContext.selectedDate)
+      const returnAsOfParam = dateParamFromIsoDate(requestContext.returnAsOf)
       const cacheState = {
         viewMode: requestContext.viewMode,
         displayLimit: requestContext.displayLimit,
@@ -280,6 +286,7 @@ export function useStockRanking(options = {}) {
         sortBy: requestContext.sortBy,
         rankingWeights: requestContext.rankingWeights,
         dateParam,
+        returnAsOfParam,
         selectedDates: requestContext.selectedDates,
         selectedStocks: requestContext.selectedStocks,
         watchlistSymbols: requestContext.watchlistSymbols,
@@ -318,6 +325,9 @@ export function useStockRanking(options = {}) {
       const appendWeightedQuery = (parts) => {
         if (weightsParam) parts.push(`weights=${encodeURIComponent(weightsParam)}`)
       }
+      const appendReturnAsOfQuery = (parts) => {
+        if (returnAsOfParam) parts.push(`return_as_of=${encodeURIComponent(returnAsOfParam)}`)
+      }
       const appendRequestPageQuery = (url) => {
         if (!requestContext.usePagedRankingsFetch) return url
         const joiner = url.includes('?') ? '&' : '?'
@@ -334,6 +344,7 @@ export function useStockRanking(options = {}) {
           if (requestContext.sortBy) url += `&sort_by=${encodeURIComponent(requestContext.sortBy)}`
           if (weightsParam) url += `&weights=${encodeURIComponent(weightsParam)}`
           if (dateParam) url += `&date=${dateParam}`
+          if (returnAsOfParam) url += `&return_as_of=${returnAsOfParam}`
           response = await requestClient({ method: 'get', url, signal })
           break
         }
@@ -360,6 +371,7 @@ export function useStockRanking(options = {}) {
           if (requestContext.sortBy) query.push(`sort_by=${encodeURIComponent(requestContext.sortBy)}`)
           appendWeightedQuery(query)
           if (dateParam) query.push(`date=${encodeURIComponent(dateParam)}`)
+          appendReturnAsOfQuery(query)
           if (query.length) url += `?${query.join('&')}`
           url = appendRequestPageQuery(url)
           dlog('index rankings GET', url)
@@ -390,6 +402,7 @@ export function useStockRanking(options = {}) {
           }
           if (requestContext.sortBy) query.push(`sort_by=${encodeURIComponent(requestContext.sortBy)}`)
           appendWeightedQuery(query)
+          appendReturnAsOfQuery(query)
           if (query.length) url += `?${query.join('&')}`
           url = appendRequestPageQuery(url)
           response = await requestClient({ method: 'post', url, data: payload, signal })
@@ -418,6 +431,7 @@ export function useStockRanking(options = {}) {
           }
           if (requestContext.sortBy) query.push(`sort_by=${encodeURIComponent(requestContext.sortBy)}`)
           appendWeightedQuery(query)
+          appendReturnAsOfQuery(query)
           if (query.length) url += `?${query.join('&')}`
           url = appendRequestPageQuery(url)
           response = await requestClient({ method: 'post', url, data: payload, signal })
@@ -539,6 +553,7 @@ export function useStockRanking(options = {}) {
     viewMode,
     selectedStocks,
     selectedDate,
+    returnAsOf,
     selectedDates,
     rankingStrategy,
     sortBy,

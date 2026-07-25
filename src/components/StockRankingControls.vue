@@ -34,6 +34,27 @@
           />
         </div>
       </v-col>
+      <v-col
+        cols="12"
+        sm="6"
+        md="4"
+        v-show="viewMode === 'ranking' || viewMode === 'watchlist' || viewMode === 'selected' || isIndexViewMode()"
+      >
+        <div class="flex-row-center gap-sm">
+          <label class="label-fixed" title="「至选中日涨跌」列的终点交易日；留空则用最新日线">涨跌截止：</label>
+          <v-text-field
+            v-model="internalReturnAsOf"
+            type="date"
+            :max="maxDate"
+            density="compact"
+            variant="outlined"
+            clearable
+            placeholder="最新"
+            hide-details
+          />
+        </div>
+        <div class="helper-text mt-xs">「至选中日涨跌」终点；空=最新日线（后复权）</div>
+      </v-col>
     </v-row>
 
     <v-row
@@ -188,7 +209,7 @@ import { toRefs, computed, ref } from 'vue'
 
 // define emits explicitly so we can call them from safe handlers
 const emit = defineEmits([
-  'change-view-mode', 'change-date', 'change-display-limit', 'change-ranking-strategy', 'change-sort-by', 'change-ranking-weights',
+  'change-view-mode', 'change-date', 'change-return-as-of', 'change-display-limit', 'change-ranking-strategy', 'change-sort-by', 'change-ranking-weights',
   'stock-input', 'add-stock', 'clear-selected-stocks', 'select-suggestion', 'remove-stock',
   // distinct events: top date input requests a maybe-open hook, while the selected-mode button
   // explicitly requests opening available-dates for the currently selected symbol.
@@ -199,6 +220,7 @@ const emit = defineEmits([
 const props = defineProps({
   viewMode: { type: String, default: 'ranking' },
   selectedDate: { type: String, default: '' },
+  returnAsOf: { type: String, default: '' },
   maxDate: { type: String, default: new Date().toISOString().slice(0,10) },
   displayLimit: { type: [String, Number], default: 50 },
   rankingStrategy: { type: String, default: 'balanced' },
@@ -233,6 +255,7 @@ const refs = toRefs(props)
 // Destructure for template access (template unwraps refs automatically)
 const viewMode = refs.viewMode
 const selectedDate = refs.selectedDate
+const returnAsOf = refs.returnAsOf
 const maxDate = refs.maxDate || { value: new Date().toISOString().slice(0,10) }
 const displayLimit = refs.displayLimit
 const rankingStrategy = refs.rankingStrategy
@@ -310,6 +333,10 @@ const internalViewMode = computed({
 const internalSelectedDate = computed({
   get: () => selectedDate.value,
   set: v => { emit('change-date', v) }
+})
+const internalReturnAsOf = computed({
+  get: () => returnAsOf.value || '',
+  set: v => { emit('change-return-as-of', v == null ? '' : v) }
 })
 const internalDisplayLimit = computed({
   get: () => displayLimit.value,

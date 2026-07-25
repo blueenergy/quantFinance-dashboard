@@ -46,6 +46,7 @@ export function buildStockRankingCacheKey(state) {
     sortBy = 'composite',
     rankingWeights = {},
     dateParam,
+    returnAsOfParam = '',
     selectedDates = [],
     selectedStocks = [],
     watchlistSymbols = [],
@@ -55,6 +56,7 @@ export function buildStockRankingCacheKey(state) {
   } = state
 
   const dp = dateParam || ''
+  const ra = returnAsOfParam || ''
   const weightsSeg =
     sortBy === 'weighted'
       ? `|w:${Object.entries(rankingWeights || {})
@@ -65,22 +67,23 @@ export function buildStockRankingCacheKey(state) {
       : ''
   const pageSeg =
     pageSize != null && pageSize > 0 ? `|o:${pageOffset}|ps:${pageSize}` : ''
+  const asOfSeg = ra ? `|asof:${ra}` : ''
 
   switch (viewMode) {
     case 'ranking':
-      return `ranking|${displayLimit}|${rankingStrategy}|${sortBy}${weightsSeg}|${dp || 'latest'}`
+      return `ranking|${displayLimit}|${rankingStrategy}|${sortBy}${weightsSeg}|${dp || 'latest'}${asOfSeg}`
     case 'selected': {
       if (!selectedStocks.length) return null
       const d = selectedDates.length ? [...selectedDates].sort().join(',') : ''
       const syms = [...selectedStocks].sort().join(',')
       const tail = syms.length > 1500 ? `h:${djb2Hash(syms)}|n:${selectedStocks.length}` : `s:${syms}`
-      return `selected|${rankingStrategy}|${sortBy}${weightsSeg}|${dp}|d:${d}|${tail}${pageSeg}`
+      return `selected|${rankingStrategy}|${sortBy}${weightsSeg}|${dp}|d:${d}|${tail}${pageSeg}${asOfSeg}`
     }
     case 'watchlist': {
       if (!watchlistSymbols.length) return null
       const syms = [...watchlistSymbols].sort().join(',')
       const tail = syms.length > 1500 ? `h:${djb2Hash(syms)}|n:${watchlistSymbols.length}` : `s:${syms}`
-      return `watchlist|${rankingStrategy}|${sortBy}${weightsSeg}|${dp}|${tail}${pageSeg}`
+      return `watchlist|${rankingStrategy}|${sortBy}${weightsSeg}|${dp}|${tail}${pageSeg}${asOfSeg}`
     }
     case 'hs300':
     case 'csi500':
@@ -89,7 +92,7 @@ export function buildStockRankingCacheKey(state) {
     case 'a500':
     case 'star50': {
       const dseg = dp || 'latest'
-      return `${viewMode}|${rankingStrategy}|${sortBy}${weightsSeg}|${dseg}${pageSeg}`
+      return `${viewMode}|${rankingStrategy}|${sortBy}${weightsSeg}|${dseg}${pageSeg}${asOfSeg}`
     }
     default:
       return null

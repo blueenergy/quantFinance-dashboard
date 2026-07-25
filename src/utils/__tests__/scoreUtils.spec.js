@@ -63,7 +63,7 @@ describe('scoreUtils', () => {
       expect(csv).toContain('总分(2025-09-18)')
       expect(csv).toContain('评分日后10日涨跌(2025-09-18)')
       expect(csv).toContain('评分日后20日涨跌(2025-09-18)')
-      expect(csv).toContain('评分日以来涨跌(2025-09-18)')
+      expect(csv).toContain('至选中日涨跌(最新|评分日2025-09-18)')
       expect(csv).toContain('80')
       expect(csv).toContain('+2.25%')
       expect(csv).toContain('-1.50%')

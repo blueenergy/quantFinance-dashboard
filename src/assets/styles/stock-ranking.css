@@ -33,7 +33,16 @@
   gap: 8px;
   margin-bottom: 15px;
   padding: 10px 0;
-  border-bottom: 2px solid #e9ecef;
+  border-bottom: 2px solid rgba(138, 43, 226, 0.35);
+}
+
+:where(.stock-ranking) .mode-header h4 {
+  margin: 0;
+  color: #f5f3ff;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 :where(.stock-ranking) .mode-header-row {
@@ -51,13 +60,15 @@
 }
 
 :where(.stock-ranking) .pager-meta {
-  color: #555;
-  font-size: 13px;
+  color: #e6e6fa;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 :where(.stock-ranking) .stock-count {
-  color: #666;
+  color: #e6e6fa;
   font-size: 14px;
+  font-weight: 600;
 }
 
 :where(.stock-ranking) .th-date {

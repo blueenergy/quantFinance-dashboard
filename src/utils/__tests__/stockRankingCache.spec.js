@@ -43,6 +43,23 @@ describe('buildStockRankingCacheKey', () => {
     ).toBe('ranking|30|balanced|composite|latest')
   })
 
+  it('includes return_as_of in ranking cache key', () => {
+    expect(
+      buildStockRankingCacheKey({
+        viewMode: 'ranking',
+        displayLimit: 30,
+        rankingStrategy: 'balanced',
+        sortBy: 'composite',
+        dateParam: '',
+        returnAsOfParam: '20250920',
+        selectedDates: [],
+        selectedStocks: [],
+        watchlistSymbols: [],
+        indexSymbols: [],
+      })
+    ).toBe('ranking|30|balanced|composite|latest|asof:20250920')
+  })
+
   it('returns null when required symbols missing', () => {
     expect(
       buildStockRankingCacheKey({

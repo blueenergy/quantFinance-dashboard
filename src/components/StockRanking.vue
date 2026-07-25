@@ -6,6 +6,7 @@
   <StockRankingControls
     :viewMode="viewMode"
     :selectedDate="selectedDate"
+    :returnAsOf="returnAsOf"
     :maxDate="maxDate"
     :displayLimit="displayLimit"
     :rankingStrategy="rankingStrategy"
@@ -21,6 +22,7 @@
     :addStockCb="addStockToQuery"
     @change-view-mode="handleChangeViewMode"
     @change-date="handleChangeDate"
+    @change-return-as-of="handleChangeReturnAsOf"
     @change-display-limit="handleChildDisplayLimitChange"
     @change-ranking-strategy="handleChildRankingStrategyChange"
     @change-sort-by="handleChildSortByChange"
@@ -99,10 +101,12 @@
 
       <div class="ranking-table-scroll">
         <RankingTable
-          :key="`${viewMode}-${rankingPageOffset}`"
+          :key="`${viewMode}-${rankingPageOffset}-${returnAsOf || 'latest'}`"
           :displayRows="displayRows"
           :viewMode="viewMode"
           :sortBy="sortBy"
+          :returnAsOf="returnAsOf"
+          :rankOffset="usePagedRankingsFetch ? rankingPageOffset : 0"
           :formatDateDisplay="formatDateDisplay"
           :getScoreClass="getScoreClass"
           :getRankClass="getRankClass"
@@ -213,6 +217,7 @@ const {
   viewMode,
   selectedStocks,
   selectedDate,
+  returnAsOf,
   selectedDates,
   rankingStrategy,
   sortBy,
@@ -256,6 +261,23 @@ const {
   dlog,
   isUserLoggedIn,
 })
+
+// 金榜 tab 会常驻挂载；SFC 热更新偶发「新模板 + 旧 setup」。
+// 本模块变更时整页失效，避免 returnAsOf / handler 未定义告警。
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    import.meta.hot.invalidate()
+  })
+}
+
+function handleChangeReturnAsOf(newDate) {
+  const val = (newDate && typeof newDate === 'object' && newDate.target && 'value' in newDate.target)
+    ? newDate.target.value
+    : newDate
+  rankingPageOffset.value = 0
+  returnAsOf.value = val ? String(val) : ''
+  fetchRankings()
+}
 
 const stockInput = ref('')
 const stockSuggestions = ref([])
@@ -816,7 +838,13 @@ function getModeTitle() {
 // ✅ 导出功能
 async function exportScores() {
   try {
-    const csvContent = utilGenerateCSV(rankings.value, selectedDates.value, getEffectiveStrategyFor, getCompositeScore)
+    const csvContent = utilGenerateCSV(
+      rankings.value,
+      selectedDates.value,
+      getEffectiveStrategyFor,
+      getCompositeScore,
+      returnAsOf.value,
+    )
     downloadCSV(csvContent, `stock-scores-${viewMode.value}-${new Date().toISOString().split('T')[0]}.csv`)
   } catch (error) {
     console.error('导出失败:', error)

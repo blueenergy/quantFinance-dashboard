@@ -5,10 +5,16 @@
         <th class="th-rank">{{ viewMode === 'ranking' ? '排名' : '序号' }}</th>
         <th class="th-name">股票名称</th>
         <th class="th-date">日期</th>
-        <th class="th-prior-3m" title="评分日前约 3 个月至评分日；未复权收盘">前3月</th>
+        <th class="th-prior-3m" title="评分日前约 3 个月至评分日；后复权收盘">前3月</th>
         <th class="th-future-return" title="评分日至评分日后第 10 个交易日；后复权收盘">后10日涨跌</th>
         <th class="th-future-return" title="评分日至评分日后第 20 个交易日；后复权收盘">后20日涨跌</th>
-        <th class="th-return-since" title="评分日至最新日线；后复权收盘">以来涨跌</th>
+        <th
+          class="th-return-since"
+          :title="returnSinceHeaderTitle"
+        >
+          <span class="th-return-since-main">至选中日</span>
+          <span class="th-return-since-date">{{ returnSinceHeaderDate }}</span>
+        </th>
   <th class="th-score" :title="scoreHeaderTitle">{{ scoreHeaderLabel }}</th>
         <th class="th-cycle">动量</th>
         <th class="th-growth">成长</th>
@@ -21,10 +27,10 @@
       </tr>
     </thead>
     <tbody>
-      <tr v-for="(row, index) in displayRows" :key="row.symbol + '_' + (row.display_date || row.score_date || index)" class="table-row" :class="getRowClass(row, index + 1)">
+      <tr v-for="(row, index) in displayRows" :key="row.symbol + '_' + (row.display_date || row.score_date || index)" class="table-row" :class="getRowClass(row, displayRank(index))">
         <td class="td-rank">
-          <span :class="['rank-badge', getRankClass(row, index + 1)]">
-            {{ index + 1 }}
+          <span :class="['rank-badge', getRankClass(row, displayRank(index))]">
+            {{ displayRank(index) }}
           </span>
         </td>
         <td class="td-name">
@@ -133,6 +139,10 @@ const props = defineProps({
   displayRows: { type: Array, required: true },
   viewMode: { type: String, required: true },
   sortBy: { type: String, default: 'composite' },
+  /** ISO YYYY-MM-DD or empty (= use latest bar / row end dates) */
+  returnAsOf: { type: String, default: '' },
+  /** Absolute rank of the first row on this page (e.g. page 2 with size 30 → 30). */
+  rankOffset: { type: Number, default: 0 },
   formatDateDisplay: { type: Function, required: true },
   getScoreClass: { type: Function, required: true },
   getRankClass: { type: Function, required: true },
@@ -141,6 +151,10 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['toggle-watchlist', 'remove-stock', 'show-score', 'show-score-detail'])
+
+function displayRank(index) {
+  return Math.max(0, Number(props.rankOffset) || 0) + index + 1
+}
 
 function onToggleWatchlist(symbol) { emit('toggle-watchlist', symbol) }
 function onRemoveStock(symbol) { emit('remove-stock', symbol) }
@@ -199,6 +213,59 @@ const scoreHeaderTitle = computed(() => (
     : '综合分仅作概览，由各维度按预设权重粗略加权；选股以「组合研究」中已验证的因子组合为准'
 ))
 
+const selectedReturnAsOfDate = computed(() => {
+  const selected = String(props.returnAsOf || '').trim()
+  return selected ? formatDateDisplay(selected) : ''
+})
+
+/** Most common actual end bar on this page; individual suspended stocks may differ. */
+const actualReturnEndDate = computed(() => {
+  const counts = new Map()
+  const selectedKey = String(props.returnAsOf || '').replaceAll('-', '').slice(0, 8)
+  for (const row of displayRows.value || []) {
+    const td = row?.display_price_latest_trade_date
+    if (!td) continue
+    const key = String(td)
+    // While a new cutoff request is loading, rows may still belong to the
+    // previous (later) cutoff. Do not present that stale date in the header.
+    if (selectedKey && key.replaceAll('-', '').slice(0, 8) > selectedKey) continue
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+  if (!counts.size) return ''
+  let best = ''
+  let bestN = -1
+  for (const [k, n] of counts) {
+    if (n > bestN || (n === bestN && k > best)) {
+      best = k
+      bestN = n
+    }
+  }
+  return formatDateDisplay(best)
+})
+
+// Prefer the bar actually used by the backend. Before data arrives, fall back to
+// the requested calendar date so the heading never becomes blank.
+const returnSinceResolvedDate = computed(
+  () => actualReturnEndDate.value || selectedReturnAsOfDate.value
+)
+
+const returnSinceHeaderDate = computed(() => returnSinceResolvedDate.value || '最新')
+
+const returnSinceHeaderTitle = computed(() => {
+  const selected = selectedReturnAsOfDate.value
+  const actual = actualReturnEndDate.value
+  if (selected) {
+    if (actual && actual !== selected) {
+      return `选择截止日 ${selected}；本页多数股票实际采用不晚于该日的交易日 ${actual}。各股票实际日期见单元格提示；后复权收盘。`
+    }
+    return `选择截止日 ${selected}${actual ? `，实际采用交易日 ${actual}` : ''}；后复权收盘。`
+  }
+  if (actual) {
+    return `未指定截止日，默认取各股票最新日线；本页多数股票实际日期为 ${actual}。各股票实际日期见单元格提示；后复权收盘。`
+  }
+  return '评分日至最新日线的涨跌幅；后复权收盘。可在上方「涨跌截止」指定任意一天。'
+})
+
 // 维度/综合分的展示：NA(null/空/非数值) 统一渲染为「—」，
 // 兼容精简评分模式下被跳过维度或 composite 置 NA 的场景。
 function fmtScore(v) {
@@ -227,13 +294,14 @@ function returnSinceTooltip(row) {
   const l = row.display_price_latest_trade_date
   const fb = b ? formatDateDisplay(b) : null
   const fl = l ? formatDateDisplay(l) : null
+  const endLabel = fl || returnSinceHeaderDate.value
   const pctText =
     v != null && !Number.isNaN(Number(v))
-      ? `涨跌幅 ${formatReturnSince(v)}（未复权收盘）`
-      : '暂无有效涨跌幅'
+      ? `至实际交易日 ${endLabel} 涨跌幅 ${formatReturnSince(v)}（后复权收盘）`
+      : `暂无有效截止日${endLabel && endLabel !== '最新' ? ` ${endLabel}` : ''}涨跌幅`
   const dateText =
-    fb || fl ? `基准交易日 ${fb || '—'}，最新日线 ${fl || '—'}` : '无基准/最新日线日期'
-  return `${pctText}。${dateText}。分红送转可能影响长区间对比。`
+    fb || fl ? `基准交易日 ${fb || '—'}，实际截止日线 ${fl || '—'}` : '无基准/实际截止日线日期'
+  return `${pctText}。${dateText}。`
 }
 
 function prior3mTooltip(row) {
@@ -244,7 +312,7 @@ function prior3mTooltip(row) {
   const fe = e ? formatDateDisplay(e) : null
   const pctText =
     v != null && !Number.isNaN(Number(v))
-      ? `前 3 个月涨跌幅 ${formatReturnSince(v)}（未复权收盘）`
+      ? `前 3 个月涨跌幅 ${formatReturnSince(v)}（后复权收盘）`
       : '暂无有效前 3 个月涨跌幅'
   const dateText =
     fb || fe ? `基准交易日 ${fb || '—'}，评分日前交易日 ${fe || '—'}` : '无基准/评分日行情日期'
@@ -314,7 +382,25 @@ function futureReturnTooltip(row, days) {
 .th-name { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
 .th-prior-3m { background: linear-gradient(135deg, #6d4c41, #4e342e); min-width: 74px; max-width: 90px; }
 .th-future-return { background: linear-gradient(135deg, #7e57c2, #5e35b1); min-width: 74px; max-width: 90px; }
-.th-return-since { background: linear-gradient(135deg, #546e7a, #37474f); min-width: 74px; max-width: 90px; }
+.th-return-since {
+  background: linear-gradient(135deg, #546e7a, #37474f);
+  min-width: 88px;
+  max-width: 110px;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+.th-return-since-main {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+.th-return-since-date {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.92;
+  margin-top: 2px;
+}
 .th-score { background: linear-gradient(135deg, #e67e22, #d35400); }
 .th-cycle { background: linear-gradient(135deg, #1abc9c, #16a085); }
 .th-growth { background: linear-gradient(135deg, #43e97b, #38f9d7); }
