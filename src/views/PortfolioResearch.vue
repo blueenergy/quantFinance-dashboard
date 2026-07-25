@@ -100,7 +100,25 @@
           </div>
 
           <div ref="detailBodyRef" class="detail-body">
+            <p v-if="inceptionWarning" class="research-inception-warning">
+              ⚠️ 该 universe（{{ inceptionWarning.universeIndex }}）指数发布日为
+              {{ inceptionWarning.inceptionDate }}，而研究起始日
+              {{ inceptionWarning.startDate }} 早于发布日。发布日之前无真实成分，
+              数据为按当前成分回贴的代理值，仅供参考。
+            </p>
+            <p v-if="dataStartNotice" class="research-data-start-notice">
+              ℹ️ 请求起始日为 {{ dataStartNotice.requestedStart }}，但实际评分数据从
+              {{ dataStartNotice.actualStart }} 开始，此前区间无数据、不参与回测。
+            </p>
             <div class="info-grid">
+              <div>
+                <span>任务开始时间</span>
+                <strong>{{ formatJobDateTime(selectedJob.started_at) }}</strong>
+              </div>
+              <div>
+                <span>任务结束时间</span>
+                <strong>{{ formatJobDateTime(selectedJob.completed_at) }}</strong>
+              </div>
               <div>
                 <span>任务耗时</span>
                 <strong>{{ jobElapsedLabel(selectedJob) || '-' }}</strong>
@@ -228,7 +246,7 @@
 </template>
 
 <script setup>
-import { defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
 import '../assets/styles/portfolio-research.css'
 import { getPortfolioResearchComboDetail } from '../api/portfolioResearch'
 import { usePortfolioResearchDetail } from '../composables/usePortfolioResearchDetail'
@@ -237,12 +255,15 @@ import { usePortfolioResearchJobs } from '../composables/usePortfolioResearchJob
 import { formatResearchApiError } from '../utils/portfolioResearchPayload'
 import {
   UNIVERSE_OPTIONS,
+  actualDataStartNotice,
+  formatJobDateTime,
   jobElapsedLabel as formatJobElapsedLabel,
   jobProgressStageLabel,
   money,
   num,
   pct,
   pctTrailingStop,
+  researchStartBeforeInception,
 } from '../utils/portfolioResearchView'
 import ResearchJobList from '../components/portfolio/ResearchJobList.vue'
 import SweepResultPanel from '../components/portfolio/SweepResultPanel.vue'
@@ -348,6 +369,26 @@ const comboDetail = ref(null)
 const comboContextRow = ref(null)
 
 const universeOptions = UNIVERSE_OPTIONS
+
+const inceptionWarning = computed(() => {
+  const job = selectedJob.value
+  if (!job) return null
+  const params = job.params || {}
+  return researchStartBeforeInception(
+    params.universe_index || job.universe_index,
+    params.start_date || job.start_date,
+  )
+})
+
+const dataStartNotice = computed(() => {
+  const job = selectedJob.value
+  if (!job) return null
+  const params = job.params || {}
+  return actualDataStartNotice(
+    params.start_date || job.start_date,
+    job.data_watermark?.backtest_score_min_date,
+  )
+})
 
 function jobElapsedLabel(job) {
   return formatJobElapsedLabel(job, nowMs.value)

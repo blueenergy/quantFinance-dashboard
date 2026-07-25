@@ -51,12 +51,20 @@
         </template>
 
         <h4 class="combo-h">净值曲线（扣费净收益，复利）</h4>
+        <p v-if="equityChart && equityChart.dataGaps.length" class="combo-gap-warning">
+          ⚠️ 检测到数据缺口，缺口区间内无调仓、账户总值保持不变（并非曲线错误）：
+          <span v-for="gap in equityChart.dataGaps" :key="`${gap.fromDate}-${gap.toDate}`" class="gap-chip">
+            {{ gap.fromDate }} → {{ gap.toDate }}（约 {{ gap.days }} 天）
+          </span>
+        </p>
         <div class="combo-chart-panel">
           <svg
             v-if="equityChart"
             :viewBox="`0 0 ${equityChart.w} ${equityChart.h}`"
             width="100%"
             preserveAspectRatio="xMidYMid meet"
+            @mousemove="handleChartPointerMove"
+            @mouseleave="chartHover = null"
           >
             <line
               v-for="(gridLine, index) in equityChart.grid"
@@ -77,32 +85,69 @@
               font-size="11"
               text-anchor="end"
             >{{ gridLine.label }}</text>
+            <line
+              v-for="(tick, index) in equityChart.axisTicks"
+              :key="`xg${index}`"
+              :x1="tick.x"
+              :y1="equityChart.padT"
+              :x2="tick.x"
+              :y2="equityChart.h - equityChart.padB"
+              stroke="#f1f5f9"
+              stroke-width="1"
+            />
             <polyline
               v-if="equityChart.hasIdx"
               fill="none"
               stroke="#94a3b8"
               stroke-width="1.5"
-              :points="equityChart.idxPoints"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              :points="equityChart.idxSmoothPoints"
             />
             <polyline
               fill="none"
               stroke="#0f6bdc"
               stroke-width="2"
-              :points="equityChart.stratPoints"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              :points="equityChart.stratSmoothPoints"
             />
+            <g v-if="chartHover" pointer-events="none">
+              <line
+                :x1="chartHover.x"
+                :y1="equityChart.padT"
+                :x2="chartHover.x"
+                :y2="equityChart.h - equityChart.padB"
+                stroke="#64748b"
+                stroke-width="1"
+                stroke-dasharray="4 4"
+              />
+              <circle
+                :cx="chartHover.x"
+                :cy="chartHover.y"
+                r="4"
+                fill="#0f6bdc"
+                stroke="#fff"
+                stroke-width="2"
+              />
+              <g :transform="`translate(${chartHover.tooltipX} ${chartHover.tooltipY})`">
+                <rect width="190" height="48" rx="6" fill="#172033" opacity=".94" />
+                <text x="10" y="19" fill="#fff" font-size="12">{{ chartHover.date }}</text>
+                <text x="10" y="37" fill="#fff" font-size="12">
+                  账户总值：{{ money(chartHover.accountValue) }}
+                </text>
+              </g>
+            </g>
             <text
-              :x="equityChart.padL"
+              v-for="(tick, index) in equityChart.axisTicks"
+              :key="`xt${index}`"
+              :x="tick.x"
               :y="equityChart.h - 8"
               fill="#94a3b8"
               font-size="11"
-            >{{ equityChart.firstDate }}</text>
-            <text
-              :x="equityChart.w - equityChart.padR"
-              :y="equityChart.h - 8"
-              fill="#94a3b8"
-              font-size="11"
-              text-anchor="end"
-            >{{ equityChart.lastDate }}</text>
+              :text-anchor="tick.anchor"
+              :transform="tick.rotate ? `rotate(${tick.rotate} ${tick.x} ${equityChart.h - 8})` : undefined"
+            >{{ tick.label }}</text>
           </svg>
           <p v-else class="muted">无净值数据</p>
           <div class="combo-legend">
@@ -263,7 +308,17 @@ const filteredTrades = computed(() => filterAndSortTrades(comboTrades.value, {
   sortKey: tradeSortKey.value,
   sortDir: tradeSortDir.value,
 }))
-const equityChart = computed(() => buildEquityChart(props.detail?.periods || []))
+const comboInitialCapital = computed(() => (
+  props.detail?.meta?.fees?.initial_capital ??
+  props.detail?.summary?.initial_capital ??
+  1_000_000
+))
+const equityChart = computed(() => buildEquityChart(
+  props.detail?.periods || [],
+  props.detail?.trades || [],
+  comboInitialCapital.value,
+))
+const chartHover = ref(null)
 
 watch(() => [props.open, props.contextRow?.combo_key], ([open]) => {
   if (!open) return
@@ -279,6 +334,29 @@ function sortTrades(key) {
   } else {
     tradeSortKey.value = key
     tradeSortDir.value = 1
+  }
+}
+
+function handleChartPointerMove(event) {
+  const chart = equityChart.value
+  if (!chart?.hoverPoints?.length) return
+  const rect = event.currentTarget.getBoundingClientRect()
+  if (!rect.width) return
+  const viewX = ((event.clientX - rect.left) / rect.width) * chart.w
+  const point = chart.hoverPoints.reduce((nearest, candidate) => (
+    Math.abs(candidate.x - viewX) < Math.abs(nearest.x - viewX) ? candidate : nearest
+  ))
+  const tooltipWidth = 190
+  const tooltipHeight = 48
+  chartHover.value = {
+    ...point,
+    tooltipX: point.x + tooltipWidth + 12 <= chart.w
+      ? point.x + 10
+      : point.x - tooltipWidth - 10,
+    tooltipY: Math.max(
+      chart.padT,
+      Math.min(point.y - tooltipHeight - 8, chart.h - chart.padB - tooltipHeight),
+    ),
   }
 }
 </script>
@@ -393,6 +471,28 @@ function sortTrades(key) {
   margin: 22px 0 10px;
   padding-left: 9px;
   border-left: 4px solid #0f6bdc;
+}
+
+.combo-gap-warning {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border: 1px solid #fbcfa4;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.combo-gap-warning .gap-chip {
+  display: inline-block;
+  margin: 2px 6px 0 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #ffedd5;
+  color: #c2410c;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .combo-chart-panel {

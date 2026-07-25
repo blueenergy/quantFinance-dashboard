@@ -54,6 +54,9 @@ describe('ResearchComboModal', () => {
     expect(wrapper.text()).toContain('Sharpe')
     expect(wrapper.text()).toContain('1.50')
     expect(wrapper.find('svg').exists()).toBe(true)
+    const strategyCurve = wrapper.find('polyline[stroke="#0f6bdc"]')
+    expect(strategyCurve.exists()).toBe(true)
+    expect(strategyCurve.attributes('points')).not.toMatch(/NaN|Infinity/)
   })
 
   it('emits close from the close button', async () => {
@@ -62,6 +65,26 @@ describe('ResearchComboModal', () => {
     await wrapper.find('.link-btn').trigger('click')
 
     expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  it('shows the date and account value when hovering the equity curve', async () => {
+    const wrapper = mountModal()
+    const svg = wrapper.find('svg')
+    svg.element.getBoundingClientRect = () => ({
+      left: 0,
+      width: 1100,
+      top: 0,
+      height: 300,
+      right: 1100,
+      bottom: 300,
+    })
+
+    await svg.trigger('mousemove', { clientX: 52 })
+    expect(wrapper.text()).toContain('账户总值：1,000,000')
+
+    await svg.trigger('mousemove', { clientX: 1080 })
+    expect(wrapper.text()).toContain('2024-01-02')
+    expect(wrapper.text()).toContain('账户总值：1,020,000')
   })
 
   it('filters trades locally by symbol or name', async () => {

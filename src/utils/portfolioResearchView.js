@@ -9,6 +9,55 @@ export const UNIVERSE_OPTIONS = [
   { value: 'star50', label: 'star50 - 科创50' },
 ]
 
+// Official index launch dates (发布日). Data before an index existed is at best a
+// retroactive proxy from current constituents, so research spanning earlier dates
+// must be flagged.
+export const INDEX_INCEPTION_DATES = {
+  hs300: '20050408',
+  csi500: '20070115',
+  csi1000: '20141017',
+  csi2000: '20230811',
+  a500: '20240923',
+  star50: '20200723',
+}
+
+/**
+ * Returns notice info when the actual earliest score date is later than the
+ * requested research start date, otherwise null.
+ */
+export function actualDataStartNotice(startDate, minScoreDate) {
+  const start = String(startDate || '').replace(/\D/g, '').slice(0, 8)
+  const min = String(minScoreDate || '').replace(/\D/g, '').slice(0, 8)
+  if (start.length !== 8 || min.length !== 8) return null
+  if (min <= start) return null
+  return {
+    requestedStart: compactDate(start),
+    actualStart: compactDate(min),
+  }
+}
+
+export function indexInceptionDate(universeIndex) {
+  const key = String(universeIndex || '').toLowerCase()
+  return INDEX_INCEPTION_DATES[key] || null
+}
+
+/**
+ * Returns warning info when a research window starts before the index existed,
+ * otherwise null.
+ */
+export function researchStartBeforeInception(universeIndex, startDate) {
+  const inception = indexInceptionDate(universeIndex)
+  if (!inception) return null
+  const start = String(startDate || '').replace(/\D/g, '').slice(0, 8)
+  if (start.length !== 8) return null
+  if (start >= inception) return null
+  return {
+    universeIndex: String(universeIndex || '').toLowerCase(),
+    startDate: compactDate(start),
+    inceptionDate: compactDate(inception),
+  }
+}
+
 export const PROGRESS_STAGE_LABELS = {
   loading_scores: '加载评分',
   building_dataset: '构建数据集',
@@ -37,6 +86,12 @@ export function parseJobDate(value) {
   const normalized = /[zZ]|[+-]\d{2}:\d{2}$/.test(text) ? text : `${text}Z`
   const date = new Date(normalized)
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+export function formatJobDateTime(value) {
+  const date = parseJobDate(value)
+  if (!date) return '-'
+  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 export function formatDurationMs(ms) {
@@ -222,48 +277,393 @@ export function filterAndSortTrades(
   return rows
 }
 
-export function buildEquityChart(periods = []) {
+function parseEquityDate(value) {
+  const compact = String(value || '').replace(/\D/g, '').slice(0, 8)
+  if (compact.length !== 8) return null
+  const year = Number(compact.slice(0, 4))
+  const month = Number(compact.slice(4, 6))
+  const day = Number(compact.slice(6, 8))
+  const ms = Date.UTC(year, month - 1, day)
+  const date = new Date(ms)
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) return null
+  return { compact, year, month, day, ms }
+}
+
+function equityDateLabel(year, month, day) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+function calendarYearPosition(date) {
+  const start = Date.UTC(date.year, 0, 1)
+  const end = Date.UTC(date.year + 1, 0, 1)
+  const lastDay = end - 24 * 60 * 60 * 1000
+  return date.year + (date.ms - start) / (lastDay - start)
+}
+
+function calendarPositionLabel(position) {
+  const year = Math.floor(position)
+  const fraction = position - year
+  const start = Date.UTC(year, 0, 1)
+  const end = Date.UTC(year + 1, 0, 1)
+  const lastDay = end - 24 * 60 * 60 * 1000
+  const date = new Date(start + fraction * (lastDay - start))
+  return equityDateLabel(
+    date.getUTCFullYear(),
+    date.getUTCMonth() + 1,
+    date.getUTCDate(),
+  )
+}
+
+function smoothCurveTangents(points) {
+  if (points.length < 2) return []
+  const slopes = points.slice(1).map((point, index) => (
+    (point.y - points[index].y) / (point.x - points[index].x)
+  ))
+  const tangents = points.map((_, index) => {
+    if (index === 0) return slopes[0]
+    if (index === points.length - 1) return slopes[slopes.length - 1]
+    if (slopes[index - 1] * slopes[index] <= 0) return 0
+    return (slopes[index - 1] + slopes[index]) / 2
+  })
+
+  // Fritsch-Carlson limiting prevents cubic overshoot between neighboring
+  // equity observations while keeping the line visually smooth.
+  for (let index = 0; index < slopes.length; index++) {
+    const slope = slopes[index]
+    if (slope === 0) {
+      tangents[index] = 0
+      tangents[index + 1] = 0
+      continue
+    }
+    const alpha = tangents[index] / slope
+    const beta = tangents[index + 1] / slope
+    const magnitude = alpha * alpha + beta * beta
+    if (magnitude <= 9) continue
+    const scale = 3 / Math.sqrt(magnitude)
+    tangents[index] = scale * alpha * slope
+    tangents[index + 1] = scale * beta * slope
+  }
+  return tangents
+}
+
+function smoothSvgPath(points) {
+  if (!points.length) return ''
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
+  const tangents = smoothCurveTangents(points)
+  let path = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
+  for (let index = 0; index < points.length - 1; index++) {
+    const start = points[index]
+    const end = points[index + 1]
+    const width = end.x - start.x
+    const control1X = start.x + width / 3
+    const control2X = end.x - width / 3
+    const control1Y = start.y + tangents[index] * width / 3
+    const control2Y = end.y - tangents[index + 1] * width / 3
+    path += ` C ${control1X.toFixed(1)} ${control1Y.toFixed(1)},`
+    path += ` ${control2X.toFixed(1)} ${control2Y.toFixed(1)},`
+    path += ` ${end.x.toFixed(1)} ${end.y.toFixed(1)}`
+  }
+  return path
+}
+
+function smoothSvgSamples(points, samplesPerSegment = 12) {
+  if (points.length < 2) {
+    return [...points]
+  }
+  const tangents = smoothCurveTangents(points)
+  const samples = [points[0]]
+  for (let index = 0; index < points.length - 1; index++) {
+    const start = points[index]
+    const end = points[index + 1]
+    const width = end.x - start.x
+    for (let step = 1; step <= samplesPerSegment; step++) {
+      const t = step / samplesPerSegment
+      const t2 = t * t
+      const t3 = t2 * t
+      const h00 = 2 * t3 - 3 * t2 + 1
+      const h10 = t3 - 2 * t2 + t
+      const h01 = -2 * t3 + 3 * t2
+      const h11 = t3 - t2
+      samples.push({
+        x: start.x + width * t,
+        y: h00 * start.y +
+          h10 * width * tangents[index] +
+          h01 * end.y +
+          h11 * width * tangents[index + 1],
+      })
+    }
+  }
+  return samples
+}
+
+function smoothSvgPoints(samples) {
+  return samples.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ')
+}
+
+export function buildEquityChart(periods = [], trades = [], initialCapital = 1_000_000) {
   if (!Array.isArray(periods) || !periods.length) return null
   const w = 1100
   const h = 300
   const padL = 52
   const padR = 16
   const padT = 14
-  const padB = 28
-  const stratEq = [1]
-  const idxEq = [1]
-  for (const period of periods) {
-    const portfolioReturn = period.portfolio_return_net ?? period.portfolio_return ?? 0
-    stratEq.push(stratEq[stratEq.length - 1] * (1 + portfolioReturn))
-    const indexReturn = period.index_benchmark_return ?? null
-    idxEq.push(idxEq[idxEq.length - 1] * (1 + (indexReturn == null ? 0 : indexReturn)))
+  const padB = 36
+
+  const periodEndByScoreDate = new Map()
+  for (const trade of Array.isArray(trades) ? trades : []) {
+    const scoreDate = parseEquityDate(trade?.score_date)
+    const sellDate = parseEquityDate(trade?.sell_date)
+    if (!scoreDate || !sellDate) continue
+    const previous = periodEndByScoreDate.get(scoreDate.compact)
+    if (!previous || sellDate.ms > previous.ms) {
+      periodEndByScoreDate.set(scoreDate.compact, sellDate)
+    }
   }
-  const hasIdx = periods.some((period) => period.index_benchmark_return != null)
-  const all = stratEq.concat(hasIdx ? idxEq : [])
+
+  const events = periods
+    .map((period) => {
+      const scoreDate = parseEquityDate(period?.score_date)
+      if (!scoreDate) return null
+      const explicitEndDate = parseEquityDate(
+        period?.period_end_date || period?.end_date || period?.exit_date,
+      )
+      const resolvedEndDate = explicitEndDate || periodEndByScoreDate.get(scoreDate.compact)
+      const endDate = resolvedEndDate?.ms >= scoreDate.ms ? resolvedEndDate : scoreDate
+      const portfolioReturn = Number(period.portfolio_return_net ?? period.portfolio_return ?? 0)
+      const indexReturn = period.index_benchmark_return == null
+        ? null
+        : Number(period.index_benchmark_return)
+      return {
+        scoreDate,
+        endDate,
+        portfolioReturn: Number.isFinite(portfolioReturn) ? portfolioReturn : 0,
+        indexReturn: Number.isFinite(indexReturn) ? indexReturn : null,
+      }
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.endDate.ms - right.endDate.ms || left.scoreDate.ms - right.scoreDate.ms)
+  if (!events.length) return null
+
+  // Flat stretches with no rebalance mean the account value cannot move; surface
+  // them so a long gap is not mistaken for a broken curve.
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const gapThresholdDays = 60
+  const dataGaps = []
+  for (let index = 1; index < events.length; index++) {
+    const previousEnd = events[index - 1].endDate
+    const currentStart = events[index].scoreDate
+    const days = Math.round((currentStart.ms - previousEnd.ms) / DAY_MS)
+    if (days >= gapThresholdDays) {
+      dataGaps.push({
+        fromDate: equityDateLabel(previousEnd.year, previousEnd.month, previousEnd.day),
+        toDate: equityDateLabel(currentStart.year, currentStart.month, currentStart.day),
+        days,
+      })
+    }
+  }
+
+  const hasIdx = events.some((event) => event.indexReturn != null)
+  const firstYear = Math.min(...events.map((event) => event.scoreDate.year))
+  const lastYear = Math.max(...events.flatMap((event) => [
+    event.scoreDate.year,
+    event.endDate.year,
+  ]))
+  const actualEndDate = events.reduce((latest, event) => (
+    event.endDate.ms > latest.ms ? event.endDate : latest
+  ), events[0].endDate)
+  const yearCount = lastYear - firstYear + 1
+  const domainStart = firstYear
+  const actualEndPosition = calendarYearPosition(actualEndDate)
+  const domainEnd = Math.max(actualEndPosition, domainStart + 1 / 366)
+  const X = (position) => (
+    padL + (w - padL - padR) * ((position - domainStart) / (domainEnd - domainStart))
+  )
+
+  let stratEquity = 1
+  let idxEquity = 1
+  const equityEvents = []
+  for (const event of events) {
+    const position = calendarYearPosition(event.endDate)
+    stratEquity *= 1 + event.portfolioReturn
+    idxEquity *= 1 + (event.indexReturn ?? 0)
+    equityEvents.push({
+      scoreDate: equityDateLabel(
+        event.scoreDate.year,
+        event.scoreDate.month,
+        event.scoreDate.day,
+      ),
+      endDate: equityDateLabel(event.endDate.year, event.endDate.month, event.endDate.day),
+      endYear: event.endDate.year,
+      position,
+      stratEquity,
+      idxEquity,
+    })
+  }
+
+  const yearBoundaries = []
+  for (let year = firstYear; year <= lastYear; year++) {
+    const isLastYear = year === lastYear
+    const boundaryEndPosition = isLastYear ? actualEndPosition : year + 1
+    const beforeYear = equityEvents.filter((event) => event.endYear < year)
+    const throughYear = equityEvents.filter((event) => event.endYear <= year)
+    const startEvent = beforeYear[beforeYear.length - 1]
+    const endEvent = throughYear[throughYear.length - 1]
+    yearBoundaries.push({
+      year,
+      startDate: `${year}-01-01`,
+      endDate: isLastYear
+        ? equityDateLabel(actualEndDate.year, actualEndDate.month, actualEndDate.day)
+        : `${year}-12-31`,
+      startStratEquity: startEvent?.stratEquity ?? 1,
+      endStratEquity: endEvent?.stratEquity ?? 1,
+      startIdxEquity: startEvent?.idxEquity ?? 1,
+      endIdxEquity: endEvent?.idxEquity ?? 1,
+      startX: X(year),
+      endX: X(boundaryEndPosition),
+      endPosition: boundaryEndPosition,
+    })
+  }
+
+  const curveStateByPosition = new Map()
+  for (const boundary of yearBoundaries) {
+    curveStateByPosition.set(boundary.year, {
+      position: boundary.year,
+      date: boundary.startDate,
+      stratEquity: boundary.startStratEquity,
+      idxEquity: boundary.startIdxEquity,
+    })
+    curveStateByPosition.set(boundary.endPosition, {
+      position: boundary.endPosition,
+      date: boundary.endDate,
+      stratEquity: boundary.endStratEquity,
+      idxEquity: boundary.endIdxEquity,
+    })
+  }
+  for (const event of equityEvents) {
+    curveStateByPosition.set(event.position, {
+      position: event.position,
+      date: event.endDate,
+      stratEquity: event.stratEquity,
+      idxEquity: event.idxEquity,
+    })
+  }
+  const curveStates = Array.from(curveStateByPosition.values())
+    .sort((left, right) => left.position - right.position)
+
+  const all = curveStates.flatMap((state) => (
+    hasIdx ? [state.stratEquity, state.idxEquity] : [state.stratEquity]
+  ))
   const mn = Math.min(...all)
   const mx = Math.max(...all)
-  const n = stratEq.length - 1
-  const X = (i) => padL + (w - padL - padR) * (n === 0 ? 0 : i / n)
-  const Y = (value) => padT + (h - padT - padB) * (1 - (value - mn) / ((mx - mn) || 1))
-  const poly = (values) =>
-    values.map((value, index) => `${X(index).toFixed(1)},${Y(value).toFixed(1)}`).join(' ')
-  const ticks = 4
+  const Y = (value) => (
+    padT + (h - padT - padB) * (1 - (value - mn) / ((mx - mn) || 1))
+  )
+  const chartPoints = (key) => curveStates.map((state) => ({
+    x: X(state.position),
+    y: Y(state[key]),
+    position: state.position,
+    equity: state[key],
+    date: state.date,
+  }))
+  const stratCurvePoints = chartPoints('stratEquity')
+  const idxCurvePoints = chartPoints('idxEquity')
+  const stratCurveSamples = smoothSvgSamples(stratCurvePoints)
+  const idxCurveSamples = smoothSvgSamples(idxCurvePoints)
+  const capital = Number(initialCapital)
+  const normalizedCapital = Number.isFinite(capital) && capital > 0 ? capital : 1_000_000
+  const plotHeight = h - padT - padB
+  const equityRange = mx - mn
+  const sourceDateByX = new Map(
+    stratCurvePoints.map((point) => [point.x.toFixed(1), point.date]),
+  )
+  const hoverPoints = stratCurveSamples.map((point) => {
+    const position = domainStart +
+      ((point.x - padL) / (w - padL - padR)) * (domainEnd - domainStart)
+    const equity = equityRange
+      ? mn + (1 - (point.y - padT) / plotHeight) * equityRange
+      : mn
+    return {
+      x: point.x,
+      y: point.y,
+      date: sourceDateByX.get(point.x.toFixed(1)) || calendarPositionLabel(position),
+      equity,
+      accountValue: equity * normalizedCapital,
+    }
+  })
+
   const grid = []
-  for (let i = 0; i <= ticks; i++) {
-    const value = mn + ((mx - mn) * i) / ticks
+  const gridTicks = 4
+  for (let i = 0; i <= gridTicks; i++) {
+    const value = mn + ((mx - mn) * i) / gridTicks
     grid.push({ y: Y(value), label: `${value.toFixed(2)}x` })
   }
+
+  const axisTicks = []
+  const xAxisGranularity = yearCount === 1 ? 'quarter' : 'year'
+  if (yearCount === 1) {
+    const quarterStarts = [
+      { month: 1, label: `${firstYear}-01-01` },
+      { month: 4, label: `${firstYear} Q2` },
+      { month: 7, label: `${firstYear} Q3` },
+      { month: 10, label: `${firstYear} Q4` },
+    ]
+    for (const tick of quarterStarts) {
+      const date = parseEquityDate(`${firstYear}${String(tick.month).padStart(2, '0')}01`)
+      const position = calendarYearPosition(date)
+      if (position < actualEndPosition) {
+        axisTicks.push({ label: tick.label, x: X(position) })
+      }
+    }
+  } else {
+    axisTicks.push({ label: `${firstYear}-01-01`, x: X(firstYear) })
+    for (let year = firstYear + 1; year <= lastYear; year++) {
+      if (year < actualEndPosition) axisTicks.push({ label: String(year), x: X(year) })
+    }
+  }
+  const actualEndLabel = equityDateLabel(
+    actualEndDate.year,
+    actualEndDate.month,
+    actualEndDate.day,
+  )
+  const lastAxisTick = axisTicks[axisTicks.length - 1]
+  if (lastAxisTick && Math.abs(lastAxisTick.x - X(actualEndPosition)) < 0.1) {
+    lastAxisTick.label = actualEndLabel
+  } else {
+    axisTicks.push({ label: actualEndLabel, x: X(actualEndPosition) })
+  }
+  const gaps = axisTicks.slice(1).map((tick, index) => tick.x - axisTicks[index].x)
+  const rotate = gaps.some((gap) => gap < 60) ? -35 : 0
+  axisTicks.forEach((tick, index) => {
+    tick.rotate = rotate
+    tick.anchor = index === 0 ? 'start' : index === axisTicks.length - 1 ? 'end' : 'middle'
+  })
+
   return {
     w,
     h,
     padL,
     padR,
+    padT,
+    padB,
     grid,
+    axisTicks,
+    xAxisGranularity,
+    yearBoundaries,
+    equityEvents,
+    curvePoints: curveStates,
+    hoverPoints,
+    dataGaps,
     hasIdx,
-    stratPoints: poly(stratEq),
-    idxPoints: poly(idxEq),
-    firstDate: periods[0].score_date,
-    lastDate: periods[periods.length - 1].score_date,
+    stratPath: smoothSvgPath(stratCurvePoints),
+    idxPath: smoothSvgPath(idxCurvePoints),
+    stratSmoothPoints: smoothSvgPoints(stratCurveSamples),
+    idxSmoothPoints: smoothSvgPoints(idxCurveSamples),
+    firstDate: `${firstYear}-01-01`,
+    lastDate: actualEndLabel,
   }
 }
 
