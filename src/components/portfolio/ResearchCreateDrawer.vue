@@ -237,8 +237,8 @@ function onScoreModeChange(event) {
 }
 
 function onNameInput(event) {
-  patchForm({ name: event.target.value })
   emit('name-touched')
+  patchForm({ name: event.target.value })
 }
 
 function onUniverseChange(event) {

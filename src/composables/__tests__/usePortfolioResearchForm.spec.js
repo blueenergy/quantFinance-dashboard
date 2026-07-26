@@ -43,6 +43,37 @@ describe('usePortfolioResearchForm', () => {
     api.rerunPortfolioResearchJob.mockResolvedValue({ data: { job_id: 'job-rerun' } })
   })
 
+  it('names new research from the selected score strategy', () => {
+    const formApi = createForm()
+    expect(formApi.form.value.name).toContain('成长30-动量70加权研究')
+
+    formApi.onDrawerFormUpdate({
+      ...formApi.form.value,
+      score_mode: 'column',
+      score_column: 'fundamental_score',
+    })
+    expect(formApi.form.value.name).toContain('基本面单维研究')
+
+    formApi.onDrawerFormUpdate({
+      ...formApi.form.value,
+      score_mode: 'preset',
+      score_column: 'composite_conservative_score',
+    })
+    expect(formApi.form.value.name).toContain('保守多维组合研究')
+  })
+
+  it('does not overwrite a manually edited research name', () => {
+    const formApi = createForm()
+    formApi.nameTouched.value = true
+    formApi.onDrawerFormUpdate({
+      ...formApi.form.value,
+      name: '我的组合研究',
+      score_mode: 'column',
+      score_column: 'value_score',
+    })
+    expect(formApi.form.value.name).toBe('我的组合研究')
+  })
+
   it('builds and submits a create payload through createPortfolioResearchJob', async () => {
     const formApi = createForm()
     formApi.form.value = {

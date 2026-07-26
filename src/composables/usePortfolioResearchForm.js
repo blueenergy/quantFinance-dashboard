@@ -6,8 +6,14 @@ import {
 import {
   buildPortfolioResearchPayload,
   formatResearchApiError,
+  parseWeightedScoreSpecs,
 } from '../utils/portfolioResearchPayload'
 import { universeName } from '../utils/portfolioResearchView'
+import {
+  ATOMIC_SCORE_OPTIONS,
+  SCORE_DIMENSION_LABELS,
+  compositeScorePreset,
+} from '../utils/scoreUtils'
 
 export function usePortfolioResearchForm({
   selectedJob = ref(null),
@@ -28,13 +34,34 @@ export function usePortfolioResearchForm({
     return new Date().toISOString().slice(0, 10)
   }
 
-  function defaultResearchName(universeValue) {
-    return `${universeName(universeValue)} growth-cycle research`
+  function scoreResearchName(state = {}) {
+    if (state.score_mode === 'column') {
+      const option = ATOMIC_SCORE_OPTIONS.find((item) => item.value === state.score_column)
+      return `${option?.label || '单维'}单维`
+    }
+    if (state.score_mode === 'preset') {
+      const preset = compositeScorePreset(state.score_column)
+      return `${preset?.label || '预定义'}多维组合`
+    }
+    try {
+      const specs = parseWeightedScoreSpecs(state.score_specs || state.growth_cycle_weights)
+      if (!specs.length) return '自定义多维加权'
+      const first = Object.entries(specs[0].weights || {})
+        .map(([dimension, weight]) => `${SCORE_DIMENSION_LABELS[dimension] || dimension}${weight}`)
+        .join('-')
+      return specs.length > 1 ? `${first}等${specs.length}组加权` : `${first}加权`
+    } catch {
+      return '自定义多维加权'
+    }
+  }
+
+  function defaultResearchName(universeValue, state = {}) {
+    return `${universeName(universeValue)} ${scoreResearchName(state)}研究`
   }
 
   function defaultFormState() {
-    return {
-      name: defaultResearchName('csi1000'),
+    const state = {
+      name: '',
       universe_index: 'csi1000',
       start_date: '2023-01-01',
       end_date: todayInputDate(),
@@ -54,6 +81,8 @@ export function usePortfolioResearchForm({
       initial_capital: 1_000_000,
       trailing_stop_pcts: '0,0.15',
     }
+    state.name = defaultResearchName(state.universe_index, state)
+    return state
   }
 
   const form = ref(defaultFormState())
@@ -71,18 +100,19 @@ export function usePortfolioResearchForm({
     drawerMode.value === 'rerun' ? '提交重跑' : '提交研究任务'
   ))
 
-  function syncDefaultName(universeIndex = form.value.universe_index) {
+  function syncDefaultName(universeIndex = form.value.universe_index, state = form.value) {
     if (nameTouched.value) return
-    form.value.name = defaultResearchName(universeIndex)
+    form.value.name = defaultResearchName(universeIndex, state)
   }
 
   function onDrawerFormUpdate(next) {
     form.value = next
+    syncDefaultName(next.universe_index, next)
   }
 
   function buildFormPayload() {
     return buildPortfolioResearchPayload(form.value, {
-      defaultName: defaultResearchName(form.value.universe_index),
+      defaultName: defaultResearchName(form.value.universe_index, form.value),
     })
   }
 
