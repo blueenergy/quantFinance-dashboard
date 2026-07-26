@@ -3,6 +3,7 @@ import {
   buildPortfolioResearchPayload,
   formatResearchApiError,
   parseCsvNumbers,
+  parseWeightedScoreSpecs,
 } from '../portfolioResearchPayload.js'
 
 describe('parseCsvNumbers', () => {
@@ -81,6 +82,48 @@ describe('buildPortfolioResearchPayload', () => {
       trailing_stop_pcts: '0,10,15,20',
     })
     expect(payload.trailing_stop_pcts).toEqual([0, 0.1, 0.15, 0.2])
+  })
+
+  it('builds a single-column score spec without legacy weights', () => {
+    const payload = buildPortfolioResearchPayload({
+      ...baseForm,
+      score_mode: 'column',
+      score_column: 'money_flow_score',
+    })
+    expect(payload.score_specs).toEqual([
+      { mode: 'column', column: 'money_flow_score' },
+    ])
+    expect(payload).not.toHaveProperty('growth_cycle_weights')
+  })
+
+  it('builds generic weighted specs and preserves legacy growth-cycle shortcut', () => {
+    const generic = buildPortfolioResearchPayload({
+      ...baseForm,
+      score_mode: 'weighted',
+      score_specs: 'fundamental:60,value:40',
+    })
+    expect(generic.score_specs).toEqual([
+      { mode: 'weighted', weights: { fundamental: 60, value: 40 } },
+    ])
+    expect(generic).not.toHaveProperty('growth_cycle_weights')
+
+    const legacy = buildPortfolioResearchPayload({
+      ...baseForm,
+      score_mode: 'weighted',
+      score_specs: 'growth:30,cycle:70\ngrowth:60,cycle:40',
+    })
+    expect(legacy.growth_cycle_weights).toEqual(['30:70', '60:40'])
+    expect(legacy).not.toHaveProperty('score_specs')
+  })
+})
+
+describe('parseWeightedScoreSpecs', () => {
+  it('parses multiple lines and rejects malformed items', () => {
+    expect(parseWeightedScoreSpecs('growth:30,cycle:70\nvalue:1')).toEqual([
+      { mode: 'weighted', weights: { growth: 30, cycle: 70 } },
+      { mode: 'weighted', weights: { value: 1 } },
+    ])
+    expect(() => parseWeightedScoreSpecs('growth')).toThrow('格式应为')
   })
 })
 

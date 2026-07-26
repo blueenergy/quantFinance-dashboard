@@ -55,6 +55,15 @@ export function usePortfolioResearchDetail({
     resultDetail.value?.publish_action || selectedJob.value?.publish_action || ''
   ))
   const hasPublishedPreset = computed(() => Boolean(publishedPresetId.value))
+  const publishSupported = computed(() => {
+    const scoreType = candidateConfig.value?.score_type
+    return !scoreType || scoreType === 'growth_cycle_weighted'
+  })
+  const publishDisabledReason = computed(() => (
+    publishSupported.value
+      ? ''
+      : '该评分配方仅用于研究；construction/template 尚未对齐，暂不能发布为参数预设。'
+  ))
   const publishedPresetLabel = computed(() => {
     if (!publishedPresetId.value) return '-'
     return publishedStatus.value
@@ -311,6 +320,8 @@ export function usePortfolioResearchDetail({
     publishedStatus,
     publishAction,
     hasPublishedPreset,
+    publishSupported,
+    publishDisabledReason,
     publishedPresetLabel,
     publishActionLabel,
     deleteDisabledReason,

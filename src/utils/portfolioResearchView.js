@@ -114,6 +114,21 @@ export function formatDurationMs(ms) {
 }
 
 export function jobWeightLabel(job) {
+  const scoreSpecs = job?.params?.score_specs
+  if (Array.isArray(scoreSpecs) && scoreSpecs.length) {
+    return scoreSpecs
+      .map((spec) => {
+        if (spec?.mode === 'column') return spec.column || ''
+        if (spec?.mode === 'weighted' && spec.weights) {
+          return Object.entries(spec.weights)
+            .map(([dimension, weight]) => `${dimension}:${weight}`)
+            .join(',')
+        }
+        return ''
+      })
+      .filter(Boolean)
+      .join(' | ')
+  }
   const weights = job?.params?.growth_cycle_weights
   if (Array.isArray(weights) && weights.length) {
     return weights.join(', ')
@@ -675,6 +690,7 @@ export function buildResearchParamRows(job, options = UNIVERSE_OPTIONS) {
     { key: 'end_date', label: 'end_date', value: compactDate(params.end_date || job.end_date) },
     { key: 'universe_index', label: 'universe', value: universeName(params.universe_index || job.universe_index, options) },
     { key: 'score_column', label: 'score_column', value: params.score_column || '-' },
+    { key: 'score_specs', label: '评分规格', value: jobWeightLabel(job) || params.score_column || '-' },
     { key: 'growth_cycle_weights', label: 'growth:cycle 权重', value: formatList(params.growth_cycle_weights) },
     { key: 'top_n_values', label: 'Top N', value: formatList(params.top_n_values) },
     { key: 'horizon', label: 'horizon', value: params.horizon ?? '-' },

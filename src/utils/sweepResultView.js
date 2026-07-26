@@ -1,7 +1,7 @@
 const AXIS_REGISTRY = [
   { key: 'trailing_stop_pct', label: '浮动止盈', rowKey: 'trailing_stop_pct', paramKeys: ['trailing_stop_pcts', 'trailing_stop_pct'] },
   { key: 'path_gate', label: '路径闸门', rowKey: 'path_gate', paramKeys: ['path_gates'] },
-  { key: 'score_variant', label: 'Score', rowKey: 'score_variant', paramKeys: ['growth_cycle_weights'] },
+  { key: 'score_variant', label: 'Score', rowKey: 'score_variant', paramKeys: ['score_specs', 'growth_cycle_weights'] },
   { key: 'top_n', label: 'Top N', rowKey: 'top_n', paramKeys: ['top_n_values'] },
   { key: 'max_industry_weight', label: '行业上限', rowKey: 'max_industry_weight', paramKeys: ['active_caps'] },
   { key: 'rebalance_interval_days', label: '调仓间隔', rowKey: 'rebalance_interval_days', paramKeys: ['rebalance_interval_days'] },
@@ -210,16 +210,30 @@ export function buildCandidateConfigFromRow(row, job = {}, params = {}) {
   const variant = String(row?.variant || 'top_n')
   const slug = (value) => String(value || '').replace(/[^0-9A-Za-z]+/g, '_').slice(0, 40)
   const presetId = `research_${slug(universe)}_${slug(scoreVariant)}_${slug(variant)}_top${topN}_${rebalanceDays}d_${String(job.job_id || '').slice(0, 8)}`
+  const legacyMatch = scoreVariant.match(/^growth_cycle_g(\d+)_c(\d+)$/)
+  const legacyTotal = legacyMatch ? Number(legacyMatch[1]) + Number(legacyMatch[2]) : 0
+  const growthWeight = row?.growth_weight ?? (
+    legacyTotal > 0 ? Number(legacyMatch[1]) / legacyTotal : undefined
+  )
+  const cycleWeight = row?.cycle_weight ?? (
+    legacyTotal > 0 ? Number(legacyMatch[2]) / legacyTotal : undefined
+  )
+  const scoreType = row?.score_weights
+    ? 'weighted_score'
+    : growthWeight != null && cycleWeight != null
+      ? 'growth_cycle_weighted'
+      : 'score_column'
   return {
     preset_id: presetId,
     strategy_template_id: 'growth_cycle_index_enhanced',
     name: `${universe.toUpperCase()} ${scoreVariant} ${variant} Top${topN} ${rebalanceDays}d`,
     universe_index: universe,
     index_benchmark_symbol: params.index_benchmark_symbol || row?.index_benchmark_symbol || '000852.SH',
-    score_type: row?.growth_weight != null && row?.cycle_weight != null ? 'growth_cycle_weighted' : 'score_column',
+    score_type: scoreType,
     score_column: row?.score_column || params.score_column || 'composite_growth_cycle_score',
-    growth_weight: row?.growth_weight,
-    cycle_weight: row?.cycle_weight,
+    growth_weight: growthWeight,
+    cycle_weight: cycleWeight,
+    score_weights: row?.score_weights,
     top_n: topN,
     rebalance_days: rebalanceDays,
     construction_mode: row?.construction_mode || 'top_n',

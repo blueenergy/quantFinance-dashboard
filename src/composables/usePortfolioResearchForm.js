@@ -38,8 +38,10 @@ export function usePortfolioResearchForm({
       universe_index: 'csi1000',
       start_date: '2023-01-01',
       end_date: todayInputDate(),
+      score_mode: 'weighted',
       score_column: 'composite_growth_cycle_score',
       growth_cycle_weights: '30:70',
+      score_specs: 'growth:30,cycle:70',
       top_n_values: '10,20,50',
       horizon: 20,
       active_caps: '0.2,0.25,0.3,0.4',
@@ -148,6 +150,29 @@ export function usePortfolioResearchForm({
     return String(params.trailing_stop_pct)
   }
 
+  function formatScoreSpecsForInput(scoreSpecs) {
+    if (!Array.isArray(scoreSpecs)) return ''
+    return scoreSpecs
+      .filter((spec) => spec?.mode === 'weighted' && spec.weights)
+      .map((spec) => Object.entries(spec.weights)
+        .map(([dimension, weight]) => `${dimension}:${weight}`)
+        .join(','))
+      .join('\n')
+  }
+
+  function legacyWeightsToScoreSpecs(value) {
+    const weights = Array.isArray(value) ? value : [value]
+    return weights
+      .filter((item) => item != null && String(item).trim())
+      .map((item) => {
+        const [growth, cycle] = String(item).split(':')
+        return cycle == null
+          ? `growth:${growth}`
+          : `growth:${growth},cycle:${cycle}`
+      })
+      .join('\n')
+  }
+
   function withRerunNameSuffix(baseName) {
     const name = String(baseName || '').trim() || '组合研究'
     if (name.endsWith('(rerun)')) return name
@@ -167,6 +192,16 @@ export function usePortfolioResearchForm({
     )
     const baseName = job.name || params.name || defaultResearchName(universe)
     const defaults = defaultFormState()
+    const scoreSpecs = Array.isArray(params.score_specs) ? params.score_specs : []
+    const columnSpec = scoreSpecs.length === 1 && scoreSpecs[0]?.mode === 'column'
+      ? scoreSpecs[0]
+      : null
+    const hasWeightedSpecs = scoreSpecs.some((spec) => spec?.mode === 'weighted')
+    const hasLegacyWeights = (
+      Array.isArray(params.growth_cycle_weights)
+        ? params.growth_cycle_weights.length > 0
+        : Boolean(params.growth_cycle_weights)
+    )
 
     form.value = {
       ...defaults,
@@ -174,8 +209,12 @@ export function usePortfolioResearchForm({
       universe_index: universe,
       start_date: toDateInputValue(params.start_date || job.start_date) || defaults.start_date,
       end_date: toDateInputValue(params.end_date || job.end_date) || defaults.end_date,
-      score_column: params.score_column || defaults.score_column,
+      score_mode: columnSpec || (!hasWeightedSpecs && !hasLegacyWeights) ? 'column' : 'weighted',
+      score_column: columnSpec?.column || params.score_column || defaults.score_column,
       growth_cycle_weights: formatListForInput(params.growth_cycle_weights) || defaults.growth_cycle_weights,
+      score_specs: hasWeightedSpecs
+        ? formatScoreSpecsForInput(scoreSpecs)
+        : legacyWeightsToScoreSpecs(params.growth_cycle_weights) || defaults.score_specs,
       top_n_values: formatListForInput(params.top_n_values) || defaults.top_n_values,
       horizon: Number.isFinite(horizon) && horizon > 0 ? horizon : defaults.horizon,
       active_caps: formatListForInput(params.active_caps) || defaults.active_caps,

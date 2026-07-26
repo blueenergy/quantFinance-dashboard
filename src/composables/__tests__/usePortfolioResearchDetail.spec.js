@@ -149,6 +149,21 @@ describe('usePortfolioResearchDetail', () => {
     host.wrapper.unmount()
   })
 
+  it('marks generic score research as not publishable', async () => {
+    const host = mountDetail()
+    host.detailApi.resultDetail.value = {
+      candidate_strategy_config: {
+        score_type: 'weighted_score',
+        score_weights: { fundamental: 0.6, value: 0.4 },
+      },
+    }
+    await flushPromises()
+
+    expect(host.detailApi.publishSupported.value).toBe(false)
+    expect(host.detailApi.publishDisabledReason.value).toContain('暂不能发布')
+    host.wrapper.unmount()
+  })
+
   it('refreshes the selected detail and jobs after publishing', async () => {
     const loadJobs = vi.fn()
     const setMessage = vi.fn()

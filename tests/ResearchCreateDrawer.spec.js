@@ -7,8 +7,10 @@ const baseForm = {
   universe_index: 'csi1000',
   start_date: '2023-01-01',
   end_date: '2024-01-01',
+  score_mode: 'weighted',
   score_column: 'composite_growth_cycle_score',
   growth_cycle_weights: '30:70',
+  score_specs: 'growth:30,cycle:70',
   top_n_values: '10,20',
   horizon: 20,
   active_caps: '0.2',
@@ -101,6 +103,23 @@ describe('ResearchCreateDrawer', () => {
     await wrapper.find('select').setValue('csi300')
 
     expect(observations).toEqual(['update:csi300', 'change:csi300:csi300'])
+  })
+
+  it('switches between weighted recipes and single score columns', async () => {
+    const wrapper = mountDrawer()
+    expect(wrapper.text()).toContain('多维加权配方')
+    expect(wrapper.find('textarea').exists()).toBe(true)
+
+    const modeSelect = wrapper.findAll('select').find((select) => (
+      select.find('option[value="column"]').exists()
+    ))
+    await modeSelect.setValue('column')
+    const next = wrapper.emitted('update:form').at(-1)[0]
+    expect(next.score_mode).toBe('column')
+
+    await wrapper.setProps({ form: { ...baseForm, score_mode: 'column' } })
+    expect(wrapper.text()).toContain('评分列')
+    expect(wrapper.find('textarea').exists()).toBe(false)
   })
 
   it('preserves v-model.number empty and numeric values without NaN', async () => {

@@ -41,17 +41,30 @@
             <input :value="form.end_date" type="date" @input="patchForm({ end_date: $event.target.value })" />
           </label>
           <label>
-            score_column
-            <input :value="form.score_column" @input="patchForm({ score_column: $event.target.value })" />
+            评分模式
+            <select :value="form.score_mode || 'weighted'" @change="patchForm({ score_mode: $event.target.value })">
+              <option value="column">单维 / 单评分列</option>
+              <option value="weighted">多维加权配方</option>
+            </select>
           </label>
-          <label>
-            growth:cycle 权重
-            <input
-              :value="form.growth_cycle_weights"
-              placeholder="30:70,40:60"
-              @input="patchForm({ growth_cycle_weights: $event.target.value })"
+          <label v-if="(form.score_mode || 'weighted') === 'column'">
+            评分列
+            <select :value="form.score_column" @change="patchForm({ score_column: $event.target.value })">
+              <option v-for="option in scoreColumnOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+            <small class="field-hint">六维原子分或已有 composite 评分</small>
+          </label>
+          <label v-else class="score-spec-field">
+            多维加权配方
+            <textarea
+              :value="form.score_specs"
+              rows="3"
+              placeholder="growth:30,cycle:70&#10;fundamental:60,value:40"
+              @input="patchForm({ score_specs: $event.target.value })"
             />
-            <small class="field-hint">逗号分隔可对比多组，如 30:70,60:40</small>
+            <small class="field-hint">每行一组配方；维度以逗号分隔。纯 growth+cycle 自动走兼容路径。</small>
           </label>
           <label>
             Top N
@@ -176,6 +189,25 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'submit', 'update:form', 'name-touched', 'universe-change'])
 
+const scoreColumnOptions = [
+  { value: 'technical_score', label: '技术 technical' },
+  { value: 'fundamental_score', label: '基本面 fundamental' },
+  { value: 'value_score', label: '价值 value' },
+  { value: 'growth_score', label: '成长 growth' },
+  { value: 'money_flow_score', label: '资金 money flow' },
+  { value: 'cycle_score', label: '周期 cycle' },
+  { value: 'composite_score', label: '综合 composite' },
+  { value: 'composite_balanced_score', label: '综合·均衡' },
+  { value: 'composite_aggressive_score', label: '综合·进取' },
+  { value: 'composite_conservative_score', label: '综合·保守' },
+  { value: 'composite_defensive_score', label: '综合·防御' },
+  { value: 'composite_value_oriented_score', label: '综合·价值' },
+  { value: 'composite_trading_oriented_score', label: '综合·交易' },
+  { value: 'composite_growth_oriented_score', label: '综合·成长' },
+  { value: 'composite_cycle_oriented_score', label: '综合·周期' },
+  { value: 'composite_growth_cycle_score', label: '综合·成长周期' },
+]
+
 function patchForm(patch) {
   const next = { ...props.form, ...patch }
   emit('update:form', next)
@@ -266,11 +298,20 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   border: 1px solid #d9e1ec;
   border-radius: 8px;
   padding: 8px 10px;
   font: inherit;
+}
+
+.score-spec-field {
+  grid-column: 1 / -1;
+}
+
+textarea {
+  resize: vertical;
 }
 
 .field-hint {

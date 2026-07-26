@@ -29,6 +29,41 @@ export function parseCsvNumbers(value, mapper = Number) {
   return items
 }
 
+export function parseWeightedScoreSpecs(value) {
+  const lines = String(value ?? '')
+    .split(/[;\n]+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  return lines.map((line) => {
+    const weights = {}
+    for (const token of line.split(/[,，]/).map((item) => item.trim()).filter(Boolean)) {
+      const separator = token.indexOf(':')
+      if (separator <= 0) {
+        throw new Error(`无效加权项「${token}」，格式应为 dimension:weight`)
+      }
+      const dimension = token.slice(0, separator).trim()
+      const weight = Number(token.slice(separator + 1).trim())
+      if (!dimension || !Number.isFinite(weight)) {
+        throw new Error(`无效加权项「${token}」`)
+      }
+      weights[dimension] = weight
+    }
+    return { mode: 'weighted', weights }
+  })
+}
+
+function legacyGrowthCycleWeights(scoreSpecs) {
+  if (!scoreSpecs.length) return null
+  const values = []
+  for (const spec of scoreSpecs) {
+    const dimensions = Object.keys(spec.weights || {}).sort()
+    if (dimensions.join(',') !== 'cycle,growth') return null
+    values.push(`${spec.weights.growth}:${spec.weights.cycle}`)
+  }
+  return values
+}
+
 function asOptionalNumber(value) {
   if (value == null || value === '') return undefined
   const num = typeof value === 'number' ? value : Number(value)
@@ -61,17 +96,32 @@ function omitEmpty(payload) {
 export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
   const form = formState || {}
   const horizon = asOptionalNumber(form.horizon)
+  const scoreMode = form.score_mode || ''
   const payload = {
     name: form.name || defaultName || '组合研究',
     universe_index: form.universe_index,
     start_date: form.start_date,
     end_date: form.end_date,
     score_column: form.score_column,
-    growth_cycle_weights: parseCsvNumbers(form.growth_cycle_weights, String),
     top_n_values: parseCsvNumbers(form.top_n_values, Number).map((n) => Math.trunc(n)),
     active_caps: parseCsvNumbers(form.active_caps, Number),
     trailing_stop_pcts: normalizeTrailingStopList(parseCsvNumbers(form.trailing_stop_pcts, Number)),
     force: true,
+  }
+
+  if (scoreMode === 'column') {
+    payload.score_specs = [{ mode: 'column', column: form.score_column }]
+  } else if (scoreMode === 'weighted') {
+    const scoreSpecs = parseWeightedScoreSpecs(form.score_specs || form.growth_cycle_weights)
+    const legacyWeights = legacyGrowthCycleWeights(scoreSpecs)
+    if (legacyWeights) {
+      payload.growth_cycle_weights = legacyWeights
+    } else {
+      payload.score_specs = scoreSpecs
+    }
+  } else {
+    // Backward-compatible form state used by old saved jobs and tests.
+    payload.growth_cycle_weights = parseCsvNumbers(form.growth_cycle_weights, String)
   }
 
   if (horizon != null && horizon >= 1) {

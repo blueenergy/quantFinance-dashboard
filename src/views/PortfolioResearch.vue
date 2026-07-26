@@ -174,16 +174,19 @@
                   <p class="muted">{{ candidateConfig.name || candidateConfig.preset_id }}</p>
                 </div>
                 <div class="actions">
-                  <button type="button" :disabled="publishLoading || hasPublishedPreset" @click="publish('draft')">
+                  <button type="button" :disabled="publishLoading || hasPublishedPreset || !publishSupported" @click="publish('draft')">
                     保存为 draft 预设
                   </button>
-                  <button type="button" :disabled="publishLoading || hasPublishedPreset" @click="publish('enabled')">
+                  <button type="button" :disabled="publishLoading || hasPublishedPreset || !publishSupported" @click="publish('enabled')">
                     保存并启用预设
                   </button>
                 </div>
               </div>
               <p v-if="hasPublishedPreset" class="muted">
                 该研究结果已经保存为参数预设，不能重复启用。
+              </p>
+              <p v-else-if="!publishSupported" class="muted">
+                {{ publishDisabledReason }}
               </p>
               <div class="config-grid">
                 <span><strong>top_n</strong>{{ candidateConfig.top_n ?? '-' }}</span>
@@ -293,6 +296,8 @@ const {
   candidateConfig,
   researchParamRows,
   hasPublishedPreset,
+  publishSupported,
+  publishDisabledReason,
   publishedPresetLabel,
   publishActionLabel,
   deleteDisabledReason,
