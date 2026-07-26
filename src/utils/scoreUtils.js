@@ -27,6 +27,91 @@ export const SCORE_DIMENSION_LABELS = {
   money_flow: '资金',
 }
 
+export const ATOMIC_SCORE_OPTIONS = [
+  { dimension: 'technical', value: 'technical_score', label: '技术' },
+  { dimension: 'fundamental', value: 'fundamental_score', label: '基本面' },
+  { dimension: 'value', value: 'value_score', label: '价值' },
+  { dimension: 'growth', value: 'growth_score', label: '成长' },
+  { dimension: 'money_flow', value: 'money_flow_score', label: '资金' },
+  { dimension: 'cycle', value: 'cycle_score', label: '动量' },
+]
+
+// Mirrors StockAnalyzer.load_weight_strategies. Composite presets keep using
+// their stored historical score columns; these weights explain their meaning.
+export const COMPOSITE_SCORE_PRESETS = [
+  {
+    column: 'composite_balanced_score',
+    label: '均衡',
+    description: '质量与估值为基础，兼顾技术、成长、资金和动量',
+    weights: { fundamental: 25, value: 20, technical: 20, growth: 15, money_flow: 10, cycle: 10 },
+  },
+  {
+    column: 'composite_conservative_score',
+    label: '保守',
+    description: '偏重基本面、价值和成长，降低资金与动量权重',
+    weights: { fundamental: 30, value: 25, growth: 20, technical: 15, money_flow: 5, cycle: 5 },
+  },
+  {
+    column: 'composite_defensive_score',
+    label: '防御',
+    description: '基本面与价值合计 70%，强调质量和安全边际',
+    weights: { fundamental: 35, value: 35, growth: 10, technical: 10, money_flow: 5, cycle: 5 },
+  },
+  {
+    column: 'composite_aggressive_score',
+    label: '激进',
+    description: '技术与资金合计 60%，偏向高敏感度交易信号',
+    weights: { technical: 35, money_flow: 25, fundamental: 15, growth: 10, value: 10, cycle: 5 },
+  },
+  {
+    column: 'composite_value_oriented_score',
+    label: '价值导向',
+    description: '基本面与价值各 30%，寻找优质低估股票',
+    weights: { fundamental: 30, value: 30, growth: 15, technical: 15, money_flow: 5, cycle: 5 },
+  },
+  {
+    column: 'composite_growth_oriented_score',
+    label: '成长导向',
+    description: '成长 35%、基本面 25%，兼顾技术确认',
+    weights: { growth: 35, fundamental: 25, technical: 20, money_flow: 10, value: 5, cycle: 5 },
+  },
+  {
+    column: 'composite_trading_oriented_score',
+    label: '交易导向',
+    description: '技术 40%、资金 25%，强调短期趋势与资金行为',
+    weights: { technical: 40, money_flow: 25, fundamental: 15, growth: 10, value: 5, cycle: 5 },
+  },
+  {
+    column: 'composite_cycle_oriented_score',
+    label: '动量导向',
+    description: '动量 40%，搭配基本面与价值确认中期趋势',
+    weights: { cycle: 40, fundamental: 20, value: 15, technical: 10, growth: 10, money_flow: 5 },
+  },
+  {
+    column: 'composite_growth_cycle_score',
+    label: '成长×动量 60:40',
+    description: '研究层兼容组合：成长 60%、动量 40%',
+    weights: { growth: 60, cycle: 40 },
+  },
+]
+
+export function compositeScorePreset(column) {
+  return COMPOSITE_SCORE_PRESETS.find((preset) => preset.column === column) || null
+}
+
+export function scoreWeightSummary(weights) {
+  if (!weights || typeof weights !== 'object') return ''
+  return Object.entries(weights)
+    .filter(([, weight]) => Number.isFinite(Number(weight)) && Number(weight) > 0)
+    .map(([dimension, weight]) => {
+      const numeric = Number(weight)
+      const pct = numeric <= 1 ? numeric * 100 : numeric
+      const display = Number.isInteger(pct) ? String(pct) : pct.toFixed(2).replace(/\.?0+$/, '')
+      return `${SCORE_DIMENSION_LABELS[dimension] || dimension} ${display}%`
+    })
+    .join(' · ')
+}
+
 export const DEFAULT_RANKING_WEIGHTS = {
   growth: 60,
   cycle: 40,

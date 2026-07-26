@@ -118,8 +118,22 @@ describe('ResearchCreateDrawer', () => {
     expect(next.score_mode).toBe('column')
 
     await wrapper.setProps({ form: { ...baseForm, score_mode: 'column' } })
-    expect(wrapper.text()).toContain('评分列')
+    expect(wrapper.text()).toContain('单一维度')
     expect(wrapper.find('textarea').exists()).toBe(false)
+  })
+
+  it('shows actual preset weights for predefined multi-dimension scores', async () => {
+    const wrapper = mountDrawer({
+      form: {
+        ...baseForm,
+        score_mode: 'preset',
+        score_column: 'composite_conservative_score',
+      },
+    })
+    expect(wrapper.text()).toContain('保守')
+    expect(wrapper.text()).toContain('基本面 30%')
+    expect(wrapper.text()).toContain('价值 25%')
+    expect(wrapper.text()).toContain('成长 20%')
   })
 
   it('preserves v-model.number empty and numeric values without NaN', async () => {

@@ -60,6 +60,25 @@ describe('sweepResultView', () => {
     expect(candidate.top_n).toBe(10)
   })
 
+  it('expands predefined composite scores into display weights', () => {
+    const candidate = buildCandidateConfigFromRow(
+      {
+        score_column: 'composite_value_oriented_score',
+        score_variant: 'composite_value_oriented_score',
+        top_n: 10,
+      },
+      { job_id: 'job-1' },
+      { universe_index: 'csi1000' },
+    )
+    expect(candidate.score_type).toBe('score_column')
+    expect(candidate.score_preset_label).toBe('价值导向')
+    expect(candidate.score_weights).toMatchObject({
+      fundamental: 0.3,
+      value: 0.3,
+      growth: 0.15,
+    })
+  })
+
   it('normalizes legacy percent-point trailing stop values for display', () => {
     expect(formatAxisValue('trailing_stop_pct', 10)).toBe('10%')
     expect(formatAxisValue('trailing_stop_pct', 0.1)).toBe('10%')

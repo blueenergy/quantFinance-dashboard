@@ -168,6 +168,23 @@ describe('usePortfolioResearchForm', () => {
     expect(formApi.form.value.top_n_values).toBe('10,20,50')
   })
 
+  it('loads composite score columns as predefined multi-dimension presets', () => {
+    const selectedJob = ref({
+      job_id: 'job-preset',
+      params: {
+        score_specs: [
+          { mode: 'column', column: 'composite_defensive_score' },
+        ],
+      },
+    })
+    const formApi = createForm({ selectedJob })
+
+    formApi.loadParamsFromSelectedJob()
+
+    expect(formApi.form.value.score_mode).toBe('preset')
+    expect(formApi.form.value.score_column).toBe('composite_defensive_score')
+  })
+
   it('focuses the drawer and restores focus when Escape closes it', async () => {
     document.body.innerHTML = `
       <button id="open-drawer">Open</button>

@@ -109,7 +109,7 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
     force: true,
   }
 
-  if (scoreMode === 'column') {
+  if (scoreMode === 'column' || scoreMode === 'preset') {
     payload.score_specs = [{ mode: 'column', column: form.score_column }]
   } else if (scoreMode === 'weighted') {
     const scoreSpecs = parseWeightedScoreSpecs(form.score_specs || form.growth_cycle_weights)

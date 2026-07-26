@@ -47,6 +47,11 @@ describe('jobWeightLabel', () => {
   it('joins array weights and trims string weights', () => {
     expect(jobWeightLabel({ params: { growth_cycle_weights: ['30:70', '40:60'] } })).toBe('30:70, 40:60')
     expect(jobWeightLabel({ params: { growth_cycle_weights: '  50:50  ' } })).toBe('50:50')
+    expect(jobWeightLabel({
+      params: {
+        score_specs: [{ mode: 'column', column: 'composite_conservative_score' }],
+      },
+    })).toContain('基本面 30%')
     expect(jobWeightLabel({ params: {} })).toBe('')
   })
 })

@@ -96,6 +96,18 @@ describe('buildPortfolioResearchPayload', () => {
     expect(payload).not.toHaveProperty('growth_cycle_weights')
   })
 
+  it('treats predefined composites as multi-dimension preset columns', () => {
+    const payload = buildPortfolioResearchPayload({
+      ...baseForm,
+      score_mode: 'preset',
+      score_column: 'composite_conservative_score',
+    })
+    expect(payload.score_specs).toEqual([
+      { mode: 'column', column: 'composite_conservative_score' },
+    ])
+    expect(payload).not.toHaveProperty('growth_cycle_weights')
+  })
+
   it('builds generic weighted specs and preserves legacy growth-cycle shortcut', () => {
     const generic = buildPortfolioResearchPayload({
       ...baseForm,

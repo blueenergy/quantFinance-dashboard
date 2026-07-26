@@ -193,8 +193,15 @@
                 <span><strong>rebalance</strong>{{ candidateConfig.rebalance_days ? `${candidateConfig.rebalance_days}d` : '-' }}</span>
                 <span><strong>mode</strong>{{ candidateConfig.construction_mode || '-' }}</span>
                 <span><strong>industry cap</strong>{{ pct(candidateConfig.max_industry_weight) }}</span>
-                <span><strong>growth</strong>{{ pct(candidateConfig.growth_weight) }}</span>
-                <span><strong>cycle</strong>{{ pct(candidateConfig.cycle_weight) }}</span>
+                <template v-if="candidateConfig.score_weights">
+                  <span v-for="(weight, dimension) in candidateConfig.score_weights" :key="dimension">
+                    <strong>{{ SCORE_DIMENSION_LABELS[dimension] || dimension }}</strong>{{ pct(weight) }}
+                  </span>
+                </template>
+                <template v-else>
+                  <span><strong>growth</strong>{{ pct(candidateConfig.growth_weight) }}</span>
+                  <span><strong>cycle</strong>{{ pct(candidateConfig.cycle_weight) }}</span>
+                </template>
                 <span><strong>benchmark</strong>{{ candidateConfig.index_benchmark_symbol || '-' }}</span>
                 <span><strong>initial capital</strong>{{ money(candidateConfig.initial_capital) }}</span>
                 <span><strong>cash buffer</strong>{{ pct(candidateConfig.cash_buffer) }}</span>
@@ -256,6 +263,7 @@ import { usePortfolioResearchDetail } from '../composables/usePortfolioResearchD
 import { usePortfolioResearchForm } from '../composables/usePortfolioResearchForm'
 import { usePortfolioResearchJobs } from '../composables/usePortfolioResearchJobs'
 import { formatResearchApiError } from '../utils/portfolioResearchPayload'
+import { SCORE_DIMENSION_LABELS } from '../utils/scoreUtils'
 import {
   UNIVERSE_OPTIONS,
   actualDataStartNotice,

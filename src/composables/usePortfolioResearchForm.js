@@ -173,6 +173,10 @@ export function usePortfolioResearchForm({
       .join('\n')
   }
 
+  function isCompositeScoreColumn(column) {
+    return column === 'composite_score' || String(column || '').startsWith('composite_')
+  }
+
   function withRerunNameSuffix(baseName) {
     const name = String(baseName || '').trim() || '组合研究'
     if (name.endsWith('(rerun)')) return name
@@ -209,7 +213,11 @@ export function usePortfolioResearchForm({
       universe_index: universe,
       start_date: toDateInputValue(params.start_date || job.start_date) || defaults.start_date,
       end_date: toDateInputValue(params.end_date || job.end_date) || defaults.end_date,
-      score_mode: columnSpec || (!hasWeightedSpecs && !hasLegacyWeights) ? 'column' : 'weighted',
+      score_mode: columnSpec
+        ? (isCompositeScoreColumn(columnSpec.column) ? 'preset' : 'column')
+        : (!hasWeightedSpecs && !hasLegacyWeights
+            ? (isCompositeScoreColumn(params.score_column) ? 'preset' : 'column')
+            : 'weighted'),
       score_column: columnSpec?.column || params.score_column || defaults.score_column,
       growth_cycle_weights: formatListForInput(params.growth_cycle_weights) || defaults.growth_cycle_weights,
       score_specs: hasWeightedSpecs

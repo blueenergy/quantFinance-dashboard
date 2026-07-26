@@ -42,19 +42,33 @@
           </label>
           <label>
             评分模式
-            <select :value="form.score_mode || 'weighted'" @change="patchForm({ score_mode: $event.target.value })">
-              <option value="column">单维 / 单评分列</option>
-              <option value="weighted">多维加权配方</option>
+            <select :value="form.score_mode || 'weighted'" @change="onScoreModeChange">
+              <option value="column">单维评分</option>
+              <option value="preset">预定义多维组合</option>
+              <option value="weighted">自定义多维加权</option>
             </select>
           </label>
           <label v-if="(form.score_mode || 'weighted') === 'column'">
-            评分列
+            单一维度
             <select :value="form.score_column" @change="patchForm({ score_column: $event.target.value })">
-              <option v-for="option in scoreColumnOptions" :key="option.value" :value="option.value">
+              <option v-for="option in ATOMIC_SCORE_OPTIONS" :key="option.value" :value="option.value">
                 {{ option.label }}
               </option>
             </select>
-            <small class="field-hint">六维原子分或已有 composite 评分</small>
+            <small class="field-hint">只使用一个原子维度排序，不包含任何综合分</small>
+          </label>
+          <label v-else-if="form.score_mode === 'preset'" class="score-spec-field">
+            预定义组合
+            <select :value="form.score_column" @change="patchForm({ score_column: $event.target.value })">
+              <option v-for="preset in COMPOSITE_SCORE_PRESETS" :key="preset.column" :value="preset.column">
+                {{ preset.label }}
+              </option>
+            </select>
+            <div v-if="selectedCompositePreset" class="weight-breakdown">
+              <strong>{{ selectedCompositePreset.label }}</strong>
+              <span>{{ selectedCompositePreset.description }}</span>
+              <span>{{ scoreWeightSummary(selectedCompositePreset.weights) }}</span>
+            </div>
           </label>
           <label v-else class="score-spec-field">
             多维加权配方
@@ -177,6 +191,14 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import {
+  ATOMIC_SCORE_OPTIONS,
+  COMPOSITE_SCORE_PRESETS,
+  compositeScorePreset,
+  scoreWeightSummary,
+} from '../../utils/scoreUtils'
+
 const props = defineProps({
   open: { type: Boolean, default: false },
   form: { type: Object, required: true },
@@ -189,24 +211,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'submit', 'update:form', 'name-touched', 'universe-change'])
 
-const scoreColumnOptions = [
-  { value: 'technical_score', label: '技术 technical' },
-  { value: 'fundamental_score', label: '基本面 fundamental' },
-  { value: 'value_score', label: '价值 value' },
-  { value: 'growth_score', label: '成长 growth' },
-  { value: 'money_flow_score', label: '资金 money flow' },
-  { value: 'cycle_score', label: '周期 cycle' },
-  { value: 'composite_score', label: '综合 composite' },
-  { value: 'composite_balanced_score', label: '综合·均衡' },
-  { value: 'composite_aggressive_score', label: '综合·进取' },
-  { value: 'composite_conservative_score', label: '综合·保守' },
-  { value: 'composite_defensive_score', label: '综合·防御' },
-  { value: 'composite_value_oriented_score', label: '综合·价值' },
-  { value: 'composite_trading_oriented_score', label: '综合·交易' },
-  { value: 'composite_growth_oriented_score', label: '综合·成长' },
-  { value: 'composite_cycle_oriented_score', label: '综合·周期' },
-  { value: 'composite_growth_cycle_score', label: '综合·成长周期' },
-]
+const selectedCompositePreset = computed(() => compositeScorePreset(props.form.score_column))
 
 function patchForm(patch) {
   const next = { ...props.form, ...patch }
@@ -217,6 +222,18 @@ function patchForm(patch) {
 function patchNumber(key, raw) {
   const number = Number.parseFloat(raw)
   patchForm({ [key]: Number.isNaN(number) ? raw : number })
+}
+
+function onScoreModeChange(event) {
+  const scoreMode = event.target.value
+  const patch = { score_mode: scoreMode }
+  if (scoreMode === 'column' && !ATOMIC_SCORE_OPTIONS.some((option) => option.value === props.form.score_column)) {
+    patch.score_column = 'fundamental_score'
+  }
+  if (scoreMode === 'preset' && !compositeScorePreset(props.form.score_column)) {
+    patch.score_column = 'composite_balanced_score'
+  }
+  patchForm(patch)
 }
 
 function onNameInput(event) {
@@ -318,6 +335,18 @@ textarea {
   font-weight: 400;
   color: #94a3b8;
   font-size: 12px;
+}
+
+.weight-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #334155;
+  font-weight: 400;
 }
 
 button {

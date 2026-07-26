@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { getCompositeScore, formatDateDisplay, generateCSV, deduplicateStocksByLatestDate } from '../scoreUtils.js'
+import {
+  compositeScorePreset,
+  deduplicateStocksByLatestDate,
+  formatDateDisplay,
+  generateCSV,
+  getCompositeScore,
+  scoreWeightSummary,
+} from '../scoreUtils.js'
 
 describe('scoreUtils', () => {
   describe('getCompositeScore', () => {
@@ -16,6 +23,22 @@ describe('scoreUtils', () => {
       const s = { composite_score: { balanced: 80, aggressive: 82 } }
       expect(getCompositeScore(s, 'aggressive')).toBe(82)
       expect(getCompositeScore(s, 'nonexistent')).toBe(0)
+    })
+  })
+
+  describe('composite score presets', () => {
+    it('exposes the actual weights behind a named preset', () => {
+      const preset = compositeScorePreset('composite_aggressive_score')
+      expect(preset.weights).toEqual({
+        technical: 35,
+        money_flow: 25,
+        fundamental: 15,
+        growth: 10,
+        value: 10,
+        cycle: 5,
+      })
+      expect(scoreWeightSummary(preset.weights)).toContain('技术 35%')
+      expect(scoreWeightSummary(preset.weights)).toContain('资金 25%')
     })
   })
 

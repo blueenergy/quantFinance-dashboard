@@ -1,3 +1,5 @@
+import { compositeScorePreset } from './scoreUtils'
+
 const AXIS_REGISTRY = [
   { key: 'trailing_stop_pct', label: '浮动止盈', rowKey: 'trailing_stop_pct', paramKeys: ['trailing_stop_pcts', 'trailing_stop_pct'] },
   { key: 'path_gate', label: '路径闸门', rowKey: 'path_gate', paramKeys: ['path_gates'] },
@@ -207,6 +209,15 @@ export function buildCandidateConfigFromRow(row, job = {}, params = {}) {
   const topN = Number(row?.top_n || params.top_n_values?.[0] || 10)
   const rebalanceDays = Number(row?.rebalance_interval_days || params.horizon || 20)
   const scoreVariant = String(row?.score_variant || params.score_column || 'score')
+  const scoreColumn = row?.score_column || params.score_column || 'composite_growth_cycle_score'
+  const compositePreset = compositeScorePreset(scoreColumn)
+  const displayScoreWeights = row?.score_weights || (
+    compositePreset
+      ? Object.fromEntries(
+          Object.entries(compositePreset.weights).map(([dimension, weight]) => [dimension, Number(weight) / 100]),
+        )
+      : undefined
+  )
   const variant = String(row?.variant || 'top_n')
   const slug = (value) => String(value || '').replace(/[^0-9A-Za-z]+/g, '_').slice(0, 40)
   const presetId = `research_${slug(universe)}_${slug(scoreVariant)}_${slug(variant)}_top${topN}_${rebalanceDays}d_${String(job.job_id || '').slice(0, 8)}`
@@ -230,10 +241,12 @@ export function buildCandidateConfigFromRow(row, job = {}, params = {}) {
     universe_index: universe,
     index_benchmark_symbol: params.index_benchmark_symbol || row?.index_benchmark_symbol || '000852.SH',
     score_type: scoreType,
-    score_column: row?.score_column || params.score_column || 'composite_growth_cycle_score',
+    score_column: scoreColumn,
     growth_weight: growthWeight,
     cycle_weight: cycleWeight,
-    score_weights: row?.score_weights,
+    score_weights: displayScoreWeights,
+    score_preset_label: compositePreset?.label,
+    score_preset_description: compositePreset?.description,
     top_n: topN,
     rebalance_days: rebalanceDays,
     construction_mode: row?.construction_mode || 'top_n',

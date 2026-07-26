@@ -1,5 +1,7 @@
 /** Display helpers for Portfolio Research (no network, no Vue refs). */
 
+import { compositeScorePreset, scoreWeightSummary } from './scoreUtils'
+
 export const UNIVERSE_OPTIONS = [
   { value: 'hs300', label: 'hs300 - 沪深300' },
   { value: 'a500', label: 'a500 - 中证A500' },
@@ -118,11 +120,14 @@ export function jobWeightLabel(job) {
   if (Array.isArray(scoreSpecs) && scoreSpecs.length) {
     return scoreSpecs
       .map((spec) => {
-        if (spec?.mode === 'column') return spec.column || ''
+        if (spec?.mode === 'column') {
+          const preset = compositeScorePreset(spec.column)
+          return preset
+            ? `${preset.label}（${scoreWeightSummary(preset.weights)}）`
+            : spec.column || ''
+        }
         if (spec?.mode === 'weighted' && spec.weights) {
-          return Object.entries(spec.weights)
-            .map(([dimension, weight]) => `${dimension}:${weight}`)
-            .join(',')
+          return scoreWeightSummary(spec.weights)
         }
         return ''
       })
