@@ -88,6 +88,16 @@ function omitEmpty(payload) {
   return next
 }
 
+/** Unique non-empty score column names from multi-select or legacy single field. */
+export function resolveScoreColumns(formState = {}) {
+  const fromList = Array.isArray(formState.score_columns)
+    ? formState.score_columns.map((item) => String(item || '').trim()).filter(Boolean)
+    : []
+  if (fromList.length) return [...new Set(fromList)]
+  const single = String(formState.score_column || '').trim()
+  return single ? [single] : []
+}
+
 /**
  * Build create/rerun API body from the research drawer form state.
  * Coerces CSV fields and drops empty/invalid optional numbers so FastAPI
@@ -95,14 +105,19 @@ function omitEmpty(payload) {
  */
 export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
   const form = formState || {}
-  const horizon = asOptionalNumber(form.horizon)
   const scoreMode = form.score_mode || ''
+  const scoreColumns = resolveScoreColumns(form)
+  const rebalanceIntervals = [...new Set(
+    parseCsvNumbers(form.horizon, Number)
+      .map((n) => Math.trunc(n))
+      .filter((n) => n >= 1),
+  )].sort((a, b) => a - b)
   const payload = {
     name: form.name || defaultName || '组合研究',
     universe_index: form.universe_index,
     start_date: form.start_date,
     end_date: form.end_date,
-    score_column: form.score_column,
+    score_column: scoreColumns[0] || form.score_column,
     top_n_values: parseCsvNumbers(form.top_n_values, Number).map((n) => Math.trunc(n)),
     active_caps: parseCsvNumbers(form.active_caps, Number),
     trailing_stop_pcts: normalizeTrailingStopList(parseCsvNumbers(form.trailing_stop_pcts, Number)),
@@ -110,7 +125,10 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
   }
 
   if (scoreMode === 'column' || scoreMode === 'preset') {
-    payload.score_specs = [{ mode: 'column', column: form.score_column }]
+    if (!scoreColumns.length) {
+      throw new Error(scoreMode === 'preset' ? '请至少选择一个预定义组合' : '请至少选择一个评分维度')
+    }
+    payload.score_specs = scoreColumns.map((column) => ({ mode: 'column', column }))
   } else if (scoreMode === 'weighted') {
     const scoreSpecs = parseWeightedScoreSpecs(form.score_specs || form.growth_cycle_weights)
     const legacyWeights = legacyGrowthCycleWeights(scoreSpecs)
@@ -124,10 +142,11 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
     payload.growth_cycle_weights = parseCsvNumbers(form.growth_cycle_weights, String)
   }
 
-  if (horizon != null && horizon >= 1) {
-    payload.horizon = Math.trunc(horizon)
-    payload.rebalance_interval_days = [payload.horizon]
+  if (!rebalanceIntervals.length) {
+    throw new Error('请至少填写一个 rebalance_days')
   }
+  payload.rebalance_interval_days = rebalanceIntervals
+  payload.horizon = rebalanceIntervals[0]
 
   for (const key of OPTIONAL_NUMBER_KEYS) {
     if (key === 'horizon') continue

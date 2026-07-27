@@ -57,13 +57,28 @@ describe('buildPortfolioResearchPayload', () => {
       buy_commission_rate: '',
       cash_buffer: '',
       stamp_tax_rate: '',
-      horizon: '',
     })
     expect(payload).not.toHaveProperty('buy_commission_rate')
     expect(payload).not.toHaveProperty('cash_buffer')
     expect(payload).not.toHaveProperty('stamp_tax_rate')
-    expect(payload).not.toHaveProperty('horizon')
-    expect(payload).not.toHaveProperty('rebalance_interval_days')
+    expect(payload.horizon).toBe(20)
+    expect(payload.rebalance_interval_days).toEqual([20])
+  })
+
+  it('parses comma-separated rebalance days into interval list', () => {
+    const payload = buildPortfolioResearchPayload({
+      ...baseForm,
+      horizon: '10,20,30,40',
+    })
+    expect(payload.rebalance_interval_days).toEqual([10, 20, 30, 40])
+    expect(payload.horizon).toBe(10)
+  })
+
+  it('rejects empty rebalance days', () => {
+    expect(() => buildPortfolioResearchPayload({
+      ...baseForm,
+      horizon: '',
+    })).toThrow('rebalance_days')
   })
 
   it('includes cash_buffer and benchmark when provided', () => {
@@ -96,6 +111,19 @@ describe('buildPortfolioResearchPayload', () => {
     expect(payload).not.toHaveProperty('growth_cycle_weights')
   })
 
+  it('builds multiple column score specs from multi-select', () => {
+    const payload = buildPortfolioResearchPayload({
+      ...baseForm,
+      score_mode: 'column',
+      score_columns: ['fundamental_score', 'value_score', 'fundamental_score'],
+    })
+    expect(payload.score_column).toBe('fundamental_score')
+    expect(payload.score_specs).toEqual([
+      { mode: 'column', column: 'fundamental_score' },
+      { mode: 'column', column: 'value_score' },
+    ])
+  })
+
   it('treats predefined composites as multi-dimension preset columns', () => {
     const payload = buildPortfolioResearchPayload({
       ...baseForm,
@@ -106,6 +134,18 @@ describe('buildPortfolioResearchPayload', () => {
       { mode: 'column', column: 'composite_conservative_score' },
     ])
     expect(payload).not.toHaveProperty('growth_cycle_weights')
+  })
+
+  it('builds multiple predefined composite score specs', () => {
+    const payload = buildPortfolioResearchPayload({
+      ...baseForm,
+      score_mode: 'preset',
+      score_columns: ['composite_conservative_score', 'composite_defensive_score'],
+    })
+    expect(payload.score_specs).toEqual([
+      { mode: 'column', column: 'composite_conservative_score' },
+      { mode: 'column', column: 'composite_defensive_score' },
+    ])
   })
 
   it('builds generic weighted specs and preserves legacy growth-cycle shortcut', () => {

@@ -48,28 +48,53 @@
               <option value="weighted">自定义多维加权</option>
             </select>
           </label>
-          <label v-if="(form.score_mode || 'weighted') === 'column'">
-            单一维度
-            <select :value="form.score_column" @change="patchForm({ score_column: $event.target.value })">
-              <option v-for="option in ATOMIC_SCORE_OPTIONS" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
-            <small class="field-hint">只使用一个原子维度排序，不包含任何综合分</small>
-          </label>
-          <label v-else-if="form.score_mode === 'preset'" class="score-spec-field">
-            预定义组合
-            <select :value="form.score_column" @change="patchForm({ score_column: $event.target.value })">
-              <option v-for="preset in COMPOSITE_SCORE_PRESETS" :key="preset.column" :value="preset.column">
-                {{ preset.label }}
-              </option>
-            </select>
-            <div v-if="selectedCompositePreset" class="weight-breakdown">
-              <strong>{{ selectedCompositePreset.label }}</strong>
-              <span>{{ selectedCompositePreset.description }}</span>
-              <span>{{ scoreWeightSummary(selectedCompositePreset.weights) }}</span>
+          <div v-if="(form.score_mode || 'weighted') === 'column'" class="score-spec-field">
+            <span class="field-label">评分维度（可多选）</span>
+            <div class="score-option-grid" role="group" aria-label="评分维度">
+              <label
+                v-for="option in ATOMIC_SCORE_OPTIONS"
+                :key="option.value"
+                class="score-option"
+              >
+                <input
+                  type="checkbox"
+                  :value="option.value"
+                  :checked="selectedScoreColumns.includes(option.value)"
+                  @change="toggleScoreColumn(option.value, $event.target.checked)"
+                >
+                <span>{{ option.label }}</span>
+              </label>
             </div>
-          </label>
+            <small class="field-hint">可同时选择多个原子维度；同一任务内并行扫参回测</small>
+          </div>
+          <div v-else-if="form.score_mode === 'preset'" class="score-spec-field">
+            <span class="field-label">预定义组合（可多选）</span>
+            <div class="score-option-grid" role="group" aria-label="预定义组合">
+              <label
+                v-for="preset in COMPOSITE_SCORE_PRESETS"
+                :key="preset.column"
+                class="score-option"
+              >
+                <input
+                  type="checkbox"
+                  :value="preset.column"
+                  :checked="selectedScoreColumns.includes(preset.column)"
+                  @change="toggleScoreColumn(preset.column, $event.target.checked)"
+                >
+                <span>{{ preset.label }}</span>
+              </label>
+            </div>
+            <small class="field-hint">可同时选择多个预定义组合；同一任务内并行扫参回测</small>
+            <div
+              v-for="preset in selectedCompositePresets"
+              :key="preset.column"
+              class="weight-breakdown"
+            >
+              <strong>{{ preset.label }}</strong>
+              <span>{{ preset.description }}</span>
+              <span>{{ scoreWeightSummary(preset.weights) }}</span>
+            </div>
+          </div>
           <label v-else class="score-spec-field">
             多维加权配方
             <textarea
@@ -92,10 +117,10 @@
             rebalance_days
             <input
               :value="form.horizon"
-              type="number"
-              min="1"
-              @input="patchNumber('horizon', $event.target.value)"
+              placeholder="10,20,30,40"
+              @input="patchForm({ horizon: $event.target.value })"
             />
+            <small class="field-hint">逗号分隔多档调仓间隔；每档按同长度持有期并行扫参</small>
           </label>
           <label>
             active caps
@@ -180,7 +205,7 @@
         <button type="button" class="secondary-btn" @click="$emit('close')">取消</button>
         <button
           type="button"
-          :disabled="submitting || !form.start_date || !form.end_date"
+          :disabled="submitting || !canSubmit"
           @click="$emit('submit')"
         >
           {{ submitting ? '提交中...' : submitLabel }}
@@ -198,6 +223,7 @@ import {
   compositeScorePreset,
   scoreWeightSummary,
 } from '../../utils/scoreUtils'
+import { resolveScoreColumns } from '../../utils/portfolioResearchPayload'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -211,7 +237,35 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'submit', 'update:form', 'name-touched', 'universe-change'])
 
-const selectedCompositePreset = computed(() => compositeScorePreset(props.form.score_column))
+const selectedScoreColumns = computed(() => resolveScoreColumns(props.form))
+const selectedCompositePresets = computed(() => (
+  selectedScoreColumns.value
+    .map((column) => compositeScorePreset(column))
+    .filter(Boolean)
+))
+
+const canSubmit = computed(() => {
+  if (!props.form.start_date || !props.form.end_date) return false
+  const scoreMode = props.form.score_mode || 'weighted'
+  if (scoreMode === 'column' || scoreMode === 'preset') {
+    if (!selectedScoreColumns.value.length) return false
+  }
+  const rebalanceDays = String(props.form.horizon ?? '')
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map(Number)
+    .filter((n) => Number.isFinite(n) && n >= 1)
+  return rebalanceDays.length > 0
+})
+
+function withScoreColumns(columns) {
+  const unique = [...new Set(columns.map((item) => String(item || '').trim()).filter(Boolean))]
+  return {
+    score_columns: unique,
+    score_column: unique[0] || props.form.score_column || '',
+  }
+}
 
 function patchForm(patch) {
   const next = { ...props.form, ...patch }
@@ -224,14 +278,27 @@ function patchNumber(key, raw) {
   patchForm({ [key]: Number.isNaN(number) ? raw : number })
 }
 
+function toggleScoreColumn(column, checked) {
+  const current = selectedScoreColumns.value
+  const next = checked
+    ? [...current, column]
+    : current.filter((item) => item !== column)
+  patchForm(withScoreColumns(next))
+}
+
 function onScoreModeChange(event) {
   const scoreMode = event.target.value
   const patch = { score_mode: scoreMode }
-  if (scoreMode === 'column' && !ATOMIC_SCORE_OPTIONS.some((option) => option.value === props.form.score_column)) {
-    patch.score_column = 'fundamental_score'
+  const current = selectedScoreColumns.value
+  if (scoreMode === 'column') {
+    const atomic = current.filter((column) => (
+      ATOMIC_SCORE_OPTIONS.some((option) => option.value === column)
+    ))
+    Object.assign(patch, withScoreColumns(atomic.length ? atomic : ['fundamental_score']))
   }
-  if (scoreMode === 'preset' && !compositeScorePreset(props.form.score_column)) {
-    patch.score_column = 'composite_balanced_score'
+  if (scoreMode === 'preset') {
+    const presets = current.filter((column) => compositeScorePreset(column))
+    Object.assign(patch, withScoreColumns(presets.length ? presets : ['composite_balanced_score']))
   }
   patchForm(patch)
 }
@@ -305,7 +372,8 @@ function onUniverseChange(event) {
   margin: 14px 0;
 }
 
-label {
+label,
+.field-label {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -337,10 +405,36 @@ textarea {
   font-size: 12px;
 }
 
+.score-option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.score-option {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #d9e1ec;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+}
+
+.score-option input {
+  width: auto;
+  margin: 0;
+}
+
 .weight-breakdown {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  margin-top: 8px;
   padding: 10px 12px;
   border: 1px solid #dbeafe;
   border-radius: 8px;

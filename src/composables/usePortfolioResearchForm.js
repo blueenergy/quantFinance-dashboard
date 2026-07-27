@@ -7,6 +7,7 @@ import {
   buildPortfolioResearchPayload,
   formatResearchApiError,
   parseWeightedScoreSpecs,
+  resolveScoreColumns,
 } from '../utils/portfolioResearchPayload'
 import { universeName } from '../utils/portfolioResearchView'
 import {
@@ -35,13 +36,22 @@ export function usePortfolioResearchForm({
   }
 
   function scoreResearchName(state = {}) {
+    const columns = resolveScoreColumns(state)
     if (state.score_mode === 'column') {
-      const option = ATOMIC_SCORE_OPTIONS.find((item) => item.value === state.score_column)
-      return `${option?.label || '单维'}单维`
+      const labels = columns
+        .map((column) => ATOMIC_SCORE_OPTIONS.find((item) => item.value === column)?.label)
+        .filter(Boolean)
+      if (!labels.length) return '单维'
+      if (labels.length === 1) return `${labels[0]}单维`
+      return `${labels[0]}等${labels.length}个单维`
     }
     if (state.score_mode === 'preset') {
-      const preset = compositeScorePreset(state.score_column)
-      return `${preset?.label || '预定义'}多维组合`
+      const labels = columns
+        .map((column) => compositeScorePreset(column)?.label)
+        .filter(Boolean)
+      if (!labels.length) return '预定义多维组合'
+      if (labels.length === 1) return `${labels[0]}多维组合`
+      return `${labels[0]}等${labels.length}个多维组合`
     }
     try {
       const specs = parseWeightedScoreSpecs(state.score_specs || state.growth_cycle_weights)
@@ -67,10 +77,11 @@ export function usePortfolioResearchForm({
       end_date: todayInputDate(),
       score_mode: 'weighted',
       score_column: 'composite_growth_cycle_score',
+      score_columns: ['composite_growth_cycle_score'],
       growth_cycle_weights: '30:70',
       score_specs: 'growth:30,cycle:70',
       top_n_values: '10,20,50',
-      horizon: 20,
+      horizon: '10,20,30,40',
       active_caps: '0.2,0.25,0.3,0.4',
       transaction_cost: 0.001,
       buy_commission_rate: 0.0001,
@@ -219,23 +230,33 @@ export function usePortfolioResearchForm({
     const params = job.params || {}
     const universe = params.universe_index || job.universe_index || form.value.universe_index
     const intervals = params.rebalance_interval_days
-    const horizon = Number(
-      params.horizon
-        ?? (Array.isArray(intervals) && intervals.length ? intervals[0] : null)
-        ?? form.value.horizon,
-    )
+    const horizonInput = Array.isArray(intervals) && intervals.length
+      ? formatListForInput(intervals)
+      : (params.horizon != null && params.horizon !== ''
+          ? formatListForInput(params.horizon)
+          : '')
     const baseName = job.name || params.name || defaultResearchName(universe)
     const defaults = defaultFormState()
     const scoreSpecs = Array.isArray(params.score_specs) ? params.score_specs : []
-    const columnSpec = scoreSpecs.length === 1 && scoreSpecs[0]?.mode === 'column'
-      ? scoreSpecs[0]
-      : null
+    const columnSpecs = scoreSpecs.filter((spec) => spec?.mode === 'column' && spec.column)
     const hasWeightedSpecs = scoreSpecs.some((spec) => spec?.mode === 'weighted')
     const hasLegacyWeights = (
       Array.isArray(params.growth_cycle_weights)
         ? params.growth_cycle_weights.length > 0
         : Boolean(params.growth_cycle_weights)
     )
+    const columnOnly = columnSpecs.length > 0 && !hasWeightedSpecs && !hasLegacyWeights
+    const scoreColumns = columnOnly
+      ? [...new Set(columnSpecs.map((spec) => String(spec.column)))]
+      : resolveScoreColumns({
+        score_column: params.score_column || defaults.score_column,
+        score_columns: params.score_columns,
+      })
+    const scoreMode = columnOnly
+      ? (scoreColumns.every(isCompositeScoreColumn) ? 'preset' : 'column')
+      : (!hasWeightedSpecs && !hasLegacyWeights
+          ? (isCompositeScoreColumn(scoreColumns[0] || params.score_column) ? 'preset' : 'column')
+          : 'weighted')
 
     form.value = {
       ...defaults,
@@ -243,18 +264,15 @@ export function usePortfolioResearchForm({
       universe_index: universe,
       start_date: toDateInputValue(params.start_date || job.start_date) || defaults.start_date,
       end_date: toDateInputValue(params.end_date || job.end_date) || defaults.end_date,
-      score_mode: columnSpec
-        ? (isCompositeScoreColumn(columnSpec.column) ? 'preset' : 'column')
-        : (!hasWeightedSpecs && !hasLegacyWeights
-            ? (isCompositeScoreColumn(params.score_column) ? 'preset' : 'column')
-            : 'weighted'),
-      score_column: columnSpec?.column || params.score_column || defaults.score_column,
+      score_mode: scoreMode,
+      score_column: scoreColumns[0] || params.score_column || defaults.score_column,
+      score_columns: scoreColumns.length ? scoreColumns : defaults.score_columns,
       growth_cycle_weights: formatListForInput(params.growth_cycle_weights) || defaults.growth_cycle_weights,
       score_specs: hasWeightedSpecs
         ? formatScoreSpecsForInput(scoreSpecs)
         : legacyWeightsToScoreSpecs(params.growth_cycle_weights) || defaults.score_specs,
       top_n_values: formatListForInput(params.top_n_values) || defaults.top_n_values,
-      horizon: Number.isFinite(horizon) && horizon > 0 ? horizon : defaults.horizon,
+      horizon: horizonInput || defaults.horizon,
       active_caps: formatListForInput(params.active_caps) || defaults.active_caps,
       transaction_cost: params.transaction_cost ?? defaults.transaction_cost,
       buy_commission_rate: params.buy_commission_rate ?? defaults.buy_commission_rate,

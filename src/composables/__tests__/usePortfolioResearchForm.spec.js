@@ -51,13 +51,22 @@ describe('usePortfolioResearchForm', () => {
       ...formApi.form.value,
       score_mode: 'column',
       score_column: 'fundamental_score',
+      score_columns: ['fundamental_score'],
     })
     expect(formApi.form.value.name).toContain('基本面单维研究')
 
     formApi.onDrawerFormUpdate({
       ...formApi.form.value,
+      score_mode: 'column',
+      score_columns: ['fundamental_score', 'value_score'],
+    })
+    expect(formApi.form.value.name).toContain('基本面等2个单维研究')
+
+    formApi.onDrawerFormUpdate({
+      ...formApi.form.value,
       score_mode: 'preset',
       score_column: 'composite_conservative_score',
+      score_columns: ['composite_conservative_score'],
     })
     expect(formApi.form.value.name).toContain('保守多维组合研究')
   })
@@ -173,7 +182,7 @@ describe('usePortfolioResearchForm', () => {
       end_date: '2025-02-03',
       growth_cycle_weights: '30:70,50:50',
       trailing_stop_pcts: '0,0.1,0.2',
-      horizon: 10,
+      horizon: '10',
     })
     expect(formApi.formSourceJobId.value).toBe('job-source')
     expect(formApi.drawerMode.value).toBe('rerun')
@@ -214,6 +223,40 @@ describe('usePortfolioResearchForm', () => {
 
     expect(formApi.form.value.score_mode).toBe('preset')
     expect(formApi.form.value.score_column).toBe('composite_defensive_score')
+    expect(formApi.form.value.score_columns).toEqual(['composite_defensive_score'])
+  })
+
+  it('loads multiple column score specs into multi-select form state', () => {
+    const selectedJob = ref({
+      job_id: 'job-multi-column',
+      params: {
+        score_specs: [
+          { mode: 'column', column: 'fundamental_score' },
+          { mode: 'column', column: 'value_score' },
+        ],
+      },
+    })
+    const formApi = createForm({ selectedJob })
+
+    formApi.loadParamsFromSelectedJob()
+
+    expect(formApi.form.value.score_mode).toBe('column')
+    expect(formApi.form.value.score_columns).toEqual(['fundamental_score', 'value_score'])
+  })
+
+  it('loads multiple rebalance intervals into the comma-separated form field', () => {
+    const selectedJob = ref({
+      job_id: 'job-rebalance',
+      params: {
+        rebalance_interval_days: [10, 20, 30, 40],
+        growth_cycle_weights: ['30:70'],
+      },
+    })
+    const formApi = createForm({ selectedJob })
+
+    formApi.loadParamsFromSelectedJob()
+
+    expect(formApi.form.value.horizon).toBe('10,20,30,40')
   })
 
   it('focuses the drawer and restores focus when Escape closes it', async () => {

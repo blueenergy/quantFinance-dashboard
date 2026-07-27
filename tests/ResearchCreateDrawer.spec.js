@@ -105,7 +105,7 @@ describe('ResearchCreateDrawer', () => {
     expect(observations).toEqual(['update:csi300', 'change:csi300:csi300'])
   })
 
-  it('switches between weighted recipes and single score columns', async () => {
+  it('switches between weighted recipes and multi-select score columns', async () => {
     const wrapper = mountDrawer()
     expect(wrapper.text()).toContain('多维加权配方')
     expect(wrapper.find('textarea').exists()).toBe(true)
@@ -116,10 +116,25 @@ describe('ResearchCreateDrawer', () => {
     await modeSelect.setValue('column')
     const next = wrapper.emitted('update:form').at(-1)[0]
     expect(next.score_mode).toBe('column')
+    expect(next.score_columns).toEqual(['fundamental_score'])
 
-    await wrapper.setProps({ form: { ...baseForm, score_mode: 'column' } })
-    expect(wrapper.text()).toContain('单一维度')
+    await wrapper.setProps({
+      form: {
+        ...baseForm,
+        score_mode: 'column',
+        score_column: 'fundamental_score',
+        score_columns: ['fundamental_score'],
+      },
+    })
+    expect(wrapper.text()).toContain('评分维度（可多选）')
     expect(wrapper.find('textarea').exists()).toBe(false)
+
+    const valueCheckbox = wrapper.find('input[value="value_score"]')
+    await valueCheckbox.setValue(true)
+    expect(wrapper.emitted('update:form').at(-1)[0].score_columns).toEqual([
+      'fundamental_score',
+      'value_score',
+    ])
   })
 
   it('shows actual preset weights for predefined multi-dimension scores', async () => {
@@ -128,28 +143,55 @@ describe('ResearchCreateDrawer', () => {
         ...baseForm,
         score_mode: 'preset',
         score_column: 'composite_conservative_score',
+        score_columns: ['composite_conservative_score', 'composite_defensive_score'],
       },
     })
     expect(wrapper.text()).toContain('保守')
+    expect(wrapper.text()).toContain('防御')
     expect(wrapper.text()).toContain('基本面 30%')
     expect(wrapper.text()).toContain('价值 25%')
     expect(wrapper.text()).toContain('成长 20%')
+    expect(wrapper.text()).toContain('基本面 35%')
+  })
+
+  it('disables submit when no score columns are selected', async () => {
+    const wrapper = mountDrawer({
+      form: {
+        ...baseForm,
+        score_mode: 'column',
+        score_column: '',
+        score_columns: [],
+      },
+    })
+    const submit = wrapper.findAll('button').find((btn) => btn.text().includes('提交'))
+    expect(submit.attributes('disabled')).toBeDefined()
   })
 
   it('preserves v-model.number empty and numeric values without NaN', async () => {
     const wrapper = mountDrawer()
-    const horizonInput = wrapper
+    const capitalInput = wrapper
+      .findAll('label')
+      .find((label) => label.text().includes('initial capital'))
+      .find('input')
+
+    await capitalInput.setValue('')
+    const emptyValue = wrapper.emitted('update:form').at(-1)[0].initial_capital
+    expect(emptyValue).toBe('')
+    expect(Number.isNaN(emptyValue)).toBe(false)
+
+    await wrapper.setProps({ form: { ...baseForm, initial_capital: '' } })
+    await capitalInput.setValue('12.5')
+    expect(wrapper.emitted('update:form').at(-1)[0].initial_capital).toBe(12.5)
+  })
+
+  it('accepts comma-separated rebalance days as text input', async () => {
+    const wrapper = mountDrawer()
+    const rebalanceInput = wrapper
       .findAll('label')
       .find((label) => label.text().includes('rebalance_days'))
       .find('input')
 
-    await horizonInput.setValue('')
-    const emptyValue = wrapper.emitted('update:form').at(-1)[0].horizon
-    expect(emptyValue).toBe('')
-    expect(Number.isNaN(emptyValue)).toBe(false)
-
-    await wrapper.setProps({ form: { ...baseForm, horizon: '' } })
-    await horizonInput.setValue('12.5')
-    expect(wrapper.emitted('update:form').at(-1)[0].horizon).toBe(12.5)
+    await rebalanceInput.setValue('10,20,30,40')
+    expect(wrapper.emitted('update:form').at(-1)[0].horizon).toBe('10,20,30,40')
   })
 })
