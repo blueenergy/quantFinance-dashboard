@@ -119,6 +119,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'watchlist', name: '自选股' },
       { id: 'backtest', name: '📊 回测管理' },
       { id: 'strategy-lab', name: '🧪 策略实验室' },
+      { id: 'factor-backtest', name: '🧬 因子回测' },
       { id: 'portfolio-research', name: '组合研究' },
       { id: 'portfolio-plans', name: '📋 组合交易计划' },
       { id: 'portfolio-overview', name: '📊 组合总览(实盘)' },
