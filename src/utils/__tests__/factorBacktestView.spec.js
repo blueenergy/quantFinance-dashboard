@@ -5,6 +5,7 @@ import {
   buildNetReturnRows,
   buildQuantileBars,
   buildFactorParamRows,
+  buildSkippedFactorRows,
   buildYearlyIcRows,
   filterCatalogFactors,
   findFactorMeta,
@@ -24,7 +25,8 @@ function sampleReport() {
     rows: 12345,
     distinct_dates: 240,
     symbols: 300,
-    evaluated_columns: 2,
+    evaluated_columns: ['alpha1', 'alpha2'],
+    skipped_factors: [{ name: 'VWAP0', reason: 'needs $vwap' }],
     score_date_range: ['20230103', '20231229'],
     estimated_memory_gb: 3.5,
     factors: {
@@ -157,6 +159,26 @@ describe('report views', () => {
     const cards = buildCoverageCards(sampleReport())
     expect(cards.find((card) => card.k === '数据区间').v).toBe('2023-01-03 → 2023-12-29')
     expect(cards.find((card) => card.k === '峰值内存估算').v).toBe('3.50 GB')
+  })
+
+  it('counts the evaluated factor columns rather than stringifying the list', () => {
+    const cards = buildCoverageCards(sampleReport())
+    expect(cards.find((card) => card.k === '评估因子数').v).toBe('2')
+  })
+
+  it('names the skipped factors and reads the missing base field out of the reason', () => {
+    expect(buildSkippedFactorRows(sampleReport())).toEqual([
+      { name: 'VWAP0', reason: '价格面板缺少 $vwap 字段' },
+    ])
+  })
+
+  it('passes an unrecognised reason through and ignores a report without skips', () => {
+    expect(buildSkippedFactorRows({ skipped_factors: [{ name: 'MA20', reason: 'too slow' }, null] }))
+      .toEqual([{ name: 'MA20', reason: 'too slow' }])
+    expect(buildSkippedFactorRows({ skipped_factors: [{ name: 'MA20' }] }))
+      .toEqual([{ name: 'MA20', reason: '未说明原因' }])
+    expect(buildSkippedFactorRows({})).toEqual([])
+    expect(buildSkippedFactorRows(null)).toEqual([])
   })
 
   it('flags a latest-only universe as needing review', () => {

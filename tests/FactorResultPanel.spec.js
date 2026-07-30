@@ -7,6 +7,7 @@ import {
   buildNetReturnRows,
   buildQuantileBars,
   buildScreenRows,
+  buildSkippedFactorRows,
   factorDiagnostics,
   reportHorizons,
 } from '../src/utils/factorBacktestView'
@@ -15,7 +16,8 @@ const report = {
   rows: 72000,
   distinct_dates: 240,
   symbols: 300,
-  evaluated_columns: 2,
+  evaluated_columns: ['alpha1', 'alpha2'],
+  skipped_factors: [{ name: 'VWAP0', reason: 'needs $vwap' }],
   score_date_range: ['20230103', '20231229'],
   estimated_memory_gb: 3.5,
   factors: {
@@ -50,6 +52,7 @@ function mountPanel(overrides = {}) {
     props: {
       report,
       coverageCards: buildCoverageCards(report),
+      skippedFactorRows: buildSkippedFactorRows(report),
       pitLabel: 'Point-in-time（当时成分股）',
       horizons: reportHorizons(report),
       selectedHorizon,
@@ -72,6 +75,15 @@ describe('FactorResultPanel', () => {
     expect(text).toContain('Point-in-time（当时成分股）')
     expect(text).toContain('3.50 GB')
     expect(text).toContain('-0.1100')
+  })
+
+  it('says which factors were skipped and why, and stays quiet when none were', () => {
+    const text = mountPanel().text()
+    expect(text).toContain('未评估 1 个因子')
+    expect(text).toContain('VWAP0')
+    expect(text).toContain('价格面板缺少 $vwap 字段')
+
+    expect(mountPanel({ skippedFactorRows: [] }).find('.skipped-note').exists()).toBe(false)
   })
 
   it('drills into the selected factor with its expression and quantile spread', () => {

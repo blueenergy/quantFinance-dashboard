@@ -8,6 +8,14 @@
     </div>
     <p class="muted pit-note">成分股口径：{{ pitLabel }}</p>
 
+    <p v-if="skippedFactorRows.length" class="skipped-note">
+      未评估 {{ skippedFactorRows.length }} 个因子：
+      <span v-for="(row, index) in skippedFactorRows" :key="row.name">
+        <template v-if="index">、</template>
+        <code>{{ row.name }}</code>（{{ row.reason }}）
+      </span>
+    </p>
+
     <div class="panel-head">
       <h4>因子 IC 排行</h4>
       <div class="horizon-tabs">
@@ -184,6 +192,7 @@ import { findFactorMeta, num, pct, signClass } from '../../utils/factorBacktestV
 const props = defineProps({
   report: { type: Object, default: null },
   coverageCards: { type: Array, default: () => [] },
+  skippedFactorRows: { type: Array, default: () => [] },
   pitLabel: { type: String, default: '-' },
   horizons: { type: Array, default: () => [] },
   selectedHorizon: { type: [String, Number], default: '' },
@@ -239,6 +248,24 @@ const screenHorizon = computed(() => props.report?.screen?.horizon ?? '-')
 
 .pit-note {
   margin: -8px 0 0;
+  font-size: 12px;
+}
+
+.skipped-note {
+  margin: -6px 0 0;
+  padding: 8px 10px;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.skipped-note code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #fef3c7;
   font-size: 12px;
 }
 

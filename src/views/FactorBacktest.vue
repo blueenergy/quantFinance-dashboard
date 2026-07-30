@@ -98,6 +98,7 @@
             v-else-if="report"
             :report="report"
             :coverage-cards="coverageCards"
+            :skipped-factor-rows="skippedFactorRows"
             :pit-label="pitLabel"
             :horizons="horizons"
             :selected-horizon="selectedHorizon"
@@ -179,6 +180,7 @@ const {
   mobileShowDetail,
   paramRows,
   coverageCards,
+  skippedFactorRows,
   pitLabel,
   screenRows,
   horizons,

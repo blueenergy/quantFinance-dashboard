@@ -12,6 +12,7 @@ import {
   buildNetReturnRows,
   buildQuantileBars,
   buildScreenRows,
+  buildSkippedFactorRows,
   buildYearlyIcRows,
   factorDiagnostics,
   reportHorizons,
@@ -36,6 +37,7 @@ export function useFactorBacktestDetail({
   const mobileShowDetail = computed(() => Boolean(selectedJobId.value))
   const paramRows = computed(() => buildFactorParamRows(selectedJob.value))
   const coverageCards = computed(() => (report.value ? buildCoverageCards(report.value) : []))
+  const skippedFactorRows = computed(() => buildSkippedFactorRows(report.value))
   const pitLabel = computed(() => universePitLabel(report.value))
   const screenRows = computed(() => buildScreenRows(report.value))
   const horizons = computed(() => reportHorizons(report.value))
@@ -158,6 +160,7 @@ export function useFactorBacktestDetail({
     mobileShowDetail,
     paramRows,
     coverageCards,
+    skippedFactorRows,
     pitLabel,
     screenRows,
     horizons,

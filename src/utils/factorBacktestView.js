@@ -214,10 +214,32 @@ export function buildCoverageCards(report) {
     { k: '样本行数', v: Number(report?.rows || 0).toLocaleString('zh-CN') },
     { k: '交易日数', v: num(report?.distinct_dates, 0) },
     { k: '标的数', v: num(report?.symbols, 0) },
-    { k: '评估因子数', v: num(report?.evaluated_columns, 0) },
+    { k: '评估因子数', v: num(report?.evaluated_columns?.length, 0) },
     { k: '数据区间', v: `${compactDate(range[0] || source.start_date)} → ${compactDate(range[1] || source.end_date)}` },
     { k: '峰值内存估算', v: report?.estimated_memory_gb == null ? '-' : `${num(report.estimated_memory_gb, 2)} GB` },
   ]
+}
+
+/**
+ * Factors the run asked for but could not evaluate, with the engine's reason.
+ *
+ * A full alpha158 run only evaluates 157: the price panel carries no $vwap, so
+ * VWAP0 is dropped. Without showing it, the missing factor reads as a bug.
+ */
+export function buildSkippedFactorRows(report) {
+  const skipped = report?.skipped_factors
+  if (!Array.isArray(skipped)) return []
+  return skipped
+    .filter((item) => item && item.name)
+    .map((item) => ({ name: String(item.name), reason: skipReasonLabel(item.reason) }))
+}
+
+/** The engine writes reasons like `needs $vwap`; anything else passes through. */
+function skipReasonLabel(reason) {
+  const text = String(reason || '').trim()
+  if (!text) return '未说明原因'
+  const field = /^needs \$(\w+)$/.exec(text)
+  return field ? `价格面板缺少 $${field[1]} 字段` : text
 }
 
 /** Job-list blurb from the small artifact summary the worker attaches. */
