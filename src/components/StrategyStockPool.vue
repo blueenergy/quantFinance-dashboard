@@ -126,9 +126,7 @@
       @close="closeBacktestDetail"
     >
       <template #actions>
-        <button type="button" class="deploy-btn" :disabled="deploying" @click="deployDetail">
-          {{ deploying ? '部署中…' : '部署到实盘' }}
-        </button>
+        <BacktestDeployActions :payload="detailDeployPayload" />
         <button type="button" class="action-close-btn" @click="closeBacktestDetail">关闭</button>
       </template>
     </BacktestResultDetailModal>
@@ -138,8 +136,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { loadStrategyPoolBacktestDetail } from '../api/strategyPool'
-import { confirmAndDeployBacktestToLive } from '../utils/deployBacktestToLive'
 import request from '../utils/request'
+import BacktestDeployActions from './BacktestDeployActions.vue'
 import BacktestResultDetailModal from './BacktestResultDetailModal.vue'
 
 // 监听来自App的策略上下文恢复事件
@@ -219,7 +217,6 @@ const detailLoadingMessage = ref('加载回测结果…')
 const detailError = ref('')
 const detailResult = ref(null)
 const detailMeta = ref({})
-const deploying = ref(false)
 
 const detailTitle = computed(() => {
   const symbol = detailMeta.value.symbol || detailResult.value?.symbol
@@ -230,6 +227,13 @@ const detailSubtitle = computed(() => {
   const parts = [detailMeta.value.strategy_key, detailMeta.value.preset].filter(Boolean)
   return parts.join(' · ')
 })
+
+const detailDeployPayload = computed(() => ({
+  symbol: detailMeta.value.symbol,
+  strategy_key: detailMeta.value.strategy_key,
+  strategy_params: detailMeta.value.strategy_params || {},
+  asset_type: detailMeta.value.asset_type || 'stock',
+}))
 
 async function openBacktestDetail(stock) {
   if (!stock) return
@@ -266,26 +270,6 @@ function closeBacktestDetail() {
   detailError.value = ''
   detailResult.value = null
   detailMeta.value = {}
-  deploying.value = false
-}
-
-async function deployDetail() {
-  if (deploying.value) return
-  deploying.value = true
-  try {
-    const outcome = await confirmAndDeployBacktestToLive(
-      {
-        symbol: detailMeta.value.symbol,
-        strategy_key: detailMeta.value.strategy_key,
-        strategy_params: detailMeta.value.strategy_params,
-        asset_type: detailMeta.value.asset_type || 'stock',
-      },
-      { requestFn: request },
-    )
-    if (outcome.ok) closeBacktestDetail()
-  } finally {
-    deploying.value = false
-  }
 }
 
 const getParamLabel = (key) => {
@@ -869,22 +853,6 @@ select {
   margin-bottom: 20px;
 }
 
-
-.deploy-btn {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.deploy-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
 .action-close-btn {
   padding: 10px 20px;

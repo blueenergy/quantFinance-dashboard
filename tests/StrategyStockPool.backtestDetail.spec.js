@@ -106,6 +106,25 @@ describe('StrategyStockPool - local backtest detail', () => {
     expect(urls.some((u) => u.includes('/strategy-pool/backtest-result'))).toBe(true)
     expect(urls.some((u) => u.includes('/backtest/tasks'))).toBe(false)
 
+    document.body.querySelector('.deploy-btn').click()
+    await flushPromises()
+    expect(pageText()).toContain('确认将 000001.SZ · hidden_dragon 部署到实盘？')
+
+    document.body.querySelector('.confirm-deploy-btn').click()
+    await flushPromises()
+
+    expect(requestMock).toHaveBeenCalledWith({
+      method: 'post',
+      url: '/user/watchlist/strategy',
+      data: {
+        symbol: '000001.SZ',
+        strategy: 'hidden_dragon',
+        enabled: true,
+        params: { p: 123 },
+      },
+    })
+    expect(pageText()).toContain('部署成功，策略已配置到实盘。')
+
     wrapper.unmount()
   })
 

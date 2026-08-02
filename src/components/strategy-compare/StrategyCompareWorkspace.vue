@@ -77,9 +77,7 @@
       @close="closeDetail"
     >
       <template #actions>
-        <button type="button" class="deploy-btn" :disabled="deploying" @click="deployDetail">
-          {{ deploying ? '部署中…' : '部署到实盘' }}
-        </button>
+        <BacktestDeployActions :payload="detailDeployPayload" />
         <button type="button" class="action-close-btn" @click="closeDetail">关闭</button>
       </template>
     </BacktestResultDetailModal>
@@ -97,12 +95,11 @@ import {
 import { useStrategyCompareBatches } from '../../composables/useStrategyCompareBatches'
 import { useStrategyCompareResults } from '../../composables/useStrategyCompareResults'
 import { normalizeStrategies, normalizeTemplateGroups } from '../../utils/strategyLabParams'
+import BacktestDeployActions from '../BacktestDeployActions.vue'
 import BacktestResultDetailModal from '../BacktestResultDetailModal.vue'
 import CompareCreateDrawer from './CompareCreateDrawer.vue'
 import CompareResultPanel from './CompareResultPanel.vue'
 import StrategyCompareBatchList from './StrategyCompareBatchList.vue'
-import { confirmAndDeployBacktestToLive } from '../../utils/deployBacktestToLive'
-import request from '../../utils/request'
 
 const props = defineProps({
   workspaceActive: { type: Boolean, default: true },
@@ -145,7 +142,6 @@ const detailError = ref('')
 const detailResult = ref(null)
 const detailMeta = ref({})
 const detailRow = ref(null)
-const deploying = ref(false)
 
 const usableStrategies = computed(() => strategies.value.filter((s) => s.can_use !== false))
 
@@ -168,6 +164,18 @@ const detailSubtitle = computed(() => {
   ].filter(Boolean)
   return parts.join(' · ')
 })
+
+const detailDeployPayload = computed(() => ({
+  symbol: detailMeta.value.symbol || detailResult.value?.symbol,
+  strategy_key: detailMeta.value.strategy_key || detailResult.value?.strategy_key,
+  strategy_params:
+    detailMeta.value.strategy_params || detailResult.value?.strategy_params || {},
+  asset_type:
+    detailResult.value?.asset_type ||
+    detailRow.value?.asset_type ||
+    detailMeta.value.asset_type ||
+    'stock',
+}))
 
 function pct(value) {
   if (value == null || Number.isNaN(Number(value))) return '-'
@@ -217,32 +225,6 @@ function closeDetail() {
   detailResult.value = null
   detailRow.value = null
   detailMeta.value = {}
-  deploying.value = false
-}
-
-async function deployDetail() {
-  if (deploying.value) return
-  deploying.value = true
-  try {
-    const assetType =
-      detailResult.value?.asset_type ||
-      detailRow.value?.asset_type ||
-      detailMeta.value.asset_type ||
-      'stock'
-    const outcome = await confirmAndDeployBacktestToLive(
-      {
-        symbol: detailMeta.value.symbol || detailResult.value?.symbol,
-        strategy_key: detailMeta.value.strategy_key || detailResult.value?.strategy_key,
-        strategy_params:
-          detailMeta.value.strategy_params || detailResult.value?.strategy_params || {},
-        asset_type: assetType,
-      },
-      { requestFn: request },
-    )
-    if (outcome.ok) closeDetail()
-  } finally {
-    deploying.value = false
-  }
 }
 
 async function loadStrategyMeta() {
@@ -382,22 +364,6 @@ onMounted(async () => {
   .layout {
     grid-template-columns: 1fr;
   }
-}
-
-.deploy-btn {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.deploy-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .action-close-btn {
