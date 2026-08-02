@@ -5,7 +5,9 @@ import {
   filterRowsByAxis,
   formatStrategyParamsCell,
   listStrategyParamEntries,
+  formatLowSampleHint,
   isLowSample,
+  LOW_SAMPLE_TRADE_THRESHOLD,
   sortRows,
 } from '../backtestSweepView.js'
 
@@ -92,5 +94,10 @@ describe('sortRows and low sample', () => {
     expect(isLowSample(sorted.find((r) => r.total_trades === 20))).toBe(false)
     expect(isLowSample({ status: 'pending', total_trades: 0 })).toBe(false)
     expect(isLowSample({ status: 'completed', total_trades: 0 })).toBe(true)
+  })
+
+  it('explains closed-round count and threshold in the low-sample hint', () => {
+    expect(formatLowSampleHint({ total_trades: 5 })).toContain('本次完成 5 个平仓回合')
+    expect(formatLowSampleHint({ total_trades: 5 })).toContain(`参考阈值 ${LOW_SAMPLE_TRADE_THRESHOLD} 次`)
   })
 })

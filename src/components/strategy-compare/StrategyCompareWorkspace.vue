@@ -44,6 +44,7 @@
           :pct="pct"
           :num="num"
           @sort="onSort"
+          @open-detail="openDetail"
         />
         <p v-else-if="resultsLoading" class="muted">加载结果…</p>
         <p v-else class="muted">
@@ -64,15 +65,32 @@
       @close="drawerOpen = false"
       @submit="onSubmit"
     />
+
+    <BacktestResultDetailModal
+      :open="detailOpen"
+      :title="detailTitle"
+      :subtitle="detailSubtitle"
+      :result="detailResult"
+      :meta="detailMeta"
+      :loading="detailLoading"
+      :error="detailError"
+      @close="closeDetail"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { createBatch, listStrategies, listStrategyTemplates } from '../../api/strategyLab'
+import {
+  createBatch,
+  getBacktestResult,
+  listStrategies,
+  listStrategyTemplates,
+} from '../../api/strategyLab'
 import { useStrategyCompareBatches } from '../../composables/useStrategyCompareBatches'
 import { useStrategyCompareResults } from '../../composables/useStrategyCompareResults'
 import { normalizeStrategies, normalizeTemplateGroups } from '../../utils/strategyLabParams'
+import BacktestResultDetailModal from '../BacktestResultDetailModal.vue'
 import CompareCreateDrawer from './CompareCreateDrawer.vue'
 import CompareResultPanel from './CompareResultPanel.vue'
 import StrategyCompareBatchList from './StrategyCompareBatchList.vue'
@@ -112,6 +130,13 @@ const submitting = ref(false)
 const strategies = ref([])
 const strategyTemplates = ref({})
 
+const detailOpen = ref(false)
+const detailLoading = ref(false)
+const detailError = ref('')
+const detailResult = ref(null)
+const detailMeta = ref({})
+const detailRow = ref(null)
+
 const usableStrategies = computed(() => strategies.value.filter((s) => s.can_use !== false))
 
 const isBatchRunning = computed(() => {
@@ -121,6 +146,19 @@ const isBatchRunning = computed(() => {
 
 const canCancel = computed(() => isBatchRunning.value)
 
+const detailTitle = computed(() => {
+  const symbol = detailMeta.value.symbol || detailResult.value?.symbol || '回测结果'
+  return `回测结果 · ${symbol}`
+})
+
+const detailSubtitle = computed(() => {
+  const parts = [
+    detailMeta.value.strategy_key || detailResult.value?.strategy_key,
+    detailMeta.value.preset || detailResult.value?.preset,
+  ].filter(Boolean)
+  return parts.join(' · ')
+})
+
 function pct(value) {
   if (value == null || Number.isNaN(Number(value))) return '-'
   return `${(Number(value) * 100).toFixed(2)}%`
@@ -129,6 +167,46 @@ function pct(value) {
 function num(value, digits = 2) {
   if (value == null || Number.isNaN(Number(value))) return '-'
   return Number(value).toFixed(digits)
+}
+
+function buildDetailMeta(row, result = null) {
+  return {
+    symbol: row?.symbol || selectedBatch.value?.symbols?.[0] || result?.symbol || '',
+    strategy_key: row?.strategy_key || result?.strategy_key || '',
+    preset: row?.preset || result?.preset || '',
+    strategy_params: row?.strategy_params || result?.strategy_params || {},
+    start_date: selectedBatch.value?.start_date || '',
+    end_date: selectedBatch.value?.end_date || '',
+    initial_cash: selectedBatch.value?.initial_cash ?? 1000000,
+  }
+}
+
+async function openDetail(row) {
+  if (!row?.task_id) return
+  detailOpen.value = true
+  detailLoading.value = true
+  detailError.value = ''
+  detailResult.value = null
+  detailRow.value = row
+  detailMeta.value = buildDetailMeta(row)
+  try {
+    const result = await getBacktestResult(row.task_id)
+    detailResult.value = result
+    detailMeta.value = buildDetailMeta(row, result)
+  } catch (err) {
+    detailError.value = err?.response?.data?.detail || err?.message || '加载结果失败'
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function closeDetail() {
+  detailOpen.value = false
+  detailLoading.value = false
+  detailError.value = ''
+  detailResult.value = null
+  detailRow.value = null
+  detailMeta.value = {}
 }
 
 async function loadStrategyMeta() {

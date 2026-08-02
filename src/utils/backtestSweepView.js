@@ -96,7 +96,9 @@ export function sortRows(rows, sortKey, order = 'desc') {
   return [...present, ...missing]
 }
 
-export function isLowSample(row, threshold = 10) {
+export const LOW_SAMPLE_TRADE_THRESHOLD = 10
+
+export function isLowSample(row, threshold = LOW_SAMPLE_TRADE_THRESHOLD) {
   const status = String(row?.status || '').toLowerCase()
   if (status && !['completed', 'failed'].includes(status)) {
     return false
@@ -105,6 +107,16 @@ export function isLowSample(row, threshold = 10) {
   if (trades == null) return false
   const n = Number(trades)
   return Number.isFinite(n) && n < threshold
+}
+
+export function formatLowSampleHint(row, threshold = LOW_SAMPLE_TRADE_THRESHOLD) {
+  const trades = Number(row?.total_trades)
+  const count = Number.isFinite(trades) ? trades : 0
+  return (
+    `本次完成 ${count} 个平仓回合（买入→卖出算 1 次，不含加仓分笔），` +
+    `少于参考阈值 ${threshold} 次；胜率/收益样本偏少，不宜单独作为优劣依据。` +
+    `详情里的买卖明细按委托笔数列出，条数通常大于平仓回合。`
+  )
 }
 
 export function formatAxisValue(axis, value) {

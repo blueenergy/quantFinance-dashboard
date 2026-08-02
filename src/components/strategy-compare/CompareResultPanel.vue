@@ -75,9 +75,25 @@
               <span><em>夏普</em>{{ num(entry.row?.sharpe_ratio, 3) }}</span>
               <span><em>回撤</em>{{ pct(entry.row?.max_drawdown) }}</span>
               <span><em>胜率</em>{{ pct(entry.row?.win_rate) }}</span>
-              <span><em>交易</em>{{ entry.row?.total_trades ?? '-' }}</span>
+              <span><em>平仓回合</em>{{ entry.row?.total_trades ?? '-' }}</span>
             </div>
-            <p v-if="isLowSample(entry.row)" class="facet-warn">交易过少（{{ entry.row?.total_trades ?? 0 }} 笔），不宜单凭收益判断</p>
+            <p
+              v-if="isLowSample(entry.row)"
+              class="facet-warn"
+              :title="formatLowSampleHint(entry.row)"
+            >
+              {{ formatLowSampleHint(entry.row) }}
+            </p>
+            <div class="facet-card-actions" @click.stop>
+              <button
+                type="button"
+                class="link-btn"
+                :disabled="String(entry.row?.status || '').toLowerCase() !== 'completed'"
+                @click="emit('open-detail', entry.row)"
+              >
+                查看详情
+              </button>
+            </div>
           </button>
         </div>
 
@@ -93,6 +109,7 @@
             :pct="pct"
             :num="num"
             @sort="emit('sort', $event)"
+            @open-detail="emit('open-detail', $event)"
           />
         </div>
       </template>
@@ -135,6 +152,7 @@
         :pct="pct"
         :num="num"
         @sort="emit('sort', $event)"
+        @open-detail="emit('open-detail', $event)"
       />
 
       <div v-if="pageState.totalPages > 1" class="pager">
@@ -153,6 +171,7 @@ import {
   filterRowsByAxis,
   filterRowsBySelections,
   formatAxisValue,
+  formatLowSampleHint,
   isLowSample,
 } from '../../utils/backtestSweepView'
 import CompareResultTable from './CompareResultTable.vue'
@@ -166,7 +185,7 @@ const props = defineProps({
   num: { type: Function, required: true },
 })
 
-const emit = defineEmits(['sort'])
+const emit = defineEmits(['sort', 'open-detail'])
 
 const activeTab = ref('facet')
 const facetAxisKey = ref('')
@@ -411,6 +430,27 @@ function toggleFilter(axisKey, value) {
   color: #b45309;
   font-size: 11px;
   margin: 8px 0 0;
+}
+
+.facet-card-actions {
+  margin-top: 10px;
+}
+
+.link-btn {
+  border: none;
+  background: transparent;
+  color: #0f6bdc;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  font-size: 12px;
+}
+
+.link-btn:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 
 .pager {

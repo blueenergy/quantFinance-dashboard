@@ -93,7 +93,7 @@
                   <span class="metric-value" :class="getReturnClass(stock.hist_return)">{{ formatPercentage(stock.hist_return) }}</span>
                 </div>
                 <div class="metric-item">
-                  <span class="metric-label">交易次数:</span>
+                  <span class="metric-label">平仓回合:</span>
                   <span class="metric-value">{{ stock.hist_total_trades || 0 }}次</span>
                 </div>
                 <div class="metric-item">

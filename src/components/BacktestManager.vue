@@ -298,15 +298,15 @@
                   <div class="metric-value">{{ formatPercent(result.metrics.win_rate) }}</div>
                 </div>
                 <div class="metric-card">
-                  <div class="metric-label">交易次数</div>
-                  <div class="metric-value">{{ result.metrics.total_trades || 0 }}</div>
+                  <div class="metric-label">平仓回合</div>
+                  <div class="metric-value" title="买入→卖出算 1 次；下方买卖明细按委托笔数统计">{{ result.metrics.total_trades || 0 }}</div>
                 </div>
               </div>
             </div>
 
             <!-- 交易记录 -->
             <div class="trades-section">
-              <h4>📝 交易记录 (最近20条)</h4>
+              <h4>买卖明细 (最近20笔委托)</h4>
               <div class="table-wrapper">
                 <table class="trades-table">
                   <thead>

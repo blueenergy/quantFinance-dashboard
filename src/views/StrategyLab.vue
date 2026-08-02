@@ -328,7 +328,7 @@
               <option value="max_drawdown">最大回撤</option>
               <option value="sharpe_ratio">夏普</option>
               <option value="win_rate">胜率</option>
-              <option value="total_trades">交易次数</option>
+              <option value="total_trades">平仓回合</option>
             </select>
           </div>
           <p v-if="!canDeleteResultRows && results.length === 1" class="muted result-action-hint">
@@ -347,7 +347,7 @@
                   <th>最大回撤</th>
                   <th>夏普</th>
                   <th>胜率</th>
-                  <th>交易</th>
+                  <th>平仓回合</th>
                   <th>错误</th>
                   <th>操作</th>
                 </tr>

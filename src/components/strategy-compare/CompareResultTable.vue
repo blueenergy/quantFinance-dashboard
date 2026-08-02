@@ -16,6 +16,7 @@
             <span v-if="sortKey === col.key" class="sort-mark">{{ sortOrder === 'desc' ? '↓' : '↑' }}</span>
           </th>
           <th class="status-col">状态</th>
+          <th class="action-col">操作</th>
         </tr>
       </thead>
       <tbody>
@@ -39,11 +40,30 @@
             {{ formatMetric(row, col.key) }}
           </td>
           <td class="status-col">
-            <span v-if="isLowSample(row)" class="warn-badge" :title="`交易数 ${row.total_trades ?? 0}`">
-              交易过少
-            </span>
+            <button
+              v-if="isLowSample(row)"
+              type="button"
+              class="warn-badge"
+              @mouseenter="(event) => openSampleHint(event, row)"
+              @mouseleave="scheduleClosePopover"
+              @focus="(event) => openSampleHint(event, row)"
+              @blur="scheduleClosePopover"
+            >
+              回合过少
+            </button>
             <span v-else-if="isPendingRow(row)" class="pending-badge">{{ statusLabel(row.status) }}</span>
             <span v-else class="status-text">{{ statusLabel(row.status) }}</span>
+          </td>
+          <td class="action-col">
+            <button
+              type="button"
+              class="detail-btn"
+              :disabled="!canOpenDetail(row)"
+              :title="detailButtonTitle(row)"
+              @click="emit('open-detail', row)"
+            >
+              详情
+            </button>
           </td>
         </tr>
       </tbody>
@@ -60,7 +80,7 @@
       @mouseleave="scheduleClosePopover"
     >
       <span class="popover-title">{{ popover.title }}</span>
-      <ul v-if="popover.entries.length" class="params-list">
+      <ul v-if="popover.kind === 'params' && popover.entries.length" class="params-list">
         <li v-for="entry in popover.entries" :key="entry.key">
           <span class="param-key">{{ entry.key }}</span>
           <span class="param-value">{{ entry.value }}</span>
@@ -74,6 +94,7 @@
 <script setup>
 import { computed, onBeforeUnmount, reactive } from 'vue'
 import {
+  formatLowSampleHint,
   hasStrategyParams,
   isLowSample,
   listStrategyParamEntries,
@@ -88,14 +109,14 @@ const props = defineProps({
   num: { type: Function, required: true },
 })
 
-const emit = defineEmits(['sort'])
+const emit = defineEmits(['sort', 'open-detail'])
 
 const metricColumns = [
   { key: 'total_return', label: '总收益' },
   { key: 'sharpe_ratio', label: '夏普' },
   { key: 'max_drawdown', label: '最大回撤' },
   { key: 'win_rate', label: '胜率' },
-  { key: 'total_trades', label: '交易数' },
+  { key: 'total_trades', label: '平仓回合' },
   { key: 'invested_return', label: '投入收益' },
   { key: 'capital_utilization', label: '资金占用' },
 ]
@@ -105,6 +126,7 @@ const POPOVER_GAP = 8
 
 const popover = reactive({
   visible: false,
+  kind: 'params',
   title: '策略参数',
   entries: [],
   plain: '',
@@ -140,6 +162,17 @@ function isPendingRow(row) {
   return ['pending', 'running', 'claimed'].includes(status)
 }
 
+function canOpenDetail(row) {
+  const status = String(row?.status || '').toLowerCase()
+  return Boolean(row?.task_id) && status === 'completed'
+}
+
+function detailButtonTitle(row) {
+  if (!row?.task_id) return '缺少任务 ID'
+  if (canOpenDetail(row)) return '查看交易与净值详情'
+  return '仅已完成任务可查看详情'
+}
+
 function statusLabel(status) {
   const key = String(status || '').toLowerCase()
   const map = {
@@ -167,26 +200,45 @@ function scheduleClosePopover() {
   }, 120)
 }
 
-function openPopover(event, row) {
-  if (!canShowParams(row)) return
-  cancelClosePopover()
-
-  const entries = listStrategyParamEntries(row)
+function positionPopover(event, estimatedHeight) {
   const rect = event.currentTarget.getBoundingClientRect()
-  const estimatedHeight = entries.length
-    ? 40 + entries.length * 24
-    : 64
   const maxLeft = window.innerWidth - POPOVER_WIDTH - 12
   const left = Math.max(12, Math.min(rect.left, maxLeft))
   let top = rect.bottom + POPOVER_GAP
   if (top + estimatedHeight > window.innerHeight - 12) {
     top = Math.max(12, rect.top - estimatedHeight - POPOVER_GAP)
   }
+  return { left, top }
+}
+
+function openPopover(event, row) {
+  if (!canShowParams(row)) return
+  cancelClosePopover()
+
+  const entries = listStrategyParamEntries(row)
+  const estimatedHeight = entries.length
+    ? 40 + entries.length * 24
+    : 64
+  const { left, top } = positionPopover(event, estimatedHeight)
 
   popover.visible = true
+  popover.kind = 'params'
   popover.title = entries.length ? '策略参数' : '组合'
   popover.entries = entries
   popover.plain = row.combo_label || '—'
+  popover.left = left
+  popover.top = top
+}
+
+function openSampleHint(event, row) {
+  cancelClosePopover()
+  const { left, top } = positionPopover(event, 88)
+
+  popover.visible = true
+  popover.kind = 'sample'
+  popover.title = '平仓回合说明'
+  popover.entries = []
+  popover.plain = formatLowSampleHint(row)
   popover.left = left
   popover.top = top
 }
@@ -266,6 +318,26 @@ th.sortable {
   white-space: nowrap;
 }
 
+.action-col {
+  white-space: nowrap;
+}
+
+.detail-btn {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f6bdc;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.detail-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: #94a3b8;
+}
+
 .status-text {
   white-space: nowrap;
 }
@@ -284,8 +356,11 @@ th.sortable {
 }
 
 .warn-badge {
+  border: none;
   background: #fef3c7;
   color: #92400e;
+  cursor: help;
+  font: inherit;
 }
 
 .pending-badge {
