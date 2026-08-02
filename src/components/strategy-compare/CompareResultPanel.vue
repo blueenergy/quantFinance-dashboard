@@ -5,12 +5,23 @@
         <h4>对比结果</h4>
         <p class="muted">共 {{ rows.length }} 组参数组合</p>
       </div>
-      <div v-if="sweepView.sweep_axes?.length" class="combo-pill muted">
-        {{ experimentSummaryText }}
+      <div class="header-side">
+        <div v-if="sweepView.sweep_axes?.length" class="combo-pill muted">
+          {{ experimentSummaryText }}
+        </div>
+        <button
+          v-if="sweepView.sweep_axes?.length"
+          type="button"
+          class="collapse-toggle"
+          :aria-expanded="axisStripOpen"
+          @click="axisStripOpen = !axisStripOpen"
+        >
+          {{ axisStripOpen ? '收起扫参轴' : '展开扫参轴' }}
+        </button>
       </div>
     </header>
 
-    <div v-if="sweepView.sweep_axes?.length" class="axis-strip">
+    <div v-if="axisStripOpen && sweepView.sweep_axes?.length" class="axis-strip">
       <div v-for="axis in sweepView.sweep_axes" :key="axis.key" class="axis-strip-item">
         <span class="axis-strip-label">{{ axis.label }}</span>
         <span class="axis-strip-values">
@@ -57,7 +68,32 @@
           </div>
         </div>
 
-        <div class="facet-cards">
+        <div class="toolbar">
+          <span class="toolbar-label">档位</span>
+          <div class="pill-group">
+            <button
+              v-for="entry in facetEntries"
+              :key="`facet-value-${entry.label}`"
+              type="button"
+              class="pill"
+              :class="{ active: facetValuesEqual(facetValue, entry.value) }"
+              @click="facetValue = entry.value"
+            >
+              {{ entry.label }}
+              <span class="pill-metric">{{ pct(entry.row?.total_return) }}</span>
+            </button>
+          </div>
+          <button
+            type="button"
+            class="collapse-toggle"
+            :aria-expanded="facetCardsOpen"
+            @click="facetCardsOpen = !facetCardsOpen"
+          >
+            {{ facetCardsOpen ? '收起档位卡片' : '展开档位卡片' }}
+          </button>
+        </div>
+
+        <div v-if="facetCardsOpen" class="facet-cards">
           <button
             v-for="entry in facetEntries"
             :key="`${facetAxisKey}-${entry.label}`"
@@ -116,7 +152,19 @@
     </div>
 
     <div v-else class="panel-body">
-      <div v-if="sweepView.sweep_axes?.length" class="filter-panel">
+      <div v-if="sweepView.sweep_axes?.length" class="filter-toolbar">
+        <button
+          type="button"
+          class="collapse-toggle"
+          :aria-expanded="gridFiltersOpen"
+          @click="gridFiltersOpen = !gridFiltersOpen"
+        >
+          {{ gridFiltersOpen ? '收起筛选' : '展开筛选' }}
+          <span v-if="activeFilterCount" class="filter-count">{{ activeFilterCount }}</span>
+        </button>
+      </div>
+
+      <div v-if="gridFiltersOpen && sweepView.sweep_axes?.length" class="filter-panel">
         <div v-for="axis in sweepView.sweep_axes" :key="`filter-${axis.key}`" class="filter-group">
           <span class="toolbar-label">{{ axis.label }}</span>
           <div class="pill-group">
@@ -194,6 +242,11 @@ const page = ref(1)
 const pageSize = 50
 const gridFilters = reactive({})
 
+/** Keep tall chrome collapsed so the ranked table stays near the top. */
+const axisStripOpen = ref(false)
+const facetCardsOpen = ref(false)
+const gridFiltersOpen = ref(false)
+
 const hasFacetAxes = computed(() => (props.sweepView.sweep_axes || []).length > 0)
 
 const experimentSummaryText = computed(() => {
@@ -224,6 +277,13 @@ const filteredGridRows = computed(() =>
   filterRowsBySelections(props.rows, props.sweepView.sweep_axes || [], gridFilters),
 )
 
+const activeFilterCount = computed(() =>
+  (props.sweepView.sweep_axes || []).reduce((sum, axis) => {
+    const values = gridFilters[axis.key]
+    return sum + (Array.isArray(values) ? values.length : 0)
+  }, 0),
+)
+
 const pageState = computed(() => {
   const total = filteredGridRows.value.length
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
@@ -241,6 +301,11 @@ const pageState = computed(() => {
 watch(
   () => props.sweepView.sweep_axes,
   (axes) => {
+    const validAxisKeys = new Set((axes || []).map((axis) => axis.key))
+    for (const key of Object.keys(gridFilters)) {
+      if (!validAxisKeys.has(key)) delete gridFilters[key]
+    }
+
     if (!axes?.length) {
       activeTab.value = 'grid'
       return
@@ -308,8 +373,46 @@ function toggleFilter(axisKey, value) {
   align-items: flex-start;
 }
 
+.header-side {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .muted {
   color: #64748b;
+}
+
+.collapse-toggle {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.collapse-toggle:hover {
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
 }
 
 .axis-strip {
@@ -349,7 +452,8 @@ function toggleFilter(axisKey, value) {
 }
 
 .toolbar,
-.filter-group {
+.filter-group,
+.filter-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -367,6 +471,8 @@ function toggleFilter(axisKey, value) {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 
 .pill {
@@ -384,10 +490,21 @@ function toggleFilter(axisKey, value) {
   color: #1d4ed8;
 }
 
+.pill-metric {
+  margin-left: 6px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.pill.active .pill-metric {
+  color: #1d4ed8;
+}
+
 .facet-cards {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  margin-bottom: 12px;
 }
 
 .facet-card {
@@ -402,6 +519,13 @@ function toggleFilter(axisKey, value) {
 .facet-card.active {
   border-color: #2563eb;
   box-shadow: 0 0 0 1px #2563eb;
+}
+
+.facet-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
 }
 
 .facet-card-metrics {
@@ -436,6 +560,24 @@ function toggleFilter(axisKey, value) {
   margin-top: 10px;
 }
 
+.facet-detail-block {
+  margin-top: 4px;
+}
+
+.subsection-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.subsection-head h5 {
+  margin: 0;
+  font-size: 14px;
+  color: #0f172a;
+}
+
 .link-btn {
   border: none;
   background: transparent;
@@ -451,6 +593,10 @@ function toggleFilter(axisKey, value) {
   color: #94a3b8;
   cursor: not-allowed;
   text-decoration: none;
+}
+
+.grid-meta {
+  margin: 0 0 8px;
 }
 
 .pager {
