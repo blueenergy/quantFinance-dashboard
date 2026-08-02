@@ -61,7 +61,7 @@
         该日期暂无选股信号
       </div>
       <div v-else class="stock-grid">
-        <div v-for="stock in stocks" :key="stock.symbol" class="stock-card" @click="viewChart(stock)">
+        <div v-for="stock in stocks" :key="stock.symbol" class="stock-card" @click="openBacktestDetail(stock)">
           <div class="stock-header">
             <span class="stock-name">{{ stock.name || '未知' }}</span>
             <span class="stock-symbol">{{ stock.symbol }}</span>
@@ -108,55 +108,39 @@
             </div>
           </div>
           <div class="stock-footer">
-            <button class="view-btn" @click.stop="viewChart(stock)">查看图表</button>
+            <button class="view-btn" @click.stop="openBacktestDetail(stock)">查看回测</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 图表模态框 -->
-    <div v-if="showChartModal" class="modal-overlay" @click="closeChartModal">
-      <div class="chart-modal" @click.stop @dblclick="toggleFullscreen">
-        <div class="modal-header">
-          <h3>{{ selectedStock?.name || selectedStock?.symbol }} ({{ selectedStock?.symbol }}) - 策略图表</h3>
-          <div class="modal-controls">
-            <span class="strategy-info">策略: {{ selectedStock?.strategy || selectedStrategy }}</span>
-            <span class="preset-info" v-if="selectedStock?.preset || selectedPreset">参数风格: {{ getPresetLabel(selectedStock?.preset || selectedPreset) }}</span>
-            <button class="fullscreen-btn" @click="toggleFullscreen" title="全屏切换">
-              {{ isFullscreen ? '❐' : '☐' }}
-            </button>
-            <button class="close-modal" @click="closeChartModal">✕</button>
-          </div>
-        </div>
-        <div class="chart-container" :class="{ fullscreen: isFullscreen }">
-          <div v-if="chartLoading" class="chart-loading">
-            <div class="spinner"></div>
-            图表数据加载中...
-          </div>
-          <div v-else-if="chartError" class="chart-error">
-            {{ chartError }}
-          </div>
-          <StockChart
-            v-else
-            :symbol="selectedStock?.symbol"
-            :signal-dates="[selectedStock?.date]"
-            :strategy-from="selectedStock?.strategy || selectedStrategy"
-            :preset-from="selectedStock?.preset || selectedPreset"
-            :date-from="selectedStock?.date"
-            style="width: 100%; height: 100%;"
-          />
-        </div>
-      </div>
-    </div>
+    <BacktestResultDetailModal
+      :open="detailOpen"
+      :title="detailTitle"
+      :subtitle="detailSubtitle"
+      :result="detailResult"
+      :meta="detailMeta"
+      :loading="detailLoading"
+      :loading-message="detailLoadingMessage"
+      :error="detailError"
+      @close="closeBacktestDetail"
+    >
+      <template #actions>
+        <button type="button" class="deploy-btn" :disabled="deploying" @click="deployDetail">
+          {{ deploying ? '部署中…' : '部署到实盘' }}
+        </button>
+        <button type="button" class="action-close-btn" @click="closeBacktestDetail">关闭</button>
+      </template>
+    </BacktestResultDetailModal>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { loadStrategyPoolBacktestDetail } from '../api/strategyPool'
+import { confirmAndDeployBacktestToLive } from '../utils/deployBacktestToLive'
 import request from '../utils/request'
-import StockChart from './StockChart.vue'
-
-const emit = defineEmits(['view-chart'])
+import BacktestResultDetailModal from './BacktestResultDetailModal.vue'
 
 // 监听来自App的策略上下文恢复事件
 const restoreContext = (event) => {
@@ -228,30 +212,80 @@ const currentParams = computed(() => {
   return backendParams.value
 })
 
-// 图表模态框相关变量
-const showChartModal = ref(false)
-const selectedStock = ref(null)
-const chartLoading = ref(false)
-const chartError = ref(null)
-const isFullscreen = ref(false)
+// 回测详情（本地弹窗，不再跳转回测管理）
+const detailOpen = ref(false)
+const detailLoading = ref(false)
+const detailLoadingMessage = ref('加载回测结果…')
+const detailError = ref('')
+const detailResult = ref(null)
+const detailMeta = ref({})
+const deploying = ref(false)
 
-// 查看图表：交给 App.vue 统一跳转（将从策略股池跳到回测模块展示）
-const viewChart = (stock) => {
-  emit('view-chart', {
+const detailTitle = computed(() => {
+  const symbol = detailMeta.value.symbol || detailResult.value?.symbol
+  return symbol ? `回测结果 · ${symbol}` : '回测结果'
+})
+
+const detailSubtitle = computed(() => {
+  const parts = [detailMeta.value.strategy_key, detailMeta.value.preset].filter(Boolean)
+  return parts.join(' · ')
+})
+
+async function openBacktestDetail(stock) {
+  if (!stock) return
+  detailOpen.value = true
+  detailLoading.value = true
+  detailLoadingMessage.value = '加载回测结果…'
+  detailError.value = ''
+  detailResult.value = null
+  detailMeta.value = {
     symbol: stock.symbol,
-    signalDate: stock.date,
-    strategy: stock.strategy || selectedStrategy.value,
-    preset: stock.preset || selectedPreset.value
-  })
+    strategy_key: stock.strategy || selectedStrategy.value,
+    preset: stock.preset || selectedPreset.value || '',
+  }
+
+  try {
+    const { result, meta } = await loadStrategyPoolBacktestDetail({
+      symbol: stock.symbol,
+      strategy: stock.strategy || selectedStrategy.value,
+      preset: stock.preset || selectedPreset.value,
+      signalDate: stock.date,
+    })
+    detailResult.value = result
+    detailMeta.value = meta
+  } catch (err) {
+    detailError.value = err?.response?.data?.detail || err?.message || '加载回测结果失败'
+  } finally {
+    detailLoading.value = false
+  }
 }
 
-const closeChartModal = () => {
-  showChartModal.value = false
-  selectedStock.value = null
+function closeBacktestDetail() {
+  detailOpen.value = false
+  detailLoading.value = false
+  detailError.value = ''
+  detailResult.value = null
+  detailMeta.value = {}
+  deploying.value = false
 }
 
-const toggleFullscreen = () => {
-  isFullscreen.value = !isFullscreen.value
+async function deployDetail() {
+  if (deploying.value) return
+  deploying.value = true
+  try {
+    const outcome = await confirmAndDeployBacktestToLive(
+      {
+        symbol: detailMeta.value.symbol,
+        strategy_key: detailMeta.value.strategy_key,
+        strategy_params: detailMeta.value.strategy_params,
+        asset_type: detailMeta.value.asset_type || 'stock',
+      },
+      { requestFn: request },
+    )
+    if (outcome.ok) closeBacktestDetail()
+  } finally {
+    deploying.value = false
+  }
 }
 
 const getParamLabel = (key) => {
@@ -836,118 +870,33 @@ select {
 }
 
 
-/* 图表模态框样式 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  backdrop-filter: blur(5px);
-}
-
-.chart-modal {
-  width: 90vw;
-  height: 85vh;
-  max-width: 1400px;
-  max-height: 90vh;
-  background: rgba(26, 26, 58, 0.95);
-  border-radius: 12px;
-  border: 1px solid rgba(138, 43, 226, 0.5);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px 20px;
-  background: rgba(138, 43, 226, 0.2);
-  border-bottom: 1px solid rgba(138, 43, 226, 0.3);
-}
-
-.modal-header h3 {
-  margin: 0;
-  color: #e6e6fa;
-  font-size: 16px;
-}
-
-.modal-controls {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.strategy-info, .preset-info {
-  font-size: 12px;
-  color: #b19cd9;
-  background: rgba(138, 43, 226, 0.2);
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.fullscreen-btn, .close-modal {
-  background: rgba(138, 43, 226, 0.3);
-  border: 1px solid rgba(138, 43, 226, 0.5);
-  color: #e6e6fa;
-  padding: 5px 10px;
+.deploy-btn {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
-  transition: all 0.2s;
+  font-weight: 500;
 }
 
-.fullscreen-btn:hover, .close-modal:hover {
-  background: rgba(138, 43, 226, 0.5);
-  transform: scale(1.05);
+.deploy-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-.chart-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  position: relative;
+.action-close-btn {
+  padding: 10px 20px;
+  background: #f4f4f5;
+  color: #606266;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
 }
 
-.chart-container.fullscreen {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw !important;
-  height: 100vh !important;
-  z-index: 1001;
-  border-radius: 0;
-}
-
-.chart-loading, .chart-error {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
-  color: #e6e6fa;
-  font-size: 16px;
-}
-
-.spinner {
-  width: 30px;
-  height: 30px;
-  border: 3px solid rgba(138, 43, 226, 0.3);
-  border-top: 3px solid #8a2be2;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-right: 10px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+.action-close-btn:hover {
+  background: #e9e9eb;
 }
 </style>

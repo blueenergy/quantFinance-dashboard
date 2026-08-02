@@ -355,21 +355,6 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
       currentIndex.value = chartSymbols.value.length - 1
     }
 
-    if (sourceTab === 'strategy-pool') {
-      switchTab('backtest')
-      await nextTick()
-      const event = new CustomEvent('open-backtest-from-strategy-pool', {
-        detail: {
-          symbol: stockSymbol,
-          signalDate,
-          strategy,
-          preset,
-        },
-      })
-      window.dispatchEvent(event)
-      return
-    }
-
     switchTab('chart')
     window.currentSourceInfo = sourceInfo
   }

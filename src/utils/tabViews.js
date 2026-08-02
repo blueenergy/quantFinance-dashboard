@@ -21,7 +21,6 @@ const TradingManualPanel = defineAsyncComponent(() => import('../components/Trad
 const StrategyWorkers = defineAsyncComponent(() => import('../views/StrategyWorkers.vue'))
 const SecuritiesAccountDashboard = defineAsyncComponent(() => import('../components/SecuritiesAccountDashboard.vue'))
 const UserProfile = defineAsyncComponent(() => import('../components/UserProfile.vue'))
-const BacktestManager = defineAsyncComponent(() => import('../components/BacktestManager.vue'))
 const StrategyLab = defineAsyncComponent(() => import('../views/StrategyLab.vue'))
 const PortfolioPlans = defineAsyncComponent(() => import('../views/PortfolioPlans.vue'))
 const PortfolioOverview = defineAsyncComponent(() => import('../views/PortfolioOverview.vue'))
@@ -177,12 +176,6 @@ export const tabViewDefinitions = [
     component: UserProfile,
     fallbackClass: 'skeleton-table',
     fallbackText: '用户配置加载中...',
-  },
-  {
-    id: 'backtest',
-    component: BacktestManager,
-    fallbackClass: 'skeleton-table',
-    fallbackText: '回测管理加载中...',
   },
   {
     id: 'strategy-lab',
@@ -396,7 +389,7 @@ export function getTabListeners(tabId, handlers) {
     }
   }
 
-  if (tabId === 'ranking' || tabId === 'strategy-pool') {
+  if (tabId === 'ranking') {
     return {
       'view-chart': handlers.selectStockForChart,
     }

@@ -117,7 +117,6 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'ranking', name: '金榜' },
       { id: 'entropy-ranking', name: '熵值排名' },
       { id: 'watchlist', name: '自选股' },
-      { id: 'backtest', name: '📊 回测管理' },
       { id: 'strategy-lab', name: '🧪 策略实验室' },
       { id: 'factor-backtest', name: '🧬 因子回测' },
       { id: 'portfolio-research', name: '组合研究' },
