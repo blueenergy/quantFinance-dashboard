@@ -124,6 +124,15 @@ describe('StrategyStockPool - local backtest detail', () => {
       },
     })
     expect(pageText()).toContain('部署成功，策略已配置到实盘。')
+    expect(document.body.querySelector('.deploy-btn').textContent).toContain('已部署')
+    expect(document.body.querySelector('.deploy-btn').disabled).toBe(true)
+
+    document.body.querySelector('.deploy-btn').click()
+    await flushPromises()
+    const deployCalls = requestMock.mock.calls.filter(
+      ([config]) => config?.method === 'post' && config?.url === '/user/watchlist/strategy',
+    )
+    expect(deployCalls).toHaveLength(1)
 
     wrapper.unmount()
   })

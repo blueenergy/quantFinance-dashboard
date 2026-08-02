@@ -31,10 +31,10 @@
         v-else
         type="button"
         class="deploy-btn"
-        :disabled="deploying"
+        :disabled="deploying || deployed"
         @click="beginConfirm"
       >
-        {{ deploying ? '部署中…' : '部署到实盘' }}
+        {{ deploying ? '部署中…' : deployed ? '已部署' : '部署到实盘' }}
       </button>
     </div>
   </div>
@@ -56,6 +56,7 @@ const emit = defineEmits(['deployed'])
 
 const confirming = ref(false)
 const deploying = ref(false)
+const deployed = ref(false)
 const message = ref('')
 const messageKind = ref('')
 
@@ -64,6 +65,7 @@ watch(
   () => {
     confirming.value = false
     deploying.value = false
+    deployed.value = false
     message.value = ''
     messageKind.value = ''
   },
@@ -95,8 +97,18 @@ async function submitDeploy() {
   try {
     await deployBacktestToLive(props.payload, { requestFn: request })
     confirming.value = false
+    deployed.value = true
     message.value = '部署成功，策略已配置到实盘。'
     messageKind.value = 'success'
+    window.dispatchEvent(
+      new CustomEvent('watchlist-strategy-updated', {
+        detail: {
+          symbol: props.payload.symbol,
+          strategy_key: props.payload.strategy_key,
+          enabled: true,
+        },
+      }),
+    )
     emit('deployed')
   } catch (error) {
     message.value = error?.response?.data?.detail || error?.message || '部署失败'

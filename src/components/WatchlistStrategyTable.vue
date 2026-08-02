@@ -370,7 +370,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { VExpansionPanels, VExpansionPanel, VExpansionPanelTitle, VExpansionPanelText } from 'vuetify/components'
 import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies } from '../api/user'
 import request from '../utils/request'
@@ -775,5 +775,16 @@ async function saveParams() {
 // Lifecycle
 // ============================================================================
 
-onMounted(loadData)
+function reloadAfterExternalDeploy() {
+  void loadData()
+}
+
+onMounted(() => {
+  window.addEventListener('watchlist-strategy-updated', reloadAfterExternalDeploy)
+  void loadData()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('watchlist-strategy-updated', reloadAfterExternalDeploy)
+})
 </script>
