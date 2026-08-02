@@ -21,6 +21,75 @@
       </div>
     </header>
 
+    <div v-if="recommendations.recommendedCombo" class="recommendation-grid">
+      <article class="recommendation-card primary">
+        <div class="recommendation-card-head">
+          <div>
+            <span class="recommendation-kicker">推荐组合</span>
+            <strong>
+              {{ recommendations.recommendedCombo.row.strategy_key }}
+              · {{ recommendations.recommendedCombo.row.preset || 'default' }}
+            </strong>
+          </div>
+          <span class="score-badge">
+            综合分 {{ recommendationScore(recommendations.recommendedCombo.score) }}
+          </span>
+        </div>
+        <div class="recommendation-metrics">
+          <span><em>收益</em>{{ pct(recommendations.recommendedCombo.row.total_return) }}</span>
+          <span><em>回撤</em>{{ pct(recommendations.recommendedCombo.row.max_drawdown) }}</span>
+          <span><em>夏普</em>{{ num(recommendations.recommendedCombo.row.sharpe_ratio, 3) }}</span>
+          <span><em>平仓回合</em>{{ recommendations.recommendedCombo.row.total_trades }}</span>
+        </div>
+        <button
+          type="button"
+          class="link-btn recommendation-detail"
+          @click="emit('open-detail', recommendations.recommendedCombo.row)"
+        >
+          查看推荐组合详情
+        </button>
+      </article>
+
+      <article class="recommendation-card">
+        <div class="recommendation-card-head">
+          <div>
+            <span class="recommendation-kicker">最优策略</span>
+            <strong>{{ recommendations.bestStrategy.strategy_key }}</strong>
+          </div>
+          <span class="score-badge secondary">
+            稳健分 {{ recommendationScore(recommendations.bestStrategy.score) }}
+          </span>
+        </div>
+        <p class="strategy-evidence">
+          基于 {{ recommendations.bestStrategy.combo_count }} 个有效组合的综合分中位数；
+          代表组合为
+          {{ recommendations.bestStrategy.representative.row.preset || 'default' }}。
+        </p>
+        <button
+          type="button"
+          class="link-btn recommendation-detail"
+          @click="emit('open-detail', recommendations.bestStrategy.representative.row)"
+        >
+          查看代表组合详情
+        </button>
+      </article>
+    </div>
+
+    <div
+      v-else-if="recommendations.excludedLowSampleCount"
+      class="recommendation-empty"
+    >
+      暂不推荐：当前完成结果均不足 {{ LOW_SAMPLE_TRADE_THRESHOLD }} 个平仓回合。
+    </div>
+
+    <p v-if="recommendations.recommendedCombo" class="recommendation-method muted">
+      实验内相对评分：收益 35% · 回撤 25% · 夏普 25% · 样本可信度 15%；
+      少于 {{ LOW_SAMPLE_TRADE_THRESHOLD }} 个平仓回合不参与推荐。
+      <span v-if="recommendations.excludedLowSampleCount">
+        已排除 {{ recommendations.excludedLowSampleCount }} 个低样本组合。
+      </span>
+    </p>
+
     <div v-if="axisStripOpen && sweepView.sweep_axes?.length" class="axis-strip">
       <div v-for="axis in sweepView.sweep_axes" :key="axis.key" class="axis-strip-item">
         <span class="axis-strip-label">{{ axis.label }}</span>
@@ -215,12 +284,14 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import {
+  buildBacktestRecommendations,
   buildFacetEntries,
   filterRowsByAxis,
   filterRowsBySelections,
   formatAxisValue,
   formatLowSampleHint,
   isLowSample,
+  LOW_SAMPLE_TRADE_THRESHOLD,
 } from '../../utils/backtestSweepView'
 import CompareResultTable from './CompareResultTable.vue'
 
@@ -248,6 +319,7 @@ const facetCardsOpen = ref(false)
 const gridFiltersOpen = ref(false)
 
 const hasFacetAxes = computed(() => (props.sweepView.sweep_axes || []).length > 0)
+const recommendations = computed(() => buildBacktestRecommendations(props.rows))
 
 const experimentSummaryText = computed(() => {
   const axes = props.sweepView.sweep_axes || []
@@ -335,6 +407,10 @@ function facetValuesEqual(a, b) {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
+function recommendationScore(value) {
+  return Number(value).toFixed(1)
+}
+
 function isFilterActive(axisKey, value) {
   const selected = gridFilters[axisKey] || []
   return selected.some((item) => JSON.stringify(item) === JSON.stringify(value))
@@ -383,6 +459,113 @@ function toggleFilter(axisKey, value) {
 
 .muted {
   color: #64748b;
+}
+
+.recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.recommendation-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #dbe4ef;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #fff 100%);
+}
+
+.recommendation-card.primary {
+  border-color: #bfdbfe;
+  background: linear-gradient(135deg, #eff6ff 0%, #fff 100%);
+}
+
+.recommendation-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.recommendation-card-head > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.recommendation-card-head strong {
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recommendation-kicker {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.score-badge {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-badge.secondary {
+  background: #475569;
+}
+
+.recommendation-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 10px;
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.recommendation-metrics em {
+  margin-right: 4px;
+  color: #64748b;
+  font-style: normal;
+}
+
+.strategy-evidence {
+  min-height: 34px;
+  margin: 10px 0 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.recommendation-detail {
+  margin-top: 10px;
+}
+
+.recommendation-method {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.recommendation-empty {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
 }
 
 .collapse-toggle {
@@ -612,5 +795,11 @@ function toggleFilter(axisKey, value) {
   border-radius: 8px;
   padding: 6px 12px;
   cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .recommendation-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

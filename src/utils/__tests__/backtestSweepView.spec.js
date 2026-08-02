@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildBacktestSweepView,
+  buildBacktestRecommendations,
   buildFacetEntries,
   filterRowsByAxis,
   formatStrategyParamsCell,
@@ -99,5 +100,63 @@ describe('sortRows and low sample', () => {
   it('explains closed-round count and threshold in the low-sample hint', () => {
     expect(formatLowSampleHint({ total_trades: 5 })).toContain('本次完成 5 个平仓回合')
     expect(formatLowSampleHint({ total_trades: 5 })).toContain(`参考阈值 ${LOW_SAMPLE_TRADE_THRESHOLD} 次`)
+  })
+})
+
+describe('buildBacktestRecommendations', () => {
+  it('recommends a balanced, sufficiently sampled combo instead of the highest raw return', () => {
+    const rows = [
+      {
+        task_id: 'risky',
+        status: 'completed',
+        strategy_key: 'momentum',
+        total_return: 0.3,
+        max_drawdown: 0.4,
+        sharpe_ratio: 0.5,
+        total_trades: 30,
+      },
+      {
+        task_id: 'balanced',
+        status: 'completed',
+        strategy_key: 'turtle',
+        total_return: 0.2,
+        max_drawdown: 0.1,
+        sharpe_ratio: 1.8,
+        total_trades: 30,
+      },
+      {
+        task_id: 'lucky-small-sample',
+        status: 'completed',
+        strategy_key: 'single_yang',
+        total_return: 0.8,
+        max_drawdown: 0.01,
+        sharpe_ratio: 4,
+        total_trades: 3,
+      },
+    ]
+
+    const result = buildBacktestRecommendations(rows)
+
+    expect(result.recommendedCombo.row.task_id).toBe('balanced')
+    expect(result.bestStrategy.strategy_key).toBe('turtle')
+    expect(result.eligibleCount).toBe(2)
+    expect(result.excludedLowSampleCount).toBe(1)
+  })
+
+  it('does not claim a winner when every complete result has too few closed rounds', () => {
+    const result = buildBacktestRecommendations([
+      {
+        status: 'completed',
+        strategy_key: 'turtle',
+        total_return: 0.2,
+        max_drawdown: 0.1,
+        sharpe_ratio: 1.5,
+        total_trades: 4,
+      },
+    ])
+
+    expect(result.recommendedCombo).toBeNull()
+    expect(result.bestStrategy).toBeNull()
+    expect(result.excludedLowSampleCount).toBe(1)
   })
 })
