@@ -12,6 +12,28 @@
       </div>
     </header>
 
+    <nav class="workspace-tabs" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        :class="{ active: workspaceTab === 'scan' }"
+        :aria-selected="workspaceTab === 'scan'"
+        @click="workspaceTab = 'scan'"
+      >
+        选股扫描
+      </button>
+      <button
+        type="button"
+        role="tab"
+        :class="{ active: workspaceTab === 'compare' }"
+        :aria-selected="workspaceTab === 'compare'"
+        @click="switchToCompare"
+      >
+        策略对比
+      </button>
+    </nav>
+
+    <div v-show="workspaceTab === 'scan'">
     <StrategyLabCreatePanel
       v-model:expanded="createPanelExpanded"
       v-model:params-expanded="createParamsExpanded"
@@ -373,16 +395,26 @@
         请选择一个实验，或先创建新的批量实验。
       </main>
     </section>
+    </div>
+
+    <StrategyCompareWorkspace
+      v-if="compareVisited"
+      v-show="workspaceTab === 'compare'"
+      :workspace-active="workspaceTab === 'compare'"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import StrategyLabBatchList from '../components/strategy-lab/StrategyLabBatchList.vue'
 import StrategyLabCreatePanel from '../components/strategy-lab/StrategyLabCreatePanel.vue'
 import StrategyLabLoopPanel from '../components/strategy-lab/StrategyLabLoopPanel.vue'
 import StrategyLabReviewPanel from '../components/strategy-lab/StrategyLabReviewPanel.vue'
 import StrategyLabTradePanel from '../components/strategy-lab/StrategyLabTradePanel.vue'
+const StrategyCompareWorkspace = defineAsyncComponent(
+  () => import('../components/strategy-compare/StrategyCompareWorkspace.vue'),
+)
 import {
   cancelBatch,
   deleteBatch,
@@ -425,8 +457,15 @@ import {
   resolveParamLabel,
 } from '../utils/strategyLabParams'
 
+const workspaceTab = ref('scan')
+const compareVisited = ref(false)
+
+function switchToCompare() {
+  compareVisited.value = true
+  workspaceTab.value = 'compare'
+}
+
 const batches = ref([])
-const selectedBatch = ref(null)
 const selectedBatchId = ref('')
 const results = ref([])
 const selectedTradeResult = ref(null)
@@ -1777,6 +1816,27 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 16px;
   padding: 16px;
+}
+
+.workspace-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.workspace-tabs button {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.workspace-tabs button.active {
+  background: #0f6bdc;
+  border-color: #0f6bdc;
+  color: #fff;
 }
 
 .lab-header,
