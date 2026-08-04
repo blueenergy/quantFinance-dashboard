@@ -327,6 +327,8 @@
               <option value="capital_utilization">资金使用率</option>
               <option value="max_drawdown">最大回撤</option>
               <option value="sharpe_ratio">夏普</option>
+              <option value="calmar_ratio">Calmar</option>
+              <option value="excess_return">超额收益</option>
               <option value="win_rate">胜率</option>
               <option value="total_trades">平仓回合</option>
             </select>
@@ -346,6 +348,8 @@
                   <th>资金使用率</th>
                   <th>最大回撤</th>
                   <th>夏普</th>
+                  <th>Calmar</th>
+                  <th>超额收益</th>
                   <th>胜率</th>
                   <th>平仓回合</th>
                   <th>错误</th>
@@ -362,6 +366,8 @@
                   <td>{{ pct(row.capital_utilization) }}</td>
                   <td>{{ pct(row.max_drawdown) }}</td>
                   <td>{{ num(row.sharpe_ratio) }}</td>
+                  <td>{{ num(row.calmar_ratio) }}</td>
+                  <td>{{ pct(row.excess_return) }}</td>
                   <td>{{ pct(row.win_rate) }}</td>
                   <td>{{ row.total_trades ?? '-' }}</td>
                   <td class="error">{{ row.error_message || '-' }}</td>

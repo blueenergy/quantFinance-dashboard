@@ -23,8 +23,17 @@ const SAMPLE_RESULT = {
     total_return: 0.12,
     sharpe_ratio: 1.2,
     max_drawdown: -0.08,
+    max_drawdown_len: 30,
     win_rate: 0.55,
     total_trades: 18,
+    calmar_ratio: 1.5,
+    sortino_ratio: 1.1,
+    sqn: 1.8,
+    ulcer_index: 0.04,
+    benchmark_return: 0.03,
+    excess_return: 0.09,
+    invested_return: 0.14,
+    capital_utilization: 0.72,
   },
   trades: [
     {
@@ -65,6 +74,10 @@ describe('BacktestResultDetail', () => {
     expect(text).toContain('atr_breakout')
     expect(text).toContain('atr_breakout_default')
     expect(text).toContain('12.00%')
+    expect(text).toContain('Calmar')
+    expect(text).toContain('超额收益')
+    expect(text).toContain('基准收益')
+    expect(text).toContain('投入资金收益')
     expect(text).toContain('买入')
     expect(wrapper.find('.radar-stub').exists()).toBe(true)
     expect(wrapper.find('.equity-stub').exists()).toBe(true)

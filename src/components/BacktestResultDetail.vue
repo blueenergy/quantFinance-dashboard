@@ -54,12 +54,15 @@
           <div class="metric-card">
             <div class="metric-label">夏普比率</div>
             <div class="metric-value">
-              {{ metrics.sharpe_ratio == null ? 'N/A' : Number(metrics.sharpe_ratio).toFixed(2) }}
+              {{ formatNumber(metrics.sharpe_ratio) }}
             </div>
           </div>
           <div class="metric-card">
             <div class="metric-label">最大回撤</div>
             <div class="metric-value negative">{{ formatPercent(metrics.max_drawdown) }}</div>
+            <div v-if="metrics.max_drawdown_len != null" class="metric-hint">
+              持续 {{ Math.round(metrics.max_drawdown_len) }} 根 K 线
+            </div>
           </div>
           <div class="metric-card">
             <div class="metric-label">胜率</div>
@@ -70,6 +73,71 @@
             <div class="metric-value" :title="'买入→卖出算 1 次；详情买卖明细按委托笔数统计'">
               {{ metrics.total_trades ?? 0 }}
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="hasRiskAdjustedMetrics" class="metrics-section">
+        <h4>风险调整</h4>
+        <div class="metrics-grid">
+          <div v-if="metrics.calmar_ratio != null" class="metric-card">
+            <div class="metric-label">Calmar</div>
+            <div class="metric-value">{{ formatNumber(metrics.calmar_ratio) }}</div>
+          </div>
+          <div v-if="metrics.sortino_ratio != null" class="metric-card">
+            <div class="metric-label">Sortino</div>
+            <div class="metric-value">{{ formatNumber(metrics.sortino_ratio) }}</div>
+          </div>
+          <div v-if="metrics.sqn != null" class="metric-card">
+            <div class="metric-label">SQN</div>
+            <div class="metric-value">{{ formatNumber(metrics.sqn) }}</div>
+          </div>
+          <div v-if="metrics.ulcer_index != null" class="metric-card">
+            <div class="metric-label">Ulcer 指数</div>
+            <div class="metric-value">{{ formatNumber(metrics.ulcer_index) }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="hasBenchmarkMetrics" class="metrics-section">
+        <h4>相对基准</h4>
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">基准收益</div>
+            <div
+              class="metric-value"
+              :class="(metrics.benchmark_return ?? 0) >= 0 ? 'positive' : 'negative'"
+            >
+              {{ formatPercent(metrics.benchmark_return) }}
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">超额收益</div>
+            <div
+              class="metric-value"
+              :class="(metrics.excess_return ?? 0) >= 0 ? 'positive' : 'negative'"
+            >
+              {{ formatPercent(metrics.excess_return) }}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="hasCapitalMetrics" class="metrics-section">
+        <h4>资金效率</h4>
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">投入资金收益</div>
+            <div
+              class="metric-value"
+              :class="(metrics.invested_return ?? 0) >= 0 ? 'positive' : 'negative'"
+            >
+              {{ formatPercent(metrics.invested_return) }}
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">资金使用率</div>
+            <div class="metric-value">{{ formatPercent(metrics.capital_utilization) }}</div>
           </div>
         </div>
       </section>
@@ -222,6 +290,20 @@ const totalProfit = computed(() => {
   return Number(finalValue) - initialCash.value
 })
 
+const hasRiskAdjustedMetrics = computed(() =>
+  ['calmar_ratio', 'sortino_ratio', 'sqn', 'ulcer_index'].some(
+    (key) => metrics.value[key] != null,
+  ),
+)
+
+const hasBenchmarkMetrics = computed(
+  () => metrics.value.benchmark_return != null || metrics.value.excess_return != null,
+)
+
+const hasCapitalMetrics = computed(
+  () => metrics.value.invested_return != null || metrics.value.capital_utilization != null,
+)
+
 function formatDate(dateStr) {
   if (!dateStr || String(dateStr).length !== 8) return dateStr
   const s = String(dateStr)
@@ -351,6 +433,12 @@ function formatNumber(value) {
 
 .metric-value.negative {
   color: #b91c1c;
+}
+
+.metric-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 .table-wrapper {

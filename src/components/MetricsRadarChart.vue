@@ -44,16 +44,27 @@ export default {
         // 胜率: 0% ~ 100% 映射到 0~100
         const winRateScore = (metrics.win_rate || 0) * 100
         
-        // 盈亏比: 0 ~ 3 映射到 0~100
-        const profitLossRatio = metrics.profit_loss_ratio || 0
-        const profitLossScore = Math.min(100, profitLossRatio * 33.33)
+        // Calmar: -1 ~ 3 mapped to 0~100 (fallback when unavailable)
+        const calmar = metrics.calmar_ratio
+        const calmarScore =
+          calmar == null
+            ? 0
+            : Math.min(100, Math.max(0, (calmar + 1) * 25))
+
+        // Excess return vs benchmark: -50% ~ +50% mapped to 0~100
+        const excess = metrics.excess_return
+        const excessScore =
+          excess == null
+            ? 50
+            : Math.min(100, Math.max(0, excess * 100 + 50))
         
         return {
           return: returnScore.toFixed(1),
           sharpe: sharpeScore.toFixed(1),
           drawdown: drawdownScore.toFixed(1),
           winRate: winRateScore.toFixed(1),
-          profitLoss: profitLossScore.toFixed(1)
+          calmar: calmarScore.toFixed(1),
+          excess: excessScore.toFixed(1),
         }
       }
 
@@ -79,7 +90,17 @@ export default {
               { name: '夏普比率', value: (metrics.sharpe_ratio || 0).toFixed(2) },
               { name: '回撤控制', value: ((metrics.max_drawdown || 0) * 100).toFixed(2) + '%' },
               { name: '胜率', value: ((metrics.win_rate || 0) * 100).toFixed(2) + '%' },
-              { name: '盈亏比', value: (metrics.profit_loss_ratio || 0).toFixed(2) }
+              {
+                name: 'Calmar',
+                value: metrics.calmar_ratio == null ? 'N/A' : Number(metrics.calmar_ratio).toFixed(2),
+              },
+              {
+                name: '超额收益',
+                value:
+                  metrics.excess_return == null
+                    ? 'N/A'
+                    : ((metrics.excess_return || 0) * 100).toFixed(2) + '%',
+              },
             ]
             
             let result = `<div style="font-weight: bold; margin-bottom: 8px;">策略表现</div>`
@@ -100,7 +121,8 @@ export default {
             { name: '夏普比率', max: 100 },
             { name: '回撤控制', max: 100 },
             { name: '胜率', max: 100 },
-            { name: '盈亏比', max: 100 }
+            { name: 'Calmar', max: 100 },
+            { name: '超额收益', max: 100 },
           ],
           shape: 'polygon',
           center: ['50%', '55%'],
@@ -137,7 +159,8 @@ export default {
                   normalized.sharpe,
                   normalized.drawdown,
                   normalized.winRate,
-                  normalized.profitLoss
+                  normalized.calmar,
+                  normalized.excess,
                 ],
                 name: '策略表现',
                 areaStyle: {

@@ -117,6 +117,8 @@ const metricColumns = [
   { key: 'total_return', label: '总收益' },
   { key: 'sharpe_ratio', label: '夏普' },
   { key: 'max_drawdown', label: '最大回撤' },
+  { key: 'calmar_ratio', label: 'Calmar' },
+  { key: 'excess_return', label: '超额' },
   { key: 'win_rate', label: '胜率' },
   { key: 'total_trades', label: '平仓回合' },
   { key: 'invested_return', label: '投入收益' },
@@ -153,7 +155,7 @@ function canShowParams(row) {
 }
 
 function formatMetric(row, key) {
-  if (key === 'total_return' || key === 'max_drawdown' || key === 'win_rate' || key === 'invested_return' || key === 'capital_utilization') {
+  if (key === 'total_return' || key === 'max_drawdown' || key === 'win_rate' || key === 'invested_return' || key === 'capital_utilization' || key === 'excess_return' || key === 'benchmark_return') {
     return props.pct(row[key])
   }
   return props.num(row[key], 3)
