@@ -43,6 +43,18 @@ describe('buildBacktestSweepView', () => {
     expect(view.sweep_axes.some((a) => a.key === 'param:turtle:entry_period')).toBe(true)
     expect(view.sweep_axes.some((a) => a.key === 'param:ma:fast')).toBe(false)
   })
+
+  it('adds a symbol axis when multiple symbols are present', () => {
+    const rows = [
+      { ...sampleRows[0], symbol: '000001.SZ' },
+      { ...sampleRows[2], symbol: '510300.SH' },
+    ]
+    const view = buildBacktestSweepView(rows)
+    const symbolAxis = view.sweep_axes.find((a) => a.key === 'symbol')
+    expect(symbolAxis).toBeTruthy()
+    expect(symbolAxis.values).toEqual(['000001.SZ', '510300.SH'])
+    expect(filterRowsByAxis(rows, symbolAxis, '510300.SH')).toHaveLength(1)
+  })
 })
 
 describe('buildFacetEntries', () => {

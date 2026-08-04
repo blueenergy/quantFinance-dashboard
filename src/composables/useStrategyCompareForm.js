@@ -5,13 +5,15 @@ import {
   estimateDurationSeconds,
   extractPresetParams,
   MAX_COMPARE_TASKS,
+  normalizeCompareSymbols,
+  parseCompareSymbols,
 } from '../utils/backtestComboPayload'
 import { defaultBacktestDateRange } from '../utils/backtestSymbolUtils'
 
 export function useStrategyCompareForm({ strategies = ref([]), templates = ref({}) } = {}) {
   const searchMode = ref('grid')
   const name = ref('')
-  const symbol = ref('')
+  const symbolsText = ref('')
   const assetType = ref('stock')
   const startDate = ref('')
   const endDate = ref('')
@@ -24,6 +26,10 @@ export function useStrategyCompareForm({ strategies = ref([]), templates = ref({
   const dates = defaultBacktestDateRange()
   startDate.value = dates.start
   endDate.value = dates.end
+
+  const parsedSymbols = computed(() =>
+    normalizeCompareSymbols(symbolsText.value, assetType.value),
+  )
 
   function ensureStrategyState(strategyKey) {
     if (!strategyStates.value[strategyKey]) {
@@ -83,15 +89,17 @@ export function useStrategyCompareForm({ strategies = ref([]), templates = ref({
   )
 
   const totalTasks = computed(() => {
-    const sym = String(symbol.value || '').trim()
-    if (!sym) return 0
-    return activeCombos.value.length
+    if (!parsedSymbols.value.length) return 0
+    return parsedSymbols.value.length * activeCombos.value.length
   })
 
   const estimatedSeconds = computed(() => estimateDurationSeconds(totalTasks.value))
 
   const canSubmit = computed(
-    () => totalTasks.value > 0 && totalTasks.value <= MAX_COMPARE_TASKS && String(symbol.value || '').trim(),
+    () =>
+      totalTasks.value > 0 &&
+      totalTasks.value <= MAX_COMPARE_TASKS &&
+      parsedSymbols.value.length > 0,
   )
 
   function buildPayload() {
@@ -99,7 +107,7 @@ export function useStrategyCompareForm({ strategies = ref([]), templates = ref({
     try {
       return buildCompareSubmitPayload({
         name: name.value,
-        symbol: symbol.value,
+        symbols: parsedSymbols.value,
         assetType: assetType.value,
         startDate: startDate.value,
         endDate: endDate.value,
@@ -114,9 +122,45 @@ export function useStrategyCompareForm({ strategies = ref([]), templates = ref({
   }
 
   function syncDefaultName() {
-    if (!name.value.trim() && symbol.value && activeStrategyStates.value.length) {
-      const keys = activeStrategyStates.value.map((s) => s.strategyKey).join('+')
-      name.value = `${symbol.value} · ${keys}`
+    if (name.value.trim() || !parsedSymbols.value.length || !activeStrategyStates.value.length) {
+      return
+    }
+    const keys = activeStrategyStates.value.map((s) => s.strategyKey).join('+')
+    const syms = parsedSymbols.value
+    const label =
+      syms.length <= 2 ? syms.join('+') : `${syms[0]}等${syms.length}只`
+    name.value = `${label} · ${keys}`
+  }
+
+  function setSymbolsText(text) {
+    symbolsText.value = text
+  }
+
+  function addSymbol(code, preferredType) {
+    const type = preferredType || assetType.value
+    const next = normalizeCompareSymbols(
+      [...parseCompareSymbols(symbolsText.value), code],
+      type,
+    )
+    symbolsText.value = next.join(', ')
+    if (preferredType) assetType.value = preferredType
+    syncDefaultName()
+  }
+
+  function removeSymbol(code) {
+    const target = String(code || '').trim().toUpperCase()
+    const next = parsedSymbols.value.filter((s) => s !== target)
+    symbolsText.value = next.join(', ')
+    syncDefaultName()
+  }
+
+  function toggleSymbol(code, preferredType) {
+    const normalized = normalizeCompareSymbols([code], preferredType || assetType.value)[0]
+    if (!normalized) return
+    if (parsedSymbols.value.includes(normalized)) {
+      removeSymbol(normalized)
+    } else {
+      addSymbol(normalized, preferredType)
     }
   }
 
@@ -127,7 +171,8 @@ export function useStrategyCompareForm({ strategies = ref([]), templates = ref({
   return {
     searchMode,
     name,
-    symbol,
+    symbolsText,
+    parsedSymbols,
     assetType,
     startDate,
     endDate,
@@ -146,6 +191,10 @@ export function useStrategyCompareForm({ strategies = ref([]), templates = ref({
     ensureStrategyState,
     buildPayload,
     syncDefaultName,
+    setSymbolsText,
+    addSymbol,
+    removeSymbol,
+    toggleSymbol,
     presetBaseline,
     MAX_COMPARE_TASKS,
   }

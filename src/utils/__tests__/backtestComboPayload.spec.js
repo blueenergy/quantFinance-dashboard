@@ -124,5 +124,30 @@ describe('buildCompareSubmitPayload', () => {
     expect(payload.combos.length).toBe(1)
     expect(payload.strategy_key).toBe('turtle')
     expect(payload.combos[0].strategy_params.entry_period).toBe(20)
+    expect(payload.symbols).toEqual(['510300.SH'])
+  })
+
+  it('accepts multiple stock and ETF symbols', () => {
+    const combos = buildStrategyCombos({
+      strategyKey: 'turtle',
+      presets: [
+        {
+          preset: 'default',
+          params_with_desc: { entry_period: { value: 20 } },
+        },
+      ],
+      selectedPresetKeys: ['default'],
+      experimentValuesByPreset: {},
+    })
+    const payload = buildCompareSubmitPayload({
+      name: 'multi',
+      symbols: '000001.SZ, 510300.SH, 000001.SZ',
+      startDate: '20240101',
+      endDate: '20241231',
+      initialCash: 1000000,
+      combos,
+    })
+    expect(payload.symbols).toEqual(['000001.SZ', '510300.SH'])
+    expect(payload.asset_type).toBe('stock')
   })
 })

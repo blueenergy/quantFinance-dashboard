@@ -5,6 +5,7 @@
         <div>
           <h3>新建策略对比实验</h3>
           <p class="muted">
+            {{ parsedSymbols.length }} 标的 × {{ activeCombos.length }} 组合 =
             合计 {{ totalTasks }} 个任务 · 串行执行 · 粗估约 {{ estimatedMinutes }} 分钟
           </p>
         </div>
@@ -19,16 +20,22 @@
               实验名
               <input v-model="name" placeholder="自动生成可修改" @blur="syncDefaultName" />
             </label>
-            <label>
-              标的代码
-              <input v-model="symbol" placeholder="510300.SH" @input="onSymbolInput" />
+            <label class="symbols-field">
+              标的代码（可多选，逗号/空格分隔）
+              <textarea
+                v-model="symbolsText"
+                rows="2"
+                placeholder="000001.SZ, 510300.SH"
+                @blur="onSymbolsBlur"
+              />
             </label>
             <label>
-              资产类型
-              <select v-model="assetType">
+              默认资产类型
+              <select v-model="assetType" @change="onSymbolsBlur">
                 <option value="stock">股票</option>
                 <option value="etf">ETF</option>
               </select>
+              <span class="field-hint">有交易所后缀时按代码自动识别；可混选股票与 ETF</span>
             </label>
             <label>
               开始日期
@@ -44,16 +51,31 @@
             </label>
           </div>
 
+          <div v-if="parsedSymbols.length" class="selected-symbols">
+            <button
+              v-for="code in parsedSymbols"
+              :key="code"
+              type="button"
+              class="symbol-chip"
+              :title="`移除 ${code}`"
+              @click="removeSymbol(code)"
+            >
+              {{ code }}
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+
           <div class="etf-shortcuts">
             <div v-for="group in featuredEtfGroups" :key="group.title" class="etf-group">
-              <span class="shortcut-title">{{ group.title }}</span>
+              <span class="shortcut-title">{{ group.title }}（点击加入/移除）</span>
               <div class="shortcut-list">
                 <button
                   v-for="etf in group.items"
                   :key="etf.code"
                   type="button"
                   class="shortcut-chip"
-                  @click="selectEtf(etf.code)"
+                  :class="{ active: isSymbolSelected(etf.code) }"
+                  @click="toggleSymbol(etf.code, 'etf')"
                 >
                   <span>{{ etf.name }}</span>
                   <small>{{ etf.code }}</small>
@@ -159,7 +181,7 @@
 
         <p v-if="message" class="error">{{ message }}</p>
         <p v-if="totalTasks > MAX_COMPARE_TASKS" class="error">
-          任务数 {{ totalTasks }} 超过上限 {{ MAX_COMPARE_TASKS }}，请减少策略、预设或参数档位。
+          任务数 {{ totalTasks }} 超过上限 {{ MAX_COMPARE_TASKS }}，请减少标的、策略、预设或参数档位。
         </p>
       </div>
 
@@ -177,11 +199,7 @@
 import { computed, ref, watch } from 'vue'
 import { FEATURED_ETF_GROUPS } from '../../constants/featuredEtfGroups'
 import { useStrategyCompareForm } from '../../composables/useStrategyCompareForm'
-import { buildStrategyCombos } from '../../utils/backtestComboPayload'
-import {
-  inferAssetTypeFromSymbol,
-  normalizeBacktestSymbol,
-} from '../../utils/backtestSymbolUtils'
+import { buildStrategyCombos, normalizeCompareSymbols } from '../../utils/backtestComboPayload'
 import { resolveParamLabel } from '../../utils/strategyLabParams'
 import ParamGridTable from './ParamGridTable.vue'
 
@@ -202,7 +220,8 @@ const formApi = useStrategyCompareForm({ strategies: strategiesRef, templates: t
 const {
   searchMode,
   name,
-  symbol,
+  symbolsText,
+  parsedSymbols,
   assetType,
   startDate,
   endDate,
@@ -220,6 +239,8 @@ const {
   ensureStrategyState,
   buildPayload,
   syncDefaultName,
+  removeSymbol,
+  toggleSymbol,
   MAX_COMPARE_TASKS,
 } = formApi
 
@@ -237,19 +258,17 @@ const comboSummaryText = computed(() => {
   return `分策略：${parts.join(' + ')} · 合计 ${activeCombos.value.length} 个组合`
 })
 
-watch(symbol, () => syncDefaultName())
+watch(parsedSymbols, () => syncDefaultName(), { deep: true })
 
-function onSymbolInput() {
-  const raw = String(symbol.value || '').trim().toUpperCase()
-  assetType.value = inferAssetTypeFromSymbol(raw, assetType.value)
-  symbol.value = normalizeBacktestSymbol(raw, assetType.value)
+function onSymbolsBlur() {
+  const normalized = normalizeCompareSymbols(symbolsText.value, assetType.value)
+  symbolsText.value = normalized.join(', ')
+  syncDefaultName()
 }
 
-function selectEtf(code) {
-  symbol.value = code
-  assetType.value = 'etf'
-  symbol.value = normalizeBacktestSymbol(code, 'etf')
-  syncDefaultName()
+function isSymbolSelected(code) {
+  const normalized = normalizeCompareSymbols([code], 'etf')[0]
+  return Boolean(normalized && parsedSymbols.value.includes(normalized))
 }
 
 function setSearchMode(mode) {
@@ -400,12 +419,48 @@ label {
   font-size: 13px;
 }
 
+.symbols-field {
+  grid-column: 1 / -1;
+}
+
 input,
-select {
+select,
+textarea {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 8px 10px;
   font: inherit;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 56px;
+}
+
+.field-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: #94a3b8;
+}
+
+.selected-symbols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.symbol-chip {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .muted {
@@ -442,6 +497,12 @@ select {
   display: flex;
   flex-direction: column;
   font-size: 12px;
+}
+
+.shortcut-chip.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .section-head-row {

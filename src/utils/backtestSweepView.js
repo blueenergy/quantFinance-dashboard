@@ -13,8 +13,12 @@ function collectParamValues(rows, strategyKey, paramName) {
 export function buildBacktestSweepView(rows = []) {
   const strategyKeys = [...new Set(rows.map((r) => r.strategy_key).filter(Boolean))]
   const presetValues = new Set(rows.map((r) => r.preset || ''))
+  const symbols = [...new Set(rows.map((r) => r.symbol).filter(Boolean))]
   const axes = []
 
+  if (symbols.length > 1) {
+    axes.push({ key: 'symbol', label: '标的', values: symbols })
+  }
   if (strategyKeys.length > 1) {
     axes.push({ key: 'strategy_key', label: '策略', values: strategyKeys })
   }
@@ -71,6 +75,7 @@ export function hasStrategyParams(row) {
 
 export function filterRowsByAxis(rows, axis, value) {
   if (!axis) return rows
+  if (axis.key === 'symbol') return rows.filter((r) => r.symbol === value)
   if (axis.key === 'strategy_key') return rows.filter((r) => r.strategy_key === value)
   if (axis.key === 'preset') return rows.filter((r) => (r.preset || '') === value)
   if (axis.param_name && axis.strategy_key) {

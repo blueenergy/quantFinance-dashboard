@@ -4,6 +4,7 @@
       <thead>
         <tr>
           <th>#</th>
+          <th>标的</th>
           <th>策略</th>
           <th>预设</th>
           <th
@@ -22,6 +23,7 @@
       <tbody>
         <tr v-for="(row, index) in rows" :key="row.task_id || index" :class="{ 'low-sample': isLowSample(row) }">
           <td>{{ rankOffset + index + 1 }}</td>
+          <td>{{ row.symbol || '—' }}</td>
           <td>{{ row.strategy_key }}</td>
           <td class="preset-cell">
             <button

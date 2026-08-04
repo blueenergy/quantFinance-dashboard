@@ -123,9 +123,38 @@ export function estimateDurationSeconds(taskCount) {
   return Math.max(1, Math.ceil(taskCount * ESTIMATED_SECONDS_PER_TASK))
 }
 
+/** Split compare-form symbol input into unique codes (space / comma separated). */
+export function parseCompareSymbols(textOrList) {
+  if (Array.isArray(textOrList)) {
+    return [...new Set(textOrList.map((item) => String(item || '').trim()).filter(Boolean))]
+  }
+  return [
+    ...new Set(
+      String(textOrList ?? '')
+        .split(/[\s,，]+/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ]
+}
+
+export function normalizeCompareSymbols(textOrList, assetType = 'stock') {
+  const seen = new Set()
+  const out = []
+  for (const raw of parseCompareSymbols(textOrList)) {
+    const preferred = inferAssetTypeFromSymbol(raw, assetType)
+    const normalized = normalizeBacktestSymbol(raw, preferred)
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    out.push(normalized)
+  }
+  return out
+}
+
 export function buildCompareSubmitPayload({
   name,
   symbol,
+  symbols: symbolsInput,
   assetType = 'stock',
   startDate,
   endDate,
@@ -133,25 +162,26 @@ export function buildCompareSubmitPayload({
   combos,
   excludedPreviewKeys = [],
 }) {
-  const symbols = [String(symbol || '').trim()].filter(Boolean)
-  const normalizedSymbol = symbols.length
-    ? normalizeBacktestSymbol(symbols[0], assetType)
-    : ''
-  const resolvedAssetType = normalizedSymbol
-    ? inferAssetTypeFromSymbol(normalizedSymbol, assetType)
-    : assetType
+  const source = symbolsInput != null ? symbolsInput : symbol
+  const symbols = normalizeCompareSymbols(source, assetType)
+  if (!symbols.length) {
+    throw new Error('至少填写一个标的代码')
+  }
+  const resolvedAssetType = inferAssetTypeFromSymbol(symbols[0], assetType)
   const filtered = combos.filter((c) => !excludedPreviewKeys.includes(c.preview_key))
   if (!filtered.length) {
     throw new Error('至少选择一个有效组合')
   }
   const totalTasks = symbols.length * filtered.length
   if (totalTasks > MAX_COMPARE_TASKS) {
-    throw new Error(`任务数 ${totalTasks} 超过上限 ${MAX_COMPARE_TASKS}`)
+    throw new Error(
+      `任务数 ${symbols.length} 标的 × ${filtered.length} 组合 = ${totalTasks} 超过上限 ${MAX_COMPARE_TASKS}`,
+    )
   }
   const primary = filtered[0]
   return {
     name,
-    symbols: normalizedSymbol ? [normalizedSymbol] : symbols,
+    symbols,
     asset_type: resolvedAssetType,
     universe_type: 'manual',
     strategy_key: primary.strategy_key,

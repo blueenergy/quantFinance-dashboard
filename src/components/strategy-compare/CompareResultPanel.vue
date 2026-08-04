@@ -3,7 +3,7 @@
     <header class="section-header">
       <div>
         <h4>对比结果</h4>
-        <p class="muted">共 {{ rows.length }} 组参数组合</p>
+        <p class="muted">共 {{ rows.length }} 个回测任务</p>
       </div>
       <div class="header-side">
         <div v-if="sweepView.sweep_axes?.length" class="combo-pill muted">
@@ -27,6 +27,9 @@
           <div>
             <span class="recommendation-kicker">推荐组合</span>
             <strong>
+              <template v-if="recommendations.recommendedCombo.row.symbol">
+                {{ recommendations.recommendedCombo.row.symbol }} ·
+              </template>
               {{ recommendations.recommendedCombo.row.strategy_key }}
               · {{ recommendations.recommendedCombo.row.preset || 'default' }}
             </strong>

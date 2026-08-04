@@ -7,7 +7,7 @@
       </div>
       <span class="type-badge">Compare</span>
     </div>
-    <p class="subtitle">多策略 × 多预设 × 参数网格的一次批量回测。</p>
+    <p class="subtitle">多标的 × 多策略 × 多预设 × 参数网格的一次批量回测。</p>
     <div class="list-action-block">
       <button type="button" class="primary" @click="emit('create')">新建对比实验</button>
     </div>
@@ -21,9 +21,13 @@
       @click="emit('select', batch.batch_id)"
     >
       <strong>{{ batch.name }}</strong>
-      <span>{{ batch.symbols?.[0] || batch.universe_value || '' }}</span>
+      <span>{{ formatSymbols(batch) }}</span>
       <small>
-        {{ batch.combos_count || 1 }} 组合 · {{ batch.status }}
+        {{ batch.combos_count || 1 }} 组合
+        <template v-if="(batch.symbols_count || 0) > 1">
+          · {{ batch.symbols_count }} 标的
+        </template>
+        · {{ batch.status }}
         <template v-if="batch.summary">
           · {{ batch.summary.completed || 0 }}/{{ batch.summary.total || 0 }}
         </template>
@@ -41,6 +45,15 @@ defineProps({
 })
 
 const emit = defineEmits(['create', 'select'])
+
+function formatSymbols(batch) {
+  const preview = batch?.symbols_preview || batch?.symbols || []
+  if (preview.length) {
+    if (preview.length <= 2) return preview.join(', ')
+    return `${preview.slice(0, 2).join(', ')} 等${batch.symbols_count || preview.length}只`
+  }
+  return batch?.universe_value || ''
+}
 </script>
 
 <style scoped>
