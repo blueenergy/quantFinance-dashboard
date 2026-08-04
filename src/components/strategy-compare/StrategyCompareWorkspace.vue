@@ -13,44 +13,66 @@
         @select="onSelectBatch"
       />
 
-      <main v-if="selectedBatch" class="card detail-card">
-        <header class="detail-header">
-          <div>
-            <h3>{{ selectedBatch.name }}</h3>
-            <p class="muted">
-              {{ (selectedBatch.symbols || []).join(', ') }}
-              · {{ selectedBatch.start_date }} - {{ selectedBatch.end_date }}
-              · {{ selectedBatch.status }}
-            </p>
-            <p v-if="selectedBatch.summary" class="muted">
-              进度 {{ selectedBatch.summary.completed || 0 }} /
-              {{ selectedBatch.summary.total || 0 }}
-              · 失败 {{ selectedBatch.summary.failed || 0 }}
-            </p>
-          </div>
-          <div class="detail-actions">
-            <button type="button" @click="refreshAll()">刷新</button>
-            <button type="button" :disabled="!canCancel" @click="cancelSelected()">取消</button>
-            <button type="button" class="danger" @click="deleteSelected()">删除</button>
-          </div>
-        </header>
+      <Teleport v-if="selectedBatch" to="body" :disabled="!detailMaximized">
+        <div :class="detailMaximized ? 'detail-fullscreen-shell' : 'detail-inline-shell'">
+          <div
+            v-if="detailMaximized"
+            class="detail-fullscreen-backdrop"
+            aria-hidden="true"
+            @click="exitDetailFullscreen"
+          />
+          <main
+            class="card detail-card"
+            :class="{ 'detail-card--maximized': detailMaximized }"
+            :role="detailMaximized ? 'dialog' : undefined"
+            :aria-modal="detailMaximized ? 'true' : undefined"
+            aria-label="对比实验详情"
+            @click.stop
+          >
+            <header class="detail-toolbar">
+              <div class="detail-title">
+                <h3>{{ selectedBatch.name }}</h3>
+                <p class="muted">
+                  {{ (selectedBatch.symbols || []).join(', ') }}
+                  · {{ selectedBatch.start_date }} - {{ selectedBatch.end_date }}
+                  · {{ selectedBatch.status }}
+                </p>
+                <p v-if="selectedBatch.summary" class="muted">
+                  进度 {{ selectedBatch.summary.completed || 0 }} /
+                  {{ selectedBatch.summary.total || 0 }}
+                  · 失败 {{ selectedBatch.summary.failed || 0 }}
+                </p>
+              </div>
+              <div class="actions">
+                <button type="button" @click="toggleDetailFullscreen">
+                  {{ detailMaximized ? '退出全屏' : '全屏' }}
+                </button>
+                <button type="button" @click="refreshAll()">刷新</button>
+                <button type="button" :disabled="!canCancel" @click="cancelSelected()">取消</button>
+                <button type="button" class="danger" @click="deleteSelected()">删除</button>
+              </div>
+            </header>
 
-        <CompareResultPanel
-          v-if="resultRows.length"
-          :rows="resultRows"
-          :sweep-view="sweepView"
-          :sort-key="sortKey"
-          :sort-order="sortOrder"
-          :pct="pct"
-          :num="num"
-          @sort="onSort"
-          @open-detail="openDetail"
-        />
-        <p v-else-if="resultsLoading" class="muted">加载结果…</p>
-        <p v-else class="muted">
-          {{ isBatchRunning ? '回测进行中，完成后将显示对比结果。' : '暂无结果行。' }}
-        </p>
-      </main>
+            <div class="detail-body">
+              <CompareResultPanel
+                v-if="resultRows.length"
+                :rows="resultRows"
+                :sweep-view="sweepView"
+                :sort-key="sortKey"
+                :sort-order="sortOrder"
+                :pct="pct"
+                :num="num"
+                @sort="onSort"
+                @open-detail="openDetail"
+              />
+              <p v-else-if="resultsLoading" class="muted">加载结果…</p>
+              <p v-else class="muted">
+                {{ isBatchRunning ? '回测进行中，完成后将显示对比结果。' : '暂无结果行。' }}
+              </p>
+            </div>
+          </main>
+        </div>
+      </Teleport>
 
       <main v-else class="card detail-card empty-card">
         <p class="muted">请选择一个对比实验，或新建对比实验。</p>
@@ -92,8 +114,10 @@ import {
   listStrategies,
   listStrategyTemplates,
 } from '../../api/strategyLab'
+import { useDetailFullscreen } from '../../composables/useDetailFullscreen'
 import { useStrategyCompareBatches } from '../../composables/useStrategyCompareBatches'
 import { useStrategyCompareResults } from '../../composables/useStrategyCompareResults'
+import '../../assets/styles/detail-fullscreen.css'
 import { normalizeStrategies, normalizeTemplateGroups } from '../../utils/strategyLabParams'
 import BacktestDeployActions from '../BacktestDeployActions.vue'
 import BacktestResultDetailModal from '../BacktestResultDetailModal.vue'
@@ -130,6 +154,10 @@ const {
   loadResults,
   setSort,
 } = useStrategyCompareResults()
+
+const { detailMaximized, toggleDetailFullscreen, exitDetailFullscreen } = useDetailFullscreen({
+  resetWhen: selectedBatchId,
+})
 
 const drawerOpen = ref(false)
 const submitting = ref(false)
@@ -314,21 +342,11 @@ onMounted(async () => {
   min-width: 0;
 }
 
-.detail-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
-  margin-bottom: 16px;
+.detail-title h3 {
+  margin: 0;
 }
 
-.detail-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.detail-actions button {
+.detail-toolbar button {
   border: 1px solid #cbd5e1;
   background: #fff;
   border-radius: 8px;
@@ -336,7 +354,7 @@ onMounted(async () => {
   cursor: pointer;
 }
 
-.detail-actions .danger {
+.detail-toolbar .danger {
   border-color: #fecaca;
   color: #b91c1c;
 }
