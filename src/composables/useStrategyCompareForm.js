@@ -31,6 +31,12 @@ export function useStrategyCompareForm({ strategies = ref([]), templates = ref({
     normalizeCompareSymbols(symbolsText.value, assetType.value),
   )
 
+  const usableStrategyKeys = computed(() =>
+    (strategies.value || [])
+      .filter((s) => s && s.key && s.can_use !== false)
+      .map((s) => s.key),
+  )
+
   function ensureStrategyState(strategyKey) {
     if (!strategyStates.value[strategyKey]) {
       const presets = templates.value[strategyKey] || []
@@ -58,6 +64,65 @@ export function useStrategyCompareForm({ strategies = ref([]), templates = ref({
         selectedStrategyKeys.value.push(strategyKey)
       }
       ensureStrategyState(strategyKey)
+    }
+  }
+
+  function selectAllStrategies() {
+    if (searchMode.value === 'single') {
+      message.value = '单次模式下只能选 1 个策略，请先切换到网格'
+      return
+    }
+    const keys = usableStrategyKeys.value
+    selectedStrategyKeys.value = [...keys]
+    const nextStates = {}
+    for (const key of keys) {
+      nextStates[key] = ensureStrategyState(key)
+    }
+    strategyStates.value = nextStates
+    message.value = keys.length ? `已选中 ${keys.length} 个可用策略` : '没有可用策略'
+    syncDefaultName()
+  }
+
+  function clearStrategies() {
+    selectedStrategyKeys.value = []
+    strategyStates.value = {}
+    excludedPreviewKeys.value = []
+  }
+
+  function selectAllPresetsForStrategy(strategyKey) {
+    if (searchMode.value === 'single') {
+      message.value = '单次模式下只能选 1 个预设'
+      return
+    }
+    const state = ensureStrategyState(strategyKey)
+    const presets = templates.value[strategyKey] || []
+    state.selectedPresetKeys = presets.map((p) => p.preset).filter(Boolean)
+  }
+
+  function selectAllPresets() {
+    if (searchMode.value === 'single') {
+      message.value = '单次模式下只能选 1 个预设，请先切换到网格'
+      return
+    }
+    if (!selectedStrategyKeys.value.length) {
+      message.value = '请先选择策略'
+      return
+    }
+    for (const key of selectedStrategyKeys.value) {
+      selectAllPresetsForStrategy(key)
+    }
+    message.value = '已选中各策略的全部预设'
+  }
+
+  function selectDefaultPresetsOnly() {
+    for (const key of selectedStrategyKeys.value) {
+      const presets = templates.value[key] || []
+      const defaultPreset = presets.find((p) => p.is_default) || presets[0]
+      const state = ensureStrategyState(key)
+      state.selectedPresetKeys = defaultPreset ? [defaultPreset.preset] : []
+    }
+    if (selectedStrategyKeys.value.length) {
+      message.value = '已恢复为各策略默认预设'
     }
   }
 
@@ -137,14 +202,32 @@ export function useStrategyCompareForm({ strategies = ref([]), templates = ref({
   }
 
   function addSymbol(code, preferredType) {
+    addSymbols([code], preferredType)
+  }
+
+  function addSymbols(codes, preferredType) {
     const type = preferredType || assetType.value
     const next = normalizeCompareSymbols(
-      [...parseCompareSymbols(symbolsText.value), code],
+      [...parseCompareSymbols(symbolsText.value), ...(codes || [])],
       type,
     )
     symbolsText.value = next.join(', ')
     if (preferredType) assetType.value = preferredType
     syncDefaultName()
+    return next
+  }
+
+  function replaceSymbols(codes, preferredType) {
+    const type = preferredType || assetType.value
+    const next = normalizeCompareSymbols(codes || [], type)
+    symbolsText.value = next.join(', ')
+    if (preferredType) assetType.value = preferredType
+    syncDefaultName()
+    return next
+  }
+
+  function clearSymbols() {
+    symbolsText.value = ''
   }
 
   function removeSymbol(code) {
@@ -181,6 +264,7 @@ export function useStrategyCompareForm({ strategies = ref([]), templates = ref({
     strategyStates,
     excludedPreviewKeys,
     message,
+    usableStrategyKeys,
     activeStrategyStates,
     allCombos,
     activeCombos,
@@ -188,11 +272,19 @@ export function useStrategyCompareForm({ strategies = ref([]), templates = ref({
     estimatedSeconds,
     canSubmit,
     toggleStrategy,
+    selectAllStrategies,
+    clearStrategies,
+    selectAllPresets,
+    selectAllPresetsForStrategy,
+    selectDefaultPresetsOnly,
     ensureStrategyState,
     buildPayload,
     syncDefaultName,
     setSymbolsText,
     addSymbol,
+    addSymbols,
+    replaceSymbols,
+    clearSymbols,
     removeSymbol,
     toggleSymbol,
     presetBaseline,

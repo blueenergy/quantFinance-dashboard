@@ -63,11 +63,54 @@
               {{ code }}
               <span aria-hidden="true">×</span>
             </button>
+            <button type="button" class="link-btn clear-symbols" @click="clearSymbols()">
+              清空标的
+            </button>
+          </div>
+
+          <div class="universe-shortcuts">
+            <div class="shortcut-toolbar">
+              <span class="shortcut-title">快捷填入标的</span>
+              <button
+                type="button"
+                class="shortcut-action"
+                :disabled="universeLoading"
+                @click="loadWatchlistSymbols"
+              >
+                自选股
+              </button>
+              <button
+                type="button"
+                class="shortcut-action"
+                :disabled="universeLoading"
+                @click="loadFeaturedEtfs"
+              >
+                精选 ETF
+              </button>
+              <button
+                v-for="universe in indexUniverses"
+                :key="universe.key"
+                type="button"
+                class="shortcut-action"
+                :disabled="universeLoading"
+                @click="loadIndexUniverse(universe)"
+              >
+                {{ universe.label }}
+              </button>
+            </div>
+            <p class="field-hint">
+              自选股 / 指数会替换当前标的；精选 ETF 与分组全选为追加。
+              指数成分较多时请配合少量策略/预设（任务上限 {{ MAX_COMPARE_TASKS }}）。
+            </p>
+            <p v-if="universeLoading" class="muted">正在加载标的…</p>
           </div>
 
           <div class="etf-shortcuts">
             <div v-for="group in featuredEtfGroups" :key="group.title" class="etf-group">
-              <span class="shortcut-title">{{ group.title }}（点击加入/移除）</span>
+              <div class="group-title-row">
+                <span class="shortcut-title">{{ group.title }}（点击加入/移除）</span>
+                <button type="button" class="link-btn" @click="addEtfGroup(group)">本组全选</button>
+              </div>
               <div class="shortcut-list">
                 <button
                   v-for="etf in group.items"
@@ -107,7 +150,36 @@
           </div>
 
           <div class="strategy-picker">
-            <span class="field-label">候选策略</span>
+            <div class="section-head-row">
+              <span class="field-label">候选策略</span>
+              <div class="shortcut-toolbar compact">
+                <button
+                  type="button"
+                  class="link-btn"
+                  :disabled="searchMode === 'single'"
+                  @click="selectAllStrategies"
+                >
+                  全选可用
+                </button>
+                <button type="button" class="link-btn" @click="clearStrategies">清空</button>
+                <button
+                  type="button"
+                  class="link-btn"
+                  :disabled="searchMode === 'single' || !selectedStrategyKeys.length"
+                  @click="selectAllPresets"
+                >
+                  全选所有预设
+                </button>
+                <button
+                  type="button"
+                  class="link-btn"
+                  :disabled="!selectedStrategyKeys.length"
+                  @click="selectDefaultPresetsOnly"
+                >
+                  仅默认预设
+                </button>
+              </div>
+            </div>
             <div class="chip-list">
               <button
                 v-for="strategy in strategies"
@@ -142,6 +214,14 @@
                 @click="togglePreset(state.strategyKey, preset.preset)"
               >
                 {{ preset.name || preset.preset }}
+              </button>
+              <button
+                v-if="searchMode === 'grid' && state.presets.length > 1"
+                type="button"
+                class="link-btn"
+                @click="selectAllPresetsForStrategy(state.strategyKey)"
+              >
+                本策略全选预设
               </button>
             </div>
 
@@ -179,7 +259,7 @@
           </ul>
         </section>
 
-        <p v-if="message" class="error">{{ message }}</p>
+        <p v-if="message" :class="messageLooksLikeError ? 'error' : 'info-msg'">{{ message }}</p>
         <p v-if="totalTasks > MAX_COMPARE_TASKS" class="error">
           任务数 {{ totalTasks }} 超过上限 {{ MAX_COMPARE_TASKS }}，请减少标的、策略、预设或参数档位。
         </p>
@@ -197,10 +277,19 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { getWatchlist } from '../../api/user'
+import { listEtfs } from '../../api/strategyLab'
 import { FEATURED_ETF_GROUPS } from '../../constants/featuredEtfGroups'
+import {
+  COMPARE_INDEX_UNIVERSES,
+  extractSymbolsFromEtfListResponse,
+  extractSymbolsFromIndexResponse,
+  extractSymbolsFromWatchlistResponse,
+} from '../../constants/compareUniverseShortcuts'
 import { useStrategyCompareForm } from '../../composables/useStrategyCompareForm'
 import { buildStrategyCombos, normalizeCompareSymbols } from '../../utils/backtestComboPayload'
 import { resolveParamLabel } from '../../utils/strategyLabParams'
+import request from '../../utils/request'
 import ParamGridTable from './ParamGridTable.vue'
 
 const props = defineProps({
@@ -236,18 +325,33 @@ const {
   estimatedSeconds,
   canSubmit,
   toggleStrategy,
+  selectAllStrategies,
+  clearStrategies,
+  selectAllPresets,
+  selectAllPresetsForStrategy,
+  selectDefaultPresetsOnly,
   ensureStrategyState,
   buildPayload,
   syncDefaultName,
+  addSymbols,
+  replaceSymbols,
+  clearSymbols,
   removeSymbol,
   toggleSymbol,
   MAX_COMPARE_TASKS,
 } = formApi
 
 const featuredEtfGroups = FEATURED_ETF_GROUPS
+const indexUniverses = COMPARE_INDEX_UNIVERSES
 const previewOpen = ref(false)
+const universeLoading = ref(false)
 
 const estimatedMinutes = computed(() => Math.max(1, Math.ceil(estimatedSeconds.value / 60)))
+
+const messageLooksLikeError = computed(() => {
+  const text = String(message.value || '')
+  return /失败|无效|超过|只能|请先|为空|未能|没有可用/.test(text)
+})
 
 const comboSummaryText = computed(() => {
   const parts = activeStrategyStates.value.map((s) => {
@@ -269,6 +373,82 @@ function onSymbolsBlur() {
 function isSymbolSelected(code) {
   const normalized = normalizeCompareSymbols([code], 'etf')[0]
   return Boolean(normalized && parsedSymbols.value.includes(normalized))
+}
+
+function addEtfGroup(group) {
+  const codes = (group?.items || []).map((item) => item.code)
+  const next = addSymbols(codes, 'etf')
+  message.value = `已追加 ${group.title}（当前 ${next.length} 只标的）`
+}
+
+function reportUniverseResult(label, next, { append = false } = {}) {
+  const comboCount = activeCombos.value.length || 1
+  const projected = next.length * comboCount
+  let text = append
+    ? `已追加${label}（当前 ${next.length} 只标的）`
+    : `已填入${label} ${next.length} 只标的`
+  if (projected > MAX_COMPARE_TASKS) {
+    text += `；按当前 ${comboCount} 个组合将产生 ${projected} 个任务，超过上限 ${MAX_COMPARE_TASKS}，请减少组合或标的`
+  }
+  message.value = text
+}
+
+async function loadWatchlistSymbols() {
+  universeLoading.value = true
+  try {
+    const payload = await getWatchlist()
+    const symbols = extractSymbolsFromWatchlistResponse(payload)
+    if (!symbols.length) {
+      message.value = '自选股为空'
+      return
+    }
+    const next = replaceSymbols(symbols, 'stock')
+    reportUniverseResult('自选股', next)
+  } catch (err) {
+    message.value = err?.message || '加载自选股失败'
+  } finally {
+    universeLoading.value = false
+  }
+}
+
+async function loadFeaturedEtfs() {
+  universeLoading.value = true
+  try {
+    let codes = []
+    try {
+      const payload = await listEtfs({ featured: true, sort: 'total_share', limit: 80 })
+      codes = extractSymbolsFromEtfListResponse(payload)
+    } catch {
+      codes = []
+    }
+    if (!codes.length) {
+      codes = featuredEtfGroups.flatMap((group) => group.items.map((item) => item.code))
+    }
+    const next = addSymbols(codes, 'etf')
+    reportUniverseResult('精选 ETF', next, { append: true })
+  } catch (err) {
+    message.value = err?.message || '加载精选 ETF 失败'
+  } finally {
+    universeLoading.value = false
+  }
+}
+
+async function loadIndexUniverse(universe) {
+  universeLoading.value = true
+  try {
+    const payload = await request({ method: 'get', url: universe.path })
+    const symbols = extractSymbolsFromIndexResponse(payload)
+    if (!symbols.length) {
+      message.value = `未能加载 ${universe.label} 成分股`
+      return
+    }
+    const next = replaceSymbols(symbols, universe.assetType || 'stock')
+    reportUniverseResult(universe.label, next)
+  } catch (err) {
+    message.value = err?.message || `加载 ${universe.label} 失败`
+  } finally {
+    universeLoading.value = false
+  }
 }
 
 function setSearchMode(mode) {
@@ -448,6 +628,47 @@ textarea {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
+  align-items: center;
+}
+
+.clear-symbols {
+  margin-left: 4px;
+}
+
+.universe-shortcuts {
+  margin-top: 12px;
+}
+
+.shortcut-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.shortcut-toolbar.compact {
+  justify-content: flex-end;
+}
+
+.shortcut-action {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.shortcut-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.group-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .symbol-chip {
@@ -461,6 +682,11 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.info-msg {
+  color: #1d4ed8;
+  margin-top: 12px;
 }
 
 .muted {
