@@ -55,15 +55,24 @@ export function usePortfolioResearchDetail({
     resultDetail.value?.publish_action || selectedJob.value?.publish_action || ''
   ))
   const hasPublishedPreset = computed(() => Boolean(publishedPresetId.value))
+  const researchSelectionMode = computed(() => (
+    candidateConfig.value?.selection_mode
+      || selectedJob.value?.params?.selection_mode
+      || resultDetail.value?.params?.selection_mode
+      || 'fixed_top_n'
+  ))
   const publishSupported = computed(() => {
+    if (researchSelectionMode.value === 'dynamic_score_threshold') return false
     const scoreType = candidateConfig.value?.score_type
     return !scoreType || scoreType === 'growth_cycle_weighted'
   })
-  const publishDisabledReason = computed(() => (
-    publishSupported.value
-      ? ''
-      : '该评分配方仅用于研究；construction/template 尚未对齐，暂不能发布为参数预设。'
-  ))
+  const publishDisabledReason = computed(() => {
+    if (publishSupported.value) return ''
+    if (researchSelectionMode.value === 'dynamic_score_threshold') {
+      return '动态评分阈值研究暂不能发布为参数预设；后端也会拒绝该操作。'
+    }
+    return '该评分配方仅用于研究；construction/template 尚未对齐，暂不能发布为参数预设。'
+  })
   const publishedPresetLabel = computed(() => {
     if (!publishedPresetId.value) return '-'
     return publishedStatus.value
@@ -246,7 +255,7 @@ export function usePortfolioResearchDetail({
   }
 
   async function publish(status) {
-    if (!resultDetail.value?.result_id) return
+    if (!resultDetail.value?.result_id || researchSelectionMode.value === 'dynamic_score_threshold') return
     publishLoading.value = true
     setMessage('')
     setErrorMessage('')

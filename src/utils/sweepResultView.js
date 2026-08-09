@@ -207,6 +207,11 @@ export function experimentSummary(sweepView) {
 export function buildCandidateConfigFromRow(row, job = {}, params = {}) {
   const universe = String(params.universe_index || job.universe_index || 'csi1000')
   const topN = Number(row?.top_n || params.top_n_values?.[0] || 10)
+  const selectionMode = row?.selection_mode || params.selection_mode || 'fixed_top_n'
+  const thresholdLookbackDays = Number(
+    row?.threshold_lookback_days ?? params.threshold_lookback_days ?? 10,
+  )
+  const maxPositions = Number(row?.max_positions ?? params.max_positions ?? 20)
   const rebalanceDays = Number(row?.rebalance_interval_days || params.horizon || 20)
   const scoreVariant = String(row?.score_variant || params.score_column || 'score')
   const scoreColumn = row?.score_column || params.score_column || 'composite_growth_cycle_score'
@@ -247,6 +252,9 @@ export function buildCandidateConfigFromRow(row, job = {}, params = {}) {
     score_weights: displayScoreWeights,
     score_preset_label: compositePreset?.label,
     score_preset_description: compositePreset?.description,
+    selection_mode: selectionMode,
+    threshold_lookback_days: thresholdLookbackDays,
+    max_positions: maxPositions,
     top_n: topN,
     rebalance_days: rebalanceDays,
     construction_mode: row?.construction_mode || 'top_n',

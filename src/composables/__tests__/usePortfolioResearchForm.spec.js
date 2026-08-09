@@ -43,6 +43,15 @@ describe('usePortfolioResearchForm', () => {
     api.rerunPortfolioResearchJob.mockResolvedValue({ data: { job_id: 'job-rerun' } })
   })
 
+  it('defaults new research to fixed Top N selection', () => {
+    const formApi = createForm()
+    expect(formApi.form.value).toMatchObject({
+      selection_mode: 'fixed_top_n',
+      threshold_lookback_days: 10,
+      max_positions: 20,
+    })
+  })
+
   it('names new research from the selected score strategy', () => {
     const formApi = createForm()
     expect(formApi.form.value.name).toContain('成长30-动量70加权研究')
@@ -106,6 +115,9 @@ describe('usePortfolioResearchForm', () => {
       end_date: '2025-01-31',
       score_column: 'growth_score',
       growth_cycle_weights: ['20:80', '40:60'],
+      selection_mode: 'fixed_top_n',
+      threshold_lookback_days: 10,
+      max_positions: 20,
       top_n_values: [10, 30],
       active_caps: [0.2, 0.35],
       trailing_stop_pcts: [0, 0.12],
@@ -206,6 +218,31 @@ describe('usePortfolioResearchForm', () => {
     expect(formApi.form.value.growth_cycle_weights).toBe('40:60')
     expect(formApi.form.value.trailing_stop_pcts).toBe('0.15')
     expect(formApi.form.value.top_n_values).toBe('10,20,50')
+    expect(formApi.form.value.selection_mode).toBe('fixed_top_n')
+    expect(formApi.form.value.threshold_lookback_days).toBe(10)
+    expect(formApi.form.value.max_positions).toBe(20)
+  })
+
+  it('hydrates dynamic-threshold parameters for reruns', () => {
+    const selectedJob = ref({
+      job_id: 'job-dynamic',
+      params: {
+        selection_mode: 'dynamic_score_threshold',
+        threshold_lookback_days: 15,
+        max_positions: 30,
+        top_n_values: [20],
+      },
+    })
+    const formApi = createForm({ selectedJob })
+
+    formApi.loadParamsFromSelectedJob()
+
+    expect(formApi.form.value).toMatchObject({
+      selection_mode: 'dynamic_score_threshold',
+      threshold_lookback_days: 15,
+      max_positions: 30,
+      top_n_values: '20',
+    })
   })
 
   it('loads composite score columns as predefined multi-dimension presets', () => {

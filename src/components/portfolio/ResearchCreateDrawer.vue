@@ -106,11 +106,44 @@
             <small class="field-hint">每行一组配方；维度以逗号分隔。纯 growth+cycle 自动走兼容路径。</small>
           </label>
           <label>
-            Top N
+            选股方式
+            <select
+              :value="form.selection_mode || FIXED_TOP_N_SELECTION_MODE"
+              @change="patchForm({ selection_mode: $event.target.value })"
+            >
+              <option :value="FIXED_TOP_N_SELECTION_MODE">固定 Top N</option>
+              <option :value="DYNAMIC_THRESHOLD_SELECTION_MODE">动态评分阈值</option>
+            </select>
+          </label>
+          <label>
+            {{ dynamicSelection ? '阈值基准排名（Top N）' : 'Top N' }}
             <input
               :value="form.top_n_values"
-              placeholder="10,20,50"
+              :placeholder="dynamicSelection ? '10' : '10,20,50'"
               @input="patchForm({ top_n_values: $event.target.value })"
+            />
+            <small v-if="dynamicSelection" class="field-hint">
+              MVP 仅支持一个基准排名；动态阈值将根据历史评分确定实际持仓。
+            </small>
+          </label>
+          <label v-if="dynamicSelection">
+            threshold_lookback_days
+            <input
+              :value="form.threshold_lookback_days"
+              type="number"
+              min="1"
+              step="1"
+              @input="patchNumber('threshold_lookback_days', $event.target.value)"
+            />
+          </label>
+          <label v-if="dynamicSelection">
+            max_positions
+            <input
+              :value="form.max_positions"
+              type="number"
+              min="1"
+              step="1"
+              @input="patchNumber('max_positions', $event.target.value)"
             />
           </label>
           <label>
@@ -223,7 +256,11 @@ import {
   compositeScorePreset,
   scoreWeightSummary,
 } from '../../utils/scoreUtils'
-import { resolveScoreColumns } from '../../utils/portfolioResearchPayload'
+import {
+  DYNAMIC_THRESHOLD_SELECTION_MODE,
+  FIXED_TOP_N_SELECTION_MODE,
+  resolveScoreColumns,
+} from '../../utils/portfolioResearchPayload'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -238,6 +275,9 @@ const props = defineProps({
 const emit = defineEmits(['close', 'submit', 'update:form', 'name-touched', 'universe-change'])
 
 const selectedScoreColumns = computed(() => resolveScoreColumns(props.form))
+const dynamicSelection = computed(() => (
+  props.form.selection_mode === DYNAMIC_THRESHOLD_SELECTION_MODE
+))
 const selectedCompositePresets = computed(() => (
   selectedScoreColumns.value
     .map((column) => compositeScorePreset(column))
@@ -256,7 +296,20 @@ const canSubmit = computed(() => {
     .filter(Boolean)
     .map(Number)
     .filter((n) => Number.isFinite(n) && n >= 1)
-  return rebalanceDays.length > 0
+  if (!rebalanceDays.length) return false
+  if (!dynamicSelection.value) return true
+  const topNValues = String(props.form.top_n_values ?? '')
+    .split(/[,，]/)
+    .map((item) => Number(item.trim()))
+    .filter(Number.isFinite)
+  const lookbackDays = Number(props.form.threshold_lookback_days)
+  const maxPositions = Number(props.form.max_positions)
+  return topNValues.length === 1
+    && topNValues[0] >= 1
+    && Number.isInteger(lookbackDays)
+    && lookbackDays >= 1
+    && Number.isInteger(maxPositions)
+    && maxPositions >= topNValues[0]
 })
 
 function withScoreColumns(columns) {

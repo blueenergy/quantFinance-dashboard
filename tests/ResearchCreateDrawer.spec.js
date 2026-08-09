@@ -11,6 +11,9 @@ const baseForm = {
   score_column: 'composite_growth_cycle_score',
   growth_cycle_weights: '30:70',
   score_specs: 'growth:30,cycle:70',
+  selection_mode: 'fixed_top_n',
+  threshold_lookback_days: 10,
+  max_positions: 20,
   top_n_values: '10,20',
   horizon: 20,
   active_caps: '0.2',
@@ -193,5 +196,34 @@ describe('ResearchCreateDrawer', () => {
 
     await rebalanceInput.setValue('10,20,30,40')
     expect(wrapper.emitted('update:form').at(-1)[0].horizon).toBe('10,20,30,40')
+  })
+
+  it('conditionally renders and validates dynamic-threshold fields', async () => {
+    const wrapper = mountDrawer()
+    expect(wrapper.text()).toContain('固定 Top N')
+    expect(wrapper.text()).not.toContain('threshold_lookback_days')
+
+    await wrapper.setProps({
+      form: {
+        ...baseForm,
+        selection_mode: 'dynamic_score_threshold',
+        top_n_values: '10,20',
+      },
+    })
+    expect(wrapper.text()).toContain('阈值基准排名（Top N）')
+    expect(wrapper.text()).toContain('threshold_lookback_days')
+    expect(wrapper.text()).toContain('max_positions')
+    let submit = wrapper.findAll('button').find((btn) => btn.text().includes('提交'))
+    expect(submit.attributes('disabled')).toBeDefined()
+
+    await wrapper.setProps({
+      form: {
+        ...baseForm,
+        selection_mode: 'dynamic_score_threshold',
+        top_n_values: '10',
+      },
+    })
+    submit = wrapper.findAll('button').find((btn) => btn.text().includes('提交'))
+    expect(submit.attributes('disabled')).toBeUndefined()
   })
 })

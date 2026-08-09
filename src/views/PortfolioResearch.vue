@@ -189,7 +189,13 @@
                 {{ publishDisabledReason }}
               </p>
               <div class="config-grid">
+                <span>
+                  <strong>selection mode</strong>
+                  {{ candidateConfig.selection_mode === 'dynamic_score_threshold' ? '动态评分阈值' : '固定 Top N' }}
+                </span>
                 <span><strong>top_n</strong>{{ candidateConfig.top_n ?? '-' }}</span>
+                <span><strong>threshold lookback</strong>{{ candidateConfig.threshold_lookback_days ? `${candidateConfig.threshold_lookback_days}d` : '-' }}</span>
+                <span><strong>max positions</strong>{{ candidateConfig.max_positions ?? '-' }}</span>
                 <span><strong>rebalance</strong>{{ candidateConfig.rebalance_days ? `${candidateConfig.rebalance_days}d` : '-' }}</span>
                 <span><strong>mode</strong>{{ candidateConfig.construction_mode || '-' }}</span>
                 <span><strong>industry cap</strong>{{ pct(candidateConfig.max_industry_weight) }}</span>

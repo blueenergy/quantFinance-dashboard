@@ -41,6 +41,9 @@ describe('buildPortfolioResearchPayload', () => {
       name: 'test research',
       universe_index: 'csi1000',
       growth_cycle_weights: ['30:70'],
+      selection_mode: 'fixed_top_n',
+      threshold_lookback_days: 10,
+      max_positions: 20,
       top_n_values: [10, 20],
       horizon: 20,
       rebalance_interval_days: [20],
@@ -72,6 +75,43 @@ describe('buildPortfolioResearchPayload', () => {
     })
     expect(payload.rebalance_interval_days).toEqual([10, 20, 30, 40])
     expect(payload.horizon).toBe(10)
+  })
+
+  it('builds dynamic-threshold fields and requires exactly one baseline rank', () => {
+    const payload = buildPortfolioResearchPayload({
+      ...baseForm,
+      selection_mode: 'dynamic_score_threshold',
+      threshold_lookback_days: '15',
+      max_positions: '30',
+      top_n_values: '20',
+    })
+    expect(payload).toMatchObject({
+      selection_mode: 'dynamic_score_threshold',
+      threshold_lookback_days: 15,
+      max_positions: 30,
+      top_n_values: [20],
+    })
+
+    expect(() => buildPortfolioResearchPayload({
+      ...baseForm,
+      selection_mode: 'dynamic_score_threshold',
+      top_n_values: '10,20',
+    })).toThrow('恰好填写一个')
+  })
+
+  it('rejects invalid dynamic-threshold bounds', () => {
+    expect(() => buildPortfolioResearchPayload({
+      ...baseForm,
+      selection_mode: 'dynamic_score_threshold',
+      threshold_lookback_days: 0,
+      top_n_values: '10',
+    })).toThrow('threshold_lookback_days')
+    expect(() => buildPortfolioResearchPayload({
+      ...baseForm,
+      selection_mode: 'dynamic_score_threshold',
+      max_positions: 9,
+      top_n_values: '10',
+    })).toThrow('max_positions')
   })
 
   it('rejects empty rebalance days', () => {

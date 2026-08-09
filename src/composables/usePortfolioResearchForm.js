@@ -80,6 +80,9 @@ export function usePortfolioResearchForm({
       score_columns: ['composite_growth_cycle_score'],
       growth_cycle_weights: '30:70',
       score_specs: 'growth:30,cycle:70',
+      selection_mode: 'fixed_top_n',
+      threshold_lookback_days: 10,
+      max_positions: 20,
       top_n_values: '10,20,50',
       horizon: '10,20,30,40',
       active_caps: '0.2,0.25,0.3,0.4',
@@ -271,6 +274,9 @@ export function usePortfolioResearchForm({
       score_specs: hasWeightedSpecs
         ? formatScoreSpecsForInput(scoreSpecs)
         : legacyWeightsToScoreSpecs(params.growth_cycle_weights) || defaults.score_specs,
+      selection_mode: params.selection_mode || defaults.selection_mode,
+      threshold_lookback_days: params.threshold_lookback_days ?? defaults.threshold_lookback_days,
+      max_positions: params.max_positions ?? defaults.max_positions,
       top_n_values: formatListForInput(params.top_n_values) || defaults.top_n_values,
       horizon: horizonInput || defaults.horizon,
       active_caps: formatListForInput(params.active_caps) || defaults.active_caps,

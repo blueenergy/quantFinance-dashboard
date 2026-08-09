@@ -93,6 +93,9 @@ describe('buildResearchParamRows', () => {
       params: {
         score_column: 'composite_growth_cycle_score',
         growth_cycle_weights: ['30:70'],
+        selection_mode: 'dynamic_score_threshold',
+        threshold_lookback_days: 15,
+        max_positions: 25,
         top_n_values: [10, 20],
         horizon: 20,
         active_caps: [0.2],
@@ -103,9 +106,18 @@ describe('buildResearchParamRows', () => {
     const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]))
     expect(byKey.start_date).toBe('2023-01-01')
     expect(byKey.universe_index).toContain('中证1000')
+    expect(byKey.selection_mode).toBe('动态评分阈值')
+    expect(byKey.threshold_lookback_days).toBe(15)
+    expect(byKey.max_positions).toBe(25)
     expect(byKey.top_n_values).toBe('10, 20')
     expect(byKey.trailing_stop_pcts).toBe('关闭, 15.00%')
     expect(byKey.force).toBe('false')
+  })
+
+  it('shows legacy jobs as fixed Top N selection', () => {
+    const rows = buildResearchParamRows({ params: {} })
+    const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]))
+    expect(byKey.selection_mode).toBe('固定 Top N')
   })
 })
 

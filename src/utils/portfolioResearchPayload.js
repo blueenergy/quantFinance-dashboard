@@ -12,6 +12,9 @@ const OPTIONAL_NUMBER_KEYS = [
   'horizon',
 ]
 
+export const FIXED_TOP_N_SELECTION_MODE = 'fixed_top_n'
+export const DYNAMIC_THRESHOLD_SELECTION_MODE = 'dynamic_score_threshold'
+
 /**
  * Split a comma-separated input (also accepts Chinese commas) into mapped values.
  * Drops blanks and non-finite numbers when mapper is Number.
@@ -107,6 +110,10 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
   const form = formState || {}
   const scoreMode = form.score_mode || ''
   const scoreColumns = resolveScoreColumns(form)
+  const selectionMode = form.selection_mode || FIXED_TOP_N_SELECTION_MODE
+  const topNValues = parseCsvNumbers(form.top_n_values, Number).map((n) => Math.trunc(n))
+  const thresholdLookbackDays = Math.trunc(asOptionalNumber(form.threshold_lookback_days) ?? 10)
+  const maxPositions = Math.trunc(asOptionalNumber(form.max_positions) ?? 20)
   const rebalanceIntervals = [...new Set(
     parseCsvNumbers(form.horizon, Number)
       .map((n) => Math.trunc(n))
@@ -118,10 +125,28 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
     start_date: form.start_date,
     end_date: form.end_date,
     score_column: scoreColumns[0] || form.score_column,
-    top_n_values: parseCsvNumbers(form.top_n_values, Number).map((n) => Math.trunc(n)),
+    selection_mode: selectionMode,
+    threshold_lookback_days: thresholdLookbackDays,
+    max_positions: maxPositions,
+    top_n_values: topNValues,
     active_caps: parseCsvNumbers(form.active_caps, Number),
     trailing_stop_pcts: normalizeTrailingStopList(parseCsvNumbers(form.trailing_stop_pcts, Number)),
     force: true,
+  }
+
+  if (selectionMode === DYNAMIC_THRESHOLD_SELECTION_MODE) {
+    if (topNValues.length !== 1) {
+      throw new Error('动态评分阈值模式下，top_n_values 必须恰好填写一个阈值基准排名')
+    }
+    if (thresholdLookbackDays < 1) {
+      throw new Error('threshold_lookback_days 必须大于等于 1')
+    }
+    if (maxPositions < 1) {
+      throw new Error('max_positions 必须大于等于 1')
+    }
+    if (maxPositions < topNValues[0]) {
+      throw new Error('max_positions 必须大于等于阈值基准排名')
+    }
   }
 
   if (scoreMode === 'column' || scoreMode === 'preset') {

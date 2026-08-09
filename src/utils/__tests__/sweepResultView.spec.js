@@ -55,9 +55,19 @@ describe('sweepResultView', () => {
   })
 
   it('builds candidate config from selected row', () => {
-    const candidate = buildCandidateConfigFromRow(sampleRows[2], { job_id: 'job-1' }, { universe_index: 'csi1000' })
+    const candidate = buildCandidateConfigFromRow(sampleRows[2], { job_id: 'job-1' }, {
+      universe_index: 'csi1000',
+      selection_mode: 'dynamic_score_threshold',
+      threshold_lookback_days: 15,
+      max_positions: 30,
+    })
     expect(candidate.trailing_stop_pct).toBe(0.15)
     expect(candidate.top_n).toBe(10)
+    expect(candidate).toMatchObject({
+      selection_mode: 'dynamic_score_threshold',
+      threshold_lookback_days: 15,
+      max_positions: 30,
+    })
   })
 
   it('expands predefined composite scores into display weights', () => {

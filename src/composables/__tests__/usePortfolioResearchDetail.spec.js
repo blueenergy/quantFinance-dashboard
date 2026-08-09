@@ -164,6 +164,25 @@ describe('usePortfolioResearchDetail', () => {
     host.wrapper.unmount()
   })
 
+  it('disables publishing dynamic-threshold research', async () => {
+    const host = mountDetail()
+    host.detailApi.selectedJob.value = {
+      params: {
+        selection_mode: 'dynamic_score_threshold',
+        threshold_lookback_days: 10,
+        max_positions: 20,
+      },
+    }
+    host.detailApi.resultDetail.value = { result_id: 'result-dynamic' }
+    await flushPromises()
+
+    expect(host.detailApi.publishSupported.value).toBe(false)
+    expect(host.detailApi.publishDisabledReason.value).toContain('动态评分阈值研究暂不能发布')
+    await host.detailApi.publish('draft')
+    expect(api.publishPortfolioResearchResult).not.toHaveBeenCalled()
+    host.wrapper.unmount()
+  })
+
   it('refreshes the selected detail and jobs after publishing', async () => {
     const loadJobs = vi.fn()
     const setMessage = vi.fn()

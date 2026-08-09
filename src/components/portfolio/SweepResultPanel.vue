@@ -11,6 +11,9 @@
           <span class="candidate-strip-label">发布候选</span>
           {{ candidateSummary }}
         </p>
+        <p v-if="dynamicSelectionSummary" class="muted">
+          {{ dynamicSelectionSummary }}
+        </p>
       </div>
       <div v-if="sweepView.sweep_axes?.length" class="combo-pill muted">
         {{ experimentSummaryText }}
@@ -209,6 +212,11 @@ const gridFilters = reactive({})
 const rows = computed(() => props.resultDetail?.rows || [])
 const rowCountTotal = computed(() => Number(props.resultDetail?.row_count_total || rows.value.length))
 const sweepView = computed(() => buildSweepResultView(props.resultDetail, props.job?.params || props.resultDetail?.params))
+const researchParams = computed(() => props.job?.params || props.resultDetail?.params || {})
+const dynamicSelectionSummary = computed(() => {
+  if (researchParams.value.selection_mode !== 'dynamic_score_threshold') return ''
+  return `动态评分阈值 · 阈值回看 ${researchParams.value.threshold_lookback_days ?? 10}d · 最多持仓 ${researchParams.value.max_positions ?? 20} 只`
+})
 const experimentSummaryText = computed(() => experimentSummary(sweepView.value))
 const hasFacetAxes = computed(() => (sweepView.value.sweep_axes || []).length > 0)
 
