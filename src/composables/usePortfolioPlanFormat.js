@@ -354,10 +354,13 @@ export function llmOpportunityTitle(opportunity) {
 }
 
 export function isKeepItem(item) {
-  const currentShares = Number(item?.current_shares ?? 0)
+  // Prefer plan baseline; live-enriched current_shares can exceed target after fills.
+  const baseline = item?.plan_current_shares != null && item?.plan_current_shares !== ''
+    ? Number(item.plan_current_shares)
+    : Number(item?.current_shares ?? 0)
   const targetShares = Number(item?.target_shares ?? 0)
   const deltaShares = Number(item?.delta_shares ?? 0)
-  return currentShares > 0 && targetShares > 0 && deltaShares === 0
+  return baseline > 0 && targetShares > 0 && deltaShares === 0
 }
 
 export function actionBadge(itemOrAction) {

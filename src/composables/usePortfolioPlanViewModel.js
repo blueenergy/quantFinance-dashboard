@@ -6,30 +6,60 @@ import {
 
 const ACTION_ORDER = { buy: 0, sell: 1, hold: 2, skip: 3 }
 
-export function normalizePlanItemRow(item) {
-  // Live enrichment overwrites current_shares with strategy/account fills.
-  // Infer buy/sell from plan baseline + stored delta, never from live current.
-  const displayCurrent = Number(item?.current_shares ?? 0)
-  const hasPlanCurrent = item?.plan_current_shares != null && item?.plan_current_shares !== ''
-  const planCurrent = Number(hasPlanCurrent ? item.plan_current_shares : displayCurrent)
-  const target = Number(item?.target_shares ?? 0)
-  const parsedDelta = Number(item?.delta_shares)
-  const delta = Number.isFinite(parsedDelta) ? parsedDelta : (target - planCurrent)
-  let action = String(item?.action || '').trim().toLowerCase()
-  if (!action) {
-    if (delta > 0) action = 'buy'
-    else if (delta < 0) action = 'sell'
-    else if (target > 0) action = 'hold'
-    else action = 'skip'
+function readPlanBaselineShares(item) {
+  // Live enrichment overwrites current_shares with post-fill strategy shares and
+  // stashes the plan baseline in plan_current_shares. Direction must never use
+  // the live-enriched current when that overlay is present.
+  if (item?.plan_current_shares != null && item?.plan_current_shares !== '') {
+    const n = Number(item.plan_current_shares)
+    return Number.isFinite(n) ? n : 0
   }
-  if (action === 'hold' && delta !== 0) {
-    action = delta > 0 ? 'buy' : 'sell'
+  const hasLiveOverlay = item?.strategy_current_shares != null
+    || item?.live_filled_qty != null
+    || item?.live_remaining_qty != null
+    || item?.live_status != null
+    || item?.account_current_shares != null
+  if (hasLiveOverlay) return 0
+  // No live overlay: current_shares is still the plan baseline.
+  const n = Number(item?.current_shares ?? 0)
+  return Number.isFinite(n) ? n : 0
+}
+
+function readPlanDeltaShares(item, planCurrent, target) {
+  // null/'' must NOT become 0 via Number(null); that blocks target-baseline fallback.
+  if (item?.delta_shares != null && item?.delta_shares !== '') {
+    const n = Number(item.delta_shares)
+    if (Number.isFinite(n)) return n
+  }
+  return target - planCurrent
+}
+
+function actionFromDelta(delta, target) {
+  if (delta > 0) return 'buy'
+  if (delta < 0) return 'sell'
+  if (target > 0) return 'hold'
+  return 'skip'
+}
+
+export function normalizePlanItemRow(item) {
+  const displayCurrent = Number(item?.current_shares ?? 0)
+  const planCurrent = readPlanBaselineShares(item)
+  const target = Number(item?.target_shares ?? 0)
+  const delta = readPlanDeltaShares(item, planCurrent, target)
+  let action = String(item?.action || '').trim().toLowerCase()
+  // Non-zero planned delta is the trade intent; it wins over a stale action label.
+  if (delta !== 0) {
+    action = actionFromDelta(delta, target)
+  } else if (!action || action === 'skip') {
+    action = actionFromDelta(delta, target)
   }
   return {
     ...item,
     action,
     current_shares: displayCurrent,
-    plan_current_shares: hasPlanCurrent ? planCurrent : item?.plan_current_shares,
+    plan_current_shares: item?.plan_current_shares != null && item?.plan_current_shares !== ''
+      ? planCurrent
+      : item?.plan_current_shares,
     target_shares: target,
     delta_shares: delta,
   }
@@ -64,37 +94,30 @@ export function buildPlanTargetRows(items) {
 }
 
 /**
- * Resolve original plan trade intent. Prefer stored action/delta and
- * plan_current_shares — never re-infer buy/sell from live-enriched current.
+ * Resolve original plan trade intent.
+ * Prefer signed delta_shares, then action/phase; never use live-enriched current.
  */
 export function resolvePlanTradeIntent(item) {
   const target = Number(item?.target_shares || 0)
-  const hasPlanCurrent = item?.plan_current_shares != null && item?.plan_current_shares !== ''
-  const planCurrent = Number(
-    hasPlanCurrent ? item.plan_current_shares : (item?.current_shares ?? 0),
-  )
+  const planCurrent = readPlanBaselineShares(item)
+  const delta = readPlanDeltaShares(item, planCurrent, target)
   let action = String(item?.action || '').trim().toLowerCase()
   const phase = String(item?.execution_phase || '').trim().toLowerCase()
   if ((!action || action === 'hold' || action === 'skip')
     && (phase === 'buy' || phase === 'sell')) {
     action = phase
   }
-  let delta = Number(item?.delta_shares)
-  if (!Number.isFinite(delta)) {
-    delta = target - planCurrent
-  }
-  // Only infer when the plan did not record a directional action.
-  // Explicit buy/sell must not flip after live fills push current past target.
-  if (!action || action === 'hold' || action === 'skip') {
-    if (delta > 0) action = 'buy'
-    else if (delta < 0) action = 'sell'
-    else if (target > 0) action = 'hold'
-    else action = 'skip'
+  // Planned share delta is authoritative for buy/sell once the plan is generated.
+  // Live fills only change current_shares / strategy_current_shares, not intent.
+  if (delta !== 0) {
+    action = actionFromDelta(delta, target)
+  } else if (!action || action === 'skip') {
+    action = actionFromDelta(delta, target)
   }
   return {
     action,
     delta_shares: delta,
-    plan_current_shares: Number.isFinite(planCurrent) ? planCurrent : 0,
+    plan_current_shares: planCurrent,
     target_shares: Number.isFinite(target) ? target : 0,
   }
 }

@@ -150,6 +150,57 @@ describe('portfolio plan row view model', () => {
     expect(rows.map((row) => row.symbol)).toEqual(['600000.SH', '000001.SZ'])
   })
 
+  it('keeps buy intent even when plan_current_shares is missing under live overlay', () => {
+    const rows = buildPlanCompletionRows([
+      {
+        symbol: '000001.SZ',
+        action: 'buy',
+        // Missing plan_current_shares — must not use live current_shares=250.
+        current_shares: 250,
+        strategy_current_shares: 250,
+        target_shares: 100,
+        delta_shares: 100,
+        live_filled_qty: 100,
+        live_remaining_qty: 0,
+        live_status: 'filled',
+      },
+      {
+        symbol: '600000.SH',
+        // No action, null delta must not become 0 and then flip via live current.
+        current_shares: 300,
+        strategy_current_shares: 300,
+        target_shares: 200,
+        delta_shares: null,
+        live_filled_qty: 200,
+        live_remaining_qty: 0,
+        live_status: 'filled',
+      },
+    ])
+
+    expect(rows.every((row) => row.action === 'buy')).toBe(true)
+    expect(rows[0].planned_shares).toBe(100)
+    expect(rows.find((row) => row.symbol === '600000.SH').planned_shares).toBe(200)
+  })
+
+  it('prefers positive delta_shares over a stale sell action label', () => {
+    const rows = buildPlanCompletionRows([
+      {
+        symbol: '000001.SZ',
+        action: 'sell',
+        plan_current_shares: 0,
+        current_shares: 100,
+        strategy_current_shares: 100,
+        target_shares: 100,
+        delta_shares: 100,
+        live_filled_qty: 100,
+        live_remaining_qty: 0,
+        live_status: 'filled',
+      },
+    ])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].action).toBe('buy')
+  })
+
   it('summarizes actionable row counts', () => {
     expect(summarizePlanRows([
       { action: 'buy' },
