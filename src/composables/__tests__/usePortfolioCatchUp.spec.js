@@ -43,4 +43,15 @@ describe('buildCatchUpRows', () => {
     ])
     expect(rows.map((row) => row.order_id)).toEqual(['new'])
   })
+
+  it('includes cancelled buys even when action is missing or uppercase', () => {
+    const rows = buildCatchUpRows([
+      { order_id: 'a', status: 'cancelled', size: 100, filled_qty: 0 },
+      { order_id: 'b', side: 'BUY', status: 'CANCELLED', size: 100, filled_qty: 0 },
+      { order_id: 'c', action: 'sell', status: 'cancelled', size: 100, filled_qty: 0 },
+      { order_id: 'd', broker_status: 'cancelled', action: 'buy', status: 'failed', size: 50, filled_qty: 0 },
+      { order_id: 'e', action: 'buy', status: 'cancel_requested', size: 100, filled_qty: 0 },
+    ])
+    expect(rows.map((row) => row.order_id)).toEqual(['a', 'b', 'd', 'e'])
+  })
 })

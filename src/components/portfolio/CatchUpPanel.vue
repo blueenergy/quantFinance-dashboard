@@ -148,6 +148,7 @@ function formatPrice(value) {
 
 function statusLabel(status) {
   if (status === 'partial_cancelled') return '部成部撤'
+  if (status === 'cancel_requested') return '撤单中'
   if (status === 'cancelled' || status === 'canceled') return '已撤单'
   return status || '—'
 }

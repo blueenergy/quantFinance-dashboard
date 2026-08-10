@@ -7,11 +7,15 @@ import {
 const ACTION_ORDER = { buy: 0, sell: 1, hold: 2, skip: 3 }
 
 export function normalizePlanItemRow(item) {
-  const current = Number(item?.current_shares ?? 0)
+  // Live enrichment overwrites current_shares with strategy/account fills.
+  // Infer buy/sell from plan baseline + stored delta, never from live current.
+  const displayCurrent = Number(item?.current_shares ?? 0)
+  const hasPlanCurrent = item?.plan_current_shares != null && item?.plan_current_shares !== ''
+  const planCurrent = Number(hasPlanCurrent ? item.plan_current_shares : displayCurrent)
   const target = Number(item?.target_shares ?? 0)
-  const rawDelta = item?.delta_shares ?? (target - current)
-  const delta = Number(rawDelta || 0)
-  let action = item?.action || ''
+  const parsedDelta = Number(item?.delta_shares)
+  const delta = Number.isFinite(parsedDelta) ? parsedDelta : (target - planCurrent)
+  let action = String(item?.action || '').trim().toLowerCase()
   if (!action) {
     if (delta > 0) action = 'buy'
     else if (delta < 0) action = 'sell'
@@ -24,7 +28,8 @@ export function normalizePlanItemRow(item) {
   return {
     ...item,
     action,
-    current_shares: current,
+    current_shares: displayCurrent,
+    plan_current_shares: hasPlanCurrent ? planCurrent : item?.plan_current_shares,
     target_shares: target,
     delta_shares: delta,
   }
@@ -59,39 +64,79 @@ export function buildPlanTargetRows(items) {
 }
 
 /**
+ * Resolve original plan trade intent. Prefer stored action/delta and
+ * plan_current_shares — never re-infer buy/sell from live-enriched current.
+ */
+export function resolvePlanTradeIntent(item) {
+  const target = Number(item?.target_shares || 0)
+  const hasPlanCurrent = item?.plan_current_shares != null && item?.plan_current_shares !== ''
+  const planCurrent = Number(
+    hasPlanCurrent ? item.plan_current_shares : (item?.current_shares ?? 0),
+  )
+  let action = String(item?.action || '').trim().toLowerCase()
+  const phase = String(item?.execution_phase || '').trim().toLowerCase()
+  if ((!action || action === 'hold' || action === 'skip')
+    && (phase === 'buy' || phase === 'sell')) {
+    action = phase
+  }
+  let delta = Number(item?.delta_shares)
+  if (!Number.isFinite(delta)) {
+    delta = target - planCurrent
+  }
+  // Only infer when the plan did not record a directional action.
+  // Explicit buy/sell must not flip after live fills push current past target.
+  if (!action || action === 'hold' || action === 'skip') {
+    if (delta > 0) action = 'buy'
+    else if (delta < 0) action = 'sell'
+    else if (target > 0) action = 'hold'
+    else action = 'skip'
+  }
+  return {
+    action,
+    delta_shares: delta,
+    plan_current_shares: Number.isFinite(planCurrent) ? planCurrent : 0,
+    target_shares: Number.isFinite(target) ? target : 0,
+  }
+}
+
+/**
  * Per-symbol plan completion for overview: target / filled / gap.
  * Uses live enrichment fields from getPortfolioPlan when present.
  */
 export function buildPlanCompletionRows(items) {
   return (items || [])
-    .map((item) => normalizePlanItemRow(item))
-    .filter((item) => item.action === 'buy' || item.action === 'sell')
     .map((item) => {
-      const target = Number(item.target_shares || 0)
-      const current = Number(
-        item.strategy_current_shares ?? item.current_shares ?? item.plan_current_shares ?? 0,
+      const intent = resolvePlanTradeIntent(item)
+      if (intent.action !== 'buy' && intent.action !== 'sell') return null
+
+      const target = intent.target_shares
+      const strategyCurrent = Number(
+        item.strategy_current_shares
+        ?? (item.plan_current_shares != null ? item.current_shares : null)
+        ?? intent.plan_current_shares
+        ?? 0,
       )
-      const planned = Math.abs(Number(item.delta_shares || 0))
+      const planned = Math.abs(Number(intent.delta_shares || 0))
       const filled = Number(item.live_filled_qty || 0)
       let gap = Number(item.live_remaining_qty)
       if (!Number.isFinite(gap)) {
-        gap = item.action === 'buy'
-          ? Math.max(0, target - current)
-          : Math.max(0, current - target)
+        gap = intent.action === 'buy'
+          ? Math.max(0, target - strategyCurrent)
+          : Math.max(0, strategyCurrent - target)
       }
       gap = Math.max(0, Math.floor(gap))
       const liveStatus = item.live_status ? String(item.live_status) : ''
       const complete = gap <= 0 && (
         liveStatus === 'filled'
         || (planned > 0 && filled >= planned)
-        || (item.action === 'buy' ? current >= target : current <= target)
+        || (intent.action === 'buy' ? strategyCurrent >= target : strategyCurrent <= target)
       )
       return {
         symbol: item.symbol,
         name: item.name || '',
-        action: item.action,
+        action: intent.action,
         target_shares: target,
-        current_shares: current,
+        current_shares: strategyCurrent,
         planned_shares: planned,
         filled_shares: Number.isFinite(filled) ? filled : 0,
         gap_shares: gap,
@@ -99,6 +144,7 @@ export function buildPlanCompletionRows(items) {
         complete: Boolean(complete),
       }
     })
+    .filter(Boolean)
     .sort((a, b) => Number(a.complete) - Number(b.complete)
       || (ACTION_ORDER[a.action] ?? 9) - (ACTION_ORDER[b.action] ?? 9)
       || String(a.symbol).localeCompare(String(b.symbol)))

@@ -48,6 +48,29 @@ describe('portfolio plan row view model', () => {
     })
   })
 
+  it('keeps buy/sell intent after live current passes target', () => {
+    expect(normalizePlanItemRow({
+      action: 'hold',
+      plan_current_shares: 0,
+      current_shares: 250,
+      target_shares: 200,
+      delta_shares: 200,
+    })).toMatchObject({
+      action: 'buy',
+      delta_shares: 200,
+      current_shares: 250,
+    })
+    expect(normalizePlanItemRow({
+      plan_current_shares: 0,
+      current_shares: 180,
+      target_shares: 100,
+      delta_shares: 100,
+    })).toMatchObject({
+      action: 'buy',
+      delta_shares: 100,
+    })
+  })
+
   it('builds plan completion rows with gaps sorted first', () => {
     const rows = buildPlanCompletionRows([
       {
@@ -95,6 +118,36 @@ describe('portfolio plan row view model', () => {
       incomplete: 1,
       incomplete_buys: 1,
     })
+  })
+
+  it('keeps buy intent when live-enriched current exceeds target', () => {
+    const rows = buildPlanCompletionRows([
+      {
+        symbol: '000001.SZ',
+        action: 'buy',
+        plan_current_shares: 0,
+        current_shares: 250,
+        strategy_current_shares: 250,
+        target_shares: 200,
+        delta_shares: 200,
+        live_filled_qty: 250,
+        live_remaining_qty: 0,
+        live_status: 'filled',
+      },
+      {
+        symbol: '600000.SH',
+        plan_current_shares: 0,
+        current_shares: 300,
+        strategy_current_shares: 300,
+        target_shares: 200,
+        live_filled_qty: 100,
+        live_remaining_qty: 100,
+        live_status: 'partial_cancelled',
+      },
+    ])
+
+    expect(rows.every((row) => row.action === 'buy')).toBe(true)
+    expect(rows.map((row) => row.symbol)).toEqual(['600000.SH', '000001.SZ'])
   })
 
   it('summarizes actionable row counts', () => {

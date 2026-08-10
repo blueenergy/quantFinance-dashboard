@@ -5,7 +5,13 @@ import {
   previewTraderSignalReprice,
 } from '../api/tradeExecution'
 
-const CATCH_UP_STATUSES = new Set(['cancelled', 'canceled', 'partial_cancelled'])
+const CATCH_UP_STATUSES = new Set([
+  'cancelled',
+  'canceled',
+  'partial_cancelled',
+  // Visible while broker cancel is in flight; reprice still needs terminal cancel.
+  'cancel_requested',
+])
 
 function normalizeStatus(value) {
   return String(value || '').toLowerCase()
@@ -20,10 +26,29 @@ function remainingShares(signal) {
   return Math.max(0, Math.floor(size - (Number.isFinite(filled) ? filled : 0)))
 }
 
+function signalAction(signal) {
+  return String(
+    signal.action
+    || signal.side
+    || signal.direction
+    || signal.execution_phase
+    || '',
+  ).trim().toLowerCase()
+}
+
+function isCatchUpCancelStatus(signal) {
+  const status = normalizeStatus(signal.status)
+  if (CATCH_UP_STATUSES.has(status)) return true
+  const broker = normalizeStatus(signal.broker_status)
+  return CATCH_UP_STATUSES.has(broker)
+}
+
 function isCatchUpBuy(signal) {
-  const action = String(signal.action || '').toLowerCase()
-  if (action !== 'buy') return false
-  return CATCH_UP_STATUSES.has(normalizeStatus(signal.status))
+  if (!isCatchUpCancelStatus(signal)) return false
+  const action = signalAction(signal)
+  if (action === 'sell' || action === 'exit') return false
+  // Accept buy / entry / missing — some live docs omit action or only set side.
+  return true
 }
 
 function toCatchUpRow(signal) {
@@ -63,11 +88,13 @@ export function buildCatchUpRows(signals = []) {
  * current operation plan. Uses live-executions + trader reprice APIs.
  *
  * @param {{ planId: import('vue').Ref|import('vue').ComputedRef|string,
+ *           extraPlanIds?: import('vue').Ref|import('vue').ComputedRef|Array|string,
  *           enabled: import('vue').Ref|import('vue').ComputedRef|boolean,
  *           onAfterConfirm?: () => Promise<void>|void }} options
  */
 export function usePortfolioCatchUp({
   planId,
+  extraPlanIds,
   enabled,
   onAfterConfirm,
 } = {}) {
@@ -87,17 +114,37 @@ export function usePortfolioCatchUp({
   const catchUpCount = computed(() => rows.value.length)
   const hasCatchUp = computed(() => catchUpCount.value > 0)
 
+  function resolvePlanIds() {
+    const primary = unref(planId)
+    const extra = unref(extraPlanIds)
+    const extras = Array.isArray(extra) ? extra : (extra ? [extra] : [])
+    return [...new Set([primary, ...extras].filter(Boolean).map((id) => String(id)))]
+  }
+
   async function loadCatchUp() {
-    const id = unref(planId)
+    const ids = resolvePlanIds()
     const on = unref(enabled)
     error.value = ''
     rows.value = []
-    if (!on || !id) return
+    if (!on || !ids.length) return
     loading.value = true
     try {
-      const response = await getPortfolioPlanLiveExecutions(id)
-      const signals = response?.data?.signals || response?.signals || []
-      rows.value = buildCatchUpRows(signals)
+      const responses = await Promise.all(
+        ids.map((id) => getPortfolioPlanLiveExecutions(id).catch((err) => {
+          error.value = err?.message || String(err)
+          return null
+        })),
+      )
+      const byOrderId = new Map()
+      for (const response of responses) {
+        const signals = response?.data?.signals || response?.signals || []
+        for (const signal of signals) {
+          const orderId = String(signal?.order_id || '')
+          if (!orderId) continue
+          byOrderId.set(orderId, signal)
+        }
+      }
+      rows.value = buildCatchUpRows([...byOrderId.values()])
     } catch (err) {
       error.value = err?.message || String(err)
       rows.value = []
@@ -179,7 +226,7 @@ export function usePortfolioCatchUp({
   }
 
   watch(
-    () => [unref(planId), unref(enabled)],
+    () => [unref(planId), unref(extraPlanIds), unref(enabled)],
     () => {
       loadCatchUp()
     },

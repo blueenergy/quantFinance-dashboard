@@ -443,6 +443,7 @@ const {
   confirmCatchUp,
 } = usePortfolioCatchUp({
   planId: selectedOperationPlanId,
+  extraPlanIds: selectedLatestPlanId,
   enabled: isLivePortfolio,
   onAfterConfirm: async () => {
     await refreshDetail()

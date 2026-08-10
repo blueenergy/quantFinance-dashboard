@@ -85,6 +85,7 @@ function statusLabel(row) {
     active: '执行中',
     cancelled: '已撤单',
     canceled: '已撤单',
+    cancel_requested: '撤单中',
     partial_cancelled: '部成部撤',
     failed: '失败',
     rejected: '拒绝',
