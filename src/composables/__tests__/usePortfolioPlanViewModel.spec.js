@@ -201,6 +201,102 @@ describe('portfolio plan row view model', () => {
     expect(rows[0].action).toBe('buy')
   })
 
+  it('falls back to plan gap when live_remaining_qty is null', () => {
+    // Backend leaves null when all signals are terminal with no fills
+    // (Number(null)===0 must not be treated as "no gap").
+    const rows = buildPlanCompletionRows([
+      {
+        symbol: '000001.SZ',
+        action: 'buy',
+        plan_current_shares: 0,
+        current_shares: 0,
+        strategy_current_shares: 0,
+        target_shares: 500,
+        delta_shares: 500,
+        live_filled_qty: 0,
+        live_remaining_qty: null,
+        live_status: 'cancelled',
+      },
+    ])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      gap_shares: 500,
+      complete: false,
+      live_status: 'cancelled',
+    })
+  })
+
+  it('keeps explicit zero remaining as no gap', () => {
+    const rows = buildPlanCompletionRows([
+      {
+        symbol: '000001.SZ',
+        action: 'buy',
+        plan_current_shares: 0,
+        current_shares: 500,
+        strategy_current_shares: 500,
+        target_shares: 500,
+        delta_shares: 500,
+        live_filled_qty: 500,
+        live_remaining_qty: 0,
+        live_status: 'filled',
+      },
+    ])
+    expect(rows[0]).toMatchObject({ gap_shares: 0, complete: true })
+  })
+
+  it('marks items without signals as blocked when the plan partially published', () => {
+    const rows = buildPlanCompletionRows([
+      {
+        symbol: '000001.SZ',
+        action: 'buy',
+        plan_current_shares: 0,
+        target_shares: 100,
+        delta_shares: 100,
+        live_filled_qty: 100,
+        live_remaining_qty: 0,
+        live_status: 'filled',
+      },
+      {
+        symbol: '600000.SH',
+        action: 'buy',
+        plan_current_shares: 0,
+        target_shares: 200,
+        delta_shares: 200,
+        // No live signal — skipped at publish (risk / partial publish).
+      },
+      {
+        symbol: '000002.SZ',
+        action: 'buy',
+        plan_current_shares: 0,
+        target_shares: 300,
+        delta_shares: 300,
+        blockers: ['price_missing'],
+      },
+    ])
+
+    expect(rows.find((row) => row.symbol === '600000.SH')).toMatchObject({
+      live_status: 'blocked',
+      complete: false,
+    })
+    expect(rows.find((row) => row.symbol === '000002.SZ')).toMatchObject({
+      live_status: 'blocked',
+      blockers: ['price_missing'],
+    })
+  })
+
+  it('keeps not_started when no live signals exist on the plan yet', () => {
+    const rows = buildPlanCompletionRows([
+      {
+        symbol: '000001.SZ',
+        action: 'buy',
+        plan_current_shares: 0,
+        target_shares: 100,
+        delta_shares: 100,
+      },
+    ])
+    expect(rows[0].live_status).toBe('not_started')
+  })
+
   it('summarizes actionable row counts', () => {
     expect(summarizePlanRows([
       { action: 'buy' },
