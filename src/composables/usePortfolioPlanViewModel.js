@@ -142,7 +142,7 @@ export function buildPlanCompletionRows(items) {
       const planned = Math.abs(Number(intent.delta_shares || 0))
       const filled = Number(item.live_filled_qty || 0)
       let gap = Number(item.live_remaining_qty)
-      if (!Number.isFinite(gap)) {
+      if (item.live_remaining_qty == null || !Number.isFinite(gap)) {
         gap = intent.action === 'buy'
           ? Math.max(0, target - strategyCurrent)
           : Math.max(0, strategyCurrent - target)
