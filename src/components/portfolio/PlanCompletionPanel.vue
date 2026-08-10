@@ -89,6 +89,7 @@ function statusLabel(row) {
     partial_cancelled: '部成部撤',
     failed: '失败',
     rejected: '拒绝',
+    blocked: '已阻止',
     not_started: '未开始',
   }
   return map[row.live_status] || row.live_status || '未完成'

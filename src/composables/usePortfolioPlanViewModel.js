@@ -127,7 +127,15 @@ export function resolvePlanTradeIntent(item) {
  * Uses live enrichment fields from getPortfolioPlan when present.
  */
 export function buildPlanCompletionRows(items) {
-  return (items || [])
+  const list = items || []
+  // Whether this plan has any live signals at all. Items with no signal in a
+  // partially-published plan were blocked (risk control / repricing), not just
+  // "not started".
+  const hasAnyLiveSignal = list.some(
+    (it) => it.live_status || (it.live_filled_qty > 0),
+  )
+
+  return list
     .map((item) => {
       const intent = resolvePlanTradeIntent(item)
       if (intent.action !== 'buy' && intent.action !== 'sell') return null
@@ -149,6 +157,22 @@ export function buildPlanCompletionRows(items) {
       }
       gap = Math.max(0, Math.floor(gap))
       const liveStatus = item.live_status ? String(item.live_status) : ''
+      const blockers = Array.isArray(item.blockers) ? item.blockers : []
+
+      // Determine fallback status when no live signal exists for this item.
+      let effectiveStatus = liveStatus
+      if (!effectiveStatus && planned > 0) {
+        if (blockers.length > 0) {
+          effectiveStatus = 'blocked'
+        } else if (hasAnyLiveSignal) {
+          // Plan has live signals for other symbols — this item was skipped at
+          // publish time (risk control, repricing, partial publish).
+          effectiveStatus = 'blocked'
+        } else {
+          effectiveStatus = 'not_started'
+        }
+      }
+
       const complete = gap <= 0 && (
         liveStatus === 'filled'
         || (planned > 0 && filled >= planned)
@@ -163,7 +187,8 @@ export function buildPlanCompletionRows(items) {
         planned_shares: planned,
         filled_shares: Number.isFinite(filled) ? filled : 0,
         gap_shares: gap,
-        live_status: liveStatus || (planned > 0 ? 'not_started' : ''),
+        live_status: effectiveStatus,
+        blockers,
         complete: Boolean(complete),
       }
     })
