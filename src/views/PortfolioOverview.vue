@@ -21,7 +21,7 @@
           </option>
         </select>
       </label>
-      <button type="button" :disabled="!selectedPortfolioKey || loadingDetail" @click="refreshDetail">
+      <button type="button" :disabled="!selectedPortfolioKey || loadingDetail" @click="refreshOverview">
         <span v-if="loadingDetail" class="spinner" />
         {{ loadingDetail ? '加载中…' : '刷新' }}
       </button>
@@ -54,6 +54,26 @@
         :force-rebalance-submitting="forceRebalanceSubmitting"
         :force-rebalance-block-reason="forceRebalanceBlockReason"
         @force-rebalance="submitForceRebalance"
+      />
+
+      <CatchUpPanel
+        :visible="isLivePortfolio && Boolean(selectedOperationPlanId)"
+        :loading="catchUpLoading"
+        :error="catchUpError"
+        :rows="catchUpRows"
+        :dialog-open="catchUpDialogOpen"
+        :dialog-loading="catchUpDialogLoading"
+        :dialog-submitting="catchUpDialogSubmitting"
+        :dialog-error="catchUpDialogError"
+        :active-order-id="catchUpActiveOrderId"
+        :preview="catchUpPreview"
+        v-model:limit-price="catchUpLimitPrice"
+        v-model:size="catchUpSize"
+        v-model:reason="catchUpReason"
+        @refresh="loadCatchUp"
+        @open="openCatchUp"
+        @close="closeCatchUp"
+        @confirm="confirmCatchUp"
       />
 
       <TrailingStopMonitorPanel
@@ -293,10 +313,12 @@
 import { computed, defineAsyncComponent, watch } from 'vue'
 import PortfolioIdentityCard from '../components/portfolio/PortfolioIdentityCard.vue'
 import CurrentPeriodStatus from '../components/portfolio/CurrentPeriodStatus.vue'
+import CatchUpPanel from '../components/portfolio/CatchUpPanel.vue'
 import TrailingStopMonitorPanel from '../components/portfolio/TrailingStopMonitorPanel.vue'
 import PlanReviewPanel from '../components/portfolio/PlanReviewPanel.vue'
 import PlanOpsPanel from '../components/portfolio/PlanOpsPanel.vue'
 import PlanPublishPreviewModal from '../components/portfolio/PlanPublishPreviewModal.vue'
+import { usePortfolioCatchUp } from '../composables/usePortfolioCatchUp'
 import LineageTimeline from '../components/portfolio/LineageTimeline.vue'
 import PortfolioEquityChart from '../components/portfolio/PortfolioEquityChart.vue'
 import PortfolioReconcileBanner from '../components/portfolio/PortfolioReconcileBanner.vue'
@@ -391,6 +413,36 @@ const {
 })
 
 const {
+  loading: catchUpLoading,
+  error: catchUpError,
+  rows: catchUpRows,
+  dialogOpen: catchUpDialogOpen,
+  dialogLoading: catchUpDialogLoading,
+  dialogSubmitting: catchUpDialogSubmitting,
+  dialogError: catchUpDialogError,
+  activeOrderId: catchUpActiveOrderId,
+  preview: catchUpPreview,
+  limitPrice: catchUpLimitPrice,
+  size: catchUpSize,
+  reason: catchUpReason,
+  loadCatchUp,
+  openCatchUp,
+  closeCatchUp,
+  confirmCatchUp,
+} = usePortfolioCatchUp({
+  planId: selectedOperationPlanId,
+  enabled: isLivePortfolio,
+  onAfterConfirm: async () => {
+    await refreshDetail()
+  },
+})
+
+async function refreshOverview() {
+  await refreshDetail()
+  await loadCatchUp()
+}
+
+const {
   holdingsRisk,
   excludeAfter,
   showManualModal,
@@ -465,6 +517,7 @@ const {
   onRefresh: async () => {
     await loadPortfolios()
     await refreshDetail()
+    await loadCatchUp()
   },
   onMessage: (msg, isError) => {
     message.value = msg
@@ -592,6 +645,7 @@ const {
   onRefresh: async () => {
     await loadPortfolios()
     await refreshDetail()
+    await loadCatchUp()
   },
   onMessage: (msg, isError) => {
     message.value = msg
