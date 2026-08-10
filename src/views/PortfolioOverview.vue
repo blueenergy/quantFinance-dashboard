@@ -56,25 +56,35 @@
         @force-rebalance="submitForceRebalance"
       />
 
-      <CatchUpPanel
-        :visible="isLivePortfolio && Boolean(selectedOperationPlanId)"
-        :loading="catchUpLoading"
-        :error="catchUpError"
-        :rows="catchUpRows"
-        :dialog-open="catchUpDialogOpen"
-        :dialog-loading="catchUpDialogLoading"
-        :dialog-submitting="catchUpDialogSubmitting"
-        :dialog-error="catchUpDialogError"
-        :active-order-id="catchUpActiveOrderId"
-        :preview="catchUpPreview"
-        v-model:limit-price="catchUpLimitPrice"
-        v-model:size="catchUpSize"
-        v-model:reason="catchUpReason"
-        @refresh="loadCatchUp"
-        @open="openCatchUp"
-        @close="closeCatchUp"
-        @confirm="confirmCatchUp"
-      />
+      <div
+        v-if="isLivePortfolio && selectedOperationPlanId"
+        class="overview-catchup-grid"
+      >
+        <CatchUpPanel
+          :visible="true"
+          :loading="catchUpLoading"
+          :error="catchUpError"
+          :rows="catchUpRows"
+          :dialog-open="catchUpDialogOpen"
+          :dialog-loading="catchUpDialogLoading"
+          :dialog-submitting="catchUpDialogSubmitting"
+          :dialog-error="catchUpDialogError"
+          :active-order-id="catchUpActiveOrderId"
+          :preview="catchUpPreview"
+          v-model:limit-price="catchUpLimitPrice"
+          v-model:size="catchUpSize"
+          v-model:reason="catchUpReason"
+          @refresh="loadCatchUp"
+          @open="openCatchUp"
+          @close="closeCatchUp"
+          @confirm="confirmCatchUp"
+        />
+
+        <PlanCompletionPanel
+          :visible="true"
+          :rows="planCompletionRows"
+        />
+      </div>
 
       <TrailingStopMonitorPanel
         v-if="!isLivePortfolio"
@@ -314,6 +324,7 @@ import { computed, defineAsyncComponent, watch } from 'vue'
 import PortfolioIdentityCard from '../components/portfolio/PortfolioIdentityCard.vue'
 import CurrentPeriodStatus from '../components/portfolio/CurrentPeriodStatus.vue'
 import CatchUpPanel from '../components/portfolio/CatchUpPanel.vue'
+import PlanCompletionPanel from '../components/portfolio/PlanCompletionPanel.vue'
 import TrailingStopMonitorPanel from '../components/portfolio/TrailingStopMonitorPanel.vue'
 import PlanReviewPanel from '../components/portfolio/PlanReviewPanel.vue'
 import PlanOpsPanel from '../components/portfolio/PlanOpsPanel.vue'
@@ -332,6 +343,7 @@ import { useHoldingsOps } from '../composables/useHoldingsOps'
 import { usePlanOps } from '../composables/usePlanOps'
 import { useReselectPlanItems } from '../composables/useReselectPlanItems'
 import {
+  buildPlanCompletionRows,
   buildPlanReviewRiskSummary,
   buildPlanSignalMaps,
   buildPlanTargetRows,
@@ -586,6 +598,7 @@ const liveAccountOptions = computed(() => securitiesAccounts.value.map((account)
 const planTargetRows = computed(() => (
   buildPlanTargetRows(latestPlanItems.value)
 ))
+const planCompletionRows = computed(() => buildPlanCompletionRows(latestPlanItems.value))
 const planSignalMaps = computed(() => buildPlanSignalMaps(planTargetRows.value))
 const holdingPlanRiskBySymbol = computed(() => planSignalMaps.value.holdingPlanRiskBySymbol)
 const holdingPlanOpportunityBySymbol = computed(() => planSignalMaps.value.holdingPlanOpportunityBySymbol)

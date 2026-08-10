@@ -100,3 +100,23 @@
     transform: rotate(360deg);
   }
 }
+
+:where(.portfolio-overview) .overview-catchup-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: 4px;
+}
+
+@media (min-width: 960px) {
+  :where(.portfolio-overview) .overview-catchup-grid {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  }
+}
+
+:where(.portfolio-overview) .overview-catchup-grid .catch-up-card,
+:where(.portfolio-overview) .overview-catchup-grid .completion-card {
+  height: 100%;
+  margin-bottom: 0;
+}

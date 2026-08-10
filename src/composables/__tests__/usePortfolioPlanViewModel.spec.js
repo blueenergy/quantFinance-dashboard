@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildPlanCompletionRows,
   buildPlanExecutionState,
   buildPlanReviewRiskSummary,
   buildPlanSignalMaps,
@@ -7,6 +8,7 @@ import {
   executionVenueFromPlan,
   executionVenueFromPortfolio,
   normalizePlanItemRow,
+  summarizePlanCompletion,
   summarizePlanRows,
 } from '../usePortfolioPlanViewModel'
 
@@ -43,6 +45,55 @@ describe('portfolio plan row view model', () => {
     })).toMatchObject({
       action: 'sell',
       delta_shares: -100,
+    })
+  })
+
+  it('builds plan completion rows with gaps sorted first', () => {
+    const rows = buildPlanCompletionRows([
+      {
+        symbol: '000001.SZ',
+        name: '平安',
+        action: 'buy',
+        target_shares: 200,
+        current_shares: 200,
+        delta_shares: 200,
+        live_filled_qty: 200,
+        live_remaining_qty: 0,
+        live_status: 'filled',
+      },
+      {
+        symbol: '600000.SH',
+        name: '浦发',
+        action: 'buy',
+        target_shares: 300,
+        strategy_current_shares: 100,
+        delta_shares: 300,
+        live_filled_qty: 100,
+        live_remaining_qty: 200,
+        live_status: 'partial_cancelled',
+      },
+      {
+        symbol: '000002.SZ',
+        action: 'hold',
+        target_shares: 50,
+        current_shares: 50,
+        delta_shares: 0,
+      },
+    ])
+
+    expect(rows.map((row) => row.symbol)).toEqual(['600000.SH', '000001.SZ'])
+    expect(rows[0]).toMatchObject({
+      gap_shares: 200,
+      filled_shares: 100,
+      complete: false,
+      live_status: 'partial_cancelled',
+    })
+    expect(rows[1].complete).toBe(true)
+    expect(summarizePlanCompletion(rows)).toMatchObject({
+      total: 2,
+      complete: 1,
+      incomplete: 1,
+      incomplete_buys: 1,
     })
   })
 

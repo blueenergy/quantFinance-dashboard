@@ -58,6 +58,67 @@ export function buildPlanTargetRows(items) {
     })
 }
 
+/**
+ * Per-symbol plan completion for overview: target / filled / gap.
+ * Uses live enrichment fields from getPortfolioPlan when present.
+ */
+export function buildPlanCompletionRows(items) {
+  return (items || [])
+    .map((item) => normalizePlanItemRow(item))
+    .filter((item) => item.action === 'buy' || item.action === 'sell')
+    .map((item) => {
+      const target = Number(item.target_shares || 0)
+      const current = Number(
+        item.strategy_current_shares ?? item.current_shares ?? item.plan_current_shares ?? 0,
+      )
+      const planned = Math.abs(Number(item.delta_shares || 0))
+      const filled = Number(item.live_filled_qty || 0)
+      let gap = Number(item.live_remaining_qty)
+      if (!Number.isFinite(gap)) {
+        gap = item.action === 'buy'
+          ? Math.max(0, target - current)
+          : Math.max(0, current - target)
+      }
+      gap = Math.max(0, Math.floor(gap))
+      const liveStatus = item.live_status ? String(item.live_status) : ''
+      const complete = gap <= 0 && (
+        liveStatus === 'filled'
+        || (planned > 0 && filled >= planned)
+        || (item.action === 'buy' ? current >= target : current <= target)
+      )
+      return {
+        symbol: item.symbol,
+        name: item.name || '',
+        action: item.action,
+        target_shares: target,
+        current_shares: current,
+        planned_shares: planned,
+        filled_shares: Number.isFinite(filled) ? filled : 0,
+        gap_shares: gap,
+        live_status: liveStatus || (planned > 0 ? 'not_started' : ''),
+        complete: Boolean(complete),
+      }
+    })
+    .sort((a, b) => Number(a.complete) - Number(b.complete)
+      || (ACTION_ORDER[a.action] ?? 9) - (ACTION_ORDER[b.action] ?? 9)
+      || String(a.symbol).localeCompare(String(b.symbol)))
+}
+
+export function summarizePlanCompletion(rows) {
+  const list = rows || []
+  return list.reduce(
+    (summary, row) => {
+      summary.total += 1
+      if (row.complete) summary.complete += 1
+      else summary.incomplete += 1
+      if (row.action === 'buy' && !row.complete) summary.incomplete_buys += 1
+      if (row.action === 'sell' && !row.complete) summary.incomplete_sells += 1
+      return summary
+    },
+    { total: 0, complete: 0, incomplete: 0, incomplete_buys: 0, incomplete_sells: 0 },
+  )
+}
+
 export function buildPlanReviewRiskSummary(rows) {
   return (rows || []).reduce(
     (summary, row) => {
