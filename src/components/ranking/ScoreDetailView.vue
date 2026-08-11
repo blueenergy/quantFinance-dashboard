@@ -8,7 +8,30 @@
       {{ errorMessage }}
     </div>
 
-    <template v-else-if="isComposite">
+    <template v-else>
+      <ScoreProvenanceHeader
+        :meta="props.meta"
+        :details="props.details"
+        :score-date="props.scoreDate"
+      />
+
+      <ScoreRecommendationsPanel
+        v-if="isComposite"
+        :recommendations="props.recommendations"
+      />
+
+      <ScoreFormulaStrip
+        v-if="categoryParsed.topLevelFormula"
+        :formula="categoryParsed.topLevelFormula"
+      />
+
+      <ScoreHistoryComparison
+        v-if="props.scoreHistory?.length"
+        :history="props.scoreHistory"
+        :category="props.category"
+      />
+
+      <template v-if="isComposite">
       <div class="score-hero">
         <div ref="gaugeRef" class="gauge-chart" />
         <div class="score-hero-meta">
@@ -88,9 +111,9 @@
           </tbody>
         </table>
       </details>
-    </template>
+      </template>
 
-    <template v-else-if="isIndustryRs">
+      <template v-else-if="isIndustryRs">
       <div class="score-hero score-hero--compact industry-rs-hero">
         <div class="score-hero-meta">
           <div class="hero-total" :style="{ color: scoreColor(industryRsScore) }">
@@ -179,6 +202,8 @@
                 <strong>{{ metric.key }}</strong> {{ metric.value }}
               </span>
             </div>
+            <ScoreFormulaStrip v-if="mod.formula" :formula="mod.formula" />
+            <SeriesTable v-if="mod.series?.length" :series-list="mod.series" />
             <details v-if="mod.rawFields.length" class="raw-fold">
               <summary class="raw-fold-summary">
                 全部原始指标 ({{ mod.rawFields.length }})
@@ -203,21 +228,27 @@
       </div>
 
       <div v-else class="detail-empty">暂无 {{ categoryLabel }} 详情</div>
-    </template>
+      </template>
 
-    <details
-      v-if="!loading && !errorMessage && !isIndustryRs && details && Object.keys(details).length"
-      class="raw-section raw-section--json"
-    >
-      <summary class="raw-section-summary">查看完整 JSON</summary>
-      <pre class="raw-json">{{ prettyJson }}</pre>
-    </details>
+      <details
+        v-if="!isIndustryRs && details && Object.keys(details).length"
+        class="raw-section raw-section--json"
+      >
+        <summary class="raw-section-summary">查看完整 JSON</summary>
+        <pre class="raw-json">{{ prettyJson }}</pre>
+      </details>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import IndustryRsBreakdown from './IndustryRsBreakdown.vue'
+import ScoreProvenanceHeader from './ScoreProvenanceHeader.vue'
+import ScoreRecommendationsPanel from './ScoreRecommendationsPanel.vue'
+import ScoreFormulaStrip from './ScoreFormulaStrip.vue'
+import ScoreHistoryComparison from './ScoreHistoryComparison.vue'
+import SeriesTable from './SeriesTable.vue'
 import {
   extractCompositeRawFields,
   extractCompositeTotal,
@@ -232,6 +263,10 @@ const props = defineProps({
   details: { type: Object, default: null },
   weights: { type: Object, default: () => ({}) },
   dimensions: { type: Array, default: () => [] },
+  meta: { type: Object, default: null },
+  recommendations: { type: Object, default: null },
+  scoreHistory: { type: Array, default: () => [] },
+  scoreDate: { type: String, default: '' },
   loading: { type: Boolean, default: false },
   maximized: { type: Boolean, default: false },
 })

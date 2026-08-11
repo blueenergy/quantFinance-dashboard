@@ -8,6 +8,9 @@
         <template v-if="loading"> · 刷新中…</template>
       </span>
     </div>
+
+    <ScoreRecommendationsPanel :recommendations="recommendations" />
+
     <div class="score-grid">
       <article v-for="item in scoreItems" :key="item.key" class="score-card">
         <div class="score-card__head">
@@ -15,60 +18,68 @@
           <strong>{{ fmtNumber(item.score) }}</strong>
         </div>
         <div class="score-bar"><i :style="{ width: `${scorePercent(item.score)}%` }"></i></div>
-        <details>
+        <details class="score-card__detail">
           <summary>查看详情</summary>
-          <pre>{{ formatDetail(item.details) }}</pre>
+          <div class="score-card__detail-body">
+            <ScoreDetailView
+              :category="item.key"
+              :details="item.details"
+              :weights="weightsFor(item.key)"
+              :meta="scoreMeta"
+              :score-date="scoreDate"
+              :score-history="scoreHistory"
+            />
+          </div>
         </details>
       </article>
     </div>
+
     <div class="score-history-block">
       <h4>评分历史</h4>
-      <div v-if="scoreHistory.length" class="quote-table-wrap">
-        <table class="quote-table">
-          <thead>
-            <tr>
-              <th>日期</th>
-              <th>综合</th>
-              <th>技术</th>
-              <th>基本面</th>
-              <th>价值</th>
-              <th>成长</th>
-              <th>资金流</th>
-              <th>动量</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in scoreHistory.slice(0, 12)" :key="row.score_date">
-              <td>{{ row.score_date || '-' }}</td>
-              <td>{{ fmtNumber(scoreRowComposite(row)) }}</td>
-              <td>{{ fmtNumber(row.technical_score) }}</td>
-              <td>{{ fmtNumber(row.fundamental_score) }}</td>
-              <td>{{ fmtNumber(row.value_score) }}</td>
-              <td>{{ fmtNumber(row.growth_score) }}</td>
-              <td>{{ fmtNumber(row.money_flow_score) }}</td>
-              <td>{{ fmtNumber(row.cycle_score) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <ScoreHistoryComparison
+        v-if="scoreHistory.length"
+        :history="scoreHistory"
+        category="composite"
+        :limit="12"
+      />
       <div v-else class="muted-block">暂无评分历史。</div>
     </div>
   </section>
 </template>
 
 <script setup>
+import { computed, defineAsyncComponent } from 'vue'
+import ScoreRecommendationsPanel from '../ranking/ScoreRecommendationsPanel.vue'
+import ScoreHistoryComparison from '../ranking/ScoreHistoryComparison.vue'
+import { normalizeScoreMeta } from '../../utils/scoreDetail.js'
+import { SUBMODULE_WEIGHTS } from '../../utils/scoreSubmoduleWeights.js'
 import {
   fmtNumber,
-  formatDetail,
   scorePercent,
-  scoreRowComposite,
 } from '../../utils/workbenchFormat'
 
-defineProps({
+const ScoreDetailView = defineAsyncComponent(
+  () => import('../ranking/ScoreDetailView.vue'),
+)
+
+const props = defineProps({
   scoreItems: { type: Array, default: () => [] },
   scoreHistory: { type: Array, default: () => [] },
+  scoreMeta: { type: Object, default: null },
+  recommendations: { type: Object, default: null },
+  scoreDate: { type: String, default: '' },
   loading: { type: Boolean, default: false },
 })
+
+const scoreMeta = computed(() => normalizeScoreMeta(
+  props.scoreMeta,
+  null,
+  props.scoreDate,
+))
+
+function weightsFor(category) {
+  return SUBMODULE_WEIGHTS[category] || {}
+}
 </script>
 
 <style scoped>
@@ -78,51 +89,55 @@ defineProps({
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 .score-card {
-  background: rgba(30, 41, 59, .72);
-  border: 1px solid rgba(148, 163, 184, .16);
-  border-radius: 14px;
-  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
 }
 .score-card__head {
-  align-items: center;
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
 }
 .score-card__head strong {
-  color: #93c5fd;
-  font-size: 24px;
-}
-.score-history-block {
-  margin-top: 22px;
-}
-.score-history-block h4 {
-  color: #e2e8f0;
-  margin: 0 0 12px;
+  font-size: 1.1rem;
+  color: #1e293b;
 }
 .score-bar {
-  background: rgba(148, 163, 184, .18);
-  border-radius: 999px;
-  height: 8px;
-  margin: 12px 0;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
   overflow: hidden;
+  margin-bottom: 8px;
 }
 .score-bar i {
-  background: linear-gradient(90deg, #38bdf8, #818cf8);
   display: block;
   height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #22c55e);
+  border-radius: 3px;
 }
-details summary {
-  color: #bfdbfe;
+.score-card__detail summary {
   cursor: pointer;
+  font-size: 0.82rem;
+  color: #3b82f6;
+  font-weight: 600;
 }
-pre {
-  background: rgba(2, 6, 23, .68);
-  border-radius: 10px;
-  color: #cbd5e1;
-  margin: 10px 0 0;
-  max-height: 360px;
-  overflow: auto;
-  padding: 12px;
-  white-space: pre-wrap;
+.score-card__detail-body {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+}
+.score-history-block {
+  margin-top: 20px;
+}
+.score-history-block h4 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+.muted-block {
+  color: #94a3b8;
+  font-size: 0.85rem;
 }
 </style>

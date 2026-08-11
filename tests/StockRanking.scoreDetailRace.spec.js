@@ -34,16 +34,23 @@ describe('StockRanking score detail requests', () => {
 
     const firstResponse = deferred()
     const secondResponse = deferred()
-    requestMock
-      .mockImplementationOnce(() => firstResponse.promise)
-      .mockImplementationOnce(() => secondResponse.promise)
+    const pendingDetails = [firstResponse.promise, secondResponse.promise]
+    // Opening a detail also fires a best-effort score-history request, so route by url
+    // instead of relying on call order.
+    requestMock.mockImplementation((config) => {
+      if (config.url === '/stock-score-detail') return pendingDetails.shift()
+      return Promise.resolve({ success: true, data: [] })
+    })
+    const detailCalls = () => requestMock.mock.calls
+      .map(([config]) => config)
+      .filter(config => config.url === '/stock-score-detail')
 
     const firstStock = { symbol: '000001.SZ', name: '平安银行' }
     const secondStock = { symbol: '600519.SH', name: '贵州茅台' }
 
     const firstRequest = wrapper.vm.fetchScoreDetails(firstStock, 'cycle')
     await Promise.resolve()
-    const firstSignal = requestMock.mock.calls[0][0].signal
+    const firstSignal = detailCalls()[0].signal
 
     const secondRequest = wrapper.vm.fetchScoreDetails(secondStock, 'growth')
     await Promise.resolve()

@@ -34,6 +34,10 @@
           :details="details"
           :weights="weights"
           :dimensions="dimensions"
+          :meta="meta"
+          :recommendations="recommendations"
+          :score-history="scoreHistory"
+          :score-date="scoreDate"
           :loading="loading"
           :maximized="maximized"
         />
@@ -90,6 +94,10 @@ const props = defineProps({
   details: { type: Object, default: null },
   weights: { type: Object, default: () => ({}) },
   dimensions: { type: Array, default: () => [] },
+  meta: { type: Object, default: null },
+  recommendations: { type: Object, default: null },
+  scoreHistory: { type: Array, default: () => [] },
+  scoreDate: { type: String, default: '' },
   loading: { type: Boolean, default: false },
   inWatchlist: { type: Boolean, default: false },
 })

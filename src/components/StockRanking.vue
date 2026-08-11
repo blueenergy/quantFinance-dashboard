@@ -172,6 +172,10 @@
       :details="scoreDetailData"
       :weights="scoreDetailWeights"
       :dimensions="scoreDetailDimensions"
+      :meta="scoreDetailMeta"
+      :recommendations="scoreDetailRecommendations"
+      :score-history="scoreDetailHistory"
+      :score-date="scoreDetailScoreDate"
       :loading="loadingDetail"
       :in-watchlist="isInWatchlist(selectedStock?.symbol)"
       @view-chart="viewChart"
@@ -286,6 +290,10 @@ const scoreDetailCategory = ref(null)
 const scoreDetailData = ref(null)
 const scoreDetailWeights = ref({})
 const scoreDetailDimensions = ref([])
+const scoreDetailMeta = ref(null)
+const scoreDetailRecommendations = ref(null)
+const scoreDetailHistory = ref([])
+const scoreDetailScoreDate = ref('')
 const loadingDetail = ref(false)
 const scoreDetailRequestSeq = ref(0)
 let scoreDetailRequestController = null
@@ -307,23 +315,41 @@ async function fetchScoreDetails(row, category) {
     scoreDetailData.value = null
     scoreDetailWeights.value = {}
     scoreDetailDimensions.value = []
+    scoreDetailMeta.value = null
+    scoreDetailRecommendations.value = null
+    scoreDetailHistory.value = []
+    scoreDetailScoreDate.value = ''
     showScoreDetail.value = true
 
     const params = { symbol: row.symbol, category }
     if (row.score_date) params.score_date = row.score_date
     if (category === 'composite') params.strategy = getEffectiveStrategyFor(row.symbol)
+    // History is best-effort: a failure there must not blank out the detail pane.
+    const historyPromise = Promise.resolve()
+      .then(() => request({
+        url: `/score-history/${encodeURIComponent(row.symbol)}`,
+        method: 'get',
+        params: { days: 30, ...(row.score_date ? { date: row.score_date } : {}) },
+        signal: controller.signal,
+      }))
+      .catch(() => null)
     const json = await request({
       url: '/stock-score-detail',
       method: 'get',
       params,
       signal: controller.signal,
     })
+    const historyJson = await historyPromise
     if (!requestStillCurrent()) return
 
     if (json && json.success) {
       scoreDetailData.value = json.data.details
       scoreDetailWeights.value = json.data.weights || {}
       scoreDetailDimensions.value = json.data.dimensions || []
+      scoreDetailMeta.value = json.data.meta || null
+      scoreDetailRecommendations.value = json.data.recommendations || null
+      scoreDetailScoreDate.value = json.data.score_date || row.score_date || ''
+      scoreDetailHistory.value = Array.isArray(historyJson?.data) ? historyJson.data : []
       if (category === 'composite') {
         const keys = Object.keys(scoreDetailData.value || {})
         const hasWeight = keys.some(k => k.includes('权重'))
@@ -339,6 +365,10 @@ async function fetchScoreDetails(row, category) {
       scoreDetailData.value = { 错误: (json && (json.detail || json.message)) || '获取详情失败' }
       scoreDetailWeights.value = {}
       scoreDetailDimensions.value = []
+      scoreDetailMeta.value = null
+      scoreDetailRecommendations.value = null
+      scoreDetailHistory.value = []
+      scoreDetailScoreDate.value = ''
     }
   } catch (e) {
     if (!requestStillCurrent()) return
@@ -348,6 +378,10 @@ async function fetchScoreDetails(row, category) {
     scoreDetailData.value = { 错误: e.message || '请求异常' }
     scoreDetailWeights.value = {}
     scoreDetailDimensions.value = []
+    scoreDetailMeta.value = null
+    scoreDetailRecommendations.value = null
+    scoreDetailHistory.value = []
+    scoreDetailScoreDate.value = ''
   } finally {
     if (requestStillCurrent()) {
       scoreDetailRequestController = null

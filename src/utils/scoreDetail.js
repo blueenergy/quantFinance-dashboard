@@ -1,5 +1,7 @@
 const SCORE_KEY_RE = /(评分|得分)$/
 const WEIGHT_KEY_RE = /\(权重:\s*([\d.]+)%\)/
+const RESERVED_SUBMODULE_KEYS = new Set(['_series', '_formula'])
+const SERIES_HIDDEN_RAW_KEYS = new Set(['历年营收', '历年净利润', '历年ROE'])
 
 const DIMENSION_NAME_MAP = {
   cycle: '动量评分',
@@ -9,6 +11,15 @@ const DIMENSION_NAME_MAP = {
   technical: '技术面评分',
   money_flow: '资金流评分',
   industry_rs: '行业相对强度',
+}
+
+const DIMENSION_SCORE_FIELDS = {
+  cycle: 'cycle_score',
+  growth: 'growth_score',
+  fundamental: 'fundamental_score',
+  value: 'value_score',
+  technical: 'technical_score',
+  money_flow: 'money_flow_score',
 }
 
 function isSignalValue(value) {
@@ -58,10 +69,50 @@ function extractSubmoduleScore(entries) {
   return null
 }
 
-function buildRawFields(entries) {
+function normalizeSeriesBlock(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return []
+  const seriesList = []
+  for (const [name, spec] of Object.entries(raw)) {
+    if (!spec || typeof spec !== 'object' || Array.isArray(spec)) continue
+    const points = Array.isArray(spec.points) ? spec.points : []
+    seriesList.push({
+      name,
+      unit: spec.unit || '',
+      source: spec.source || '',
+      points: points.map((pt) => ({
+        period: pt?.period ?? '—',
+        end_date: pt?.end_date ?? '',
+        value: pt?.value,
+        yoy: pt?.yoy,
+      })),
+    })
+  }
+  return seriesList
+}
+
+function normalizeFormulaBlock(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const steps = Array.isArray(raw.steps) ? raw.steps : []
+  if (!steps.length && raw.base == null && raw.raw_score == null) return null
+  return {
+    base: typeof raw.base === 'number' ? raw.base : 50,
+    steps: steps.map((step) => ({
+      rule: step?.rule || step?.label || '—',
+      delta: typeof step?.delta === 'number' ? step.delta : 0,
+      reason: step?.reason || '',
+    })),
+    rawScore: typeof raw.raw_score === 'number' ? raw.raw_score : null,
+    clippedScore: typeof raw.clipped_score === 'number' ? raw.clipped_score : null,
+    clipped: Boolean(raw.clipped),
+  }
+}
+
+function buildRawFields(entries, seriesKeys = new Set()) {
   const rawFields = []
   for (const [key, value] of entries) {
     if (SCORE_KEY_RE.test(key)) continue
+    if (RESERVED_SUBMODULE_KEYS.has(key)) continue
+    if (seriesKeys.has(key)) continue
     rawFields.push({ key, ...classifyRawValue(value) })
   }
   return rawFields
@@ -75,10 +126,17 @@ function parseSubmodule(name, raw, weights = {}) {
   const entries = Object.entries(raw)
   const metrics = []
   const signals = []
-  const rawFields = buildRawFields(entries)
+  const series = normalizeSeriesBlock(raw._series)
+  const formula = normalizeFormulaBlock(raw._formula)
+  const seriesKeys = new Set()
+  if (series.length) {
+    for (const key of SERIES_HIDDEN_RAW_KEYS) seriesKeys.add(key)
+  }
 
   for (const [key, value] of entries) {
     if (SCORE_KEY_RE.test(key)) continue
+    if (RESERVED_SUBMODULE_KEYS.has(key)) continue
+    if (seriesKeys.has(key)) continue
     if (isSignalValue(value)) {
       signals.push({ key, text: value, positive: signalPositive(value) })
     } else if (value !== null && typeof value !== 'object') {
@@ -92,7 +150,9 @@ function parseSubmodule(name, raw, weights = {}) {
     weight: typeof weights[name] === 'number' ? weights[name] : null,
     metrics,
     signals,
-    rawFields,
+    series,
+    formula,
+    rawFields: buildRawFields(entries, seriesKeys),
   }
 }
 
@@ -103,22 +163,24 @@ function parseSubmodule(name, raw, weights = {}) {
  */
 export function normalizeCategoryDetails(details, weights = {}) {
   if (!details || typeof details !== 'object') {
-    return { total: null, subModules: [], topLevelFields: [], error: null }
+    return { total: null, subModules: [], topLevelFields: [], topLevelFormula: null, error: null }
   }
 
   if ('错误' in details) {
-    return { total: null, subModules: [], topLevelFields: [], error: String(details['错误']) }
+    return { total: null, subModules: [], topLevelFields: [], topLevelFormula: null, error: String(details['错误']) }
   }
 
   let total = null
   const subModules = []
   const topLevelFields = []
+  const topLevelFormula = normalizeFormulaBlock(details._formula)
 
   for (const [key, value] of Object.entries(details)) {
     if (SCORE_KEY_RE.test(key) && typeof value === 'number') {
       total = value
       continue
     }
+    if (RESERVED_SUBMODULE_KEYS.has(key)) continue
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       const mod = parseSubmodule(key, value, weights)
       if (mod) subModules.push(mod)
@@ -127,7 +189,7 @@ export function normalizeCategoryDetails(details, weights = {}) {
     topLevelFields.push({ key, ...classifyRawValue(value) })
   }
 
-  return { total, subModules, topLevelFields, error: null }
+  return { total, subModules, topLevelFields, topLevelFormula, error: null }
 }
 
 function parseLegacyCompositeDetails(details) {
@@ -211,4 +273,82 @@ export function scoreColor(score) {
   if (n >= 60) return '#eab308'
   if (n >= 50) return '#f97316'
   return '#ef4444'
+}
+
+/**
+ * Merge API meta with client-side fallbacks from details.
+ * @param {Record<string, unknown>|null|undefined} meta
+ * @param {Record<string, unknown>|null|undefined} details
+ * @param {string} [scoreDate]
+ */
+export function normalizeScoreMeta(meta, details, scoreDate) {
+  const base = (meta && typeof meta === 'object') ? { ...meta } : {}
+  if (!base.score_date && scoreDate) base.score_date = scoreDate
+  if (base.details_schema_version == null) base.details_schema_version = 0
+  if (!base.algorithm_version) base.algorithm_version = 'v0.1'
+  if (!base.lookahead_rule) base.lookahead_rule = 'ann_date/f_ann_date <= score_date'
+
+  const express = extractExpressFromDetails(details)
+  if (express && Object.keys(express).length) {
+    base.express = { ...(base.express || {}), ...express }
+  }
+  return base
+}
+
+/**
+ * Scan details (top-level or nested) for express / provisional markers.
+ * @param {Record<string, unknown>|null|undefined} details
+ */
+export function extractExpressFromDetails(details) {
+  if (!details || typeof details !== 'object') return {}
+  const flags = {}
+  if (details.express_source) flags.express_source = details.express_source
+  if (details['数据来源']) flags.data_source = details['数据来源']
+  if (details.express_discount != null) flags.express_discount = details.express_discount
+  return flags
+}
+
+/**
+ * Build score history comparison rows for chart/table display.
+ * @param {Array<Record<string, unknown>>} history
+ * @param {string} [category]
+ */
+export function buildScoreHistoryComparison(history, category = 'composite') {
+  if (!Array.isArray(history) || !history.length) return []
+  const field = category === 'composite' ? null : DIMENSION_SCORE_FIELDS[category]
+  return history
+    .filter((row) => row && row.score_date)
+    .map((row) => {
+      let score = null
+      if (field) {
+        score = row[field]
+      } else {
+        const composite = row.composite_score
+        if (typeof composite === 'number') score = composite
+        else if (composite && typeof composite === 'object') {
+          score = composite.balanced ?? Object.values(composite).find((v) => typeof v === 'number')
+        }
+      }
+      return {
+        score_date: String(row.score_date),
+        score: typeof score === 'number' ? score : null,
+      }
+    })
+    .filter((row) => row.score != null)
+}
+
+export function formatSeriesValue(value, unit) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  const n = Number(value)
+  if (unit === '%') return `${n.toFixed(2)}%`
+  if (unit === '亿元') return `${n.toFixed(2)}亿`
+  if (unit) return `${n.toFixed(2)} ${unit}`
+  return Number.isInteger(n) ? String(n) : n.toFixed(2)
+}
+
+export function formatYoyValue(yoy) {
+  if (yoy == null || Number.isNaN(Number(yoy))) return '—'
+  const n = Number(yoy)
+  const sign = n > 0 ? '+' : ''
+  return `${sign}${n.toFixed(2)}%`
 }

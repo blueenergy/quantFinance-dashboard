@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildScoreHistoryComparison,
   classifyRawValue,
   extractCompositeRawFields,
   extractCompositeTotal,
+  extractExpressFromDetails,
   normalizeCategoryDetails,
   normalizeComposite,
+  normalizeScoreMeta,
 } from '../scoreDetail.js'
 
 describe('normalizeCategoryDetails', () => {
@@ -127,5 +130,89 @@ describe('extractCompositeRawFields', () => {
 describe('extractCompositeTotal', () => {
   it('reads composite total from details', () => {
     expect(extractCompositeTotal({ '综合得分(当前策略)': 75.2 })).toBe(75.2)
+  })
+})
+
+describe('_series and _formula parsing', () => {
+  it('extracts structured series and hides duplicate raw keys', () => {
+    const result = normalizeCategoryDetails({
+      利润增长分析: {
+        利润增长得分: 78,
+        历年净利润: ['FY2022: 12.34亿'],
+        _series: {
+          归母净利润: {
+            unit: '亿元',
+            source: 'blocks_ttm',
+            points: [
+              { period: 'FY2022', end_date: '20221231', value: 12.34, yoy: null },
+              { period: 'FY2023', end_date: '20231231', value: 15.67, yoy: 27.0 },
+            ],
+          },
+        },
+      },
+      成长性综合评分: 80,
+    })
+
+    const profit = result.subModules[0]
+    expect(profit.series).toHaveLength(1)
+    expect(profit.series[0].points).toHaveLength(2)
+    expect(profit.rawFields.find((row) => row.key === '历年净利润')).toBeUndefined()
+    expect(profit.rawFields.find((row) => row.key === '_series')).toBeUndefined()
+  })
+
+  it('parses formula steps from _formula block', () => {
+    const result = normalizeCategoryDetails({
+      营收增长分析: {
+        营收增长得分: 85,
+        _formula: {
+          base: 50,
+          steps: [
+            { rule: '最近增长', delta: 30, reason: 'YoY > 30%' },
+            { rule: '稳定性', delta: 5 },
+          ],
+          raw_score: 85,
+          clipped_score: 85,
+          clipped: false,
+        },
+      },
+      成长性综合评分: 85,
+    })
+
+    expect(result.subModules[0].formula).toMatchObject({
+      base: 50,
+      rawScore: 85,
+    })
+    expect(result.subModules[0].formula.steps).toHaveLength(2)
+  })
+})
+
+describe('normalizeScoreMeta', () => {
+  it('merges API meta with express flags from details', () => {
+    const meta = normalizeScoreMeta(
+      { algorithm_version: 'v0.1', details_schema_version: 0 },
+      { express_source: 'express', express_discount: 0.85 },
+      '20240809',
+    )
+    expect(meta.score_date).toBe('20240809')
+    expect(meta.express.express_discount).toBe(0.85)
+  })
+})
+
+describe('extractExpressFromDetails', () => {
+  it('reads express markers', () => {
+    expect(extractExpressFromDetails({ 数据来源: 'express' })).toMatchObject({
+      data_source: 'express',
+    })
+  })
+})
+
+describe('buildScoreHistoryComparison', () => {
+  it('builds chronological score rows for a dimension', () => {
+    const rows = buildScoreHistoryComparison([
+      { score_date: '20240101', growth_score: 70 },
+      { score_date: '20240201', growth_score: 75 },
+    ], 'growth')
+    expect(rows).toHaveLength(2)
+    expect(rows[1].score).toBe(75)
   })
 })

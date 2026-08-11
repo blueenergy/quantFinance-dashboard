@@ -359,6 +359,8 @@ export function useStockWorkbench(options = {}) {
         mergeWorkbenchSection('scores', data, {
           score: data?.score || null,
           score_history: Array.isArray(data?.score_history) ? data.score_history : [],
+          score_meta: data?.score_meta || null,
+          recommendations: data?.recommendations || null,
         })
         await onScoresLoaded()
       } else if (section === 'financials') {

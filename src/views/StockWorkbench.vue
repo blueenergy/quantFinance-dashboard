@@ -112,6 +112,9 @@
           <WorkbenchScoresPanel
             :score-items="scoreItems"
             :score-history="scoreHistory"
+            :score-meta="scoreMeta"
+            :recommendations="scoreRecommendations"
+            :score-date="scoreDate"
             :loading="sectionLoading.scores"
           />
         </v-window-item>
@@ -452,6 +455,9 @@ const evaluationByHistoryId = computed(() => Object.fromEntries(
     .map((row) => [row.history_id, row]),
 ))
 const scoreHistory = computed(() => Array.isArray(payload.value?.score_history) ? payload.value.score_history : [])
+const scoreMeta = computed(() => payload.value?.score_meta || null)
+const scoreRecommendations = computed(() => payload.value?.recommendations || null)
+const scoreDate = computed(() => score.value.score_date || payload.value?.data_status?.score_date || '')
 const swotPayload = computed(() => swotData.value || {})
 const pendingSwotFinding = computed(() => {
   const nav = props.pendingNavigation
