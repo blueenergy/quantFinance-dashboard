@@ -24,8 +24,8 @@
             <ScoreDetailView
               :category="item.key"
               :details="item.details"
-              :weights="weightsFor(item.key)"
-              :meta="scoreMeta"
+              :weights="weightsFor(item)"
+              :meta="normalizedScoreMeta"
               :score-date="scoreDate"
               :score-history="scoreHistory"
             />
@@ -51,7 +51,7 @@
 import { computed, defineAsyncComponent } from 'vue'
 import ScoreRecommendationsPanel from '../ranking/ScoreRecommendationsPanel.vue'
 import ScoreHistoryComparison from '../ranking/ScoreHistoryComparison.vue'
-import { normalizeScoreMeta } from '../../utils/scoreDetail.js'
+import { normalizeScoreMeta, submoduleWeightsFromDetails } from '../../utils/scoreDetail.js'
 import { SUBMODULE_WEIGHTS } from '../../utils/scoreSubmoduleWeights.js'
 import {
   fmtNumber,
@@ -71,14 +71,16 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
 })
 
-const scoreMeta = computed(() => normalizeScoreMeta(
+const normalizedScoreMeta = computed(() => normalizeScoreMeta(
   props.scoreMeta,
   null,
   props.scoreDate,
 ))
 
-function weightsFor(category) {
-  return SUBMODULE_WEIGHTS[category] || {}
+// Prefer the weights the scorer recorded; the local table only covers scorers
+// that do not yet keep a ledger.
+function weightsFor(item) {
+  return submoduleWeightsFromDetails(item?.details) || SUBMODULE_WEIGHTS[item?.key] || {}
 }
 </script>
 

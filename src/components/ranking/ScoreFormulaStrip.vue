@@ -8,7 +8,8 @@
         class="formula-part"
         :title="step.reason || step.rule"
       >
-        {{ step.rule }} {{ formatDelta(step.delta) }}
+        {{ step.rule }}<span v-if="step.weight != null" class="formula-weight">
+          ×{{ formatWeight(step.weight) }}</span> ({{ formatMagnitude(step.delta) }})
       </span>
     </template>
     <template v-if="formula.rawScore != null">
@@ -35,11 +36,17 @@ function formatNum(value) {
   return Number(value).toFixed(1)
 }
 
-function formatDelta(delta) {
-  const n = Number(delta)
+// The +/− already precedes the term, so the term itself shows magnitude only.
+function formatMagnitude(delta) {
+  const n = Math.abs(Number(delta))
+  if (Number.isNaN(n)) return '—'
+  return Number.isInteger(n) ? String(n) : n.toFixed(1)
+}
+
+function formatWeight(weight) {
+  const n = Number(weight)
   if (Number.isNaN(n)) return ''
-  const sign = n > 0 ? '+' : ''
-  return `(${sign}${n.toFixed(0)})`
+  return `${(n * 100).toFixed(0)}%`
 }
 </script>
 
@@ -66,6 +73,11 @@ function formatDelta(delta) {
 .formula-part {
   color: #475569;
   cursor: default;
+}
+
+.formula-weight {
+  color: #0f766e;
+  font-weight: 600;
 }
 
 .formula-operator {

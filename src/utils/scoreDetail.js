@@ -100,6 +100,7 @@ function normalizeFormulaBlock(raw) {
       rule: step?.rule || step?.label || '—',
       delta: typeof step?.delta === 'number' ? step.delta : 0,
       reason: step?.reason || '',
+      weight: typeof step?.weight === 'number' ? step.weight : null,
     })),
     rawScore: typeof raw.raw_score === 'number' ? raw.raw_score : null,
     clippedScore: typeof raw.clipped_score === 'number' ? raw.clipped_score : null,
@@ -335,6 +336,27 @@ export function buildScoreHistoryComparison(history, category = 'composite') {
       }
     })
     .filter((row) => row.score != null)
+}
+
+/**
+ * Read submodule weights off a dimension's `_formula` steps.
+ *
+ * Scorers that keep a ledger report the weight they actually applied, which
+ * beats any table we mirror here. Returns null when the details predate that,
+ * so callers can fall back.
+ * @param {Record<string, unknown>|null|undefined} details
+ * @returns {Record<string, number>|null}
+ */
+export function submoduleWeightsFromDetails(details) {
+  const steps = details?._formula?.steps
+  if (!Array.isArray(steps)) return null
+  const weights = {}
+  for (const step of steps) {
+    if (step && typeof step.weight === 'number' && step.rule) {
+      weights[step.rule] = step.weight
+    }
+  }
+  return Object.keys(weights).length ? weights : null
 }
 
 export function formatSeriesValue(value, unit) {

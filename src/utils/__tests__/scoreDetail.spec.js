@@ -8,6 +8,7 @@ import {
   normalizeCategoryDetails,
   normalizeComposite,
   normalizeScoreMeta,
+  submoduleWeightsFromDetails,
 } from '../scoreDetail.js'
 
 describe('normalizeCategoryDetails', () => {
@@ -183,6 +184,57 @@ describe('_series and _formula parsing', () => {
       rawScore: 85,
     })
     expect(result.subModules[0].formula.steps).toHaveLength(2)
+  })
+
+  it('carries step weights so weighted contributions are distinguishable', () => {
+    const result = normalizeCategoryDetails({
+      _formula: {
+        base: 0,
+        steps: [
+          { rule: '短期周期(5-10日)', delta: 33.2, weight: 0.4 },
+          { rule: '价格位置', delta: 15 },
+        ],
+        raw_score: 48.2,
+        clipped_score: 48.2,
+        clipped: false,
+      },
+      周期综合评分: 48.2,
+    })
+
+    const [weighted, flat] = result.topLevelFormula.steps
+    expect(result.topLevelFormula.base).toBe(0)
+    expect(weighted.weight).toBe(0.4)
+    expect(flat.weight).toBeNull()
+    // The reserved key must not leak into the plain field list.
+    expect(result.topLevelFields.find((row) => row.key === '_formula')).toBeUndefined()
+  })
+})
+
+describe('submoduleWeightsFromDetails', () => {
+  it('reads weights recorded by the scorer ledger', () => {
+    const weights = submoduleWeightsFromDetails({
+      _formula: {
+        steps: [
+          { rule: '短期周期(5-10日)', delta: 33.2, weight: 0.4 },
+          { rule: '中期周期(20-60日)', delta: 30.8, weight: 0.35 },
+          { rule: '长期周期(120-250日)', delta: 21.25, weight: 0.25 },
+        ],
+      },
+    })
+    expect(weights).toEqual({
+      '短期周期(5-10日)': 0.4,
+      '中期周期(20-60日)': 0.35,
+      '长期周期(120-250日)': 0.25,
+    })
+  })
+
+  it('returns null when no weights were recorded, so callers can fall back', () => {
+    expect(submoduleWeightsFromDetails(null)).toBeNull()
+    expect(submoduleWeightsFromDetails({})).toBeNull()
+    expect(submoduleWeightsFromDetails({ _formula: { steps: [] } })).toBeNull()
+    expect(
+      submoduleWeightsFromDetails({ _formula: { steps: [{ rule: '5日趋势', delta: 10 }] } }),
+    ).toBeNull()
   })
 })
 
