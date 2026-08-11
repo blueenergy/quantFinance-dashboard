@@ -1,4 +1,11 @@
-/** Submodule weights for score detail UI (mirrors quantFinance SUBMODULE_WEIGHTS). */
+/**
+ * Submodule weights for score detail UI (mirrors quantFinance SUBMODULE_WEIGHTS).
+ *
+ * Scorers report their applied weights in `_formula.steps`, so
+ * `submoduleWeightsFromDetails` is preferred. This table is the fallback for
+ * documents scored before the ledger landed, which are not backfilled
+ * automatically and so persist indefinitely.
+ */
 export const SUBMODULE_WEIGHTS = {
   cycle: {
     '短期周期(5-10日)': 0.4,
