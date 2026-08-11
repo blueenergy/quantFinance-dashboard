@@ -23,6 +23,7 @@
       </span>
       <span class="formula-note">（裁剪到 [0, 100]）</span>
     </template>
+    <span v-if="formula.note" class="formula-rule-note">{{ formula.note }}</span>
   </div>
 </template>
 
@@ -96,6 +97,14 @@ function formatWeight(weight) {
 
 .formula-note {
   color: #64748b;
+  font-size: 0.75rem;
+}
+
+/* Explains a weighting rule the terms alone cannot show, so it takes the full
+   width rather than sitting inline between terms. */
+.formula-rule-note {
+  flex-basis: 100%;
+  color: #b45309;
   font-size: 0.75rem;
 }
 </style>

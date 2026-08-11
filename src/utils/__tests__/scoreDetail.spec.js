@@ -208,6 +208,35 @@ describe('_series and _formula parsing', () => {
     // The reserved key must not leak into the plain field list.
     expect(result.topLevelFields.find((row) => row.key === '_formula')).toBeUndefined()
   })
+
+  it('carries the accounting note explaining renormalized weights', () => {
+    const result = normalizeCategoryDetails({
+      _formula: {
+        base: 0,
+        note: '快报口径：仅 PE/PB/PS 可用，名义权重合计 45%，已等比例放大至 100%',
+        steps: [
+          { rule: 'PE估值分析', delta: 50, weight: 0.666667 },
+          { rule: 'PS估值分析', delta: 21.666667, weight: 0.333333 },
+        ],
+        raw_score: 71.666667,
+        clipped_score: 71.666667,
+        clipped: false,
+      },
+      价值评分: 71.67,
+    })
+
+    expect(result.topLevelFormula.note).toContain('等比例放大至 100%')
+    const totalWeight = result.topLevelFormula.steps.reduce((sum, s) => sum + s.weight, 0)
+    expect(totalWeight).toBeCloseTo(1)
+  })
+
+  it('leaves the note empty when the scorer set none', () => {
+    const result = normalizeCategoryDetails({
+      _formula: { base: 50, steps: [{ rule: 'A', delta: 10 }], raw_score: 60 },
+      技术面评分: 60,
+    })
+    expect(result.topLevelFormula.note).toBe('')
+  })
 })
 
 describe('submoduleWeightsFromDetails', () => {

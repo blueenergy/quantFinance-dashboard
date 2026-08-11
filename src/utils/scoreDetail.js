@@ -105,6 +105,7 @@ function normalizeFormulaBlock(raw) {
     rawScore: typeof raw.raw_score === 'number' ? raw.raw_score : null,
     clippedScore: typeof raw.clipped_score === 'number' ? raw.clipped_score : null,
     clipped: Boolean(raw.clipped),
+    note: typeof raw.note === 'string' ? raw.note : '',
   }
 }
 
