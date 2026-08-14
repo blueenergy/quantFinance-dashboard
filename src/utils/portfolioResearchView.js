@@ -694,6 +694,7 @@ export function buildResearchParamRows(job, options = UNIVERSE_OPTIONS) {
     { key: 'start_date', label: 'start_date', value: compactDate(params.start_date || job.start_date) },
     { key: 'end_date', label: 'end_date', value: compactDate(params.end_date || job.end_date) },
     { key: 'universe_index', label: 'universe', value: universeName(params.universe_index || job.universe_index, options) },
+    { key: 'industry_l1', label: '申万 L1', value: params.industry_l1 || '-' },
     { key: 'score_column', label: 'score_column', value: params.score_column || '-' },
     { key: 'score_specs', label: '评分规格', value: jobWeightLabel(job) || params.score_column || '-' },
     { key: 'growth_cycle_weights', label: 'growth:cycle 权重', value: formatList(params.growth_cycle_weights) },

@@ -33,6 +33,16 @@
             </select>
           </label>
           <label>
+            申万行业 L1
+            <select :value="form.industry_l1 || ''" @change="onIndustryChange">
+              <option value="">全市场（不过滤）</option>
+              <option v-for="item in industryOptions" :key="item.code" :value="item.code">
+                {{ item.name }} ({{ item.code }})
+              </option>
+            </select>
+            <small v-if="form.industry_l1" class="field-hint">单行业研究建议 Top-N 5–10；基准默认切到行业指数</small>
+          </label>
+          <label>
             start_date
             <input :value="form.start_date" type="date" @input="patchForm({ start_date: $event.target.value })" />
           </label>
@@ -155,7 +165,7 @@
             />
             <small class="field-hint">逗号分隔多档调仓间隔；每档按同长度持有期并行扫参</small>
           </label>
-          <label>
+          <label v-if="!industryFilterActive">
             active caps
             <input
               :value="form.active_caps"
@@ -266,6 +276,7 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   form: { type: Object, required: true },
   universeOptions: { type: Array, default: () => [] },
+  industryOptions: { type: Array, default: () => [] },
   submitting: { type: Boolean, default: false },
   title: { type: String, default: '新建研究任务' },
   subtitle: { type: String, default: '' },
@@ -278,6 +289,7 @@ const selectedScoreColumns = computed(() => resolveScoreColumns(props.form))
 const dynamicSelection = computed(() => (
   props.form.selection_mode === DYNAMIC_THRESHOLD_SELECTION_MODE
 ))
+const industryFilterActive = computed(() => Boolean(String(props.form.industry_l1 || '').trim()))
 const selectedCompositePresets = computed(() => (
   selectedScoreColumns.value
     .map((column) => compositeScorePreset(column))
@@ -364,6 +376,20 @@ function onNameInput(event) {
 function onUniverseChange(event) {
   const next = patchForm({ universe_index: event.target.value })
   emit('universe-change', next.universe_index)
+}
+
+function onIndustryChange(event) {
+  const industryL1 = String(event.target.value || '').trim()
+  const patch = { industry_l1: industryL1 }
+  if (industryL1) {
+    patch.index_benchmark_symbol = industryL1
+    if (!String(props.form.top_n_values || '').trim()) {
+      patch.top_n_values = '5,8,10'
+    }
+  } else {
+    patch.index_benchmark_symbol = ''
+  }
+  patchForm(patch)
 }
 </script>
 

@@ -94,6 +94,8 @@ export function usePortfolioResearchForm({
       transfer_fee_rate: 0,
       initial_capital: 1_000_000,
       trailing_stop_pcts: '0,0.15',
+      industry_l1: '',
+      index_benchmark_symbol: '',
     }
     state.name = defaultResearchName(state.universe_index, state)
     return state

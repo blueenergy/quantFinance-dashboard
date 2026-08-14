@@ -188,6 +188,11 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
     payload.index_benchmark_symbol = String(benchmark).trim()
   }
 
+  const industryL1 = String(form.industry_l1 || '').trim()
+  if (industryL1) {
+    payload.industry_l1 = industryL1
+  }
+
   return omitEmpty(payload)
 }
 

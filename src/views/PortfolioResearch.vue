@@ -238,6 +238,7 @@
       :open="drawerOpen"
       :form="form"
       :universe-options="universeOptions"
+      :industry-options="industryOptions"
       :submitting="submitting"
       :title="drawerTitle"
       :subtitle="drawerSubtitle"
@@ -264,7 +265,7 @@
 <script setup>
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
 import '../assets/styles/portfolio-research.css'
-import { getPortfolioResearchComboDetail } from '../api/portfolioResearch'
+import { getPortfolioResearchComboDetail, listSwL1Catalog } from '../api/portfolioResearch'
 import { usePortfolioResearchDetail } from '../composables/usePortfolioResearchDetail'
 import { usePortfolioResearchForm } from '../composables/usePortfolioResearchForm'
 import { usePortfolioResearchJobs } from '../composables/usePortfolioResearchJobs'
@@ -388,6 +389,17 @@ const comboDetail = ref(null)
 const comboContextRow = ref(null)
 
 const universeOptions = UNIVERSE_OPTIONS
+const industryOptions = ref([])
+
+async function loadIndustryOptions() {
+  try {
+    const response = await listSwL1Catalog()
+    industryOptions.value = response?.data || []
+  } catch (error) {
+    console.warn('load sw l1 catalog failed', error)
+    industryOptions.value = []
+  }
+}
 
 const inceptionWarning = computed(() => {
   const job = selectedJob.value
@@ -452,6 +464,7 @@ onMounted(async () => {
   isNarrow.value = narrowMql.matches
   narrowMql.addEventListener('change', onNarrowChange)
   window.addEventListener('keydown', onDrawerEscape, true)
+  await loadIndustryOptions()
   await refreshAll()
 })
 

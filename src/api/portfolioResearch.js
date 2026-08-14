@@ -1,5 +1,9 @@
 import request from '../utils/request'
 
+export function listSwL1Catalog() {
+  return request({ url: '/portfolio-research/sw-l1-catalog', method: 'get' })
+}
+
 export function listPortfolioResearchJobs(params = {}) {
   return request({ url: '/portfolio-research/jobs', method: 'get', params })
 }
