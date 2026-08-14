@@ -1,5 +1,5 @@
 <template>
-  <div class="unified-chart-container dark" ref="containerRef">
+  <div class="unified-chart-container" ref="containerRef">
     <div class="chart-header">
       <div class="stock-info">
         <span class="symbol-badge">{{ props.symbol }}</span>
@@ -138,7 +138,8 @@ async function drawChart() {
   const shares = dataList.map(r => r.fd_share || 0)
 
   const option = {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#ffffff',
+    textStyle: { color: '#475569' },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'cross' }
@@ -154,7 +155,8 @@ async function drawChart() {
         type: 'category',
         data: dates,
         gridIndex: 0,
-        axisLine: { onZero: false, lineStyle: { color: '#8392A5' } },
+        axisLabel: { color: '#64748b' },
+        axisLine: { onZero: false, lineStyle: { color: '#94a3b8' } },
       },
       {
         type: 'category',
@@ -175,8 +177,9 @@ async function drawChart() {
       {
         scale: true,
         gridIndex: 0,
-        splitLine: { show: true, lineStyle: { color: '#2a2a2a' } },
-        axisLine: { lineStyle: { color: '#8392A5' } }
+        splitLine: { show: true, lineStyle: { color: '#e2e8f0' } },
+        axisLabel: { color: '#64748b' },
+        axisLine: { lineStyle: { color: '#94a3b8' } }
       },
       {
         scale: true,
@@ -189,13 +192,13 @@ async function drawChart() {
         scale: true,
         gridIndex: 2,
         splitLine: { show: false },
-        axisLabel: { show: true, color: '#ff9800', formatter: '{value}万' },
+        axisLabel: { show: true, color: '#b45309', formatter: '{value}万' },
         axisLine: { show: false }
       }
     ],
     dataZoom: [
       { type: 'inside', xAxisIndex: [0, 1, 2], start: 50, end: 100 },
-      { type: 'slider', xAxisIndex: [0, 1, 2], start: 50, end: 100, bottom: '2%', textStyle: { color: '#8392A5' } }
+      { type: 'slider', xAxisIndex: [0, 1, 2], start: 50, end: 100, bottom: '2%', textStyle: { color: '#64748b' } }
     ],
     series: [
       {
@@ -251,8 +254,8 @@ async function drawChart() {
   border-radius: 8px;
   overflow: hidden;
   position: relative;
-  background: #1a1a1a;
-  color: #fff;
+  background: #ffffff;
+  color: #172033;
 }
 
 .chart-header {
@@ -260,7 +263,7 @@ async function drawChart() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .stock-info {
@@ -270,7 +273,7 @@ async function drawChart() {
 }
 
 .symbol-badge {
-  background: #1890ff;
+  background: #0466c8;
   color: #fff;
   padding: 4px 8px;
   border-radius: 4px;
@@ -284,9 +287,9 @@ async function drawChart() {
 }
 
 .data-count {
-  color: #888;
+  color: #64748b;
   font-size: 0.85em;
-  background: #2a2a2a;
+  background: #f1f5f9;
   padding: 2px 8px;
   border-radius: 10px;
 }
@@ -311,16 +314,16 @@ async function drawChart() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(26, 26, 26, 0.7);
+  background: rgba(255, 255, 255, 0.72);
   z-index: 10;
 }
 
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid rgba(255,255,255,0.1);
+  border: 3px solid #dbeafe;
   border-radius: 50%;
-  border-top-color: #1890ff;
+  border-top-color: #0466c8;
   animation: spin 1s ease-in-out infinite;
 }
 

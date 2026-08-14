@@ -2,10 +2,28 @@
   <div class="etf-view">
     <div class="header-section">
       <h2>💰 ETF淘金</h2>
-      <div class="header-meta" v-if="listTradeDate && !searchQuery.trim()">
+      <div class="main-tabs" v-if="!selectedEtf">
+        <button
+          type="button"
+          class="main-tab"
+          :class="{ on: mainTab === 'heatmap' }"
+          @click="mainTab = 'heatmap'"
+        >
+          行业资金
+        </button>
+        <button
+          type="button"
+          class="main-tab"
+          :class="{ on: mainTab === 'list' }"
+          @click="switchToListTab"
+        >
+          产品列表
+        </button>
+      </div>
+      <div class="header-meta" v-if="mainTab === 'list' && listTradeDate && !searchQuery.trim() && !selectedEtf">
         规模数据日：<strong>{{ listTradeDate }}</strong> · 已加载 {{ etfList.length }} / {{ listTotal }} 只 · 默认按<strong>基金份额（万份）</strong>降序
       </div>
-      <div class="search-box">
+      <div class="search-box" v-if="mainTab === 'list' || selectedEtf">
         <input
           v-model="searchQuery"
           @keyup.enter="handleSearch"
@@ -27,12 +45,16 @@
       </div>
     </div>
 
-    <div v-if="loading" class="loading-state">正在加载数据...</div>
+    <div v-if="mainTab === 'heatmap' && !selectedEtf && !loading" class="content-section">
+      <EtfHeatmapPanel ref="heatmapPanelRef" @open-etf="openEtfFromHeatmap" />
+    </div>
+
+    <div v-else-if="loading" class="loading-state">正在加载数据...</div>
 
     <div v-else-if="error" class="error-state">{{ error }}</div>
 
     <div v-else class="content-section">
-      <div class="list-section" v-if="!selectedEtf">
+      <div class="list-section" v-if="!selectedEtf && mainTab === 'list'">
         <div class="table-wrap">
           <table class="data-table">
             <thead>
@@ -75,7 +97,7 @@
 
       <div class="detail-section" v-else>
         <div class="detail-toolbar">
-          <button type="button" class="back-button" @click="selectedEtf = null">← 返回列表</button>
+          <button type="button" class="back-button" @click="leaveDetail">← 返回{{ detailReturnTab === 'heatmap' ? '行业资金' : '列表' }}</button>
           <span class="detail-search-hint">在上方搜索框输入代码或名称后点「切换」即可换到其它 ETF</span>
         </div>
         <div class="detail-header">
@@ -146,6 +168,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import request from '../utils/request'
 import EtfChart from '../components/EtfChart.vue'
+import EtfHeatmapPanel from '../components/EtfHeatmapPanel.vue'
 
 const props = defineProps({
   pendingNavigation: {
@@ -156,8 +179,12 @@ const props = defineProps({
 
 const PAGE_SIZE = 50
 
+const mainTab = ref('heatmap')
+const detailReturnTab = ref('list')
+const heatmapPanelRef = ref(null)
+
 const etfList = ref([])
-const loading = ref(true)
+const loading = ref(false)
 const loadingMore = ref(false)
 const error = ref('')
 const searchQuery = ref('')
@@ -280,8 +307,45 @@ function loadMore() {
   fetchList({ append: true })
 }
 
+function switchToListTab() {
+  mainTab.value = 'list'
+  if (!etfList.value.length && !loading.value) {
+    fetchList({ append: false })
+  }
+}
+
+async function openEtfFromHeatmap(tsCode) {
+  if (!tsCode) return
+  detailReturnTab.value = 'heatmap'
+  try {
+    const body = await request.get('/etf/list', { params: { q: tsCode, limit: 10 } })
+    const pick = _pickEtfRow(body.data, tsCode)
+    if (pick) {
+      await selectEtf(pick)
+      return
+    }
+    await selectEtf({ ts_code: tsCode, name: tsCode })
+  } catch (e) {
+    alert('打开 ETF 失败: ' + (e.message || String(e)))
+  }
+}
+
+function leaveDetail() {
+  selectedEtf.value = null
+  analysisResult.value = null
+  analysisMeta.value = null
+  chartRecords.value = []
+  if (detailReturnTab.value === 'heatmap') {
+    mainTab.value = 'heatmap'
+  } else {
+    mainTab.value = 'list'
+  }
+}
+
 onMounted(() => {
-  fetchList({ append: false })
+  if (mainTab.value === 'list') {
+    fetchList({ append: false })
+  }
 })
 
 function _normTs(s) {
@@ -369,6 +433,9 @@ async function loadEtfKline (tsCode, tfForRequest) {
 }
 
 const selectEtf = async (etf) => {
+  if (mainTab.value === 'list' && detailReturnTab.value !== 'heatmap') {
+    detailReturnTab.value = 'list'
+  }
   selectedEtf.value = etf
   analysisResult.value = null
   analysisMeta.value = null
@@ -509,9 +576,24 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .etf-view {
-  padding: 20px;
+  --bg-color: #ffffff;
+  --card-bg: #ffffff;
+  --hover-bg: #f8fafc;
+  --text-color: #172033;
+  --text-secondary: #64748b;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --primary-color: #0466c8;
+  padding: 24px;
   max-width: 1400px;
   margin: 0 auto;
+  min-height: 620px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: #f5f7fa;
+  color: var(--text-color);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 }
 
 .header-section {
@@ -524,6 +606,28 @@ onBeforeUnmount(() => {
 
 .header-section h2 {
   margin: 0;
+  color: var(--text-color);
+}
+
+.main-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.main-tab {
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color, #ddd);
+  background: var(--card-bg, #fff);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-color);
+}
+
+.main-tab.on {
+  background: var(--primary-color, #1890ff);
+  color: #fff;
+  border-color: var(--primary-color, #1890ff);
 }
 
 .header-meta {
@@ -548,6 +652,12 @@ onBeforeUnmount(() => {
   max-width: 100%;
   background-color: var(--bg-color, #fff);
   color: var(--text-color, #333);
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(4, 102, 200, 0.12);
 }
 
 .search-button {
@@ -639,7 +749,8 @@ onBeforeUnmount(() => {
   background: var(--card-bg, #fff);
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
 }
 
 .detail-toolbar {
@@ -676,7 +787,7 @@ onBeforeUnmount(() => {
 }
 
 .analysis-btn {
-  background: linear-gradient(135deg, #1890ff, #722ed1);
+  background: var(--primary-color);
   color: white;
   border: none;
   padding: 8px 20px;
@@ -773,7 +884,8 @@ onBeforeUnmount(() => {
 .chart-container {
   min-height: 600px;
   height: 600px;
-  border: 1px dashed var(--border-color, #ccc);
+  border: 1px solid var(--border-color, #ccc);
+  background: var(--card-bg);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
