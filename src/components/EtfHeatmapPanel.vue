@@ -17,9 +17,21 @@
         </div>
         <div v-if="tradeDate" class="as-of">
           份额数据日：<strong>{{ tradeDate }}</strong>
-          <span class="legend-hint">颜色 = 窗口净申购 / 期初规模；红进绿出，深浅表示强度</span>
         </div>
       </div>
+
+      <aside class="howto">
+        <p class="howto-lead">
+          格子里的百分比是<strong>ETF 净申购率</strong>，不是指数或板块涨跌。
+          金额是该主题场内股票 ETF（规模前 3）在窗口内的净申购，单位亿元。
+        </p>
+        <ul>
+          <li><strong>红色 / 正值</strong>：窗口内净申购，份额在增加。</li>
+          <li><strong>绿色 / 负值</strong>：窗口内净赎回，份额在减少。</li>
+          <li>颜色深浅只比较各主题之间谁更热，不表示持续多久。看趋势请点进格子。</li>
+          <li>指数上涨也可以大额赎回（上涨派发）；指数下跌也可以净申购（有人在吸筹）。</li>
+        </ul>
+      </aside>
 
       <div v-if="loading" class="loading-state">正在加载行业资金热力图…</div>
       <div v-else-if="error" class="error-state">{{ error }}</div>
@@ -37,13 +49,14 @@
             >
               <span class="cell-name">{{ cell.name }}</span>
               <span class="cell-rate">{{ formatInflowRatePct(cell.inflow_rate) }}</span>
+              <span class="cell-rate-label">净申购率</span>
               <span class="cell-amt">{{ formatInflowYi(cell.net_inflow) }}</span>
             </button>
           </div>
         </section>
 
         <section class="grid-section broad-section">
-          <h3 class="section-title">宽基（市场 β）</h3>
+          <h3 class="section-title">宽基（市场 β，同样是 ETF 申赎，不是指数涨跌）</h3>
           <div class="cell-grid broad-grid">
             <button
               v-for="cell in broadCells"
@@ -55,6 +68,7 @@
             >
               <span class="cell-name">{{ cell.name }}</span>
               <span class="cell-rate">{{ formatInflowRatePct(cell.inflow_rate) }}</span>
+              <span class="cell-rate-label">净申购率</span>
               <span class="cell-amt">{{ formatInflowYi(cell.net_inflow) }}</span>
             </button>
           </div>
@@ -67,6 +81,10 @@
         <button type="button" class="back-button" @click="viewMode = 'grid'">← 返回热力图</button>
         <h3>{{ activeCell?.name }} · 资金时序</h3>
       </div>
+      <p class="series-howto">
+        上图：旗舰 ETF 净值（近似价格，不是指数点位）。中图：前 3 合计份额。下图：每日净申购柱，红进绿出。
+        份额持续抬升才是中长期资金看好的证据；只看一天红绿容易被噪音带偏。
+      </p>
       <p v-if="memberLockNote" class="member-note">{{ memberLockNote }}</p>
       <ul v-if="seriesMembers.length" class="member-list">
         <li v-for="m in seriesMembers" :key="m.ts_code">
@@ -244,9 +262,25 @@ defineExpose({ refresh: fetchHeatmap })
   font-size: 13px;
   color: var(--text-color, #555);
 }
-.legend-hint {
-  margin-left: 12px;
-  color: var(--text-muted, #888);
+.howto {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-color, #172033);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.howto-lead {
+  margin: 0 0 8px;
+}
+.howto ul {
+  margin: 0;
+  padding-left: 1.2em;
+}
+.howto li {
+  margin: 2px 0;
 }
 .section-title {
   margin: 0 0 12px;
@@ -287,6 +321,10 @@ defineExpose({ refresh: fetchHeatmap })
   font-weight: 700;
   color: inherit;
 }
+.cell-rate-label {
+  font-size: 11px;
+  opacity: 0.72;
+}
 .cell-amt {
   font-size: 12px;
   color: inherit;
@@ -318,6 +356,12 @@ defineExpose({ refresh: fetchHeatmap })
   border-radius: 6px;
   background: transparent;
   cursor: pointer;
+}
+.series-howto {
+  font-size: 13px;
+  color: var(--text-color, #334155);
+  line-height: 1.55;
+  margin: 0 0 8px;
 }
 .member-note {
   font-size: 12px;

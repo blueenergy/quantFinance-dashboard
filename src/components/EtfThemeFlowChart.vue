@@ -118,7 +118,7 @@ async function drawChart() {
       {
         scale: true,
         gridIndex: 0,
-        name: '旗舰价',
+        name: '旗舰净值',
         nameTextStyle: { color: '#64748b' },
         splitLine: { lineStyle: { color: '#e2e8f0' } },
         axisLabel: { color: '#64748b' },
@@ -136,7 +136,7 @@ async function drawChart() {
       {
         scale: true,
         gridIndex: 2,
-        name: '净申购(万)',
+        name: '净申购(万元)',
         nameTextStyle: { color: '#64748b' },
         splitLine: { show: false },
         axisLabel: { color: '#64748b' },
@@ -149,7 +149,7 @@ async function drawChart() {
     ],
     series: [
       {
-        name: props.flagshipCode ? `${props.flagshipCode} 收盘` : '旗舰价格',
+        name: props.flagshipCode ? `${props.flagshipCode} 净值` : '旗舰净值',
         type: 'line',
         data: prices,
         xAxisIndex: 0,
