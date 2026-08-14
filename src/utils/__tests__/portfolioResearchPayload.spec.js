@@ -207,6 +207,18 @@ describe('buildPortfolioResearchPayload', () => {
     expect(legacy.growth_cycle_weights).toEqual(['30:70', '60:40'])
     expect(legacy).not.toHaveProperty('score_specs')
   })
+
+  it('includes industry_l1 when selected in the form', () => {
+    const payload = buildPortfolioResearchPayload({
+      ...baseForm,
+      industry_l1: '801730.SI',
+      index_benchmark_symbol: '801730.SI',
+      top_n_values: '5,8,10',
+    })
+    expect(payload.industry_l1).toBe('801730.SI')
+    expect(payload.index_benchmark_symbol).toBe('801730.SI')
+    expect(payload.top_n_values).toEqual([5, 8, 10])
+  })
 })
 
 describe('parseWeightedScoreSpecs', () => {
