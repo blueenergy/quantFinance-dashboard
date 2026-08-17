@@ -212,15 +212,8 @@ export function useHoldingsManualOps({
     if (!isLivePortfolio.value) return
     const now = new Date()
     externalManualRowSeq = 0
-    externalManualRows.value = latestHoldingRows.value.map((row) => ({
-      key: `row-${externalManualRowSeq += 1}`,
-      symbol: row.symbol,
-      name: row.name || '',
-      action: 'sell',
-      filled_size: Number(row.shares || 0),
-      filled_price: Number(row.last_price || row.avg_cost || 0),
-      editableSymbol: false,
-    }))
+    // 默认空表：卖出/买入行必须由用户显式添加，避免误把当前持仓全部补录为卖出。
+    externalManualRows.value = []
     externalManualExcludeAfter.value = false
     externalManualPauseLineage.value = false
     externalManualReason.value = 'miniQMT manual operation'

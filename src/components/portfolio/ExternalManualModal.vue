@@ -7,7 +7,10 @@
         支持部分减仓/加仓或全部清仓。只需填方向、数量和成交价，费用默认 0，成交时间/批次号/说明由系统自动填充。
       </p>
       <div class="table-wrap compact external-fill-table">
-        <table>
+        <p v-if="!rows.length" class="empty-hint">
+          尚未添加任何一笔。点击下方「+ 添加一笔」，按 miniQMT 实际成交逐笔填写方向、代码、数量和成交价。
+        </p>
+        <table v-else>
           <thead>
             <tr>
               <th>方向</th>
@@ -74,10 +77,21 @@
         <input :checked="pauseLineage" type="checkbox" @change="$emit('update:pauseLineage', $event.target.checked)">
         若清空全部持仓，则暂停该组合自动调仓（通常不需要）
       </label>
+      <p v-if="armed && !submitting" class="armed-hint">
+        请核对：以上 {{ rows.length }} 笔将作为已成交记录写入组合账本，系统不会向券商下单。
+      </p>
       <div class="modal-actions">
         <button type="button" @click="$emit('close')">取消</button>
-        <button type="button" :disabled="submitting || !ready" @click="$emit('confirm')">
-          {{ submitting ? '补录中…' : '确认补录' }}
+        <button
+          type="button"
+          class="confirm-btn"
+          :class="{ armed }"
+          :disabled="submitting || !ready"
+          @click="onConfirmClick"
+        >
+          <template v-if="submitting">补录中…</template>
+          <template v-else-if="armed">再次点击确认提交（买 {{ buyCount }} / 卖 {{ sellCount }}）</template>
+          <template v-else>确认补录</template>
         </button>
       </div>
     </div>
@@ -85,7 +99,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed, ref, watch } from 'vue'
+
+const props = defineProps({
   visible: { type: Boolean, default: false },
   rows: { type: Array, default: () => [] },
   excludeAfter: { type: Boolean, default: false },
@@ -94,7 +110,7 @@ defineProps({
   ready: { type: Boolean, default: false },
 })
 
-defineEmits([
+const emit = defineEmits([
   'close',
   'confirm',
   'add-row',
@@ -103,6 +119,25 @@ defineEmits([
   'update:excludeAfter',
   'update:pauseLineage',
 ])
+
+// 两步确认：第一次点击进入待确认态，行内容或弹窗状态变化即复位，防止一键误提交。
+const armed = ref(false)
+watch(() => props.visible, (visible) => {
+  if (!visible) armed.value = false
+})
+watch(() => props.rows, () => {
+  armed.value = false
+})
+const buyCount = computed(() => props.rows.filter((row) => row.action === 'buy').length)
+const sellCount = computed(() => props.rows.filter((row) => row.action !== 'buy').length)
+function onConfirmClick() {
+  if (!armed.value) {
+    armed.value = true
+    return
+  }
+  armed.value = false
+  emit('confirm')
+}
 </script>
 
 <style scoped>
@@ -173,6 +208,29 @@ th {
 
 .external-fill-table {
   margin-top: 10px;
+}
+
+.empty-hint {
+  color: #6b7280;
+  font-size: 13px;
+  margin: 0;
+  padding: 14px 12px;
+}
+
+.armed-hint {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  color: #b91c1c;
+  font-size: 13px;
+  margin: 12px 0 0;
+  padding: 8px 10px;
+}
+
+.confirm-btn.armed {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  color: #fff;
 }
 
 .external-fill-table td {
