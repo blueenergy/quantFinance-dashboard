@@ -9,8 +9,8 @@
             :key="w.value"
             type="button"
             class="pill"
-            :class="{ on: window === w.value }"
-            @click="setWindow(w.value)"
+            :class="{ on: statWindow === w.value }"
+            @click="setStatWindow(w.value)"
           >
             {{ w.label }}
           </button>
@@ -22,13 +22,21 @@
 
       <aside class="howto">
         <p class="howto-lead">
-          格子里的百分比是<strong>ETF 净申购率</strong>，不是指数或板块涨跌。
-          金额是该主题场内股票 ETF（规模前 3）在窗口内的净申购，单位亿元。
+          <template v-if="isLongWindow">
+            长期窗口格子同时给出<strong>份额变化率</strong>、<strong>累计净申购</strong>和<strong>有效覆盖天数</strong>。
+            份额变化率不是指数涨跌；覆盖天数小于窗口说明份额数据不够长。
+          </template>
+          <template v-else>
+            格子里的百分比是<strong>ETF 净申购率</strong>，不是指数或板块涨跌。
+            金额是该主题场内股票 ETF（规模前 3）在窗口内的净申购，单位亿元。
+          </template>
         </p>
         <ul>
           <li><strong>红色 / 正值</strong>：窗口内净申购，份额在增加。</li>
           <li><strong>绿色 / 负值</strong>：窗口内净赎回，份额在减少。</li>
-          <li>颜色深浅只比较各主题之间谁更热，不表示持续多久。看趋势请点进格子。</li>
+          <li v-if="statWindow === 'ytd'">YTD 从当年首个交易日计到份额数据日，起点用上年最后一行份额。</li>
+          <li v-else-if="isLongWindow">覆盖天数是窗口内实际有份额记录的交易日数，不是日历天数。</li>
+          <li v-else>颜色深浅只比较各主题之间谁更热，不表示持续多久。看趋势请点进格子。</li>
           <li>指数上涨也可以大额赎回（上涨派发）；指数下跌也可以净申购（有人在吸筹）。</li>
         </ul>
       </aside>
@@ -44,13 +52,22 @@
               :key="cell.bucket_id"
               type="button"
               class="heat-cell"
+              :class="{ long: isLongWindow }"
               :style="cellStyle(cell)"
               @click="openSeries(cell)"
             >
               <span class="cell-name">{{ cell.name }}</span>
-              <span class="cell-rate">{{ formatInflowRatePct(cell.inflow_rate) }}</span>
-              <span class="cell-rate-label">净申购率</span>
-              <span class="cell-amt">{{ formatInflowYi(cell.net_inflow) }}</span>
+              <template v-if="isLongWindow">
+                <span class="cell-rate">{{ formatInflowRatePct(cell.share_chg_pct) }}</span>
+                <span class="cell-rate-label">份额变化率</span>
+                <span class="cell-amt">累计 {{ formatInflowYi(cell.net_inflow) }}</span>
+                <span class="cell-cov">覆盖 {{ formatCoverageDays(cell.coverage_days, windowTargetDays) }}</span>
+              </template>
+              <template v-else>
+                <span class="cell-rate">{{ formatInflowRatePct(cell.inflow_rate) }}</span>
+                <span class="cell-rate-label">净申购率</span>
+                <span class="cell-amt">{{ formatInflowYi(cell.net_inflow) }}</span>
+              </template>
             </button>
           </div>
         </section>
@@ -63,13 +80,22 @@
               :key="cell.bucket_id"
               type="button"
               class="heat-cell"
+              :class="{ long: isLongWindow }"
               :style="cellStyleBroad(cell)"
               @click="openSeries(cell)"
             >
               <span class="cell-name">{{ cell.name }}</span>
-              <span class="cell-rate">{{ formatInflowRatePct(cell.inflow_rate) }}</span>
-              <span class="cell-rate-label">净申购率</span>
-              <span class="cell-amt">{{ formatInflowYi(cell.net_inflow) }}</span>
+              <template v-if="isLongWindow">
+                <span class="cell-rate">{{ formatInflowRatePct(cell.share_chg_pct) }}</span>
+                <span class="cell-rate-label">份额变化率</span>
+                <span class="cell-amt">累计 {{ formatInflowYi(cell.net_inflow) }}</span>
+                <span class="cell-cov">覆盖 {{ formatCoverageDays(cell.coverage_days, windowTargetDays) }}</span>
+              </template>
+              <template v-else>
+                <span class="cell-rate">{{ formatInflowRatePct(cell.inflow_rate) }}</span>
+                <span class="cell-rate-label">净申购率</span>
+                <span class="cell-amt">{{ formatInflowYi(cell.net_inflow) }}</span>
+              </template>
             </button>
           </div>
         </section>
@@ -108,6 +134,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import request from '../utils/request'
 import EtfThemeFlowChart from './EtfThemeFlowChart.vue'
 import {
+  formatCoverageDays,
   formatInflowRatePct,
   formatInflowYi,
   heatmapCellBackground,
@@ -117,17 +144,23 @@ import {
 
 defineEmits(['open-etf'])
 
+const LONG_WINDOWS = new Set(['60d', '120d', 'ytd'])
+
 const windowOptions = [
   { value: '1d', label: '1日' },
   { value: '5d', label: '5日' },
   { value: '20d', label: '20日' },
+  { value: '60d', label: '60日' },
+  { value: '120d', label: '120日' },
+  { value: 'ytd', label: 'YTD' },
 ]
 
-const window = ref('5d')
+const statWindow = ref('5d')
 const loading = ref(true)
 const error = ref('')
 const tradeDate = ref(null)
 const cells = ref([])
+const windowTargetDays = ref(null)
 
 const viewMode = ref('grid')
 const activeCell = ref(null)
@@ -137,20 +170,27 @@ const seriesMembers = ref([])
 const flagshipCode = ref('')
 const memberLockNote = ref('')
 
+const isLongWindow = computed(() => LONG_WINDOWS.has(statWindow.value))
+
 const themeCells = computed(() => cells.value.filter((c) => c.kind === 'theme'))
 const broadCells = computed(() => cells.value.filter((c) => c.kind === 'broad'))
 
+function cellHeatMetric(cell) {
+  return isLongWindow.value ? cell.share_chg_pct : cell.inflow_rate
+}
+
 const themeCap = computed(() =>
-  heatmapIntensityCap(themeCells.value.map((c) => c.inflow_rate)),
+  heatmapIntensityCap(themeCells.value.map((c) => cellHeatMetric(c))),
 )
 const broadCap = computed(() =>
-  heatmapIntensityCap(broadCells.value.map((c) => c.inflow_rate)),
+  heatmapIntensityCap(broadCells.value.map((c) => cellHeatMetric(c))),
 )
 
 function buildCellStyle(cell, cap) {
+  const metric = cellHeatMetric(cell)
   return {
-    background: heatmapCellBackground(cell.inflow_rate, cap),
-    '--heat-cell-fg': heatmapCellForeground(cell.inflow_rate, cap),
+    background: heatmapCellBackground(metric, cap),
+    '--heat-cell-fg': heatmapCellForeground(metric, cap),
   }
 }
 
@@ -166,9 +206,11 @@ async function fetchHeatmap() {
   loading.value = true
   error.value = ''
   try {
-    const body = await request.get('/etf/heatmap', { params: { window: window.value } })
+    const body = await request.get('/etf/heatmap', { params: { window: statWindow.value } })
     cells.value = body.cells || []
     tradeDate.value = body.trade_date || body.share_as_of || null
+    windowTargetDays.value =
+      body.window_target_days == null ? null : Number(body.window_target_days)
     if (body.message && !cells.value.length) {
       error.value = body.message
     }
@@ -179,9 +221,9 @@ async function fetchHeatmap() {
   }
 }
 
-function setWindow(w) {
-  if (window.value === w) return
-  window.value = w
+function setStatWindow(w) {
+  if (statWindow.value === w) return
+  statWindow.value = w
   fetchHeatmap()
 }
 
@@ -292,7 +334,7 @@ defineExpose({ refresh: fetchHeatmap })
   gap: 10px;
 }
 .broad-grid {
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
 }
 .heat-cell {
   border: 1px solid var(--border-color);
@@ -306,6 +348,9 @@ defineExpose({ refresh: fetchHeatmap })
   min-height: 88px;
   color: var(--heat-cell-fg);
   transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.heat-cell.long {
+  min-height: 118px;
 }
 .heat-cell:hover {
   transform: translateY(-2px);
@@ -329,6 +374,11 @@ defineExpose({ refresh: fetchHeatmap })
   font-size: 12px;
   color: inherit;
   opacity: 0.78;
+}
+.cell-cov {
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.7;
 }
 .grid-section {
   margin-bottom: 24px;

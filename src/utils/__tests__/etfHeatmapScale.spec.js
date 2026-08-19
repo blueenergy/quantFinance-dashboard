@@ -4,6 +4,7 @@ import {
   heatmapCellForeground,
   heatmapIntensityCap,
   heatmapRateLevel,
+  formatCoverageDays,
   formatInflowRatePct,
   formatInflowYi,
 } from '../etfHeatmapScale.js'
@@ -45,5 +46,11 @@ describe('etfHeatmapScale', () => {
   it('does not present missing data as zero', () => {
     expect(formatInflowRatePct(null)).toBe('—')
     expect(formatInflowYi(null)).toBe('—')
+    expect(formatCoverageDays(null)).toBe('—')
+  })
+
+  it('formatCoverageDays shows target when the window is a session count', () => {
+    expect(formatCoverageDays(118, 120)).toBe('118/120日')
+    expect(formatCoverageDays(148)).toBe('148日')
   })
 })

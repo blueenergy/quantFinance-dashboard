@@ -7,7 +7,7 @@
           type="button"
           class="main-tab"
           :class="{ on: mainTab === 'heatmap' }"
-          @click="mainTab = 'heatmap'"
+          @click="switchToHeatmapTab"
         >
           行业资金
         </button>
@@ -307,8 +307,13 @@ function loadMore() {
   fetchList({ append: true })
 }
 
+function switchToHeatmapTab() {
+  mainTab.value = 'heatmap'
+}
+
 function switchToListTab() {
   mainTab.value = 'list'
+  detailReturnTab.value = 'list'
   if (!etfList.value.length && !loading.value) {
     fetchList({ append: false })
   }
@@ -316,7 +321,7 @@ function switchToListTab() {
 
 async function openEtfFromHeatmap(tsCode) {
   if (!tsCode) return
-  detailReturnTab.value = 'heatmap'
+  mainTab.value = 'heatmap'
   try {
     const body = await request.get('/etf/list', { params: { q: tsCode, limit: 10 } })
     const pick = _pickEtfRow(body.data, tsCode)
@@ -331,15 +336,13 @@ async function openEtfFromHeatmap(tsCode) {
 }
 
 function leaveDetail() {
+  const backTo = detailReturnTab.value
+  detailReturnTab.value = 'list'
   selectedEtf.value = null
   analysisResult.value = null
   analysisMeta.value = null
   chartRecords.value = []
-  if (detailReturnTab.value === 'heatmap') {
-    mainTab.value = 'heatmap'
-  } else {
-    mainTab.value = 'list'
-  }
+  mainTab.value = backTo === 'heatmap' ? 'heatmap' : 'list'
 }
 
 onMounted(() => {
@@ -433,9 +436,7 @@ async function loadEtfKline (tsCode, tfForRequest) {
 }
 
 const selectEtf = async (etf) => {
-  if (mainTab.value === 'list' && detailReturnTab.value !== 'heatmap') {
-    detailReturnTab.value = 'list'
-  }
+  detailReturnTab.value = mainTab.value === 'heatmap' ? 'heatmap' : 'list'
   selectedEtf.value = etf
   analysisResult.value = null
   analysisMeta.value = null
@@ -571,6 +572,16 @@ onBeforeUnmount(() => {
   if (klineAbort) {
     try { klineAbort.abort() } catch (e) { /* noop */ }
   }
+})
+
+defineExpose({
+  mainTab,
+  detailReturnTab,
+  selectedEtf,
+  selectEtf,
+  leaveDetail,
+  switchToListTab,
+  switchToHeatmapTab,
 })
 </script>
 

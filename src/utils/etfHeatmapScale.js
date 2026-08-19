@@ -95,3 +95,20 @@ export function formatInflowRatePct(rate) {
   if (!Number.isFinite(n)) return '—'
   return `${(n * 100).toFixed(2)}%`
 }
+
+/**
+ * Effective session coverage vs the requested window.
+ * @param {number|null|undefined} coverage
+ * @param {number|null|undefined} [targetDays]
+ */
+export function formatCoverageDays(coverage, targetDays) {
+  if (coverage == null || coverage === '') return '—'
+  const n = Number(coverage)
+  if (!Number.isFinite(n)) return '—'
+  const days = Math.round(n)
+  const target = Number(targetDays)
+  if (Number.isFinite(target) && target > 0) {
+    return `${days}/${Math.round(target)}日`
+  }
+  return `${days}日`
+}
