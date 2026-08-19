@@ -21,6 +21,16 @@
         <button @click="setMode('daily')" :disabled="loading || mode === 'daily'" class="btn-base btn-sm btn-gradient-blue">日线</button>
         <button @click="setMode('minute')" :disabled="loading || mode === 'minute'" class="btn-base btn-sm btn-gradient-teal">分钟线</button>
       </div>
+      <div class="mode-toggle flex-row-center gap-sm wrap">
+        <span class="qr-label">均线:</span>
+        <button
+          v-for="period in MA_PERIOD_OPTIONS"
+          :key="period"
+          @click="setMaPeriod(period)"
+          :disabled="loading || maPeriod === period"
+          :class="['btn-base', 'btn-sm', period === 5 ? 'btn-gradient-blue' : 'btn-gradient-teal', { active: maPeriod === period }]"
+        >MA{{ period }}</button>
+      </div>
       <div v-if="mode === 'daily'" class="mode-toggle flex-row-center gap-sm wrap">
         <span class="qr-label">叠加指数:</span>
         <select v-model="overlaySymbol" @change="onOverlayChange" class="overlay-sel">
@@ -41,13 +51,13 @@
           :class="['btn-base', 'btn-xs', 'btn-gradient-orange', { active: sectorLevel === 'L2' }]"
         >申万 L2</button>
       </div>
-      <div class="hint">阳谱(yang_spectrum) 是上涨占比, 阴谱(yin_spectrum) 是下跌/未达标占比</div>
+      <div class="hint">阳谱(yang_spectrum) 是站上 MA{{ maPeriod }} 的股票占比, 阴谱(yin_spectrum) 是未站上占比</div>
       <div v-if="isRealtimeSpectrumTab" class="realtime-spectrum-notes">
         <p class="realtime-spectrum-notes-title">实时阴阳谱 · 数据与 MA 说明</p>
         <ul class="realtime-spectrum-notes-list">
           <li>曲线与表格为盘中按任务写入的<strong>实时日 K 快照</strong>；横轴时间为 <code>YYYYMMDDHHMM</code>，仅在交易时段内有新点。</li>
           <li>全市场阳谱来自 <code>market_spectrum_realtime_daily</code>；下方板块表来自 <code>realtime_sector_strength</code>，与全市场同一批快照对齐。</li>
-          <li><strong>「站上 MA5」</strong>与「阴阳谱」日线逻辑一致：取该股最近 <strong>4 个交易日</strong>已在 <code>volume_price</code> 落库的<strong>收盘</strong>，加上<strong>当前实时快照收盘价</strong>（每只股票在 <code>volume_price_realtime_latest</code> 中当日一条），构成含当日在内的 5 日均价，再判断现价是否高于该均价；<strong>不会</strong>把当日 <code>volume_price</code> 里可能滞后或重复的同日记录算进这条 MA。</li>
+          <li><strong>「站上 MA{{ maPeriod }}」</strong>与「阴阳谱」日线逻辑一致：取该股最近 <strong>{{ maPeriod - 1 }} 个交易日</strong>已在 <code>volume_price</code> 落库的<strong>收盘</strong>，加上<strong>当前实时快照收盘价</strong>（每只股票在 <code>volume_price_realtime_latest</code> 中当日一条），构成含当日在内的 {{ maPeriod }} 日均价，再判断现价是否高于该均价；<strong>不会</strong>把当日 <code>volume_price</code> 里可能滞后或重复的同日记录算进这条 MA。</li>
           <li>收盘后若日线入库完成且与最后一笔快照一致，该判断与纯日线阴阳谱收敛一致。</li>
         </ul>
       </div>
@@ -80,7 +90,7 @@
         <div class="corr-help-body">
           <section>
             <h5>什么是阳谱？</h5>
-            <p>阳谱（yang_spectrum）是全市场当日上涨股票数占总股票数的比例，反映市场内部广度（Breadth）。按 MA5 弹窗统计，即当日收盘价高于 5 日均线计为“阳”。</p>
+            <p>阳谱（yang_spectrum）是全市场当日站上均线股票数占总股票数的比例，反映市场内部广度（Breadth）。当前按 MA{{ maPeriod }} 统计，即当日收盘价高于 {{ maPeriod }} 日均线计为“阳”。</p>
           </section>
           <section>
             <h5>两个相关系数的区别</h5>
@@ -314,6 +324,7 @@ const OVERLAY_INDICES = [
   { symbol: '000001.SH', name: '上证指数' },
 ]
 const OVERLAY_MAP = Object.fromEntries(OVERLAY_INDICES.map(p => [p.symbol, p.name]))
+const MA_PERIOD_OPTIONS = [5, 30]
 
 const overlaySymbol = ref('')
 const overlayData = ref([]) // [{ trade_date, close }]
@@ -387,10 +398,11 @@ const sectorSeriesLoading = ref(false)
 const contributorsPayload = ref(null)
 const contributorsLoading = ref(false)
 const contributorsError = ref('')
-const contributorMaPeriod = 5
+const maPeriod = ref(5)
+const contributorMaPeriod = computed(() => maPeriod.value)
 const contributorTopN = 40
 const contributorsDescription = computed(() => (
-  `与上方板块表同一套 MA${contributorMaPeriod} 规则：日线为最近 N 根收盘（含当日）的均值；实时为前 N−1 根已收盘日线 + 当前快照价构成当日均线。下列按成交额、涨跌与距均线空间摘录，便于观察板块内部结构。`
+  `与上方板块表同一套 MA${contributorMaPeriod.value} 规则：日线为最近 N 根收盘（含当日）的均值；实时为前 N−1 根已收盘日线 + 当前快照价构成当日均线。下列按成交额、涨跌与距均线空间摘录，便于观察板块内部结构。`
 ))
 const selectedSectorContributorsKey = computed(() => (
   `${selectedSectorCode.value}-${String(contributorsPayload.value?.trade_date || contributorsPayload.value?.snapshot_time || '')}`
@@ -579,8 +591,8 @@ async function fetchSectorSpectrum() {
   sectorLoading.value = true
   try {
     const url = mode.value === 'minute'
-      ? `/market-spectrum/realtime-sectors?start_time=${latestDate}&end_time=${latestDate}&level=${sectorLevel.value}&ma_period=5&limit=120`
-      : `/market-spectrum/sectors?start_date=${latestDate}&end_date=${latestDate}&level=${sectorLevel.value}&ma_period=5&limit=120`
+      ? `/market-spectrum/realtime-sectors?start_time=${latestDate}&end_time=${latestDate}&level=${sectorLevel.value}&ma_period=${maPeriod.value}&limit=120`
+      : `/market-spectrum/sectors?start_date=${latestDate}&end_date=${latestDate}&level=${sectorLevel.value}&ma_period=${maPeriod.value}&limit=120`
     const body = await request({ method: 'get', url })
     const arr = Array.isArray(body?.data) ? body.data : []
     arr.sort((a, b) => String(a.trade_date).localeCompare(String(b.trade_date)) || String(a.sector_code).localeCompare(String(b.sector_code)))
@@ -617,7 +629,7 @@ async function fetchSectorContributors() {
   try {
     const code = encodeURIComponent(selectedSectorCode.value)
     const lv = sectorLevel.value
-    const mp = contributorMaPeriod
+    const mp = contributorMaPeriod.value
     const tn = contributorTopN
     let url
     if (mode.value === 'minute') {
@@ -647,11 +659,11 @@ async function fetchSelectedSectorSeries(code) {
     let url
     if (mode.value === 'minute') {
       const { start, end } = buildMinuteRange()
-      url = `/market-spectrum/realtime-sectors?start_time=${start}&end_time=${end}&level=${sectorLevel.value}&ma_period=5&limit=300&sector_code=${encodeURIComponent(code)}`
+      url = `/market-spectrum/realtime-sectors?start_time=${start}&end_time=${end}&level=${sectorLevel.value}&ma_period=${maPeriod.value}&limit=300&sector_code=${encodeURIComponent(code)}`
     } else {
       const sd = ymd(startDate.value)
       const ed = ymd(endDate.value)
-      url = `/market-spectrum/sectors?start_date=${sd}&end_date=${ed}&level=${sectorLevel.value}&ma_period=5&limit=300&sector_code=${encodeURIComponent(code)}`
+      url = `/market-spectrum/sectors?start_date=${sd}&end_date=${ed}&level=${sectorLevel.value}&ma_period=${maPeriod.value}&limit=300&sector_code=${encodeURIComponent(code)}`
     }
     const body = await request({ method: 'get', url })
     const arr = Array.isArray(body?.data) ? body.data : []
@@ -680,10 +692,10 @@ async function fetchSpectrum() {
   try {
     let url
     if (mode.value === 'daily') {
-      url = `/market-spectrum?start_date=${ymd(startDate.value)}&end_date=${ymd(endDate.value)}`
+      url = `/market-spectrum?start_date=${ymd(startDate.value)}&end_date=${ymd(endDate.value)}&ma_period=${maPeriod.value}`
     } else {
       const { start, end } = buildMinuteRange()
-      url = `/market-spectrum-minute?start_time=${start}&end_time=${end}&ma_period=5`
+      url = `/market-spectrum-minute?start_time=${start}&end_time=${end}&ma_period=${maPeriod.value}`
     }
     const body = await request({ method: 'get', url })
     const arr = Array.isArray(body?.data) ? body.data : []
@@ -728,6 +740,13 @@ function setMode(m) {
   if (props.lockedMode) return
   mode.value = m
   // 切换模式后自动刷新当前选择区间
+  refreshCurrent()
+}
+
+function setMaPeriod(period) {
+  const next = Number(period)
+  if (!MA_PERIOD_OPTIONS.includes(next) || maPeriod.value === next) return
+  maPeriod.value = next
   refreshCurrent()
 }
 
