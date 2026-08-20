@@ -50,6 +50,43 @@
       <span v-if="statsLine" class="dg-badge dg-badge--muted">{{ statsLine }}</span>
     </div>
 
+    <section v-if="loaded" class="dg-performance" aria-labelledby="dg-performance-title">
+      <div class="dg-performance__head">
+        <div>
+          <span class="dg-performance__eyebrow">过去整体战绩</span>
+          <h2 id="dg-performance-title" class="dg-performance__title" :class="pnlClass(stats.avg_return_pct)">
+            {{ performanceSummary.title }}
+          </h2>
+        </div>
+        <span v-if="panel.score_date" class="dg-performance__asof">
+          截至 {{ fmtDate(panel.score_date) }}
+        </span>
+      </div>
+      <p class="dg-performance__description">{{ performanceSummary.description }}</p>
+      <div v-if="stats.scored_count" class="dg-performance__metrics">
+        <div class="dg-metric">
+          <span>已结束样本</span>
+          <strong>{{ stats.scored_count }}</strong>
+        </div>
+        <div class="dg-metric">
+          <span>盈利 / 亏损</span>
+          <strong><em class="dg-pos">{{ stats.win_count }}</em> / <em class="dg-neg">{{ stats.loss_count }}</em></strong>
+        </div>
+        <div class="dg-metric">
+          <span>胜率</span>
+          <strong>{{ fmtPct(stats.win_rate, 1) }}</strong>
+        </div>
+        <div class="dg-metric">
+          <span>平均每笔</span>
+          <strong :class="pnlClass(stats.avg_return_pct)">{{ fmtSignedPct(stats.avg_return_pct) }}</strong>
+        </div>
+        <div class="dg-metric">
+          <span>平均盈亏比</span>
+          <strong>{{ fmtRatio(stats.profit_factor) }}</strong>
+        </div>
+      </div>
+    </section>
+
     <section v-if="top10.length" class="dg-section">
       <h2 class="dg-h2">今日观察 Top10</h2>
       <table class="dg-table">
@@ -170,12 +207,51 @@ const top10 = computed(() => panel.value?.top10 || [])
 const openLots = computed(() => panel.value?.open_lots || [])
 const recentClosed = computed(() => panel.value?.recent_closed || [])
 const recipeMeta = computed(() => panel.value?.recipe || null)
+const stats = computed(() => panel.value?.stats || {})
 const statsLine = computed(() => {
-  const s = panel.value?.stats
+  const s = stats.value
   if (!s || !s.scored_count) return ''
   const win = s.win_rate != null ? `${(s.win_rate * 100).toFixed(1)}% 胜率` : ''
   const avg = s.avg_return_pct != null ? `均收益 ${(s.avg_return_pct * 100).toFixed(2)}%` : ''
   return [win, avg, `样本 ${s.scored_count}`].filter(Boolean).join(' · ')
+})
+const performanceSummary = computed(() => {
+  const s = stats.value
+  const count = Number(s.scored_count || 0)
+  if (!count) {
+    return {
+      title: '尚无足够的已结束交易样本',
+      description: '新账本正在积累中；至少完成一批退出后，才能形成胜率、平均收益和盈亏比。',
+    }
+  }
+
+  const avg = Number(s.avg_return_pct || 0)
+  const winRate = Number(s.win_rate || 0)
+  let assessment = '历史平均收益接近持平'
+  if (avg > 0 && winRate >= 0.5) {
+    assessment = '历史平均收益为正，且胜率过半'
+  } else if (avg > 0) {
+    assessment = '历史平均收益为正，但胜率未过半'
+  } else if (avg < 0 && winRate >= 0.5) {
+    assessment = '胜率过半，但历史平均收益为负'
+  } else if (avg < 0) {
+    assessment = '历史平均收益为负，且胜率未过半'
+  }
+
+  const exits = []
+  if (s.trailing_stop_count) exits.push(`回撤退出 ${s.trailing_stop_count} 笔`)
+  if (s.expire_count) exits.push(`排名复核退出 ${s.expire_count} 笔`)
+  const insufficient = Number(s.insufficient_data_count || 0)
+  const sampleNote = count < 20 ? '样本少于 20 笔，结论仅供观察。' : '样本已覆盖至少 20 笔已结束交易。'
+  return {
+    title: assessment,
+    description: [
+      `${s.win_count || 0} 笔盈利、${s.loss_count || 0} 笔亏损，平均每笔 ${fmtSignedPct(s.avg_return_pct)}。`,
+      exits.length ? `${exits.join('、')}。` : '',
+      insufficient ? `另有 ${insufficient} 笔因数据不足未计入绩效。` : '',
+      sampleNote,
+    ].filter(Boolean).join(''),
+  }
 })
 
 function fmtDate(ymd) {
@@ -198,6 +274,22 @@ function fmtPrice(v) {
 function fmtReturnPct(v) {
   if (v == null || v === '') return '—'
   return `${(Number(v) * 100).toFixed(2)}%`
+}
+
+function fmtSignedPct(v, digits = 2) {
+  if (v == null || v === '') return '—'
+  const value = Number(v) * 100
+  return `${value > 0 ? '+' : ''}${value.toFixed(digits)}%`
+}
+
+function fmtPct(v, digits = 1) {
+  if (v == null || v === '') return '—'
+  return `${(Number(v) * 100).toFixed(digits)}%`
+}
+
+function fmtRatio(v) {
+  if (v == null || v === '') return '—'
+  return Number(v).toFixed(2)
 }
 
 function fmtRankDelta(delta) {
@@ -350,6 +442,79 @@ onMounted(() => {
   color: #444;
 }
 
+.dg-performance {
+  margin-bottom: 1.25rem;
+  padding: 0.9rem;
+  background: #fff;
+  border: 1px solid #999;
+  border-left: 4px solid #555;
+}
+
+.dg-performance__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.dg-performance__eyebrow {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: #666;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.dg-performance__title {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.dg-performance__asof {
+  color: #666;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.dg-performance__description {
+  margin: 0.55rem 0 0;
+  color: #333;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.dg-performance__metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(7rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.dg-metric {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #ccc;
+  background: #fafafa;
+}
+
+.dg-metric span {
+  display: block;
+  color: #666;
+  font-size: 0.74rem;
+}
+
+.dg-metric strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dg-metric em {
+  font-style: normal;
+}
+
 .dg-section {
   margin-bottom: 1.25rem;
   padding: 0.75rem;
@@ -389,16 +554,22 @@ onMounted(() => {
 }
 
 .dg-pos {
-  color: #1b5e20;
+  color: #c62828;
 }
 
 .dg-neg {
-  color: #b71c1c;
+  color: #2e7d32;
 }
 
 .dg-footnote {
   font-size: 0.8rem;
   color: #555;
   margin: 0.5rem 0 0;
+}
+
+@media (max-width: 900px) {
+  .dg-performance__metrics {
+    grid-template-columns: repeat(2, minmax(7rem, 1fr));
+  }
 }
 </style>
