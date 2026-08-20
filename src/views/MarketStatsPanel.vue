@@ -72,7 +72,7 @@
             <header class="stat-card-head">
               <div>
                 <h2>{{ peTitle }}</h2>
-                <p class="mrp-caption">市盈率 TTM · 数据来自指数估值指标</p>
+                <p class="mrp-caption">{{ peCaption }}</p>
                 <div v-if="availableIndices.length > 1" class="index-toggle">
                   <button
                     v-for="idx in availableIndices"
@@ -93,7 +93,7 @@
             </header>
             <div v-if="loading && !overview" class="stat-empty">加载中…</div>
             <template v-else>
-              <div v-if="!peSeries.length" class="stat-empty">暂无指数市盈率。上证 / 沪深300 / 创业板由 index_dailybasic 同步。</div>
+              <div v-if="!peSeries.length" class="stat-empty">暂无市盈率。全A需先跑 market_pe_aggregate；上证 / 沪深300 / 创业板来自 index_dailybasic。</div>
               <div v-show="peSeries.length" ref="peChartRef" class="stat-chart stat-chart-wide"></div>
             </template>
           </article>
@@ -138,6 +138,14 @@ const availableIndices = computed(() => overview.value?.pe?.available_indices ||
 const peTitle = computed(() => {
   const name = overview.value?.pe?.index_name
   return name ? `${name}市盈率` : '指数市盈率'
+})
+const peCaption = computed(() => {
+  if (overview.value?.pe?.index_code === 'ALLA.WI') {
+    const used = peLatest.value?.n_used
+    const extra = used != null ? ` · 纳入 ${used} 只盈利股` : ''
+    return `沪深A股盈利公司总市值/净利润TTM，剔除亏损与北交所${extra}。不是中证全指。`
+  }
+  return '市盈率 TTM · 数据来自指数估值指标'
 })
 
 function fmtDate(value) {
