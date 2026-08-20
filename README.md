@@ -76,9 +76,9 @@ docker run -d \
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `VITE_API_BASE` | `/api` | FastAPI 后端根路径 |
-| `VITE_WORKER_API` | `/api/strategy/workers` | 策略 Worker API 路径 |
+| `VITE_WORKER_API` | `/api/strategy/workers` | 策略 Worker API（经 quantFinance 代理） |
 
-详见 [docs/ENV_CONFIGURATION.md](docs/ENV_CONFIGURATION.md)。
+环境变量与 WebSocket 排障：[docs/ENV_CONFIGURATION.md](docs/ENV_CONFIGURATION.md)、[docs/WEBSOCKET_TROUBLESHOOTING.md](docs/WEBSOCKET_TROUBLESHOOTING.md)。架构背景见 llm-wiki `projects/trading/strategy-worker-websocket-architecture.md`。
 
 ## 后端依赖
 
