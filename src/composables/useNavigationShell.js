@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import request from '../utils/request'
 
-const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v6'
+const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v7'
 const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v2'
 const ACTIVE_TAB_KEY = 'activeTab_v2'
 const ACTIVE_TAB_USER_KEY = 'activeTab_username_v2'
@@ -12,6 +12,7 @@ const LEGACY_NAV_CACHE_KEYS = [
   'nav_visible_tab_ids_v3',
   'nav_visible_tab_ids_v4',
   'nav_visible_tab_ids_v5',
+  'nav_visible_tab_ids_v6',
 ]
 
 const LEGACY_NAV_CACHE_USER_KEYS = [
@@ -101,6 +102,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'limit-up-ladder', name: '📊 连板天梯' },
       { id: 'market-risk', name: '🚨 风险预警' },
       { id: 'market-regime', name: '📡 广度估值' },
+      { id: 'market-stats', name: '📉 市场统计' },
       { id: 'china-macro', name: '🇨🇳 中国宏观' },
       { id: 'us-rates', name: '🇺🇸 美国利率' },
       { id: 'x-influencer-voices', name: '🐦 X大V情报' },

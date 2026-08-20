@@ -12,6 +12,7 @@ import { searchStocks, getStockInfo, getStockWorkbenchSignalTask } from '../stoc
 import { getTraderAccount, getSecuritiesAccounts } from '../trader.js'
 import { getDailyLadder } from '../ladder.js'
 import { getMarketRegimeLatest } from '../marketRegime.js'
+import { getMarketStatsOverview } from '../marketStats.js'
 import { earningsHunterApi } from '../earningsHunter.js'
 
 describe('api module return contracts after request migration', () => {
@@ -78,6 +79,16 @@ describe('api module return contracts after request migration', () => {
     expect(requestOrNullMock).toHaveBeenCalledWith({
       url: '/market-regime/latest',
       method: 'get',
+    })
+  })
+
+  it('marketStats.getMarketStatsOverview uses requestOrNull', async () => {
+    requestOrNullMock.mockResolvedValue(null)
+    await expect(getMarketStatsOverview({ days: 250 })).resolves.toBeNull()
+    expect(requestOrNullMock).toHaveBeenCalledWith({
+      url: '/market-stats/overview',
+      method: 'get',
+      params: { days: 250 },
     })
   })
 
