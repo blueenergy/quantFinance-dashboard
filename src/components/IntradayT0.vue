@@ -113,6 +113,108 @@
 
     <section class="panel">
       <div class="panel-title">
+        <h4>实盘执行（Phase 3）</h4>
+        <button class="btn primary small" :disabled="loading" @click="saveExecutionSettings">保存设置</button>
+      </div>
+      <div class="execution-settings">
+        <div class="execution-field">
+          <label>实盘组合</label>
+          <select v-model="executionSettings.plan_id">
+            <option value="">选择实盘组合</option>
+            <option
+              v-for="portfolio in livePortfolios"
+              :key="portfolioKey(portfolio)"
+              :value="portfolio.latest_plan_id"
+            >
+              {{ portfolioOptionLabel(portfolio) }}
+            </option>
+          </select>
+          <small v-if="!livePortfolios.length" class="field-hint">暂无实盘组合（需有 live 成交 lineage）</small>
+          <small v-else-if="selectedExecutionPortfolio?.securities_account_id" class="field-hint">
+            绑定账户 ···{{ selectedExecutionPortfolio.securities_account_id.slice(-6) }}（随组合自动解析，无需单独选择）
+          </small>
+        </div>
+        <div class="execution-field">
+          <label>卖出比例</label>
+          <input
+            v-model.number="executionSettings.sell_qty_ratio"
+            type="number"
+            min="0.1"
+            max="1"
+            step="0.1"
+          />
+          <small class="field-hint">
+            遇到 SELL_WATCH 时，单次卖出量 = 券商可卖量 × 比例，再向下取整到 100 股一手。
+            默认 0.5 表示卖出一半可卖仓，留底仓便于回补；预览/提交下单均生效。
+          </small>
+        </div>
+        <div class="execution-field">
+          <label>自动阈值</label>
+          <input
+            v-model.number="executionSettings.auto_min_score"
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+          />
+          <small class="field-hint">
+            仅对「自动下单」生效：信号分数 ≥ 此值且为 WATCH 类型时，才会在后台自动提交实盘单。
+            手动点「预览/提交下单」不受此限制。默认 80，越高越保守、触发越少。
+          </small>
+        </div>
+        <div class="execution-field inline">
+          <label>
+            <input v-model="executionSettings.auto_execute_enabled" type="checkbox" />
+            自动下单
+          </label>
+          <small class="field-hint">
+            开启后，新 WATCH 信号满足自动阈值时系统自动下单；还需服务端开启
+            INTRADAY_T0_AUTO_EXECUTE_ENABLED。手动下单不受影响。
+          </small>
+          <small v-if="executionSettings.global_auto_execute_enabled === false" class="field-hint warn">
+            当前服务端全局自动开关未启用，勾选后也不会自动下单。
+          </small>
+        </div>
+      </div>
+      <div v-if="executionPreview" class="alert info">
+        <div>
+          {{ executionPreview.intent?.action }} {{ executionPreview.intent?.quantity }} 股
+          → 目标 {{ executionPreview.intent?.target_shares }} 股
+        </div>
+        <div v-if="executionPreview.intent?.warnings?.length" class="muted">
+          {{ executionPreview.intent.warnings.join('；') }}
+        </div>
+        <div v-if="executionPreviewBlockers.length" class="negative">
+          风控拦截：{{ executionPreviewBlockers.join('；') }}
+        </div>
+      </div>
+      <table v-if="executionRows.length">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>股票</th>
+            <th>方向</th>
+            <th>数量</th>
+            <th>状态</th>
+            <th>order_ids</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in executionRows" :key="row.id || row._id">
+            <td>{{ formatTradeTime(row.created_at) }}</td>
+            <td>{{ row.symbol }}</td>
+            <td>{{ row.action }}</td>
+            <td>{{ row.quantity }}</td>
+            <td>{{ row.status }}</td>
+            <td class="muted">{{ (row.order_ids || []).join(', ') }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else class="empty">暂无实盘执行记录。</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">
         <h4>最新信号</h4>
         <span>{{ signals.length }} 条</span>
       </div>
@@ -145,6 +247,10 @@
             </td>
             <td>
               <button class="btn small" @click="fillTradeFromSignal(sig)">记账</button>
+              <template v-if="isWatchSignal(sig)">
+                <button class="btn small primary" :disabled="loading" @click="previewExecution(sig)">预览下单</button>
+                <button class="btn small" :disabled="loading || !executionReady" @click="submitExecution(sig)">提交下单</button>
+              </template>
             </td>
           </tr>
         </tbody>
@@ -272,6 +378,15 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import axios from 'axios'
 import request from '../utils/request'
+import { listLivePortfolios } from '../api/portfolioPlans'
+import { portfolioKey, portfolioOptionLabel } from '../utils/portfolioOverviewFormat'
+import {
+  getIntradayT0ExecutionSettings,
+  updateIntradayT0ExecutionSettings,
+  previewIntradayT0Execution,
+  submitIntradayT0Execution,
+  listIntradayT0Executions,
+} from '../api/intradayT0'
 
 const loading = ref(false)
 const error = ref('')
@@ -305,6 +420,29 @@ const tradeForm = reactive({
   fees: 0,
   pair_id: '',
   signal_id: '',
+})
+const livePortfolios = ref([])
+const executionSettings = reactive({
+  plan_id: '',
+  auto_execute_enabled: false,
+  auto_min_score: 80,
+  sell_qty_ratio: 0.5,
+  global_auto_execute_enabled: false,
+})
+const executionRows = ref([])
+const executionPreview = ref(null)
+const activeExecutionSignalId = ref('')
+
+const selectedExecutionPortfolio = computed(() => (
+  livePortfolios.value.find((row) => row.latest_plan_id === executionSettings.plan_id) || null
+))
+
+const executionReady = computed(() => Boolean(executionSettings.plan_id))
+
+const executionPreviewBlockers = computed(() => {
+  const items = executionPreview.value?.rebalance_preview?.risk_report?.items || []
+  const blockers = items.flatMap((item) => item.blockers || [])
+  return [...new Set(blockers)]
 })
 
 function compactDate() {
@@ -395,12 +533,113 @@ async function exportEvaluationsCsv() {
   }
 }
 
+async function loadExecutionSettings() {
+  const body = await getIntradayT0ExecutionSettings()
+  const data = body?.data || {}
+  executionSettings.plan_id = data.plan_id || ''
+  executionSettings.auto_execute_enabled = Boolean(data.auto_execute_enabled)
+  executionSettings.auto_min_score = Number(data.auto_min_score) || 80
+  executionSettings.sell_qty_ratio = Number(data.sell_qty_ratio) || 0.5
+  executionSettings.global_auto_execute_enabled = data.global_auto_execute_enabled
+}
+
+async function loadExecutionHistory() {
+  const body = await listIntradayT0Executions({ limit: 100 })
+  executionRows.value = body?.data || []
+}
+
+async function loadExecutionDeps() {
+  const portfoliosBody = await listLivePortfolios()
+  livePortfolios.value = portfoliosBody?.data?.portfolios || portfoliosBody?.portfolios || []
+}
+
+async function saveExecutionSettings() {
+  loading.value = true
+  error.value = ''
+  try {
+    await updateIntradayT0ExecutionSettings({
+      plan_id: executionSettings.plan_id || undefined,
+      auto_execute_enabled: executionSettings.auto_execute_enabled,
+      auto_min_score: executionSettings.auto_min_score,
+      sell_qty_ratio: executionSettings.sell_qty_ratio,
+    })
+    message.value = '执行设置已保存'
+    await loadExecutionSettings()
+  } catch (err) {
+    setError(err, '保存执行设置失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+function isWatchSignal(sig) {
+  return sig?.signal_type === 'SELL_WATCH' || sig?.signal_type === 'BUY_WATCH'
+}
+
+function executionPayload(signal) {
+  return {
+    signal_id: signal._id || signal.id,
+    plan_id: executionSettings.plan_id || undefined,
+    sell_qty_ratio: executionSettings.sell_qty_ratio,
+    pair_id: tradeForm.pair_id || undefined,
+  }
+}
+
+async function previewExecution(signal) {
+  if (!executionReady.value) {
+    error.value = '请先选择实盘组合'
+    return
+  }
+  loading.value = true
+  error.value = ''
+  try {
+    activeExecutionSignalId.value = signal._id || signal.id
+    executionPreview.value = await previewIntradayT0Execution(executionPayload(signal))
+    message.value = '下单预览已生成'
+  } catch (err) {
+    setError(err, '预览下单失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function submitExecution(signal) {
+  if (!executionReady.value) {
+    error.value = '请先选择实盘组合'
+    return
+  }
+  const signalId = signal._id || signal.id
+  const confirmed = window.confirm(`确认提交 ${signal.signal_type} 实盘下单？`)
+  if (!confirmed) return
+  loading.value = true
+  error.value = ''
+  try {
+    const body = await submitIntradayT0Execution(executionPayload(signal))
+    message.value = `已提交 ${body?.intent?.action || ''} ${body?.intent?.quantity || ''} 股`
+    executionPreview.value = null
+    await loadExecutionHistory()
+  } catch (err) {
+    setError(err, '提交下单失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 async function loadAll() {
   loading.value = true
   error.value = ''
   message.value = ''
   try {
-    await Promise.all([loadPositions(), loadSignals(), loadPerformance(), loadTrades(), loadTradeSummary()])
+    await Promise.all([
+      loadPositions(),
+      loadSignals(),
+      loadPerformance(),
+      loadTrades(),
+      loadTradeSummary(),
+      loadExecutionSettings(),
+      loadExecutionHistory(),
+      loadExecutionDeps(),
+    ])
   } catch (err) {
     setError(err, '加载日内T+0数据失败')
   } finally {
@@ -715,7 +954,34 @@ select {
   cursor: not-allowed;
   opacity: 0.55;
 }
-.trade-summary,
+.execution-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.execution-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.execution-field.inline label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.execution-field input[type='number'],
+.execution-field select {
+  max-width: 280px;
+}
+.field-hint {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.field-hint.warn {
+  color: #b45309;
+}
 .open-pairs,
 .pair-row {
   display: flex;
