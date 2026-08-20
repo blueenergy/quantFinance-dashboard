@@ -35,6 +35,7 @@ const ChinaMacroPanel = defineAsyncComponent(() => import('../views/ChinaMacroPa
 const UsRatesPanel = defineAsyncComponent(() => import('../views/UsRatesPanel.vue'))
 const XInfluencerVoicesPanel = defineAsyncComponent(() => import('../views/XInfluencerVoicesPanel.vue'))
 const ThemeLagRecommendPanel = defineAsyncComponent(() => import('../components/ThemeLagRecommendPanel.vue'))
+const DailyGoldPicksPanel = defineAsyncComponent(() => import('../components/DailyGoldPicksPanel.vue'))
 const SectorConceptAnalysis = defineAsyncComponent(() => import('../components/SectorConceptAnalysis.vue'))
 const HotStockAnalysis = defineAsyncComponent(() => import('../components/HotStockAnalysis.vue'))
 const KLineComparison = defineAsyncComponent(() => import('../views/KLineComparison.vue'))
@@ -285,6 +286,12 @@ export const tabViewDefinitions = [
     component: ThemeLagRecommendPanel,
     fallbackClass: 'skeleton-table',
     fallbackText: '主题补涨加载中...',
+  },
+  {
+    id: 'daily-gold-picks',
+    component: DailyGoldPicksPanel,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '每日金股加载中...',
   },
   {
     id: 'chat',

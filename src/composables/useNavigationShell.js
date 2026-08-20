@@ -107,6 +107,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'us-rates', name: '🇺🇸 美国利率' },
       { id: 'x-influencer-voices', name: '🐦 X大V情报' },
       { id: 'theme-lag-recommend', name: '📌 主题补涨' },
+      { id: 'daily-gold-picks', name: '⭐ 每日金股' },
       { id: 'sector-concept', name: '📈 概念板块' },
       { id: 'hot-stock', name: '🔥 热股分析' },
       { id: 'etf', name: '💰 ETF淘金' },
