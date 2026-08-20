@@ -216,9 +216,14 @@
     <section class="panel">
       <div class="panel-title">
         <h4>最新信号</h4>
-        <span>{{ signals.length }} 条</span>
+        <span>
+          {{ watchSignals.length }} 条可观察
+          <span v-if="holdSignalCount" class="muted">（已隐藏 {{ holdSignalCount }} 条 HOLD）</span>
+        </span>
       </div>
-      <div v-if="signals.length === 0" class="empty">暂无信号，可点击“生成信号”。</div>
+      <div v-if="watchSignals.length === 0" class="empty">
+        {{ signals.length ? '暂无 WATCH 信号（HOLD 已隐藏）。' : '暂无信号，可点击“生成信号”。' }}
+      </div>
       <table v-else>
         <thead>
           <tr>
@@ -233,7 +238,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="sig in signals" :key="sig._id || `${sig.symbol}-${sig.snapshot_time}`">
+          <tr v-for="sig in watchSignals" :key="sig._id || `${sig.symbol}-${sig.snapshot_time}`">
             <td>{{ formatSnapshot(sig.snapshot_time) }}</td>
             <td>{{ sig.name || sig.symbol }}<div class="muted">{{ sig.symbol }}</div></td>
             <td><span :class="['signal', sig.signal_type]">{{ sig.signal_type }}</span></td>
@@ -483,6 +488,14 @@ const activePerformance = computed(() => {
   if (perfTab.value === 'reason') return performanceByReason.value
   return performance.value
 })
+
+const watchSignals = computed(() => (
+  signals.value.filter((sig) => sig?.signal_type !== 'HOLD')
+))
+
+const holdSignalCount = computed(() => (
+  Math.max(0, signals.value.length - watchSignals.value.length)
+))
 
 function performanceRowKey(row) {
   if (perfTab.value === 'symbol') return `${row.symbol}-${row.signal_type}-${row.horizon}`
