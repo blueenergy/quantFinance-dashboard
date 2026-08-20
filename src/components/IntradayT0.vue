@@ -16,6 +16,8 @@
         <button class="btn primary" :disabled="loading" @click="loadAll">刷新</button>
         <button class="btn" :disabled="loading" @click="generateSignals">生成信号</button>
         <button class="btn" :disabled="loading" @click="evaluateSignals">评估</button>
+        <button class="btn" :disabled="loading" @click="exportSignalsCsv">导出信号</button>
+        <button class="btn" :disabled="loading" @click="exportEvaluationsCsv">导出评估</button>
       </div>
     </div>
 
@@ -148,12 +150,31 @@
     <section class="panel">
       <div class="panel-title">
         <h4>表现统计</h4>
-        <span>{{ performance.length }} 组</span>
+        <div class="perf-tabs">
+          <button
+            class="btn small"
+            :class="{ active: perfTab === 'overall' }"
+            @click="perfTab = 'overall'"
+          >总体</button>
+          <button
+            class="btn small"
+            :class="{ active: perfTab === 'symbol' }"
+            @click="perfTab = 'symbol'"
+          >按股票</button>
+          <button
+            class="btn small"
+            :class="{ active: perfTab === 'reason' }"
+            @click="perfTab = 'reason'"
+          >按原因</button>
+          <span class="muted">{{ activePerformance.length }} 组</span>
+        </div>
       </div>
-      <div v-if="performance.length === 0" class="empty">暂无评估结果。</div>
+      <div v-if="activePerformance.length === 0" class="empty">暂无评估结果。</div>
       <table v-else>
         <thead>
           <tr>
+            <th v-if="perfTab === 'symbol'">股票</th>
+            <th v-if="perfTab === 'reason'">原因</th>
             <th>信号</th>
             <th>周期</th>
             <th>样本数</th>
@@ -162,7 +183,9 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in performance" :key="`${row.signal_type}-${row.horizon}`">
+          <tr v-for="row in activePerformance" :key="performanceRowKey(row)">
+            <td v-if="perfTab === 'symbol'">{{ row.symbol }}</td>
+            <td v-if="perfTab === 'reason'">{{ row.reason_code }}</td>
             <td>{{ row.signal_type }}</td>
             <td>{{ row.horizon }}</td>
             <td>{{ row.count }}</td>
@@ -176,7 +199,8 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import axios from 'axios'
 import request from '../utils/request'
 
 const loading = ref(false)
@@ -187,6 +211,9 @@ const actualSource = ref('')
 const positions = ref([])
 const signals = ref([])
 const performance = ref([])
+const performanceBySymbol = ref([])
+const performanceByReason = ref([])
+const perfTab = ref('overall')
 const market = ref(null)
 const tradeDate = ref(new Date().toISOString().slice(0, 10))
 const mockForm = reactive({
@@ -225,6 +252,63 @@ async function loadPerformance() {
     params: { trade_date: compactDate() },
   })
   performance.value = body?.data || []
+  performanceBySymbol.value = body?.by_symbol || []
+  performanceByReason.value = body?.by_reason || []
+}
+
+const activePerformance = computed(() => {
+  if (perfTab.value === 'symbol') return performanceBySymbol.value
+  if (perfTab.value === 'reason') return performanceByReason.value
+  return performance.value
+})
+
+function performanceRowKey(row) {
+  if (perfTab.value === 'symbol') return `${row.symbol}-${row.signal_type}-${row.horizon}`
+  if (perfTab.value === 'reason') return `${row.reason_code}-${row.signal_type}-${row.horizon}`
+  return `${row.signal_type}-${row.horizon}`
+}
+
+async function downloadCsv(path, filename) {
+  const token = localStorage.getItem('access_token')
+  const baseURL = import.meta.env.VITE_API_BASE || '/api'
+  const response = await axios.get(`${baseURL}${path}`, {
+    params: { trade_date: compactDate() },
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    responseType: 'blob',
+  })
+  const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+async function exportSignalsCsv() {
+  loading.value = true
+  error.value = ''
+  try {
+    await downloadCsv('/intraday-t0/signals/export', `intraday_t0_signals_${compactDate()}.csv`)
+    message.value = '信号 CSV 已开始下载'
+  } catch (err) {
+    setError(err, '导出信号 CSV 失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function exportEvaluationsCsv() {
+  loading.value = true
+  error.value = ''
+  try {
+    await downloadCsv('/intraday-t0/signals/evaluations/export', `intraday_t0_evaluations_${compactDate()}.csv`)
+    message.value = '评估 CSV 已开始下载'
+  } catch (err) {
+    setError(err, '导出评估 CSV 失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 async function loadAll() {
@@ -383,6 +467,17 @@ onMounted(loadAll)
 .panel-title,
 .metric-row {
   justify-content: space-between;
+}
+.perf-tabs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.btn.small.active {
+  background: #dbeafe;
+  border-color: #2563eb;
+  color: #1d4ed8;
 }
 .page-header {
   margin-bottom: 14px;
