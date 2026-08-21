@@ -47,7 +47,8 @@ const panel = {
     loss_count: 5,
     win_rate: 7 / 12,
     avg_return_pct: 0.025,
-    profit_factor: 1.8,
+    payoff_ratio: 1.8,
+    profit_factor: 1.4,
     trailing_stop_count: 9,
     expire_count: 3,
   },
@@ -80,6 +81,7 @@ describe('DailyGoldPicksPanel', () => {
     expect(wrapper.get('.dg-performance__description').text()).toContain('7 笔盈利、5 笔亏损')
     expect(wrapper.get('.dg-performance__description').text()).toContain('样本少于 20 笔')
     expect(wrapper.get('.dg-performance__metrics').text()).toContain('+2.50%')
+    expect(wrapper.get('.dg-performance__metrics').text()).toContain('1.80')
 
     const returnCells = wrapper.findAll('td').filter(cell => cell.classes().includes('dg-pos') || cell.classes().includes('dg-neg'))
     expect(returnCells[0].classes()).toContain('dg-pos')

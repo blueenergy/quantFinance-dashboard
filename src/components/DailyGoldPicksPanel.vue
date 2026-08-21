@@ -82,7 +82,7 @@
         </div>
         <div class="dg-metric">
           <span>平均盈亏比</span>
-          <strong>{{ fmtRatio(stats.profit_factor) }}</strong>
+          <strong>{{ fmtRatio(stats.payoff_ratio ?? stats.profit_factor) }}</strong>
         </div>
       </div>
     </section>
@@ -181,6 +181,7 @@
     </section>
 
     <p v-if="loaded" class="dg-footnote">
+      成本与峰值显示真实价格；收益和 8% 回撤按后复权序列计算，避免除权除息造成假亏损。
       未满 20 个交易日或调仓日仍在 Top20 的仓位会继续持有；今日掉出 Top10 不等于立即卖出。
     </p>
   </div>
