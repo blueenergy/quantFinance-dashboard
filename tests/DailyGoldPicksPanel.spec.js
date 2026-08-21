@@ -15,6 +15,8 @@ const panel = {
   recipe: {
     recipe_id: 'daily_gold_v1_csi1000_g60c40',
     label: '中证1000 · 成长周期 60:40',
+    growth_weight: 0.6,
+    cycle_weight: 0.4,
     loss_stop_cooldown_trading_days: 5,
   },
   recipes: [],
@@ -24,6 +26,8 @@ const panel = {
       name: '冷却样本',
       rank: 1,
       score: 90,
+      growth_score: 90,
+      cycle_score: 60,
       entry_blocked_reason: 'losing_stop_cooldown',
       cooldown_remaining_trading_days: 3,
     },
@@ -38,6 +42,8 @@ const panel = {
       exit_date: '20260801',
       return_pct: 0.1,
       outcome_label: '回撤止盈',
+      hold_to_latest_return_pct: 0.15,
+      hold_to_latest_date: '20260820',
     },
     {
       lot_id: 'loss',
@@ -104,12 +110,18 @@ describe('DailyGoldPicksPanel', () => {
     expect(wrapper.get('.dg-performance__metrics').text()).toContain('1.80')
     expect(wrapper.get('.dg-sub').text()).toContain('亏损止损后冷却 5 个交易日')
     expect(wrapper.get('.dg-section').text()).toContain('剩余 3 日')
+    expect(wrapper.get('.dg-section').text()).toContain('成长贡献主导，60:40 加权后第 1 名')
+    expect(wrapper.text()).toContain('至今涨跌幅')
+    expect(wrapper.text()).toContain('15.00%')
+    expect(wrapper.get('.dg-footnote').text()).toContain('事后观察值')
 
     const returnCells = wrapper.findAll('td').filter(cell => cell.classes().includes('dg-pos') || cell.classes().includes('dg-neg'))
-    expect(returnCells[0].classes()).toContain('dg-pos')
-    expect(returnCells[0].text()).toBe('10.00%')
-    expect(returnCells[1].classes()).toContain('dg-neg')
-    expect(returnCells[1].text()).toBe('-4.00%')
+    const actualWin = returnCells.find(cell => cell.text() === '10.00%')
+    const holdToLatest = returnCells.find(cell => cell.text().includes('15.00%'))
+    const actualLoss = returnCells.find(cell => cell.text() === '-4.00%')
+    expect(actualWin.classes()).toContain('dg-pos')
+    expect(holdToLatest.classes()).toContain('dg-pos')
+    expect(actualLoss.classes()).toContain('dg-neg')
   })
 
   it('explains when the ledger has no completed samples', async () => {

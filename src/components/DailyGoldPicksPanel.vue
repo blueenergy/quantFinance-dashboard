@@ -124,6 +124,7 @@
             <th class="dg-num">周期</th>
             <th class="dg-num">名次变化</th>
             <th class="dg-num">入场冷却</th>
+            <th>入选原因</th>
           </tr>
         </thead>
         <tbody>
@@ -147,6 +148,7 @@
               </span>
               <span v-else>—</span>
             </td>
+            <td class="dg-reason">{{ selectionReason(row) }}</td>
           </tr>
         </tbody>
       </table>
@@ -196,6 +198,7 @@
             <th class="dg-num">入选日</th>
             <th class="dg-num">退出日</th>
             <th class="dg-num">盈亏%</th>
+            <th class="dg-num" title="假设该股票退出后一直持有，以最新可用价格按后复权口径计算">至今涨跌幅</th>
           </tr>
         </thead>
         <tbody>
@@ -206,6 +209,16 @@
             <td class="dg-num">{{ fmtDate(lot.entry_score_date) }}</td>
             <td class="dg-num">{{ fmtDate(lot.exit_date) }}</td>
             <td class="dg-num" :class="pnlClass(lot.return_pct)">{{ fmtReturnPct(lot.return_pct) }}</td>
+            <td
+              class="dg-num"
+              :class="pnlClass(lot.hold_to_latest_return_pct)"
+              :title="lot.hold_to_latest_date ? `最新估值日 ${fmtDate(lot.hold_to_latest_date)}` : ''"
+            >
+              {{ fmtReturnPct(lot.hold_to_latest_return_pct) }}
+              <small v-if="lot.hold_to_latest_date" class="dg-cell-note">
+                {{ fmtDate(lot.hold_to_latest_date) }}
+              </small>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -215,6 +228,7 @@
       策略指数假设每个新 lot 投入相同资金单位，以时间加权收益率剔除追加和撤回资金的影响；它不代表固定本金账户。
       当前 TWR 未计交易成本；成本与峰值显示真实价格，收益和 8% 回撤按后复权序列计算，避免除权除息造成假亏损。
       未满 20 个交易日或调仓日仍在 Top20 的仓位会继续持有；今日掉出 Top10 不等于立即卖出。
+      “若持有至今”是假设退出后继续持有的事后观察值，不计入策略胜率、单笔收益或 TWR。
     </p>
   </div>
 </template>
@@ -343,6 +357,35 @@ function fmtRankDelta(delta) {
   if (delta > 0) return `↑${delta}`
   if (delta < 0) return `↓${Math.abs(delta)}`
   return '—'
+}
+
+function selectionReason(row) {
+  const growthWeight = Number(recipeMeta.value?.growth_weight ?? 0.6)
+  const cycleWeight = Number(recipeMeta.value?.cycle_weight ?? 0.4)
+  const growth = row?.growth_score == null ? null : Number(row.growth_score)
+  const cycle = row?.cycle_score == null ? null : Number(row.cycle_score)
+  let driver = '成长与周期综合'
+  if (Number.isFinite(growth) && Number.isFinite(cycle)) {
+    const growthContribution = growth * growthWeight
+    const cycleContribution = cycle * cycleWeight
+    const totalContribution = Math.abs(growthContribution) + Math.abs(cycleContribution)
+    const relativeGap = totalContribution
+      ? Math.abs(growthContribution - cycleContribution) / totalContribution
+      : 0
+    if (relativeGap < 0.15) {
+      driver = '双因子贡献均衡'
+    } else if (growthContribution > cycleContribution) {
+      driver = '成长贡献主导'
+    } else {
+      driver = '周期贡献主导'
+    }
+  }
+  const growthPct = Math.round(growthWeight * 100)
+  const cyclePct = Math.round(cycleWeight * 100)
+  const rank = row?.rank ? `第 ${row.rank} 名` : '进入 Top10'
+  const rankChange = Number(row?.rank_delta || 0)
+  const change = rankChange > 0 ? `，较前日升 ${rankChange} 名` : ''
+  return `${driver}，${growthPct}:${cyclePct} 加权后${rank}${change}`
 }
 
 function pnlClass(v) {
@@ -588,6 +631,19 @@ onMounted(() => {
 .dg-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.dg-reason {
+  min-width: 11rem;
+  line-height: 1.35;
+}
+
+.dg-cell-note {
+  display: block;
+  color: #666;
+  font-size: 0.72rem;
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 .dg-link {
