@@ -49,10 +49,15 @@
       <div class="card">
         <span>市场状态</span>
         <strong>{{ overview?.market_state || '-' }}</strong>
+        <small v-if="overview?.market_state_ma_period">基于 MA{{ overview.market_state_ma_period }} 阳谱</small>
       </div>
       <div class="card">
-        <span>实时阳谱</span>
-        <strong>{{ percent(overview?.latest_spectrum?.yang_spectrum) }}</strong>
+        <span>实时阳谱 MA5</span>
+        <strong>{{ percent(primarySpectrumYang) }}</strong>
+      </div>
+      <div class="card">
+        <span>实时阳谱 MA30</span>
+        <strong>{{ percent(secondarySpectrumYang) }}</strong>
       </div>
       <div class="card">
         <span>事件数</span>
@@ -396,6 +401,11 @@ const secondaryPanelsLoaded = ref(false)
 const error = ref('')
 const message = ref('')
 const overview = ref(null)
+const primarySpectrumYang = computed(() => (
+  overview.value?.spectra_by_ma_period?.['5']?.yang_spectrum
+  ?? overview.value?.latest_spectrum?.yang_spectrum
+))
+const secondarySpectrumYang = computed(() => overview.value?.spectra_by_ma_period?.['30']?.yang_spectrum)
 const focusItems = ref([])
 const events = ref([])
 const selectedEvent = ref(null)
@@ -1005,8 +1015,14 @@ select {
 }
 .overview {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin-bottom: 12px;
+}
+.card small {
+  color: #94a3b8;
+  display: block;
+  font-size: 11px;
+  margin-top: 4px;
 }
 .card,
 .panel {
