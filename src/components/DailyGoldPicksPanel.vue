@@ -53,17 +53,41 @@
     <section v-if="loaded" class="dg-performance" aria-labelledby="dg-performance-title">
       <div class="dg-performance__head">
         <div>
-          <span class="dg-performance__eyebrow">过去整体战绩</span>
-          <h2 id="dg-performance-title" class="dg-performance__title" :class="pnlClass(stats.avg_return_pct)">
-            {{ performanceSummary.title }}
+          <span class="dg-performance__eyebrow">
+            {{ strategyTwr ? '策略指数（可变投入 TWR）' : '过去整体战绩' }}
+          </span>
+          <h2
+            id="dg-performance-title"
+            class="dg-performance__title"
+            :class="pnlClass(strategyTwr?.cumulative_return ?? stats.avg_return_pct)"
+          >
+            {{ strategyTwr ? `累计收益 ${fmtSignedPct(strategyTwr.cumulative_return)}` : performanceSummary.title }}
           </h2>
         </div>
         <span v-if="panel.score_date" class="dg-performance__asof">
           截至 {{ fmtDate(panel.score_date) }}
         </span>
       </div>
-      <p class="dg-performance__description">{{ performanceSummary.description }}</p>
-      <div v-if="stats.scored_count" class="dg-performance__metrics">
+      <p class="dg-performance__description">
+        {{ strategyTwr ? twrDescription : performanceSummary.description }}
+      </p>
+      <div v-if="strategyTwr || stats.scored_count" class="dg-performance__metrics">
+        <div v-if="strategyTwr" class="dg-metric">
+          <span>TWR 累计收益</span>
+          <strong :class="pnlClass(strategyTwr.cumulative_return)">
+            {{ fmtSignedPct(strategyTwr.cumulative_return) }}
+          </strong>
+        </div>
+        <div v-if="strategyTwr" class="dg-metric">
+          <span>最大回撤</span>
+          <strong :class="pnlClass(strategyTwr.max_drawdown)">
+            {{ fmtPct(strategyTwr.max_drawdown, 2) }}
+          </strong>
+        </div>
+        <div v-if="strategyTwr" class="dg-metric">
+          <span>当前 / 历史最多持有</span>
+          <strong>{{ strategyTwr.active_lots }} / {{ strategyTwr.peak_active_lots }} 笔</strong>
+        </div>
         <div class="dg-metric">
           <span>已结束样本</span>
           <strong>{{ stats.scored_count }}</strong>
@@ -73,7 +97,7 @@
           <strong><em class="dg-pos">{{ stats.win_count }}</em> / <em class="dg-neg">{{ stats.loss_count }}</em></strong>
         </div>
         <div class="dg-metric">
-          <span>胜率</span>
+          <span>单笔胜率</span>
           <strong>{{ fmtPct(stats.win_rate, 1) }}</strong>
         </div>
         <div class="dg-metric">
@@ -181,7 +205,8 @@
     </section>
 
     <p v-if="loaded" class="dg-footnote">
-      成本与峰值显示真实价格；收益和 8% 回撤按后复权序列计算，避免除权除息造成假亏损。
+      策略指数假设每个新 lot 投入相同资金单位，以时间加权收益率剔除追加和撤回资金的影响；它不代表固定本金账户。
+      当前 TWR 未计交易成本；成本与峰值显示真实价格，收益和 8% 回撤按后复权序列计算，避免除权除息造成假亏损。
       未满 20 个交易日或调仓日仍在 Top20 的仓位会继续持有；今日掉出 Top10 不等于立即卖出。
     </p>
   </div>
@@ -209,12 +234,25 @@ const openLots = computed(() => panel.value?.open_lots || [])
 const recentClosed = computed(() => panel.value?.recent_closed || [])
 const recipeMeta = computed(() => panel.value?.recipe || null)
 const stats = computed(() => panel.value?.stats || {})
+const strategyTwr = computed(() => panel.value?.strategy_twr || null)
 const statsLine = computed(() => {
   const s = stats.value
   if (!s || !s.scored_count) return ''
+  const twr = strategyTwr.value?.cumulative_return != null
+    ? `TWR ${(strategyTwr.value.cumulative_return * 100).toFixed(2)}%`
+    : ''
   const win = s.win_rate != null ? `${(s.win_rate * 100).toFixed(1)}% 胜率` : ''
   const avg = s.avg_return_pct != null ? `均收益 ${(s.avg_return_pct * 100).toFixed(2)}%` : ''
-  return [win, avg, `样本 ${s.scored_count}`].filter(Boolean).join(' · ')
+  return [twr, win, avg, `样本 ${s.scored_count}`].filter(Boolean).join(' · ')
+})
+const twrDescription = computed(() => {
+  const twr = strategyTwr.value
+  if (!twr) return ''
+  return [
+    '每个新 lot 按相同初始资金单位计入，资金追加和退出不会直接改变收益率。',
+    `当前持有 ${twr.active_lots || 0} 笔，历史最大回撤 ${fmtPct(twr.max_drawdown, 2)}。`,
+    `单笔账本平均收益 ${fmtSignedPct(stats.value.avg_return_pct)}，单笔胜率 ${fmtPct(stats.value.win_rate, 1)}。`,
+  ].join('')
 })
 const performanceSummary = computed(() => {
   const s = stats.value

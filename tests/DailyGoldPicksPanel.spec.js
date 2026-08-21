@@ -39,6 +39,13 @@ const panel = {
       outcome_label: '回撤止损',
     },
   ],
+  strategy_twr: {
+    score_date: '20260820',
+    cumulative_return: 0.1234,
+    max_drawdown: -0.0567,
+    active_lots: 12,
+    peak_active_lots: 24,
+  },
   stats: {
     closed_count: 12,
     scored_count: 12,
@@ -77,9 +84,12 @@ describe('DailyGoldPicksPanel', () => {
     const wrapper = mountPanel()
     await flushPromises()
 
-    expect(wrapper.get('.dg-performance__title').text()).toBe('历史平均收益为正，且胜率过半')
-    expect(wrapper.get('.dg-performance__description').text()).toContain('7 笔盈利、5 笔亏损')
-    expect(wrapper.get('.dg-performance__description').text()).toContain('样本少于 20 笔')
+    expect(wrapper.get('.dg-performance__title').text()).toBe('累计收益 +12.34%')
+    expect(wrapper.get('.dg-performance__description').text()).toContain('资金追加和退出不会直接改变收益率')
+    expect(wrapper.get('.dg-performance__description').text()).toContain('单笔胜率 58.3%')
+    expect(wrapper.get('.dg-performance__metrics').text()).toContain('+12.34%')
+    expect(wrapper.get('.dg-performance__metrics').text()).toContain('-5.67%')
+    expect(wrapper.get('.dg-performance__metrics').text()).toContain('单笔胜率')
     expect(wrapper.get('.dg-performance__metrics').text()).toContain('+2.50%')
     expect(wrapper.get('.dg-performance__metrics').text()).toContain('1.80')
 
@@ -94,6 +104,7 @@ describe('DailyGoldPicksPanel', () => {
     requestMock.mockResolvedValue({
       ...panel,
       recent_closed: [],
+      strategy_twr: null,
       stats: { scored_count: 0 },
     })
     const wrapper = mountPanel()
