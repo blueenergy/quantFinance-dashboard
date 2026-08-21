@@ -4,7 +4,7 @@
       <div class="dg-col dg-col--title">
         <h1 class="dg-h1">每日金股</h1>
         <p class="dg-sub">
-          成长×周期加权截面 Top10 观察池；每笔等权纸面账本，8% 移动止损，满 20 个交易日调仓日复核（仍在 Top20 续持）。
+          成长×周期加权截面 Top10 观察池；每笔等权纸面账本，8% 移动止损，亏损止损后冷却 5 个交易日，满 20 个交易日调仓日复核（仍在 Top20 续持）。
           观察池每日更新，不等于每日换股。研究观察，非买卖指令。
         </p>
       </div>
@@ -123,6 +123,7 @@
             <th class="dg-num">成长</th>
             <th class="dg-num">周期</th>
             <th class="dg-num">名次变化</th>
+            <th class="dg-num">入场冷却</th>
           </tr>
         </thead>
         <tbody>
@@ -140,6 +141,12 @@
             <td class="dg-num">{{ fmtNum(row.growth_score) }}</td>
             <td class="dg-num">{{ fmtNum(row.cycle_score) }}</td>
             <td class="dg-num">{{ fmtRankDelta(row.rank_delta) }}</td>
+            <td class="dg-num">
+              <span v-if="row.entry_blocked_reason === 'losing_stop_cooldown'" class="dg-neg">
+                剩余 {{ row.cooldown_remaining_trading_days }} 日
+              </span>
+              <span v-else>—</span>
+            </td>
           </tr>
         </tbody>
       </table>
