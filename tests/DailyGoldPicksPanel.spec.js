@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 const requestMock = vi.hoisted(() => vi.fn())
@@ -12,6 +12,7 @@ import DailyGoldPicksPanel from '../src/components/DailyGoldPicksPanel.vue'
 const panel = {
   recipe_id: 'daily_gold_v1_csi1000_g60c40',
   score_date: '20260820',
+  is_historical: false,
   recipe: {
     recipe_id: 'daily_gold_v1_csi1000_g60c40',
     label: '中证1000 · 成长周期 60:40',
@@ -44,6 +45,9 @@ const panel = {
       outcome_label: '回撤止盈',
       hold_to_latest_return_pct: 0.15,
       hold_to_latest_date: '20260820',
+      hold_to_latest_price_source: 'realtime',
+      hold_to_latest_data_source: 'miniqmt_full_market_daily',
+      hold_to_latest_updated_at: '20260820 14:59:00',
     },
     {
       lot_id: 'loss',
@@ -77,8 +81,10 @@ const panel = {
   },
 }
 
+const mountedWrappers = []
+
 function mountPanel() {
-  return mount(DailyGoldPicksPanel, {
+  const wrapper = mount(DailyGoldPicksPanel, {
     global: {
       stubs: {
         'v-select': true,
@@ -88,11 +94,18 @@ function mountPanel() {
       },
     },
   })
+  mountedWrappers.push(wrapper)
+  return wrapper
 }
 
 describe('DailyGoldPicksPanel', () => {
   beforeEach(() => {
     requestMock.mockReset()
+  })
+
+  afterEach(() => {
+    mountedWrappers.splice(0).forEach(wrapper => wrapper.unmount())
+    vi.useRealTimers()
   })
 
   it('uses A-share P&L classes and summarizes overall history', async () => {
@@ -113,6 +126,8 @@ describe('DailyGoldPicksPanel', () => {
     expect(wrapper.get('.dg-section').text()).toContain('成长贡献主导，60:40 加权后第 1 名')
     expect(wrapper.text()).toContain('至今涨跌幅')
     expect(wrapper.text()).toContain('15.00%')
+    expect(wrapper.text()).toContain('盘中实时 · miniQMT · 2026-08-20 14:59')
+    expect(wrapper.text()).toContain('行情每 60 秒刷新')
     expect(wrapper.get('.dg-footnote').text()).toContain('事后观察值')
 
     const returnCells = wrapper.findAll('td').filter(cell => cell.classes().includes('dg-pos') || cell.classes().includes('dg-neg'))
@@ -136,5 +151,26 @@ describe('DailyGoldPicksPanel', () => {
 
     expect(wrapper.get('.dg-performance__title').text()).toBe('尚无足够的已结束交易样本')
     expect(wrapper.find('.dg-performance__metrics').exists()).toBe(false)
+  })
+
+  it('silently refreshes the latest view every 60 seconds', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-21T15:03:00+08:00'))
+    requestMock.mockResolvedValue(panel)
+    mountPanel()
+    await flushPromises()
+
+    expect(requestMock).toHaveBeenCalledTimes(1)
+    expect(requestMock.mock.calls[0][0].params).toEqual({
+      recipe_id: 'daily_gold_v1_csi1000_g60c40',
+    })
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    await flushPromises()
+
+    expect(requestMock).toHaveBeenCalledTimes(2)
+    expect(requestMock.mock.calls[1][0].params).toEqual({
+      recipe_id: 'daily_gold_v1_csi1000_g60c40',
+    })
   })
 })

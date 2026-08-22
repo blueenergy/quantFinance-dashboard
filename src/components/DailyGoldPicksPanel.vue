@@ -33,7 +33,7 @@
           color="grey-darken-3"
           base-color="grey-darken-2"
         />
-        <v-btn variant="flat" class="dg-btn-load" :loading="loading" @click="loadPanel">
+        <v-btn variant="flat" class="dg-btn-load" :loading="loading" @click="loadPanel()">
           加载
         </v-btn>
       </div>
@@ -48,6 +48,9 @@
       <span class="dg-badge">{{ recipeMeta.label }}</span>
       <span v-if="panel.score_date" class="dg-badge dg-badge--muted">评分日 {{ fmtDate(panel.score_date) }}</span>
       <span v-if="statsLine" class="dg-badge dg-badge--muted">{{ statsLine }}</span>
+      <span v-if="lastRefreshedAt" class="dg-badge dg-badge--muted">
+        行情每 60 秒刷新 · 页面更新 {{ fmtClock(lastRefreshedAt) }}
+      </span>
     </div>
 
     <section v-if="loaded" class="dg-performance" aria-labelledby="dg-performance-title">
@@ -216,7 +219,7 @@
             >
               {{ fmtReturnPct(lot.hold_to_latest_return_pct) }}
               <small v-if="lot.hold_to_latest_date" class="dg-cell-note">
-                {{ fmtDate(lot.hold_to_latest_date) }}
+                {{ marketMarkLabel(lot) }}
               </small>
             </td>
           </tr>
@@ -234,7 +237,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import request from '../utils/request'
 import AppLink from './common/AppLink.vue'
 
@@ -247,8 +250,12 @@ const loaded = ref(false)
 const error = ref('')
 const panel = ref({})
 const recipeOptions = ref([])
+const lastRefreshedAt = ref(null)
 
 let loadSeq = 0
+let autoRefreshTimer = null
+let autoRefreshInFlight = false
+const AUTO_REFRESH_MS = 60_000
 
 const top10 = computed(() => panel.value?.top10 || [])
 const openLots = computed(() => panel.value?.open_lots || [])
@@ -319,6 +326,51 @@ function fmtDate(ymd) {
   const s = String(ymd)
   if (s.length !== 8) return s
   return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+}
+
+function fmtClock(value) {
+  if (!(value instanceof Date)) return '—'
+  return value.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+}
+
+function fmtMarketTimestamp(value, fallbackDate) {
+  const text = String(value || '')
+  const compact = text.match(/^(\d{4})(\d{2})(\d{2})(?:[ T](\d{2}:\d{2}))?/)
+  if (compact) {
+    const date = `${compact[1]}-${compact[2]}-${compact[3]}`
+    return compact[4] ? `${date} ${compact[4]}` : date
+  }
+  const separated = text.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/)
+  if (separated) {
+    return separated[2] ? `${separated[1]} ${separated[2]}` : separated[1]
+  }
+  return fmtDate(fallbackDate)
+}
+
+function marketSourceLabel(lot) {
+  const priceSource = lot?.hold_to_latest_price_source === 'realtime' ? '盘中实时' : '日线收盘'
+  const sourceLabels = {
+    miniqmt_full_market_daily: 'miniQMT',
+    miniqmt: 'miniQMT',
+    tushare_rt_k_daily: 'Tushare',
+    tushare: 'Tushare',
+    eastmoney_snapshot: '东财',
+  }
+  const dataSource = sourceLabels[lot?.hold_to_latest_data_source] || lot?.hold_to_latest_data_source
+  return dataSource ? `${priceSource} · ${dataSource}` : priceSource
+}
+
+function marketMarkLabel(lot) {
+  const updatedAt = fmtMarketTimestamp(
+    lot?.hold_to_latest_updated_at,
+    lot?.hold_to_latest_date,
+  )
+  return `${marketSourceLabel(lot)} · ${updatedAt}`
 }
 
 function fmtNum(v) {
@@ -400,14 +452,18 @@ function statusLabel(status) {
   return status || '—'
 }
 
-async function loadPanel() {
+async function loadPanel(options = {}) {
+  const silent = options?.silent === true
+  const useLatest = options?.useLatest === true
   const seq = ++loadSeq
-  loading.value = true
-  loaded.value = false
-  error.value = ''
+  if (!silent) {
+    loading.value = true
+    loaded.value = false
+    error.value = ''
+  }
   try {
     const params = { recipe_id: recipeId.value }
-    if (selectedDate.value) {
+    if (!useLatest && selectedDate.value) {
       params.score_date = selectedDate.value.replace(/-/g, '')
     }
     const body = await request({ method: 'get', url: '/daily-gold/panel', params })
@@ -415,9 +471,11 @@ async function loadPanel() {
     panel.value = body || {}
     recipeOptions.value = body?.recipes || recipeOptions.value
     selectedDate.value = body?.score_date ? fmtDate(body.score_date) : ''
+    lastRefreshedAt.value = new Date()
     loaded.value = true
   } catch (e) {
     if (seq !== loadSeq) return
+    if (silent) return
     error.value = e?.response?.data?.detail || e?.message || '加载失败'
     panel.value = {}
     loaded.value = false
@@ -426,13 +484,33 @@ async function loadPanel() {
   }
 }
 
+async function autoRefresh() {
+  if (autoRefreshInFlight || document.visibilityState === 'hidden') return
+  autoRefreshInFlight = true
+  try {
+    await loadPanel({
+      silent: true,
+      useLatest: !panel.value?.is_historical,
+    })
+  } finally {
+    autoRefreshInFlight = false
+  }
+}
+
 watch(recipeId, () => {
   selectedDate.value = ''
-  loadPanel()
+  loadPanel({ useLatest: true })
 })
 
 onMounted(() => {
-  loadPanel()
+  loadPanel({ useLatest: true })
+  autoRefreshTimer = window.setInterval(autoRefresh, AUTO_REFRESH_MS)
+})
+
+onUnmounted(() => {
+  if (autoRefreshTimer != null) {
+    window.clearInterval(autoRefreshTimer)
+  }
 })
 </script>
 
