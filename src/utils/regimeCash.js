@@ -9,6 +9,12 @@ const REGIME_MODE_LABELS = {
   [REGIME_MODE_CASH]: '非牛空仓',
 }
 
+const INDEX_REGIME_LABELS = {
+  bull: '牛市',
+  bear: '熊市',
+  uncertain: '震荡',
+}
+
 export function isRegimeCashEnabled(value) {
   return value === true || value === 'true' || value === 1 || value === '1'
 }
@@ -50,6 +56,18 @@ export function formatRegimeModes(params = {}) {
   return regimeModesFromParams(params)
     .map((mode) => REGIME_MODE_LABELS[mode] || mode)
     .join(', ')
+}
+
+export function formatIndexRegimeLabel(label) {
+  const key = String(label || '').trim().toLowerCase()
+  if (!key) return '-'
+  return INDEX_REGIME_LABELS[key] || key
+}
+
+export function indexRegimeTone(label) {
+  const key = String(label || '').trim().toLowerCase()
+  if (key === 'bull' || key === 'bear' || key === 'uncertain') return key
+  return ''
 }
 
 export function regimeCashFromParams(params = {}) {

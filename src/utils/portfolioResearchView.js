@@ -1,7 +1,7 @@
 /** Display helpers for Portfolio Research (no network, no Vue refs). */
 
 import { compositeScorePreset, scoreWeightSummary } from './scoreUtils'
-import { formatRegimeModes } from './regimeCash'
+import { formatIndexRegimeLabel, formatRegimeModes } from './regimeCash'
 
 export const UNIVERSE_OPTIONS = [
   { value: 'hs300', label: 'hs300 - 沪深300' },
@@ -464,6 +464,7 @@ export function buildEquityChart(periods = [], trades = [], initialCapital = 1_0
         endDate,
         portfolioReturn: Number.isFinite(portfolioReturn) ? portfolioReturn : 0,
         indexReturn: Number.isFinite(indexReturn) ? indexReturn : null,
+        regimeLabel: period?.regime_label || '',
       }
     })
     .filter(Boolean)
@@ -523,6 +524,29 @@ export function buildEquityChart(periods = [], trades = [], initialCapital = 1_0
       position,
       stratEquity,
       idxEquity,
+      regimeLabel: event.regimeLabel,
+      startX: X(calendarYearPosition(event.scoreDate)),
+      endX: X(position),
+    })
+  }
+
+  const regimeBands = []
+  for (const event of equityEvents) {
+    if (!event.regimeLabel) continue
+    const x = Math.min(event.startX, event.endX)
+    const width = Math.max(Math.abs(event.endX - event.startX), 1)
+    const previous = regimeBands[regimeBands.length - 1]
+    if (previous && previous.label === event.regimeLabel) {
+      previous.width = Math.max(previous.width, (x + width) - previous.x)
+      continue
+    }
+    regimeBands.push({
+      label: event.regimeLabel,
+      displayLabel: formatIndexRegimeLabel(event.regimeLabel),
+      x,
+      width,
+      y: padT,
+      height: h - padT - padB,
     })
   }
 
@@ -608,12 +632,14 @@ export function buildEquityChart(periods = [], trades = [], initialCapital = 1_0
     const equity = equityRange
       ? mn + (1 - (point.y - padT) / plotHeight) * equityRange
       : mn
+    const band = regimeBands.find((item) => point.x >= item.x && point.x <= item.x + item.width)
     return {
       x: point.x,
       y: point.y,
       date: sourceDateByX.get(point.x.toFixed(1)) || calendarPositionLabel(position),
       equity,
       accountValue: equity * normalizedCapital,
+      regimeLabel: band?.displayLabel || '',
     }
   })
 
@@ -679,6 +705,7 @@ export function buildEquityChart(periods = [], trades = [], initialCapital = 1_0
     curvePoints: curveStates,
     hoverPoints,
     dataGaps,
+    regimeBands,
     hasIdx,
     stratPath: smoothSvgPath(stratCurvePoints),
     idxPath: smoothSvgPath(idxCurvePoints),

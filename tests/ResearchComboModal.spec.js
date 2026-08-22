@@ -107,4 +107,41 @@ describe('ResearchComboModal', () => {
     expect(wrapper.text()).toContain('600000.SH')
     expect(wrapper.text()).toContain('2 笔 / 共 2')
   })
+
+  it('shows index regime on trades and the equity chart', async () => {
+    const wrapper = mountModal({
+      detail: {
+        ...detail,
+        meta: { ...detail.meta, regime_mode: 'bull_g60_else_cash' },
+        periods: [{
+          score_date: '2024-01-02',
+          period_end_date: '2024-01-20',
+          portfolio_return_net: 0.02,
+          index_benchmark_return: 0.01,
+          regime_label: 'bull',
+        }],
+        trades: [
+          { score_date: '2024-01-02', symbol: '600000.SH', name: '浦发银行', regime_label: 'bull' },
+        ],
+      },
+    })
+
+    expect(wrapper.text()).toContain('非牛空仓')
+    expect(wrapper.text()).toContain('指数')
+    expect(wrapper.text()).toContain('牛市')
+    expect(wrapper.text()).toContain('持有期内指数翻熊不会中途卖出')
+    expect(wrapper.findAll('rect').length).toBeGreaterThan(0)
+
+    const svg = wrapper.find('svg')
+    svg.element.getBoundingClientRect = () => ({
+      left: 0,
+      width: 1100,
+      top: 0,
+      height: 300,
+      right: 1100,
+      bottom: 300,
+    })
+    await svg.trigger('mousemove', { clientX: 1080 })
+    expect(wrapper.text()).toContain('指数：牛市')
+  })
 })

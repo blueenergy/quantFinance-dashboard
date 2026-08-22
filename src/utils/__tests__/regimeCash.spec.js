@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildRegimeModesFromForm,
+  formatIndexRegimeLabel,
   formatRegimeModes,
+  indexRegimeTone,
   isRegimeCashEnabled,
   regimeCashFromParams,
   regimeFlagsFromParams,
@@ -34,5 +36,16 @@ describe('regime modes', () => {
       regime_always_invest: true,
       regime_cash: true,
     })).toEqual(['off', 'bull_g60_else_cash'])
+  })
+})
+
+describe('index regime labels', () => {
+  it('maps MA tags to Chinese labels', () => {
+    expect(formatIndexRegimeLabel('bull')).toBe('牛市')
+    expect(formatIndexRegimeLabel('bear')).toBe('熊市')
+    expect(formatIndexRegimeLabel('uncertain')).toBe('震荡')
+    expect(formatIndexRegimeLabel('')).toBe('-')
+    expect(indexRegimeTone('BULL')).toBe('bull')
+    expect(indexRegimeTone('unknown')).toBe('')
   })
 })

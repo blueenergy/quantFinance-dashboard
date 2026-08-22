@@ -95,6 +95,16 @@
               stroke="#f1f5f9"
               stroke-width="1"
             />
+            <rect
+              v-for="(band, index) in equityChart.regimeBands || []"
+              :key="`rg${index}`"
+              :x="band.x"
+              :y="band.y"
+              :width="band.width"
+              :height="band.height"
+              :fill="regimeBandFill(band.label)"
+              pointer-events="none"
+            />
             <polyline
               v-if="equityChart.hasIdx"
               fill="none"
@@ -131,10 +141,13 @@
                 stroke-width="2"
               />
               <g :transform="`translate(${chartHover.tooltipX} ${chartHover.tooltipY})`">
-                <rect width="190" height="48" rx="6" fill="#172033" opacity=".94" />
+                <rect :width="190" :height="chartHover.regimeLabel ? 66 : 48" rx="6" fill="#172033" opacity=".94" />
                 <text x="10" y="19" fill="#fff" font-size="12">{{ chartHover.date }}</text>
                 <text x="10" y="37" fill="#fff" font-size="12">
                   账户总值：{{ money(chartHover.accountValue) }}
+                </text>
+                <text v-if="chartHover.regimeLabel" x="10" y="55" fill="#cbd5e1" font-size="12">
+                  指数：{{ chartHover.regimeLabel }}
                 </text>
               </g>
             </g>
@@ -153,6 +166,11 @@
           <div class="combo-legend">
             <span><i class="sw" style="background:#0f6bdc"></i>策略（净）</span>
             <span><i class="sw" style="background:#94a3b8"></i>指数基准</span>
+            <template v-if="equityChart?.regimeBands?.length">
+              <span><i class="sw sw-band" style="background:rgba(16,185,129,.35)"></i>牛市</span>
+              <span><i class="sw sw-band" style="background:rgba(239,68,68,.35)"></i>熊市</span>
+              <span><i class="sw sw-band" style="background:rgba(148,163,184,.45)"></i>震荡</span>
+            </template>
           </div>
         </div>
 
@@ -190,6 +208,14 @@
                   <span v-else class="muted">已平仓</span>
                 </td>
                 <td>{{ trade.score_date }}</td>
+                <td class="col-left">
+                  <span
+                    v-if="trade.regime_label"
+                    class="tag-regime"
+                    :class="`tag-${indexRegimeTone(trade.regime_label)}`"
+                  >{{ formatIndexRegimeLabel(trade.regime_label) }}</span>
+                  <span v-else class="muted">-</span>
+                </td>
                 <td>{{ trade.symbol }}</td>
                 <td>{{ trade.name || '' }}</td>
                 <td>{{ num(trade.score_value, 1) }}</td>
@@ -206,6 +232,9 @@
             </tbody>
           </table>
         </div>
+        <p class="muted combo-note">
+          净值背景色是指数 MA 标签（牛/熊/震荡），按调仓日分段。研究回测只在调仓日按标签决定满仓或空仓；持有期内指数翻熊不会中途卖出，要等到下一期调仓。实盘勾选非牛空仓后，监控日可以提前清仓。
+        </p>
         <p class="muted combo-note">
           <template v-if="comboTrailingStopEnabled">
             移动止盈（{{ comboTrailingStopLabel }}）：持仓期内跟踪最高价，若某日收盘价 ≤
@@ -241,6 +270,7 @@ import {
   signClass,
 } from '../../utils/portfolioResearchView'
 import { formatAxisValue, resolveComboTrailingStopPct } from '../../utils/sweepResultView'
+import { formatIndexRegimeLabel, formatRegimeModes, indexRegimeTone } from '../../utils/regimeCash'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -260,6 +290,7 @@ const tradeSortDir = ref(1)
 const tradeCols = [
   { k: 'status', t: '状态' },
   { k: 'score_date', t: '调仓日' },
+  { k: 'regime_label', t: '指数' },
   { k: 'symbol', t: '代码' },
   { k: 'name', t: '名称' },
   { k: 'score_value', t: '分值' },
@@ -287,6 +318,7 @@ const comboSubtitle = computed(() => {
   if (meta.construction_mode) parts.push(`构建 ${meta.construction_mode}`)
   if (meta.max_industry_weight != null) parts.push(`行业上限 ${pct(meta.max_industry_weight)}`)
   if (meta.horizon) parts.push(`调仓 ${meta.horizon}d`)
+  if (meta.regime_mode) parts.push(formatRegimeModes({ regime_modes: [meta.regime_mode] }))
   if (meta.index_benchmark_symbol) parts.push(`基准 ${meta.index_benchmark_symbol}`)
   return parts.join(' · ')
 })
@@ -347,7 +379,7 @@ function handleChartPointerMove(event) {
     Math.abs(candidate.x - viewX) < Math.abs(nearest.x - viewX) ? candidate : nearest
   ))
   const tooltipWidth = 190
-  const tooltipHeight = 48
+  const tooltipHeight = point.regimeLabel ? 66 : 48
   chartHover.value = {
     ...point,
     tooltipX: point.x + tooltipWidth + 12 <= chart.w
@@ -358,6 +390,12 @@ function handleChartPointerMove(event) {
       Math.min(point.y - tooltipHeight - 8, chart.h - chart.padB - tooltipHeight),
     ),
   }
+}
+
+function regimeBandFill(label) {
+  if (label === 'bull') return 'rgba(16, 185, 129, 0.14)'
+  if (label === 'bear') return 'rgba(239, 68, 68, 0.14)'
+  return 'rgba(148, 163, 184, 0.16)'
 }
 </script>
 
@@ -519,6 +557,11 @@ function handleChartPointerMove(event) {
   margin-right: 5px;
 }
 
+.combo-legend .sw-band {
+  width: 16px;
+  height: 10px;
+}
+
 .combo-toolbar {
   display: flex;
   gap: 14px;
@@ -567,10 +610,14 @@ td {
   white-space: nowrap;
 }
 
-th:nth-child(3),
-td:nth-child(3),
 th:nth-child(4),
-td:nth-child(4) {
+td:nth-child(4),
+th:nth-child(5),
+td:nth-child(5) {
+  text-align: left;
+}
+
+.col-left {
   text-align: left;
 }
 
@@ -600,6 +647,29 @@ th {
   color: #c2410c;
   font-size: 11px;
   font-weight: 700;
+}
+
+.tag-regime {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tag-bull {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.tag-bear {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.tag-uncertain {
+  background: #f1f5f9;
+  color: #475569;
 }
 
 .open-trade-row td {

@@ -383,4 +383,41 @@ describe('buildEquityChart', () => {
       accountValue: 2_200_000,
     })
   })
+
+  it('paints merged bull/bear bands from period regime labels', () => {
+    const chart = buildEquityChart([
+      {
+        score_date: '2024-01-03',
+        period_end_date: '2024-01-17',
+        portfolio_return_net: 0.02,
+        regime_label: 'bull',
+      },
+      {
+        score_date: '2024-01-18',
+        period_end_date: '2024-01-31',
+        portfolio_return_net: 0.0,
+        regime_label: 'bull',
+      },
+      {
+        score_date: '2024-02-01',
+        period_end_date: '2024-02-15',
+        portfolio_return_net: 0.0,
+        regime_label: 'bear',
+      },
+    ])
+
+    expect(chart.regimeBands).toHaveLength(2)
+    expect(chart.regimeBands[0]).toMatchObject({ label: 'bull', displayLabel: '牛市' })
+    expect(chart.regimeBands[1]).toMatchObject({ label: 'bear', displayLabel: '熊市' })
+    expect(chart.hoverPoints.some((point) => point.regimeLabel === '牛市')).toBe(true)
+    expect(chart.hoverPoints.some((point) => point.regimeLabel === '熊市')).toBe(true)
+  })
+
+  it('omits bands when combo JSON has no regime labels', () => {
+    const chart = buildEquityChart([{
+      score_date: '2024-01-02',
+      portfolio_return_net: 0.02,
+    }])
+    expect(chart.regimeBands).toEqual([])
+  })
 })
