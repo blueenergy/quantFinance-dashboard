@@ -111,7 +111,7 @@ describe('buildResearchParamRows', () => {
     expect(byKey.max_positions).toBe(25)
     expect(byKey.top_n_values).toBe('10, 20')
     expect(byKey.trailing_stop_pcts).toBe('关闭, 15.00%')
-    expect(byKey.regime_cash).toBe('关闭')
+    expect(byKey.regime_modes).toBe('始终满仓')
     expect(byKey.force).toBe('false')
   })
 

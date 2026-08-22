@@ -242,14 +242,23 @@
             />
             <small class="field-hint">逗号分隔多档 A/B，0 表示关闭；与 CLI --trailing-stop-pcts 一致</small>
           </label>
+          <label class="inline-check">
+            <input
+              type="checkbox"
+              :checked="form.regime_always_invest !== false"
+              @change="patchForm({ regime_always_invest: $event.target.checked })"
+            />
+            始终满仓
+            <small class="field-hint">每个调仓日都按评分选股持有。可与非牛空仓同时勾选做对照，也可以只跑其中一种。</small>
+          </label>
           <label class="inline-check score-spec-field">
             <input
               type="checkbox"
               :checked="Boolean(form.regime_cash)"
               @change="patchForm({ regime_cash: $event.target.checked })"
             />
-            非牛空仓对照
-            <small class="field-hint">勾选后同时扫「始终满仓」和「牛市满仓 / 非牛空仓」。{{ REGIME_CASH_REMINDER }}</small>
+            非牛空仓
+            <small class="field-hint">独立仓位模式，不必和始终满仓一起跑。{{ REGIME_CASH_REMINDER }}</small>
           </label>
         </div>
       </div>
@@ -319,6 +328,7 @@ const canSubmit = computed(() => {
     .map(Number)
     .filter((n) => Number.isFinite(n) && n >= 1)
   if (!rebalanceDays.length) return false
+  if (!(props.form.regime_always_invest !== false || props.form.regime_cash)) return false
   if (!dynamicSelection.value) return true
   const topNValues = String(props.form.top_n_values ?? '')
     .split(/[,，]/)

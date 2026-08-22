@@ -49,6 +49,7 @@ describe('usePortfolioResearchForm', () => {
       selection_mode: 'fixed_top_n',
       threshold_lookback_days: 10,
       max_positions: 20,
+      regime_always_invest: true,
       regime_cash: false,
     })
   })
@@ -127,6 +128,7 @@ describe('usePortfolioResearchForm', () => {
       rebalance_interval_days: [15],
       cash_buffer: 0.05,
       initial_capital: 500000,
+      regime_modes: ['off'],
       regime_cash: false,
     }
 
@@ -183,7 +185,7 @@ describe('usePortfolioResearchForm', () => {
         growth_cycle_weights: ['30:70', '50:50'],
         trailing_stop_pcts: [0, 0.1, 0.2],
         rebalance_interval_days: [10],
-        regime_cash: true,
+        regime_modes: ['bull_g60_else_cash'],
       },
     })
     const formApi = createForm({ selectedJob })
@@ -198,6 +200,7 @@ describe('usePortfolioResearchForm', () => {
       growth_cycle_weights: '30:70,50:50',
       trailing_stop_pcts: '0,0.1,0.2',
       horizon: '10',
+      regime_always_invest: false,
       regime_cash: true,
     })
     expect(formApi.formSourceJobId.value).toBe('job-source')

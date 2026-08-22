@@ -228,18 +228,19 @@ describe('ResearchCreateDrawer', () => {
     expect(submit.attributes('disabled')).toBeUndefined()
   })
 
-  it('exposes non-bull cash overlay for any universe', async () => {
+  it('lets non-bull cash run without always-invest', async () => {
     const wrapper = mountDrawer({
-      form: { ...baseForm, universe_index: 'csi500', regime_cash: false },
+      form: { ...baseForm, universe_index: 'csi500', regime_always_invest: false, regime_cash: true },
     })
-    expect(wrapper.text()).toContain('非牛空仓对照')
-    expect(wrapper.text()).toContain('是否启用由你决定')
-    const checkbox = wrapper.findAll('input[type="checkbox"]').find((input) => (
-      input.element.closest('label')?.textContent?.includes('非牛空仓对照')
-    ))
-    expect(checkbox.exists()).toBe(true)
-    expect(checkbox.attributes('disabled')).toBeUndefined()
-    await checkbox.setValue(true)
-    expect(wrapper.emitted('update:form').at(-1)[0].regime_cash).toBe(true)
+    expect(wrapper.text()).toContain('始终满仓')
+    expect(wrapper.text()).toContain('非牛空仓')
+    expect(wrapper.text()).not.toContain('非牛空仓对照')
+    expect(wrapper.text()).toContain('不必和始终满仓一起跑')
+    const modeLabels = wrapper.findAll('label.inline-check')
+    expect(modeLabels[0].text()).toContain('始终满仓')
+    expect(modeLabels[1].text()).toContain('非牛空仓')
+    expect(modeLabels[0].find('input').element.checked).toBe(false)
+    expect(modeLabels[1].find('input').element.checked).toBe(true)
+    expect(modeLabels[1].find('input').attributes('disabled')).toBeUndefined()
   })
 })

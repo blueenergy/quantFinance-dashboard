@@ -49,6 +49,7 @@ describe('buildPortfolioResearchPayload', () => {
       rebalance_interval_days: [20],
       active_caps: [0.2, 0.3],
       trailing_stop_pcts: [0, 0.15],
+      regime_modes: ['off'],
       force: true,
     })
     expect(payload.regime_cash).toBe(false)
@@ -132,14 +133,25 @@ describe('buildPortfolioResearchPayload', () => {
     expect(payload.index_benchmark_symbol).toBe('000852.SH')
   })
 
-  it('sends regime_cash on any universe when checked', () => {
+  it('can run non-bull cash without always-invest', () => {
     const payload = buildPortfolioResearchPayload({
       ...baseForm,
       universe_index: 'csi500',
+      regime_always_invest: false,
       regime_cash: true,
     })
     expect(payload.universe_index).toBe('csi500')
+    expect(payload.regime_modes).toEqual(['bull_g60_else_cash'])
     expect(payload.regime_cash).toBe(true)
+  })
+
+  it('can sweep both position modes when both are checked', () => {
+    const payload = buildPortfolioResearchPayload({
+      ...baseForm,
+      regime_always_invest: true,
+      regime_cash: true,
+    })
+    expect(payload.regime_modes).toEqual(['off', 'bull_g60_else_cash'])
   })
 
   it('normalizes percent-point trailing stop inputs on submit', () => {
