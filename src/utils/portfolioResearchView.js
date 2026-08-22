@@ -250,6 +250,7 @@ export function buildComboSummaryCards(summary = {}) {
       cls: signClass(values.index_excess_cumulative_return),
     },
     { k: '平均换手', v: pct(values.average_turnover), cls: '' },
+    { k: '平均暴露', v: pct(values.average_exposure), cls: '' },
     { k: '调仓期数', v: num(values.periods, 0), cls: '' },
   ]
 }

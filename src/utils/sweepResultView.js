@@ -158,6 +158,7 @@ export function buildSweepResultView(resultDetail, jobParams = {}) {
       'sharpe',
       'max_drawdown',
       'average_turnover',
+      'average_exposure',
       'risk_adjusted_score',
     ],
     row_count: Number(resultDetail?.row_count_total || rows.length),

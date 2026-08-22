@@ -12,6 +12,7 @@
           <th>超额</th>
           <th>Sharpe</th>
           <th>回撤</th>
+          <th>暴露</th>
           <th>综合分</th>
           <th class="col-actions">操作</th>
         </tr>
@@ -36,6 +37,7 @@
           <td :class="signClass(row.index_excess_cumulative_return)">{{ pct(row.index_excess_cumulative_return) }}</td>
           <td>{{ num(row.sharpe) }}</td>
           <td class="neg">{{ pct(row.max_drawdown) }}</td>
+          <td>{{ pct(row.average_exposure) }}</td>
           <td>{{ num(row.risk_adjusted_score, 3) }}</td>
           <td class="col-actions detail-cell">
             <button type="button" class="link-btn" @click="$emit('select-row', row)">选为候选</button>

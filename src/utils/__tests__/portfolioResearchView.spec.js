@@ -166,10 +166,12 @@ describe('buildComboSummaryCards', () => {
       max_drawdown: -0.1,
       index_excess_cumulative_return: 0.08,
       average_turnover: 0.3,
+      average_exposure: 0.54,
       periods: 24,
     })
     expect(cards.map((card) => card.k)).toContain('年化收益')
     expect(cards.find((card) => card.k === '年化收益')?.v).toBe('20.00%')
+    expect(cards.find((card) => card.k === '平均暴露')?.v).toBe('54.00%')
   })
 })
 
