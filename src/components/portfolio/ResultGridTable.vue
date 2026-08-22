@@ -6,7 +6,7 @@
           <th class="col-rank">Rank</th>
           <th v-for="axis in sweepAxes" :key="axis.key" class="col-text">{{ axis.label }}</th>
           <th class="col-text">Variant</th>
-          <th>TopN</th>
+          <th v-if="!hasSweptAxis('top_n')">TopN</th>
           <th>收益</th>
           <th>年化</th>
           <th>超额</th>
@@ -31,7 +31,7 @@
             {{ formatAxisValue(axis.key, row[axis.key]) }}
           </td>
           <td class="col-text">{{ row.variant || '-' }}</td>
-          <td>{{ row.top_n }}</td>
+          <td v-if="!hasSweptAxis('top_n')">{{ row.top_n }}</td>
           <td :class="signClass(row.cumulative_return)">{{ pct(row.cumulative_return) }}</td>
           <td :class="signClass(row.annualized_return)">{{ pct(row.annualized_return) }}</td>
           <td :class="signClass(row.index_excess_cumulative_return)">{{ pct(row.index_excess_cumulative_return) }}</td>
@@ -58,6 +58,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { rowMatchesAxis } from '../../utils/sweepResultView'
 
 const props = defineProps({
@@ -72,6 +73,12 @@ const props = defineProps({
 })
 
 defineEmits(['select-row', 'open-combo'])
+
+const sweptAxisKeys = computed(() => new Set(props.sweepAxes.map((axis) => axis.key)))
+
+function hasSweptAxis(key) {
+  return sweptAxisKeys.value.has(key)
+}
 
 function rowKey(row, idx) {
   return row.combo_key || `${row.score_variant}-${row.variant}-${row.top_n}-${row.trailing_stop_pct}-${idx}`
