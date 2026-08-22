@@ -101,7 +101,9 @@ export function usePortfolioPlanGeneration({
   }
 
   function setGenerateParam(key, value) {
-    generateForm.value.params = { ...generateForm.value.params, [key]: value }
+    const next = { ...generateForm.value.params, [key]: value }
+    if (key === 'universe_index' && value !== 'csi1000') next.regime_cash = false
+    generateForm.value.params = next
   }
 
   function setGeneratePreset(value) {

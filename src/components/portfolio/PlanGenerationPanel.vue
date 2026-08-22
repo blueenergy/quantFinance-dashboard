@@ -92,6 +92,16 @@
             <input :value="form.params.trailing_stop_pct" type="number" min="0" max="1" step="0.01" placeholder="0.15" @input="updateNumber('trailing_stop_pct', $event.target.value)" />
             <small class="field-hint">峰值回撤比例，0 或留空关闭；回测已支持，实盘监控二期</small>
           </label>
+          <label class="inline-check">
+            <input
+              type="checkbox"
+              :checked="form.params.universe_index === 'csi1000' && form.params.regime_cash !== false"
+              :disabled="form.params.universe_index !== 'csi1000'"
+              @change="updateParam('regime_cash', $event.target.checked)"
+            />
+            非牛空仓（仅中证1000）
+            <small class="field-hint">指数 MA 标成牛市则满仓，否则空仓。只适用于中证1000；中证500等股票池禁用。</small>
+          </label>
           <label>buy commission<input :value="form.params.buy_commission_rate" type="number" min="0" step="0.00001" @input="updateNumber('buy_commission_rate', $event.target.value)" /></label>
           <label>sell commission<input :value="form.params.sell_commission_rate" type="number" min="0" step="0.00001" @input="updateNumber('sell_commission_rate', $event.target.value)" /></label>
           <label>min commission<input :value="form.params.min_commission" type="number" min="0" step="0.1" @input="updateNumber('min_commission', $event.target.value)" /></label>

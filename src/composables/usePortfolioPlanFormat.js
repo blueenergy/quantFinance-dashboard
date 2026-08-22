@@ -479,6 +479,9 @@ export function planParamSummary(plan) {
   if (rebalanceDays) parts.push(`${rebalanceDays}d`)
   const mode = effectiveConstructionMode(plan)
   if (mode) parts.push(mode)
+  if (plan?.params_snapshot?.regime_cash === true || plan?.regime_cash?.enabled) {
+    parts.push('非牛空仓')
+  }
   return parts.join(' · ')
 }
 

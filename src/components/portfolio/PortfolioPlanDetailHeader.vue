@@ -22,6 +22,7 @@
         <button class="danger" :disabled="actionLoading" @click="$emit('review', 'rejected')">驳回</button>
       </div>
     </div>
+    <p v-if="regimeCashNote" class="monitor-note">{{ regimeCashNote }}</p>
     <p v-if="monitorNoTrade" class="monitor-note">
       观察日（未到调仓周期）：本计划仅展示组合漂移，不产生交易。下方“漂移”列为若调仓应执行的股数。
       调仓周期按 <strong>交易日</strong> 计（自动跳过周末与节假日）：每 {{ detail.plan.rebalance_days || 'N' }} 个交易日调仓一次。
@@ -37,9 +38,10 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { effectiveInitialCapital, money, planCadenceBadge, planParamSummary } from '../../composables/usePortfolioPlanFormat'
 
-defineProps({
+const props = defineProps({
   detail: { type: Object, required: true },
   displayTitle: { type: Function, required: true },
   signalReviewSummary: { type: String, default: '' },
@@ -51,4 +53,12 @@ defineProps({
 })
 
 defineEmits(['review'])
+
+const regimeCashNote = computed(() => {
+  const overlay = props.detail?.plan?.regime_cash
+  if (!overlay?.enabled) return ''
+  const label = overlay.label ? `当前指数标签 ${overlay.label}` : '当前指数标签未知'
+  const action = overlay.action === 'cash' ? '空仓' : '满仓'
+  return `非牛空仓（仅中证1000）：${label}，本计划${action}。同一规则不适用于中证500等其它股票池。`
+})
 </script>

@@ -207,6 +207,10 @@ describe('portfolio plan view formatting', () => {
     expect(effectiveConstructionMode(plan)).toBe('equal_weight')
     expect(effectiveInitialCapital(plan)).toBe(500000)
     expect(planParamSummary(plan)).toBe('Top8 · 20d · equal_weight')
+    expect(planParamSummary({
+      ...plan,
+      params_snapshot: { ...plan.params_snapshot, regime_cash: true },
+    })).toBe('Top8 · 20d · equal_weight · 非牛空仓')
     expect(shortPlanId('123456789012345678901234567890')).toBe('123456789012345678…34567890')
   })
 
