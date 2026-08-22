@@ -193,6 +193,8 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
     payload.industry_l1 = industryL1
   }
 
+  payload.regime_cash = form.regime_cash === true || form.regime_cash === 'true'
+
   return omitEmpty(payload)
 }
 

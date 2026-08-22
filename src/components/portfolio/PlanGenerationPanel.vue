@@ -95,12 +95,11 @@
           <label class="inline-check">
             <input
               type="checkbox"
-              :checked="form.params.universe_index === 'csi1000' && form.params.regime_cash !== false"
-              :disabled="form.params.universe_index !== 'csi1000'"
+              :checked="form.params.regime_cash === true"
               @change="updateParam('regime_cash', $event.target.checked)"
             />
-            非牛空仓（仅中证1000）
-            <small class="field-hint">指数 MA 标成牛市则满仓，否则空仓。只适用于中证1000；中证500等股票池禁用。</small>
+            非牛空仓
+            <small class="field-hint">{{ REGIME_CASH_REMINDER }}</small>
           </label>
           <label>buy commission<input :value="form.params.buy_commission_rate" type="number" min="0" step="0.00001" @input="updateNumber('buy_commission_rate', $event.target.value)" /></label>
           <label>sell commission<input :value="form.params.sell_commission_rate" type="number" min="0" step="0.00001" @input="updateNumber('sell_commission_rate', $event.target.value)" /></label>
@@ -123,6 +122,7 @@
 
 <script setup>
 import { num, pct } from '../../composables/usePortfolioPlanFormat'
+import { REGIME_CASH_REMINDER } from '../../utils/regimeCash'
 
 defineProps({
   expanded: { type: Boolean, default: false },

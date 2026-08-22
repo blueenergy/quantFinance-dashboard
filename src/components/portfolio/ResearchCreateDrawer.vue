@@ -242,6 +242,15 @@
             />
             <small class="field-hint">逗号分隔多档 A/B，0 表示关闭；与 CLI --trailing-stop-pcts 一致</small>
           </label>
+          <label class="inline-check score-spec-field">
+            <input
+              type="checkbox"
+              :checked="Boolean(form.regime_cash)"
+              @change="patchForm({ regime_cash: $event.target.checked })"
+            />
+            非牛空仓对照
+            <small class="field-hint">勾选后同时扫「始终满仓」和「牛市满仓 / 非牛空仓」。{{ REGIME_CASH_REMINDER }}</small>
+          </label>
         </div>
       </div>
       <footer class="drawer-footer">
@@ -271,6 +280,7 @@ import {
   FIXED_TOP_N_SELECTION_MODE,
   resolveScoreColumns,
 } from '../../utils/portfolioResearchPayload'
+import { REGIME_CASH_REMINDER } from '../../utils/regimeCash'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -507,6 +517,23 @@ textarea {
 .score-option input {
   width: auto;
   margin: 0;
+}
+
+.inline-check {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-check input {
+  width: auto;
+  margin: 0;
+}
+
+.inline-check .field-hint {
+  flex: 1 1 100%;
 }
 
 .weight-breakdown {

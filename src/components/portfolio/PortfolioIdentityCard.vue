@@ -15,7 +15,7 @@
           · Top{{ portfolio.top_n ?? '-' }}
           · {{ portfolio.rebalance_days ?? '-' }} 日调仓
           · {{ portfolio.construction_mode || '-' }}
-          <template v-if="portfolio.param_summary && portfolio.param_summary.includes('非牛空仓')"> · 非牛空仓仅中证1000</template>
+          <template v-if="portfolio.param_summary && portfolio.param_summary.includes('非牛空仓')"> · 非牛空仓</template>
         </small>
       </div>
       <div>

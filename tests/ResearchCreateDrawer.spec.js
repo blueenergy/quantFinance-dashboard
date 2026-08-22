@@ -25,6 +25,7 @@ const baseForm = {
   transfer_fee_rate: 0,
   initial_capital: 1_000_000,
   trailing_stop_pcts: '0,0.15',
+  regime_cash: false,
 }
 
 function mountDrawer(overrides = {}) {
@@ -225,5 +226,20 @@ describe('ResearchCreateDrawer', () => {
     })
     submit = wrapper.findAll('button').find((btn) => btn.text().includes('提交'))
     expect(submit.attributes('disabled')).toBeUndefined()
+  })
+
+  it('exposes non-bull cash overlay for any universe', async () => {
+    const wrapper = mountDrawer({
+      form: { ...baseForm, universe_index: 'csi500', regime_cash: false },
+    })
+    expect(wrapper.text()).toContain('非牛空仓对照')
+    expect(wrapper.text()).toContain('是否启用由你决定')
+    const checkbox = wrapper.findAll('input[type="checkbox"]').find((input) => (
+      input.element.closest('label')?.textContent?.includes('非牛空仓对照')
+    ))
+    expect(checkbox.exists()).toBe(true)
+    expect(checkbox.attributes('disabled')).toBeUndefined()
+    await checkbox.setValue(true)
+    expect(wrapper.emitted('update:form').at(-1)[0].regime_cash).toBe(true)
   })
 })

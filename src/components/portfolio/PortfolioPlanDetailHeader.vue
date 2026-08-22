@@ -40,6 +40,7 @@
 <script setup>
 import { computed } from 'vue'
 import { effectiveInitialCapital, money, planCadenceBadge, planParamSummary } from '../../composables/usePortfolioPlanFormat'
+import { REGIME_CASH_REMINDER } from '../../utils/regimeCash'
 
 const props = defineProps({
   detail: { type: Object, required: true },
@@ -59,6 +60,6 @@ const regimeCashNote = computed(() => {
   if (!overlay?.enabled) return ''
   const label = overlay.label ? `当前指数标签 ${overlay.label}` : '当前指数标签未知'
   const action = overlay.action === 'cash' ? '空仓' : '满仓'
-  return `非牛空仓（仅中证1000）：${label}，本计划${action}。同一规则不适用于中证500等其它股票池。`
+  return `非牛空仓：${label}，本计划${action}。${overlay.note || REGIME_CASH_REMINDER}`
 })
 </script>

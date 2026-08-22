@@ -10,6 +10,7 @@ import {
   resolveScoreColumns,
 } from '../utils/portfolioResearchPayload'
 import { universeName } from '../utils/portfolioResearchView'
+import { regimeCashFromParams } from '../utils/regimeCash'
 import {
   ATOMIC_SCORE_OPTIONS,
   SCORE_DIMENSION_LABELS,
@@ -96,6 +97,7 @@ export function usePortfolioResearchForm({
       trailing_stop_pcts: '0,0.15',
       industry_l1: '',
       index_benchmark_symbol: '',
+      regime_cash: false,
     }
     state.name = defaultResearchName(state.universe_index, state)
     return state
@@ -292,6 +294,7 @@ export function usePortfolioResearchForm({
       trailing_stop_pcts: formatTrailingStopPctsForInput(params),
       index_benchmark_symbol: params.index_benchmark_symbol,
       cash_buffer: params.cash_buffer,
+      regime_cash: regimeCashFromParams(params),
     }
     nameTouched.value = true
     formSourceJobId.value = job.job_id

@@ -51,6 +51,7 @@ describe('buildPortfolioResearchPayload', () => {
       trailing_stop_pcts: [0, 0.15],
       force: true,
     })
+    expect(payload.regime_cash).toBe(false)
     expect(payload).not.toHaveProperty('cash_buffer')
   })
 
@@ -129,6 +130,16 @@ describe('buildPortfolioResearchPayload', () => {
     })
     expect(payload.cash_buffer).toBe(0.03)
     expect(payload.index_benchmark_symbol).toBe('000852.SH')
+  })
+
+  it('sends regime_cash on any universe when checked', () => {
+    const payload = buildPortfolioResearchPayload({
+      ...baseForm,
+      universe_index: 'csi500',
+      regime_cash: true,
+    })
+    expect(payload.universe_index).toBe('csi500')
+    expect(payload.regime_cash).toBe(true)
   })
 
   it('normalizes percent-point trailing stop inputs on submit', () => {
