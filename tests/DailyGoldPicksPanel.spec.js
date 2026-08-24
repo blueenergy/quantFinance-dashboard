@@ -33,7 +33,23 @@ const panel = {
       cooldown_remaining_trading_days: 3,
     },
   ],
-  open_lots: [],
+  open_lots: [
+    {
+      lot_id: 'open-1',
+      symbol: '000004.SZ',
+      name: '持仓样本',
+      status: 'open',
+      entry_score_date: '20260715',
+      entry_price: 10,
+      current_price: 11.5,
+      current_price_date: '20260820',
+      current_price_source: 'realtime',
+      current_price_data_source: 'miniqmt_full_market_daily',
+      current_price_updated_at: '20260820 14:59:00',
+      unrealized_return_pct: 0.15,
+      peak_high: 12.3,
+    },
+  ],
   recent_closed: [
     {
       lot_id: 'win',
@@ -130,12 +146,25 @@ describe('DailyGoldPicksPanel', () => {
     expect(wrapper.text()).toContain('行情每 60 秒刷新')
     expect(wrapper.get('.dg-footnote').text()).toContain('事后观察值')
 
+    const holdings = wrapper.findAll('.dg-section').find(section => section.text().includes('持有中'))
+    expect(holdings.text()).toContain('成本')
+    expect(holdings.text()).toContain('现价')
+    expect(holdings.text()).toContain('峰值')
+    expect(holdings.text().indexOf('成本')).toBeLessThan(holdings.text().indexOf('现价'))
+    expect(holdings.text().indexOf('现价')).toBeLessThan(holdings.text().indexOf('峰值'))
+    expect(holdings.text()).toContain('11.50')
+    expect(holdings.text()).toContain('+15.00%')
+    expect(holdings.text()).toContain('10.00')
+    expect(holdings.text()).toContain('12.30')
+
     const returnCells = wrapper.findAll('td').filter(cell => cell.classes().includes('dg-pos') || cell.classes().includes('dg-neg'))
     const actualWin = returnCells.find(cell => cell.text() === '10.00%')
     const holdToLatest = returnCells.find(cell => cell.text().includes('15.00%'))
+    const currentMark = returnCells.find(cell => cell.text().includes('11.50'))
     const actualLoss = returnCells.find(cell => cell.text() === '-4.00%')
     expect(actualWin.classes()).toContain('dg-pos')
     expect(holdToLatest.classes()).toContain('dg-pos')
+    expect(currentMark.classes()).toContain('dg-pos')
     expect(actualLoss.classes()).toContain('dg-neg')
   })
 

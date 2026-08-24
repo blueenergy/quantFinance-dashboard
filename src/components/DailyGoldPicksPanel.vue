@@ -170,6 +170,7 @@
             <th>状态</th>
             <th class="dg-num">入选日</th>
             <th class="dg-num">成本</th>
+            <th class="dg-num" title="当前真实股价，盘中优先用实时快照">现价</th>
             <th class="dg-num">峰值</th>
           </tr>
         </thead>
@@ -184,6 +185,16 @@
             <td>{{ statusLabel(lot.status) }}</td>
             <td class="dg-num">{{ fmtDate(lot.entry_score_date) }}</td>
             <td class="dg-num">{{ fmtPrice(lot.entry_price) }}</td>
+            <td
+              class="dg-num"
+              :class="pnlClass(lot.unrealized_return_pct)"
+              :title="currentPriceTitle(lot)"
+            >
+              {{ fmtPrice(lot.current_price) }}
+              <small v-if="lot.unrealized_return_pct != null" class="dg-cell-note">
+                {{ fmtSignedPct(lot.unrealized_return_pct) }}
+              </small>
+            </td>
             <td class="dg-num">{{ fmtPrice(lot.peak_high) }}</td>
           </tr>
         </tbody>
@@ -229,7 +240,7 @@
 
     <p v-if="loaded" class="dg-footnote">
       策略指数假设每个新 lot 投入相同资金单位，以时间加权收益率剔除追加和撤回资金的影响；它不代表固定本金账户。
-      当前 TWR 未计交易成本；成本与峰值显示真实价格，收益和 8% 回撤按后复权序列计算，避免除权除息造成假亏损。
+      当前 TWR 未计交易成本；成本、现价与峰值显示真实价格，浮盈浮亏和 8% 回撤按后复权序列计算，避免除权除息造成假亏损。
       未满 20 个交易日或调仓日仍在 Top20 的仓位会继续持有；今日掉出 Top10 不等于立即卖出。
       “若持有至今”是假设退出后继续持有的事后观察值，不计入策略胜率、单笔收益或 TWR。
     </p>
@@ -352,8 +363,8 @@ function fmtMarketTimestamp(value, fallbackDate) {
   return fmtDate(fallbackDate)
 }
 
-function marketSourceLabel(lot) {
-  const priceSource = lot?.hold_to_latest_price_source === 'realtime' ? '盘中实时' : '日线收盘'
+function quoteSourceLabel(priceSource, dataSource) {
+  const sourceKind = priceSource === 'realtime' ? '盘中实时' : '日线收盘'
   const sourceLabels = {
     miniqmt_full_market_daily: 'miniQMT',
     miniqmt: 'miniQMT',
@@ -361,8 +372,21 @@ function marketSourceLabel(lot) {
     tushare: 'Tushare',
     eastmoney_snapshot: '东财',
   }
-  const dataSource = sourceLabels[lot?.hold_to_latest_data_source] || lot?.hold_to_latest_data_source
-  return dataSource ? `${priceSource} · ${dataSource}` : priceSource
+  const dataLabel = sourceLabels[dataSource] || dataSource
+  return dataLabel ? `${sourceKind} · ${dataLabel}` : sourceKind
+}
+
+function marketSourceLabel(lot) {
+  return quoteSourceLabel(lot?.hold_to_latest_price_source, lot?.hold_to_latest_data_source)
+}
+
+function currentPriceTitle(lot) {
+  if (lot?.current_price == null) return ''
+  const updatedAt = fmtMarketTimestamp(
+    lot?.current_price_updated_at,
+    lot?.current_price_date,
+  )
+  return `${quoteSourceLabel(lot?.current_price_source, lot?.current_price_data_source)} · ${updatedAt}`
 }
 
 function marketMarkLabel(lot) {
