@@ -22,6 +22,27 @@ export async function fetchStrategyPoolBacktestResult({
   })
 }
 
+export async function fetchStrategyPoolChartContext({
+  symbol,
+  strategy,
+  preset,
+  signalDate,
+} = {}) {
+  const normSymbol = normalizeBacktestSymbol(symbol, 'stock')
+  if (!normSymbol) throw new Error('股票代码为空')
+  if (!strategy) throw new Error('策略为空')
+  if (!signalDate) throw new Error('信号日期为空')
+
+  const params = { symbol: normSymbol, strategy, signal_date: signalDate }
+  if (preset) params.preset = preset
+
+  return request({
+    method: 'get',
+    url: '/strategy-pool/chart-context',
+    params,
+  })
+}
+
 export async function fetchStrategyPoolParams({ strategy, preset } = {}) {
   if (!strategy) return {}
   const params = { strategy }

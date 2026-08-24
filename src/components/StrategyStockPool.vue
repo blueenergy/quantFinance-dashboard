@@ -37,80 +37,100 @@
       </div>
     </div>
 
-    <div class="strategy-info-card" v-if="currentParams">
-      <div class="info-header">
-        <span class="info-title">🛠️ 当前策略运行参数: {{ strategies.find(s => s.key === selectedStrategy)?.name }}</span>
-      </div>
+    <details class="strategy-info-card" v-if="currentParams">
+      <summary class="info-header">
+        <span class="info-title">当前策略参数: {{ strategies.find(s => s.key === selectedStrategy)?.name }}</span>
+      </summary>
       <div class="params-grid">
         <div v-for="(val, key) in currentParams" :key="key" class="param-item">
           <span class="param-label">{{ getParamLabel(key) }}:</span>
           <span class="param-value">{{ formatParamValue(key, val) }}</span>
         </div>
       </div>
-    </div>
+    </details>
 
     <div v-if="error" class="error-msg">
       {{ error }}
     </div>
 
     <div class="pool-content">
-      <div v-if="loading" class="loading-state">
+      <div v-if="loading && stocks.length === 0" class="loading-state">
         正在获取策略信号...
       </div>
       <div v-else-if="stocks.length === 0" class="empty-state">
         该日期暂无选股信号
       </div>
-      <div v-else class="stock-grid">
-        <div v-for="stock in stocks" :key="stock.symbol" class="stock-card" @click="openBacktestDetail(stock)">
-          <div class="stock-header">
-            <span class="stock-name">{{ stock.name || '未知' }}</span>
-            <span class="stock-symbol">{{ stock.symbol }}</span>
-          </div>
-          <div class="stock-body">
-            <div class="info-row">
-              <span class="label">信号日期:</span>
-              <span class="value">{{ formatDisplayDate(stock.date) }}</span>
+      <div v-else class="pool-workspace">
+        <div class="pool-list">
+          <div
+            v-for="stock in stocks"
+            :key="stock.symbol"
+            class="pool-row"
+            :class="{ selected: isSelected(stock) }"
+            role="button"
+            tabindex="0"
+            @click="onSelectStock(stock)"
+            @keydown.enter.prevent="onSelectStock(stock)"
+          >
+            <div class="pool-row-head">
+              <span class="stock-name">{{ stock.name || '未知' }}</span>
+              <span class="stock-symbol">{{ stock.symbol }}</span>
             </div>
-            <div class="info-row">
-              <span class="label">操作动作:</span>
-              <span class="value action-buy">买入 (BUY)</span>
+            <div class="pool-row-meta">
+              <span class="action-buy">买入</span>
+              <span v-if="stock.price" class="price-tag">{{ stock.price.toFixed(2) }}</span>
+              <span v-if="stock.hist_win_rate !== undefined" class="muted-metric">
+                胜率 {{ formatPercentage(stock.hist_win_rate) }}
+              </span>
             </div>
-            <!-- Future extension: buy price and analysis -->
-            <div class="info-row" v-if="stock.price">
-              <span class="label">建议股价:</span>
-              <span class="value price-tag">{{ stock.price.toFixed(2) }}</span>
-            </div>
-            <!-- Historical Performance Metrics -->
-            <div class="hist-metrics" v-if="stock.hist_win_rate !== undefined">
-              <div class="metrics-title">历史回测表现（360天）</div>
-              <div class="metrics-grid">
-                <div class="metric-item">
-                  <span class="metric-label">胜率:</span>
-                  <span class="metric-value" :class="getWinRateClass(stock.hist_win_rate)">{{ formatPercentage(stock.hist_win_rate) }}</span>
-                </div>
-                <div class="metric-item">
-                  <span class="metric-label">总回报:</span>
-                  <span class="metric-value" :class="getReturnClass(stock.hist_return)">{{ formatPercentage(stock.hist_return) }}</span>
-                </div>
-                <div class="metric-item">
-                  <span class="metric-label">平仓回合:</span>
-                  <span class="metric-value">{{ stock.hist_total_trades || 0 }}次</span>
-                </div>
-                <div class="metric-item">
-                  <span class="metric-label">夏普率:</span>
-                  <span class="metric-value">{{ formatSharpe(stock.hist_sharpe_ratio) }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="analysis-section" v-if="getStrategyReason(stock.strategy)">
-              <div class="analysis-label">买入原因分析:</div>
-              <div class="analysis-text">{{ getStrategyReason(stock.strategy) }}</div>
-            </div>
-          </div>
-          <div class="stock-footer">
-            <button class="view-btn" @click.stop="openBacktestDetail(stock)">查看回测</button>
+            <button type="button" class="row-backtest-btn" @click.stop="openBacktestDetail(stock)">
+              完整回测
+            </button>
           </div>
         </div>
+
+        <section class="pool-chart-pane">
+          <header class="chart-pane-head">
+            <div>
+              <h2 class="chart-title">
+                {{ selectedStock?.name || 'K 线验真' }}
+                <span v-if="selectedStock?.symbol" class="chart-symbol">{{ selectedStock.symbol }}</span>
+              </h2>
+              <p class="chart-disclaimer">{{ chartDisclaimer || '含信号日之后走势，仅供事后验证。' }}</p>
+            </div>
+            <button
+              type="button"
+              class="view-btn chart-backtest-btn"
+              :disabled="!selectedStock"
+              @click="selectedStock && openBacktestDetail(selectedStock)"
+            >
+              查看完整回测
+            </button>
+          </header>
+
+          <div v-if="forwardReturns?.horizons?.length" class="forward-strip">
+            <span class="forward-label">事后收益</span>
+            <span
+              v-for="item in forwardReturns.horizons"
+              :key="item.days"
+              class="forward-item"
+              :class="forwardClass(item)"
+            >
+              +{{ item.days }}日
+              {{ formatForwardReturn(item) }}
+            </span>
+          </div>
+
+          <div v-if="chartError" class="error-msg">{{ chartError }}</div>
+          <div v-if="chartLoading" class="chart-loading">加载 K 线与买卖点…</div>
+          <StockKLineChart
+            v-else-if="chartRecords.length"
+            :records="chartRecords"
+            :markers="chartMarkers"
+            :chart-meta="chartMeta"
+          />
+          <div v-else class="chart-empty">选择左侧股票查看日 K 与历史买卖点</div>
+        </section>
       </div>
     </div>
 
@@ -136,9 +156,11 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { loadStrategyPoolBacktestDetail } from '../api/strategyPool'
+import { useStrategyPoolChart } from '../composables/useStrategyPoolChart'
 import request from '../utils/request'
 import BacktestDeployActions from './BacktestDeployActions.vue'
 import BacktestResultDetailModal from './BacktestResultDetailModal.vue'
+import StockKLineChart from './StockKLineChart.vue'
 
 // 监听来自App的策略上下文恢复事件
 const restoreContext = (event) => {
@@ -199,6 +221,19 @@ const availableDates = ref([])
 const stocks = ref([])
 const loading = ref(false)
 const error = ref(null)
+
+const {
+  selectedStock,
+  loading: chartLoading,
+  error: chartError,
+  records: chartRecords,
+  markers: chartMarkers,
+  forwardReturns,
+  disclaimer: chartDisclaimer,
+  chartMeta,
+  selectStock,
+  clear: clearChart,
+} = useStrategyPoolChart()
 
 const backendParams = ref(null)
 
@@ -272,6 +307,31 @@ function closeBacktestDetail() {
   detailMeta.value = {}
 }
 
+function isSelected(stock) {
+  return Boolean(stock?.symbol && selectedStock.value?.symbol === stock.symbol)
+}
+
+function onSelectStock(stock) {
+  selectStock(stock, {
+    strategy: selectedStrategy.value,
+    preset: selectedPreset.value,
+  })
+}
+
+function formatForwardReturn(item) {
+  if (!item?.available || item.return == null) return '—'
+  const pct = item.return * 100
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct.toFixed(1)}%`
+}
+
+function forwardClass(item) {
+  if (!item?.available || item.return == null) return 'forward-na'
+  if (item.return > 0) return 'forward-pos'
+  if (item.return < 0) return 'forward-neg'
+  return 'forward-flat'
+}
+
 const getParamLabel = (key) => {
   const labels = {
     limit_up_rate: '涨停阈值',
@@ -322,34 +382,9 @@ const formatDisplayDate = (dateStr) => {
   return `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`
 }
 
-const formatTime = (dtStr) => {
-  if (!dtStr) return 'N/A'
-  if (dtStr.includes(' ')) return dtStr.split(' ')[1]
-  return dtStr
-}
-
 const formatPercentage = (val) => {
   if (val === null || val === undefined) return 'N/A'
   return (val * 100).toFixed(1) + '%'
-}
-
-const formatSharpe = (val) => {
-  if (val === null || val === undefined || val === 0) return 'N/A'
-  return val.toFixed(2)
-}
-
-const getWinRateClass = (winRate) => {
-  if (winRate >= 0.6) return 'metric-excellent'
-  if (winRate >= 0.5) return 'metric-good'
-  if (winRate >= 0.4) return 'metric-fair'
-  return 'metric-poor'
-}
-
-const getReturnClass = (ret) => {
-  if (ret >= 0.1) return 'metric-excellent'
-  if (ret >= 0.05) return 'metric-good'
-  if (ret >= 0) return 'metric-fair'
-  return 'metric-poor'
 }
 
 const getPresetLabel = (preset) => {
@@ -463,6 +498,7 @@ const fetchDates = async () => {
 const fetchStocks = async () => {
   if (!selectedDate.value) {
     stocks.value = []
+    clearChart()
     return
   }
   
@@ -511,25 +547,15 @@ const onStrategyChange = async () => {
   }
 }
 
-// The viewChart function is now defined above in the modal section
-// Emitting the event is no longer needed since we show the chart inline
-const emitViewChartEvent = (stock) => {
-  emit('view-chart', {
-    symbol: stock.symbol,
-    signalDate: stock.date,
-    strategy: stock.strategy,
-    preset: stock.preset || selectedPreset.value  // Pass preset for trade history lookup
-  })
-}
-
-const getStrategyReason = (strategy) => {
-  const reasons = {
-    'hidden_dragon': '前板龙头回调：该股前期出现强力涨停（龙抬头），近期缩量回调至支撑均线，形态符合潜龙低吸标准，看好二次起爆。',
-    'turtle': '趋势突破：价格突破过去20日（或50日）最高价，进入强趋势通道，符合海龟交易法则入场信号。',
-    'single_yang': '单阳不破：前期出现一根大阳线，随后价格在阳线实体范围内缩量整理，显示主力控盘力度强，蓄势待发。'
+watch(stocks, (list) => {
+  if (!Array.isArray(list) || list.length === 0) {
+    clearChart()
+    return
   }
-  return reasons[strategy] || '符合策略量化选股标准。'
-}
+  const current = selectedStock.value
+  const match = current && list.find((stock) => stock.symbol === current.symbol)
+  onSelectStock(match || list[0])
+})
 
 // 监听日期变化，自动获取股票
 watch(selectedDate, (newDate) => {
@@ -582,6 +608,12 @@ watch(selectedPreset, async () => {
   margin-bottom: 12px;
   border-bottom: 1px solid rgba(138, 43, 226, 0.2);
   padding-bottom: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.strategy-info-card summary::-webkit-details-marker {
+  display: none;
 }
 
 .info-title {
@@ -653,10 +685,141 @@ select {
   cursor: not-allowed;
 }
 
-.stock-grid {
+.pool-workspace {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.pool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 640px;
+  overflow: auto;
+}
+
+.pool-row {
+  text-align: left;
+  background: rgba(42, 42, 94, 0.6);
+  border-radius: 10px;
+  border: 1px solid rgba(138, 43, 226, 0.2);
+  padding: 10px 12px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.pool-row.selected {
+  border-color: #c4b5fd;
+  background: rgba(76, 29, 149, 0.55);
+}
+
+.pool-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.pool-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  align-items: center;
+}
+
+.muted-metric {
+  color: #94a3b8;
+}
+
+.row-backtest-btn {
+  margin-top: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 6px;
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.pool-chart-pane {
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(138, 43, 226, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+  min-height: 480px;
+}
+
+.chart-pane-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.chart-title {
+  margin: 0;
+  font-size: 18px;
+  color: #fff;
+}
+
+.chart-symbol {
+  margin-left: 8px;
+  font-family: monospace;
+  font-size: 13px;
+  color: #c4b5fd;
+}
+
+.chart-disclaimer {
+  margin: 4px 0 0;
+  color: #fbbf24;
+  font-size: 12px;
+}
+
+.chart-backtest-btn {
+  width: auto;
+  padding: 8px 14px;
+}
+
+.forward-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.forward-label {
+  color: #94a3b8;
+}
+
+.forward-pos { color: #4ade80; font-weight: 700; }
+.forward-neg { color: #f87171; font-weight: 700; }
+.forward-flat, .forward-na { color: #94a3b8; }
+
+.chart-loading,
+.chart-empty {
+  min-height: 380px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #b19cd9;
+}
+
+@media (max-width: 960px) {
+  .pool-workspace {
+    grid-template-columns: 1fr;
+  }
+  .pool-list {
+    max-height: 280px;
+  }
 }
 
 .stock-card {

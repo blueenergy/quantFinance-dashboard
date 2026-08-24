@@ -66,6 +66,15 @@ describe('StrategyStockPool - local backtest detail', () => {
           ],
         }
       }
+      if (u.includes('/strategy-pool/chart-context')) {
+        return {
+          success: true,
+          kline: { records: [] },
+          markers: [],
+          rounds: [],
+          forward_returns: { horizons: [] },
+        }
+      }
       if (u.includes('/strategy-pool/backtest-result')) {
         return {
           task_id: 'pool_hidden_dragon_dragon_default_000001.SZ_20260109',

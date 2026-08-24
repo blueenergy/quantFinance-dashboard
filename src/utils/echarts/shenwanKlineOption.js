@@ -32,9 +32,10 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
   })
   const showPctLine = _meta?.showPctLine === true
   const hasPct = showPctLine && pcts.some((p) => p != null)
+  const showMa = _meta?.showMa !== false
   const maPeriods = movingAveragePeriods(_meta?.tf)
-  const maFast = movingAverage(closes, maPeriods.fast)
-  const maSlow = movingAverage(closes, maPeriods.slow)
+  const maFast = showMa ? movingAverage(closes, maPeriods.fast) : []
+  const maSlow = showMa ? movingAverage(closes, maPeriods.slow) : []
   const vols = data.map((r) => volumeToHands(r))
   const hasVol = vols.some((v) => v != null)
   const amountYi = data.map((r) => amountToYi(r))
@@ -63,7 +64,7 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
   const xVol = hasSub ? 1 : 0
   const xAmt = hasSub && subBoth ? 2 : (hasSub && hasAmt ? 1 : 0)
 
-  return {
+  const option = {
     backgroundColor: 'transparent',
     textStyle: { color: '#ccc' },
     axisPointer: { link: [{ xAxisIndex: 'all' }], type: 'cross' },
@@ -81,6 +82,7 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
       maFast,
       maSlow,
       maPeriods,
+      showMa,
       pcts,
       hasPct,
       hasSub,
@@ -93,10 +95,19 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
       yVol,
       yAmt,
       markers,
-      fmtAxis
+      fmtAxis,
+      markLineDate: _meta?.markLineDate
     }),
     tooltip: buildShenwanTooltip(data, { fmtAxis, formatNum2, toNumOrNull, formatVolShow, formatAmount, formatMvWan })
   }
+
+  applyFocusZoom(option, times, {
+    focusDate: _meta?.focusDate,
+    fmtAxis,
+    barsBefore: _meta?.focusBarsBefore,
+    barsAfter: _meta?.focusBarsAfter
+  })
+  return option
 }
 
 function barUpDnColor (o, c) {
@@ -265,6 +276,7 @@ function buildSeries (ctx) {
     maFast,
     maSlow,
     maPeriods,
+    showMa = true,
     pcts,
     hasPct,
     hasSub,
@@ -277,39 +289,50 @@ function buildSeries (ctx) {
     yVol,
     yAmt,
     markers,
-    fmtAxis
+    fmtAxis,
+    markLineDate
   } = ctx
   const markPointData = buildMarkerPoints(markers, fmtAxis)
-  const s = [
-    {
-      name: 'K线',
-      type: 'candlestick',
-      xAxisIndex: 0,
-      yAxisIndex: 0,
-      data: ohlc,
-      itemStyle: {
-        color: '#ef5350',
-        color0: '#26a69a',
-        borderColor: '#ef5350',
-        borderColor0: '#26a69a'
-      },
-      ...(markPointData.length ? {
-        markPoint: {
-          symbol: 'circle',
-          symbolSize: 24,
-          data: markPointData,
-          label: {
-            color: '#fff',
-            fontSize: 11,
-            fontWeight: 700,
-            formatter: (params) => params?.data?.label || '9'
-          }
-        }
-      } : {})
+  const candle = {
+    name: 'K线',
+    type: 'candlestick',
+    xAxisIndex: 0,
+    yAxisIndex: 0,
+    data: ohlc,
+    itemStyle: {
+      color: '#ef5350',
+      color0: '#26a69a',
+      borderColor: '#ef5350',
+      borderColor0: '#26a69a'
     }
-  ]
-  s.push(movingAverageSeries(`MA${maPeriods.fast}`, maFast, '#facc15', 3))
-  s.push(movingAverageSeries(`MA${maPeriods.slow}`, maSlow, '#a855f7', 2))
+  }
+  if (markPointData.length) {
+    candle.markPoint = {
+      symbol: 'circle',
+      symbolSize: 24,
+      data: markPointData,
+      label: {
+        color: '#fff',
+        fontSize: 11,
+        fontWeight: 700,
+        formatter: (params) => params?.data?.label || '9'
+      }
+    }
+  }
+  const axisDate = markLineDate ? fmtAxis(markLineDate) : ''
+  if (axisDate) {
+    candle.markLine = {
+      symbol: 'none',
+      label: { formatter: '信号日', color: '#fbbf24', fontSize: 11 },
+      lineStyle: { color: '#fbbf24', type: 'dashed', width: 1 },
+      data: [{ xAxis: axisDate }]
+    }
+  }
+  const s = [candle]
+  if (showMa !== false) {
+    s.push(movingAverageSeries(`MA${maPeriods.fast}`, maFast, '#facc15', 3))
+    s.push(movingAverageSeries(`MA${maPeriods.slow}`, maSlow, '#a855f7', 2))
+  }
   if (hasPct) {
     s.push({
       name: '涨跌幅%',
@@ -420,16 +443,68 @@ function trimFixed (value, digits) {
   return Number(value).toFixed(digits).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1')
 }
 
+function applyFocusZoom (option, times, { focusDate, fmtAxis, barsBefore, barsAfter } = {}) {
+  if (!focusDate || !Array.isArray(times) || !times.length || typeof fmtAxis !== 'function') return
+  const key = fmtAxis(focusDate)
+  const compact = String(focusDate || '').replace(/-/g, '')
+  let idx = times.indexOf(key)
+  if (idx < 0) {
+    idx = times.findIndex((item) => String(item || '').replace(/-/g, '') === compact)
+  }
+  if (idx < 0) return
+  const before = Number.isFinite(Number(barsBefore)) ? Number(barsBefore) : 60
+  const after = Number.isFinite(Number(barsAfter)) ? Number(barsAfter) : 40
+  const startIdx = Math.max(0, idx - before)
+  const endIdx = Math.min(times.length - 1, idx + after)
+  const n = times.length
+  const start = (startIdx / n) * 100
+  const end = ((endIdx + 1) / n) * 100
+  const zooms = Array.isArray(option.dataZoom) ? option.dataZoom : []
+  zooms.forEach((zoom) => {
+    zoom.start = start
+    zoom.end = Math.max(start + 1, end)
+  })
+}
+
+function markerKind (marker) {
+  if (marker?.kind === 'buy' || marker?.kind === 'sell') return marker.kind
+  if (marker?.direction === 'up' || marker?.direction === 'down') return 'nineturn'
+  return 'nineturn'
+}
+
 function buildMarkerPoints (markers, fmtAxis) {
   if (!Array.isArray(markers) || !markers.length) return []
   return markers
     .map((marker) => {
-      const direction = marker.direction
-      const isTop = direction === 'up'
+      const kind = markerKind(marker)
       const date = fmtAxis(marker.trade_date)
+      if (!date) return null
+      if (kind === 'buy' || kind === 'sell') {
+        const isBuy = kind === 'buy'
+        const priced = Number(marker.price)
+        const rawY = Number.isFinite(priced)
+          ? priced
+          : Number(isBuy ? marker.low : marker.high)
+        if (!Number.isFinite(rawY)) return null
+        return {
+          name: isBuy ? '买入' : '卖出',
+          coord: [date, rawY],
+          value: isBuy ? '买' : '卖',
+          label: isBuy ? '买' : '卖',
+          symbol: 'pin',
+          symbolSize: marker.highlighted ? 42 : 34,
+          symbolOffset: isBuy ? [0, 10] : [0, -10],
+          itemStyle: {
+            color: isBuy ? '#22c55e' : '#ef4444',
+            borderColor: marker.highlighted ? '#fde68a' : '#f8fafc',
+            borderWidth: marker.highlighted ? 2 : 1
+          }
+        }
+      }
+      const isTop = marker.direction === 'up'
       const rawY = isTop ? marker.high : marker.low
       const y = Number(rawY)
-      if (!date || !Number.isFinite(y)) return null
+      if (!Number.isFinite(y)) return null
       return {
         name: marker.grade === 'strong' ? '强九转' : marker.grade === 'perfect' ? '完美九转' : '九转',
         coord: [date, isTop ? y * 1.012 : y * 0.988],

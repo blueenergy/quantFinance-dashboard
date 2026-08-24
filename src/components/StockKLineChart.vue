@@ -23,6 +23,10 @@ const props = defineProps({
     type: String,
     default: '1d',
   },
+  chartMeta: {
+    type: Object,
+    default: () => ({}),
+  },
 })
 
 const chartRef = ref(null)
@@ -51,7 +55,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => [props.records, props.markers, props.tf],
+  () => [props.records, props.markers, props.tf, props.chartMeta],
   () => {
     nextTick(() => {
       void renderChart()
@@ -99,7 +103,7 @@ async function renderChart() {
       formatAmount: formatAmountByUnit,
       formatMvWan,
       markers: props.markers,
-    }, { tf: props.tf }),
+    }, { tf: props.tf, ...(props.chartMeta || {}) }),
     true,
   )
   instance.resize()

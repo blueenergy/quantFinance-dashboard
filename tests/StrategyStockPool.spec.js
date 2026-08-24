@@ -66,6 +66,16 @@ describe('StrategyStockPool', () => {
       if (url.includes('params')) {
         return Promise.resolve({ success: true, found: false, params: null })
       }
+      if (url.includes('chart-context')) {
+        return Promise.resolve({
+          success: true,
+          kline: { records: [] },
+          markers: [],
+          rounds: [],
+          forward_returns: { horizons: [] },
+          disclaimer: '含信号日之后走势，仅供事后验证。',
+        })
+      }
       return Promise.reject(new Error('Unexpected API call: ' + url))
     })
 
@@ -107,6 +117,9 @@ describe('StrategyStockPool', () => {
       if (url.includes('params')) {
         return Promise.resolve({ success: true, found: false, params: null })
       }
+      if (url.includes('chart-context')) {
+        return Promise.resolve({ success: true, kline: { records: [] }, markers: [] })
+      }
       return Promise.reject(new Error('Unexpected API call'))
     })
 
@@ -132,6 +145,9 @@ describe('StrategyStockPool', () => {
       }
       if (url.includes('params')) {
         return Promise.resolve({ success: true, found: false, params: null })
+      }
+      if (url.includes('chart-context')) {
+        return Promise.resolve({ success: true, kline: { records: [] }, markers: [] })
       }
       return Promise.reject(new Error('Unexpected API call'))
     })
@@ -159,6 +175,9 @@ describe('StrategyStockPool', () => {
       }
       if (url.includes('params')) {
         return Promise.resolve({ success: true, found: false, params: null })
+      }
+      if (url.includes('chart-context')) {
+        return Promise.resolve({ success: true, kline: { records: [] }, markers: [] })
       }
       return Promise.reject(new Error('Unexpected API call'))
     })
@@ -191,6 +210,9 @@ describe('StrategyStockPool', () => {
       }
       if (url.includes('stocks') && url.includes('hidden_dragon')) {
         return Promise.resolve({ success: true, stocks: [] })
+      }
+      if (url.includes('chart-context')) {
+        return Promise.resolve({ success: true, kline: { records: [] }, markers: [] })
       }
 
       return Promise.reject(new Error('Unexpected API call: ' + url))
