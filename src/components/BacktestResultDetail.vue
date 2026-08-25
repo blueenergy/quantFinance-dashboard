@@ -216,7 +216,7 @@ const props = defineProps({
 
 const metrics = computed(() => props.result?.metrics || {})
 const trades = computed(() => (Array.isArray(props.result?.trades) ? props.result.trades : []))
-const tradePreview = computed(() => trades.value.slice(0, props.tradeLimit))
+const tradePreview = computed(() => trades.value.slice(-props.tradeLimit))
 const equityCurve = computed(() =>
   Array.isArray(props.result?.equity_curve) ? props.result.equity_curve : [],
 )

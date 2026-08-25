@@ -26,6 +26,7 @@
             :loading="loading"
             :loading-message="loadingMessage"
             :error="error"
+            :trade-limit="tradeLimit"
           >
             <template v-if="$slots.actions" #actions>
               <slot name="actions" />
@@ -49,6 +50,7 @@ defineProps({
   loading: { type: Boolean, default: false },
   loadingMessage: { type: String, default: '加载结果中…' },
   error: { type: String, default: '' },
+  tradeLimit: { type: Number, default: 20 },
 })
 
 const emit = defineEmits(['close'])

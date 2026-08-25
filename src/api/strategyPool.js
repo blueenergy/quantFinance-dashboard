@@ -1,17 +1,23 @@
 import request from '../utils/request'
 import { normalizeBacktestSymbol } from '../utils/backtestSymbolUtils'
 
+export const STRATEGY_POOL_BACKTEST_DAYS_BACK = 2200
+export const STRATEGY_POOL_CHART_LOOKBACK_DAYS = 1200
+export const STRATEGY_POOL_CHART_MAX_ROUNDS = 20
+export const STRATEGY_POOL_TRADE_PREVIEW_LIMIT = 80
+
 export async function fetchStrategyPoolBacktestResult({
   symbol,
   strategy,
   preset,
   signalDate,
+  daysBack = STRATEGY_POOL_BACKTEST_DAYS_BACK,
 } = {}) {
   const normSymbol = normalizeBacktestSymbol(symbol, 'stock')
   if (!normSymbol) throw new Error('股票代码为空')
   if (!strategy) throw new Error('策略为空')
 
-  const params = { symbol: normSymbol, strategy }
+  const params = { symbol: normSymbol, strategy, days_back: daysBack }
   if (preset) params.preset = preset
   if (signalDate) params.end_date = signalDate
 
@@ -33,7 +39,13 @@ export async function fetchStrategyPoolChartContext({
   if (!strategy) throw new Error('策略为空')
   if (!signalDate) throw new Error('信号日期为空')
 
-  const params = { symbol: normSymbol, strategy, signal_date: signalDate }
+  const params = {
+    symbol: normSymbol,
+    strategy,
+    signal_date: signalDate,
+    lookback_days: STRATEGY_POOL_CHART_LOOKBACK_DAYS,
+    max_rounds: STRATEGY_POOL_CHART_MAX_ROUNDS,
+  }
   if (preset) params.preset = preset
 
   return request({

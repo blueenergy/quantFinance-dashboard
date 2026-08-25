@@ -79,6 +79,7 @@
             <div class="pool-row-meta">
               <span class="action-buy">买入</span>
               <span v-if="stock.price" class="price-tag">{{ stock.price.toFixed(2) }}</span>
+              <span v-if="stockIndustry(stock)" class="industry-chip">{{ stockIndustry(stock) }}</span>
               <span v-if="stock.hist_win_rate !== undefined" class="muted-metric">
                 胜率 {{ formatPercentage(stock.hist_win_rate) }}
               </span>
@@ -95,6 +96,11 @@
               <h2 class="chart-title">
                 {{ selectedStock?.name || 'K 线验真' }}
                 <span v-if="selectedStock?.symbol" class="chart-symbol">{{ selectedStock.symbol }}</span>
+                <span
+                  v-if="selectedIndustry"
+                  class="industry-chip industry-chip-lg"
+                  :title="'申万一级行业 ' + selectedIndustry"
+                >申万L1 · {{ selectedIndustry }}</span>
               </h2>
               <p class="chart-disclaimer">{{ chartDisclaimer || '含信号日之后走势，仅供事后验证。' }}</p>
             </div>
@@ -143,6 +149,7 @@
       :loading="detailLoading"
       :loading-message="detailLoadingMessage"
       :error="detailError"
+      :trade-limit="STRATEGY_POOL_TRADE_PREVIEW_LIMIT"
       @close="closeBacktestDetail"
     >
       <template #actions>
@@ -155,7 +162,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { loadStrategyPoolBacktestDetail } from '../api/strategyPool'
+import { loadStrategyPoolBacktestDetail, STRATEGY_POOL_TRADE_PREVIEW_LIMIT } from '../api/strategyPool'
 import { useStrategyPoolChart } from '../composables/useStrategyPoolChart'
 import request from '../utils/request'
 import BacktestDeployActions from './BacktestDeployActions.vue'
@@ -210,7 +217,8 @@ onUnmounted(() => {
 const strategies = ref([
   { key: 'hidden_dragon', name: '潜龙低吸' },
   { key: 'turtle', name: '海龟交易' },
-  { key: 'single_yang', name: '单阳不破' }
+  { key: 'single_yang', name: '单阳不破' },
+  { key: 'k_regime', name: '量价择时' },
 ])
 
 const selectedStrategy = ref('hidden_dragon')
@@ -318,6 +326,13 @@ function onSelectStock(stock) {
   })
 }
 
+function stockIndustry(stock) {
+  if (!stock) return ''
+  return String(stock.industry || stock.sw_l1 || '').trim()
+}
+
+const selectedIndustry = computed(() => stockIndustry(selectedStock.value))
+
 function formatForwardReturn(item) {
   if (!item?.available || item.return == null) return '—'
   const pct = item.return * 100
@@ -359,7 +374,14 @@ const getParamLabel = (key) => {
     max_units: '最大加仓单元',
     add_step_mult: '加仓步长(ATR倍数)',
     trailing_stop_mult: '移动止损(ATR倍数)',
-    exit_mode: '离场模式'
+    exit_mode: '离场模式',
+    regime_rule: '择时规则',
+    confirm_days: '入场确认天数',
+    exit_confirm_days: '离场确认天数',
+    fast_alpha: 'K快线 alpha',
+    slow_alpha: 'K慢线 alpha',
+    industries: '扫描行业',
+    price_adjust: '复权',
   }
   return labels[key] || key
 }
@@ -401,7 +423,8 @@ const getPresetLabel = (preset) => {
     'turtle_conservative': '保守',
     'turtle_standard': '标准',
     'turtle_classic': '经典',
-    'turtle_aggressive': '激进'
+    'turtle_aggressive': '激进',
+    'k_regime_default': '标准',
   }
   return labels[preset] || preset
 }
@@ -774,6 +797,26 @@ select {
   font-family: monospace;
   font-size: 13px;
   color: #c4b5fd;
+}
+
+.industry-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.industry-chip-lg {
+  margin-left: 10px;
+  vertical-align: middle;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .chart-disclaimer {

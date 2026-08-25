@@ -112,7 +112,11 @@ describe('StrategyStockPool - local backtest detail', () => {
     expect(pageText()).toContain('部署到实盘')
 
     const urls = requestMock.mock.calls.map((c) => urlOf(c))
-    expect(urls.some((u) => u.includes('/strategy-pool/backtest-result'))).toBe(true)
+    const backtestCalls = requestMock.mock.calls.filter(
+      ([cfg]) => urlOf([cfg]).includes('/strategy-pool/backtest-result'),
+    )
+    expect(backtestCalls.length).toBeGreaterThanOrEqual(1)
+    expect(backtestCalls[0][0].params.days_back).toBe(2200)
     expect(urls.some((u) => u.includes('/backtest/tasks'))).toBe(false)
 
     document.body.querySelector('.deploy-btn').click()

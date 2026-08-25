@@ -235,4 +235,26 @@ describe('StrategyStockPool', () => {
 
     expect(paramsUrls.some((u) => String(u).includes('preset=dragon_aggressive'))).toBe(true)
   })
+
+  it('lists k_regime as an independent strategy type', async () => {
+    requestMock.mockImplementation((config) => {
+      const url = urlOf([config])
+      if (url.includes('dates')) return Promise.resolve({ success: true, dates: [] })
+      if (url.includes('stocks')) return Promise.resolve({ success: true, stocks: [] })
+      if (url.includes('presets')) return Promise.resolve({ success: true, presets: ['k_regime_default'] })
+      if (url.includes('params')) return Promise.resolve({ success: true, found: false, params: null })
+      if (url.includes('chart-context')) {
+        return Promise.resolve({ success: true, kline: { records: [] }, markers: [] })
+      }
+      return Promise.reject(new Error('Unexpected API call: ' + url))
+    })
+
+    wrapper = mount(StrategyStockPool)
+    await flushPromises()
+
+    const keys = wrapper.vm.strategies.map((item) => item.key)
+    expect(keys).toContain('k_regime')
+    expect(wrapper.vm.strategies.find((item) => item.key === 'k_regime').name).toBe('量价择时')
+    expect(keys).toContain('hidden_dragon')
+  })
 })

@@ -84,6 +84,30 @@ describe('BacktestResultDetail', () => {
     wrapper.unmount()
   })
 
+  it('previews the most recent trades, not the oldest', () => {
+    const trades = [1, 2, 3, 4, 5].map((n) => ({
+      datetime: `2025-01-0${n}`,
+      action: n % 2 ? 'buy' : 'sell',
+      price: n,
+      quantity: 100,
+      commission: 0,
+      pnl: 0,
+      cumulative_pnl: 0,
+    }))
+    const wrapper = mount(BacktestResultDetail, {
+      props: {
+        result: { ...SAMPLE_RESULT, trades },
+        tradeLimit: 2,
+      },
+    })
+    const text = wrapper.text()
+    expect(text).toContain('最近 2 / 5 笔委托')
+    expect(text).toContain('2025-01-04')
+    expect(text).toContain('2025-01-05')
+    expect(text).not.toContain('2025-01-01')
+    wrapper.unmount()
+  })
+
   it('shows loading and error states without fetching', () => {
     const loading = mount(BacktestResultDetail, {
       props: { loading: true, loadingMessage: '加载中测试' },

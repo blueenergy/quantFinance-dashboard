@@ -44,7 +44,7 @@ describe('StrategyStockPool chart pane', () => {
         return {
           success: true,
           stocks: [
-            { symbol: '000001.SZ', name: '平安银行', strategy: 'hidden_dragon', date: '20260109', price: 10.5 },
+            { symbol: '000001.SZ', name: '平安银行', strategy: 'hidden_dragon', date: '20260109', price: 10.5, industry: '银行' },
             { symbol: '000002.SZ', name: '万科A', strategy: 'hidden_dragon', date: '20260109' },
           ],
         }
@@ -79,6 +79,8 @@ describe('StrategyStockPool chart pane', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('平安银行')
+    expect(wrapper.text()).toContain('申万L1 · 银行')
+    expect(wrapper.find('.industry-chip-lg').text()).toContain('银行')
     expect(wrapper.text()).toContain('事后验证')
     expect(wrapper.text()).toContain('+1日')
     expect(wrapper.find('.kline-stub').exists()).toBe(true)
@@ -93,6 +95,7 @@ describe('StrategyStockPool chart pane', () => {
     await flushPromises()
 
     expect(wrapper.vm.selectedStock.symbol).toBe('000002.SZ')
+    expect(wrapper.find('.industry-chip-lg').exists()).toBe(false)
     expect(requestMock.mock.calls.some(([cfg]) => urlOf([cfg]).includes('backtest-result'))).toBe(false)
 
     wrapper.unmount()
