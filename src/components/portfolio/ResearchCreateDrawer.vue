@@ -260,6 +260,23 @@
             非牛空仓
             <small class="field-hint">独立仓位模式，不必和始终满仓一起跑。{{ REGIME_CASH_REMINDER }}</small>
           </label>
+          <label v-if="Boolean(form.regime_cash)" class="score-spec-field">
+            择时规则
+            <select
+              class="regime-rule-select"
+              :value="form.regime_rule || DEFAULT_REGIME_RULE"
+              @change="patchForm({ regime_rule: $event.target.value })"
+            >
+              <option
+                v-for="option in regimeRuleSelectOptions(form.regime_rule)"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+            <small class="field-hint">{{ REGIME_RULE_HINT }}</small>
+          </label>
         </div>
       </div>
       <footer class="drawer-footer">
@@ -289,7 +306,7 @@ import {
   FIXED_TOP_N_SELECTION_MODE,
   resolveScoreColumns,
 } from '../../utils/portfolioResearchPayload'
-import { REGIME_CASH_REMINDER } from '../../utils/regimeCash'
+import { REGIME_CASH_REMINDER, REGIME_RULE_HINT, DEFAULT_REGIME_RULE, regimeRuleSelectOptions } from '../../utils/regimeCash'
 
 const props = defineProps({
   open: { type: Boolean, default: false },

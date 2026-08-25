@@ -4,6 +4,19 @@ export const REGIME_CASH_REMINDER =
 export const REGIME_MODE_OFF = 'off'
 export const REGIME_MODE_CASH = 'bull_g60_else_cash'
 
+export const DEFAULT_REGIME_RULE = 'k_slow_anchor'
+export const VOLUME_PRICE_REGIME_RULE = 'k_slow_anchor_with_vol_and_atr'
+
+export const REGIME_RULE_OPTIONS = [
+  { value: DEFAULT_REGIME_RULE, label: '价格K交叉（默认）' },
+  { value: VOLUME_PRICE_REGIME_RULE, label: '量价择时（放量+低波动）' },
+  { value: 'k_slow_anchor_with_volume', label: '仅放量过滤' },
+  { value: 'k_slow_anchor_with_volatility', label: '仅低波动过滤' },
+]
+
+export const REGIME_RULE_HINT =
+  '仅对非牛空仓生效。量价择时：牛市买入需放量且波动收缩；熊市退出不加过滤。指数日线缺成交量时会退化为价格交叉。'
+
 const REGIME_MODE_LABELS = {
   [REGIME_MODE_OFF]: '始终满仓',
   [REGIME_MODE_CASH]: '非牛空仓',
@@ -72,4 +85,23 @@ export function indexRegimeTone(label) {
 
 export function regimeCashFromParams(params = {}) {
   return regimeFlagsFromParams(params).regime_cash
+}
+
+export function regimeRuleFromParams(params = {}) {
+  const text = String(params?.regime_rule || '').trim()
+  return text || DEFAULT_REGIME_RULE
+}
+
+export function formatRegimeRule(ruleId) {
+  const id = String(ruleId || '').trim() || DEFAULT_REGIME_RULE
+  const option = REGIME_RULE_OPTIONS.find((item) => item.value === id)
+  return option?.label || id
+}
+
+export function regimeRuleSelectOptions(currentRule) {
+  const selected = String(currentRule || '').trim()
+  if (!selected || REGIME_RULE_OPTIONS.some((item) => item.value === selected)) {
+    return REGIME_RULE_OPTIONS
+  }
+  return [...REGIME_RULE_OPTIONS, { value: selected, label: selected }]
 }

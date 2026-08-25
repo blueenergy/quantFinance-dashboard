@@ -1,7 +1,7 @@
 /** Display helpers for Portfolio Research (no network, no Vue refs). */
 
 import { compositeScorePreset, scoreWeightSummary } from './scoreUtils'
-import { formatIndexRegimeLabel, formatRegimeModes } from './regimeCash'
+import { formatIndexRegimeLabel, formatRegimeModes, formatRegimeRule } from './regimeCash'
 
 export const UNIVERSE_OPTIONS = [
   { value: 'hs300', label: 'hs300 - 沪深300' },
@@ -747,6 +747,7 @@ export function buildResearchParamRows(job, options = UNIVERSE_OPTIONS) {
     { key: 'initial_capital', label: 'initial_capital', value: money(params.initial_capital) },
     { key: 'trailing_stop_pcts', label: 'trailing_stop', value: formatTrailingStopParamValue(params) },
     { key: 'regime_modes', label: '仓位模式', value: formatRegimeModes(params) },
+    { key: 'regime_rule', label: '择时规则', value: formatRegimeRule(params.regime_rule) },
     { key: 'force', label: 'force', value: formatBool(params.force) },
   ]
   return rows.map((row) => ({ ...row, value: row.value || '-' }))

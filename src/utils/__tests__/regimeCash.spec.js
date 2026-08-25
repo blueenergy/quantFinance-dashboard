@@ -3,10 +3,13 @@ import {
   buildRegimeModesFromForm,
   formatIndexRegimeLabel,
   formatRegimeModes,
+  formatRegimeRule,
   indexRegimeTone,
   isRegimeCashEnabled,
   regimeCashFromParams,
   regimeFlagsFromParams,
+  regimeRuleFromParams,
+  VOLUME_PRICE_REGIME_RULE,
 } from '../regimeCash'
 
 describe('regime modes', () => {
@@ -47,5 +50,14 @@ describe('index regime labels', () => {
     expect(formatIndexRegimeLabel('')).toBe('-')
     expect(indexRegimeTone('BULL')).toBe('bull')
     expect(indexRegimeTone('unknown')).toBe('')
+  })
+})
+
+describe('regime rule', () => {
+  it('defaults missing rules to price K and labels volume-price timing', () => {
+    expect(regimeRuleFromParams({})).toBe('k_slow_anchor')
+    expect(regimeRuleFromParams({ regime_rule: VOLUME_PRICE_REGIME_RULE })).toBe(VOLUME_PRICE_REGIME_RULE)
+    expect(formatRegimeRule(VOLUME_PRICE_REGIME_RULE)).toContain('量价择时')
+    expect(formatRegimeRule('k_slow_anchor')).toContain('价格K交叉')
   })
 })

@@ -143,6 +143,23 @@ describe('buildPortfolioResearchPayload', () => {
     expect(payload.universe_index).toBe('csi500')
     expect(payload.regime_modes).toEqual(['bull_g60_else_cash'])
     expect(payload.regime_cash).toBe(true)
+    expect(payload.regime_rule).toBe('k_slow_anchor')
+  })
+
+  it('sends volume-price timing only when non-bull cash is on', () => {
+    const withCash = buildPortfolioResearchPayload({
+      ...baseForm,
+      regime_always_invest: false,
+      regime_cash: true,
+      regime_rule: 'k_slow_anchor_with_vol_and_atr',
+    })
+    expect(withCash.regime_rule).toBe('k_slow_anchor_with_vol_and_atr')
+
+    const alwaysInvest = buildPortfolioResearchPayload({
+      ...baseForm,
+      regime_rule: 'k_slow_anchor_with_vol_and_atr',
+    })
+    expect(alwaysInvest).not.toHaveProperty('regime_rule')
   })
 
   it('can sweep both position modes when both are checked', () => {
@@ -152,6 +169,7 @@ describe('buildPortfolioResearchPayload', () => {
       regime_cash: true,
     })
     expect(payload.regime_modes).toEqual(['off', 'bull_g60_else_cash'])
+    expect(payload.regime_rule).toBe('k_slow_anchor')
   })
 
   it('normalizes percent-point trailing stop inputs on submit', () => {

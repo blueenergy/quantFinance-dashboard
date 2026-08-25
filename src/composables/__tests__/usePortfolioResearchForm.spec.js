@@ -51,6 +51,7 @@ describe('usePortfolioResearchForm', () => {
       max_positions: 20,
       regime_always_invest: true,
       regime_cash: false,
+      regime_rule: 'k_slow_anchor',
     })
   })
 
@@ -186,6 +187,7 @@ describe('usePortfolioResearchForm', () => {
         trailing_stop_pcts: [0, 0.1, 0.2],
         rebalance_interval_days: [10],
         regime_modes: ['bull_g60_else_cash'],
+        regime_rule: 'k_slow_anchor_with_vol_and_atr',
       },
     })
     const formApi = createForm({ selectedJob })
@@ -202,6 +204,7 @@ describe('usePortfolioResearchForm', () => {
       horizon: '10',
       regime_always_invest: false,
       regime_cash: true,
+      regime_rule: 'k_slow_anchor_with_vol_and_atr',
     })
     expect(formApi.formSourceJobId.value).toBe('job-source')
     expect(formApi.drawerMode.value).toBe('rerun')

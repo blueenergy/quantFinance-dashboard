@@ -10,7 +10,7 @@ import {
   resolveScoreColumns,
 } from '../utils/portfolioResearchPayload'
 import { universeName } from '../utils/portfolioResearchView'
-import { regimeFlagsFromParams } from '../utils/regimeCash'
+import { DEFAULT_REGIME_RULE, regimeFlagsFromParams, regimeRuleFromParams } from '../utils/regimeCash'
 import {
   ATOMIC_SCORE_OPTIONS,
   SCORE_DIMENSION_LABELS,
@@ -99,6 +99,7 @@ export function usePortfolioResearchForm({
       index_benchmark_symbol: '',
       regime_always_invest: true,
       regime_cash: false,
+      regime_rule: DEFAULT_REGIME_RULE,
     }
     state.name = defaultResearchName(state.universe_index, state)
     return state
@@ -296,6 +297,7 @@ export function usePortfolioResearchForm({
       index_benchmark_symbol: params.index_benchmark_symbol,
       cash_buffer: params.cash_buffer,
       ...regimeFlagsFromParams(params),
+      regime_rule: regimeRuleFromParams(params),
     }
     nameTouched.value = true
     formSourceJobId.value = job.job_id

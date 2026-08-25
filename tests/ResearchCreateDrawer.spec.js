@@ -48,6 +48,7 @@ describe('ResearchCreateDrawer', () => {
     const create = mountDrawer()
     expect(create.text()).toContain('新建研究任务')
     expect(create.text()).toContain('提交研究任务')
+    expect(create.text()).not.toContain('择时规则')
     create.unmount()
 
     const rerun = mountDrawer({
@@ -236,6 +237,11 @@ describe('ResearchCreateDrawer', () => {
     expect(wrapper.text()).toContain('非牛空仓')
     expect(wrapper.text()).not.toContain('非牛空仓对照')
     expect(wrapper.text()).toContain('不必和始终满仓一起跑')
+    expect(wrapper.text()).toContain('择时规则')
+    expect(wrapper.text()).toContain('量价择时')
+    const select = wrapper.find('select.regime-rule-select')
+    expect(select.exists()).toBe(true)
+    expect(select.element.value).toBe('k_slow_anchor')
     const modeLabels = wrapper.findAll('label.inline-check')
     expect(modeLabels[0].text()).toContain('始终满仓')
     expect(modeLabels[1].text()).toContain('非牛空仓')
