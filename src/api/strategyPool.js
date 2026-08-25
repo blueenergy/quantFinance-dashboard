@@ -6,6 +6,27 @@ export const STRATEGY_POOL_CHART_LOOKBACK_DAYS = 1200
 export const STRATEGY_POOL_CHART_MAX_ROUNDS = 20
 export const STRATEGY_POOL_TRADE_PREVIEW_LIMIT = 80
 
+export async function fetchStrategyPoolStocks({
+  strategy,
+  preset,
+  startDate,
+  endDate,
+  date,
+  limit = 500,
+} = {}) {
+  const params = { limit }
+  if (strategy) params.strategy = strategy
+  if (preset) params.preset = preset
+  if (date) params.date = date
+  if (startDate) params.start_date = startDate
+  if (endDate) params.end_date = endDate
+  return request({
+    method: 'get',
+    url: '/strategy-pool/stocks',
+    params,
+  })
+}
+
 export async function fetchStrategyPoolBacktestResult({
   symbol,
   strategy,

@@ -3,7 +3,7 @@
     <div class="controls-card">
       <div class="control-group">
         <label>选择策略:</label>
-        <select v-model="selectedStrategy" @change="onStrategyChange">
+        <select v-model="selectedStrategy">
           <option v-for="strat in strategies" :key="strat.key" :value="strat.key">
             {{ strat.name }}
           </option>
@@ -18,16 +18,8 @@
           </option>
         </select>
       </div>
-      
-      <div class="control-group">
-        <label>选择日期:</label>
-        <select v-model="selectedDate">
-          <option v-if="availableDates.length === 0" value="">-- 无可用日期 --</option>
-          <option v-for="date in availableDates" :key="date" :value="date">
-            {{ formatDisplayDate(date) }}
-          </option>
-        </select>
-      </div>
+
+      <p class="range-hint">{{ rankingHint }}</p>
 
       <div class="refresh-btn">
         <button @click="refreshData" :disabled="loading">
@@ -57,37 +49,63 @@
       <div v-if="loading && stocks.length === 0" class="loading-state">
         正在获取策略信号...
       </div>
-      <div v-else-if="stocks.length === 0" class="empty-state">
-        该日期暂无选股信号
+      <div v-else-if="rankedStocks.length === 0" class="empty-state">
+        近 30 日暂无买入信号
       </div>
       <div v-else class="pool-workspace">
         <div class="pool-list">
-          <div
-            v-for="stock in stocks"
-            :key="stock.symbol"
-            class="pool-row"
-            :class="{ selected: isSelected(stock) }"
-            role="button"
-            tabindex="0"
-            @click="onSelectStock(stock)"
-            @keydown.enter.prevent="onSelectStock(stock)"
-          >
-            <div class="pool-row-head">
-              <span class="stock-name">{{ stock.name || '未知' }}</span>
-              <span class="stock-symbol">{{ stock.symbol }}</span>
-            </div>
-            <div class="pool-row-meta">
-              <span class="action-buy">买入</span>
-              <span v-if="stock.price" class="price-tag">{{ stock.price.toFixed(2) }}</span>
-              <span v-if="stockIndustry(stock)" class="industry-chip">{{ stockIndustry(stock) }}</span>
-              <span v-if="stock.hist_win_rate !== undefined" class="muted-metric">
-                胜率 {{ formatPercentage(stock.hist_win_rate) }}
-              </span>
-            </div>
-            <button type="button" class="row-backtest-btn" @click.stop="openBacktestDetail(stock)">
-              完整回测
-            </button>
-          </div>
+          <table class="pool-table">
+            <thead>
+              <tr>
+                <th class="col-rank">#</th>
+                <th>信号日</th>
+                <th>名称</th>
+                <th>行业</th>
+                <th class="col-num">买入价</th>
+                <th class="col-num">路径收益</th>
+                <th class="col-num">胜率</th>
+                <th v-if="showSharpe" class="col-num">夏普</th>
+                <th class="col-action"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="stock in rankedStocks"
+                :key="`${stock.symbol}-${stock.date}`"
+                class="pool-row"
+                :class="{ selected: isSelected(stock), 'pool-row-top': isPoolTopRow(stock) }"
+                role="button"
+                tabindex="0"
+                @click="onSelectStock(stock)"
+                @keydown.enter.prevent="onSelectStock(stock)"
+              >
+                <td class="col-rank">
+                  <span class="rank-num">{{ stock.rank }}</span>
+                  <span v-if="isPoolTopRow(stock)" class="top-chip">优</span>
+                </td>
+                <td>{{ formatDisplayDate(stock.date) }}</td>
+                <td>
+                  <div class="name-cell">
+                    <span class="stock-name">{{ stock.name || '未知' }}</span>
+                    <span class="stock-symbol">{{ stock.symbol }}</span>
+                  </div>
+                </td>
+                <td>
+                  <span v-if="stockIndustry(stock)" class="industry-chip">{{ stockIndustry(stock) }}</span>
+                  <span v-else class="muted-metric">—</span>
+                </td>
+                <td class="col-num">{{ formatPrice(stock.price) }}</td>
+                <td class="col-num" :class="returnClass(stock.hist_return)">{{ formatSignedPct(stock.hist_return) }}</td>
+                <td class="col-num">{{ formatPercentage(stock.hist_win_rate) }}</td>
+                <td v-if="showSharpe" class="col-num">{{ formatSharpe(stock.hist_sharpe_ratio) }}</td>
+                <td class="col-action">
+                  <button type="button" class="row-backtest-btn" @click.stop="openBacktestDetail(stock)">
+                    回测
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         <section class="pool-chart-pane">
@@ -162,8 +180,14 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { loadStrategyPoolBacktestDetail, STRATEGY_POOL_TRADE_PREVIEW_LIMIT } from '../api/strategyPool'
+import { loadStrategyPoolBacktestDetail, fetchStrategyPoolStocks, STRATEGY_POOL_TRADE_PREVIEW_LIMIT } from '../api/strategyPool'
 import { useStrategyPoolChart } from '../composables/useStrategyPoolChart'
+import {
+  isPoolTopRow,
+  poolTableRange,
+  rankPoolStocks,
+  rankingCaption,
+} from '../utils/strategyPoolRank'
 import request from '../utils/request'
 import BacktestDeployActions from './BacktestDeployActions.vue'
 import BacktestResultDetailModal from './BacktestResultDetailModal.vue'
@@ -171,24 +195,15 @@ import StockKLineChart from './StockKLineChart.vue'
 
 // 监听来自App的策略上下文恢复事件
 const restoreContext = (event) => {
-  const { strategy, preset, date } = event.detail
+  const { strategy, preset, date } = event.detail || {}
   if (strategy) {
-    // 更新策略选择
     selectedStrategy.value = strategy
-    
-    // 更新参数风格（如果提供）
-    if (preset) {
-      selectedPreset.value = preset
-    }
-    
-    // 更新日期（如果提供）
-    if (date) {
-      selectedDate.value = date
-    }
-    
-    // 重新加载相关数据
-    fetchDates()
   }
+  if (preset) {
+    selectedPreset.value = preset
+  }
+  pendingRestore.value = { date: date || '' }
+  fetchPresets().then(() => fetchParams()).then(() => fetchStocks())
 }
 
 // 组件挂载时添加事件监听器
@@ -202,9 +217,10 @@ onMounted(() => {
     try {
       await fetchPresets()
       await fetchParams()
-      await fetchDates()
+      await fetchStocks()
     } finally {
       loading.value = false
+      ready.value = true
     }
   })()
 })
@@ -224,11 +240,15 @@ const strategies = ref([
 const selectedStrategy = ref('hidden_dragon')
 const selectedPreset = ref('')  // Will be populated when presets are fetched
 const availablePresets = ref([])
-const selectedDate = ref('')
-const availableDates = ref([])
 const stocks = ref([])
 const loading = ref(false)
 const error = ref(null)
+const ready = ref(false)
+const pendingRestore = ref(null)
+
+const rankedStocks = computed(() => rankPoolStocks(stocks.value, selectedStrategy.value))
+const rankingHint = computed(() => rankingCaption(selectedStrategy.value))
+const showSharpe = computed(() => selectedStrategy.value === 'k_regime')
 
 const {
   selectedStock,
@@ -316,7 +336,11 @@ function closeBacktestDetail() {
 }
 
 function isSelected(stock) {
-  return Boolean(stock?.symbol && selectedStock.value?.symbol === stock.symbol)
+  return Boolean(
+    stock?.symbol
+    && selectedStock.value?.symbol === stock.symbol
+    && selectedStock.value?.date === stock.date,
+  )
 }
 
 function onSelectStock(stock) {
@@ -405,8 +429,37 @@ const formatDisplayDate = (dateStr) => {
 }
 
 const formatPercentage = (val) => {
-  if (val === null || val === undefined) return 'N/A'
-  return (val * 100).toFixed(1) + '%'
+  if (val === null || val === undefined || val === '') return '—'
+  const n = Number(val)
+  if (!Number.isFinite(n)) return '—'
+  return (n * 100).toFixed(1) + '%'
+}
+
+const formatSignedPct = (val) => {
+  if (val === null || val === undefined || val === '') return '—'
+  const n = Number(val)
+  if (!Number.isFinite(n)) return '—'
+  const pct = n * 100
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct.toFixed(1)}%`
+}
+
+const formatPrice = (val) => {
+  const n = Number(val)
+  if (!Number.isFinite(n) || n <= 0) return '—'
+  return n.toFixed(2)
+}
+
+const formatSharpe = (val) => {
+  const n = Number(val)
+  if (!Number.isFinite(n)) return '—'
+  return n.toFixed(2)
+}
+
+const returnClass = (val) => {
+  const n = Number(val)
+  if (!Number.isFinite(n) || n === 0) return 'return-flat'
+  return n > 0 ? 'return-pos' : 'return-neg'
 }
 
 const getPresetLabel = (preset) => {
@@ -485,68 +538,29 @@ const fetchPresets = async () => {
   }
 }
 
-const fetchDates = async () => {
-  try {
-    loading.value = true
-    error.value = null
-    console.log('[StrategyPool] Fetching dates for strategy:', selectedStrategy.value, 'preset:', selectedPreset.value)
-    
-    let url = `/strategy-pool/dates?strategy=${selectedStrategy.value}`
-    if (selectedPreset.value) {
-      url += `&preset=${selectedPreset.value}`
-    }
-    
-    const body = await request({ method: 'get', url })
-    console.log('[StrategyPool] Dates response:', body)
-    if (body.success) {
-      availableDates.value = body.dates
-      
-      // Always select the most recent date for the new strategy/preset
-      // regardless of the current selected date
-      if (availableDates.value.length > 0) {
-        selectedDate.value = availableDates.value[0]  // Most recent date for this strategy/preset
-      } else {
-        selectedDate.value = ''
-        stocks.value = []
-      }
-    }
-  } catch (err) {
-    console.error('Failed to fetch dates:', err)
-    error.value = '获取可用日期失败，请检查网络或登录状态'
-  } finally {
-    loading.value = false
-  }
-}
-
 const fetchStocks = async () => {
-  if (!selectedDate.value) {
-    stocks.value = []
-    clearChart()
-    return
-  }
-  
   try {
     loading.value = true
     error.value = null
-    console.log('[StrategyPool] Fetching stocks for:', { 
-      date: selectedDate.value, 
+    const range = poolTableRange()
+    console.log('[StrategyPool] Fetching stocks for:', {
       strategy: selectedStrategy.value,
-      preset: selectedPreset.value 
+      preset: selectedPreset.value,
+      startDate: range.startDate,
+      endDate: range.endDate,
     })
-    
-    let url = `/strategy-pool/stocks?date=${selectedDate.value}&strategy=${selectedStrategy.value}`
-    if (selectedPreset.value) {
-      url += `&preset=${selectedPreset.value}`
-    }
-    
-    const body = await request({ method: 'get', url })
+    const body = await fetchStrategyPoolStocks({
+      strategy: selectedStrategy.value,
+      preset: selectedPreset.value,
+      startDate: range.startDate,
+      endDate: range.endDate,
+    })
     console.log('[StrategyPool] Stocks response:', body)
-    if (body.success) {
-      stocks.value = body.stocks
-    }
+    stocks.value = Array.isArray(body?.stocks) ? body.stocks : []
   } catch (err) {
     console.error('Failed to fetch stocks:', err)
-    error.value = '获取选股池数据失败'
+    error.value = '获取选股池数据失败，请检查网络或登录状态'
+    stocks.value = []
   } finally {
     loading.value = false
   }
@@ -555,49 +569,45 @@ const fetchStocks = async () => {
 const refreshData = async () => {
   await fetchPresets()
   await fetchParams()
-  await fetchDates()
-  // 注意：fetchDates 内部修改 selectedDate 会触发下面的 watch，从而调用 fetchStocks
+  await fetchStocks()
 }
 
 const onStrategyChange = async () => {
-  // When strategy changes, fetch presets first, then dates
+  if (!ready.value) return
+  loading.value = true
+  stocks.value = []
   await fetchPresets()
   await fetchParams()
-  await fetchDates()
-  // Force reload stocks even if date unchanged
-  if (selectedDate.value) {
-    await fetchStocks()
-  }
+  await fetchStocks()
 }
 
-watch(stocks, (list) => {
+watch(rankedStocks, (list) => {
   if (!Array.isArray(list) || list.length === 0) {
     clearChart()
     return
   }
+  const restoreDate = pendingRestore.value?.date
+  if (restoreDate) {
+    pendingRestore.value = null
+    const restored = list.find((stock) => stock.date === restoreDate)
+    if (restored) {
+      onSelectStock(restored)
+      return
+    }
+  }
   const current = selectedStock.value
-  const match = current && list.find((stock) => stock.symbol === current.symbol)
+  const match = current && list.find((stock) => (
+    stock.symbol === current.symbol && stock.date === current.date
+  ))
   onSelectStock(match || list[0])
 })
 
-// 监听日期变化，自动获取股票
-watch(selectedDate, (newDate) => {
-  if (newDate) {
-    fetchStocks()
-  }
-})
-
-// 监听策略变化，更新日期列表
 watch(selectedStrategy, onStrategyChange)
 
-// 监听 preset 变化，更新日期和股票
 watch(selectedPreset, async () => {
+  if (!ready.value) return
   await fetchParams()
-  await fetchDates()
-  // 强制重新加载股票，即使日期没变
-  if (selectedDate.value) {
-    await fetchStocks()
-  }
+  await fetchStocks()
 })
 </script>
 
@@ -610,13 +620,21 @@ watch(selectedPreset, async () => {
 .controls-card {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 16px 20px;
   background: rgba(30, 30, 63, 0.6);
   padding: 20px;
   border-radius: 12px;
   margin-bottom: 15px;
   border: 1px solid rgba(138, 43, 226, 0.3);
   align-items: center;
+}
+
+.range-hint {
+  flex: 1 1 280px;
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .strategy-info-card {
@@ -710,57 +728,105 @@ select {
 
 .pool-workspace {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(420px, 560px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
 
 .pool-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   max-height: 640px;
   overflow: auto;
+  border: 1px solid rgba(138, 43, 226, 0.25);
+  border-radius: 10px;
+  background: rgba(15, 15, 35, 0.45);
+}
+
+.pool-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.pool-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(30, 30, 63, 0.95);
+  color: #b19cd9;
+  font-weight: 600;
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(138, 43, 226, 0.3);
+  white-space: nowrap;
+}
+
+.pool-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(138, 43, 226, 0.12);
+  vertical-align: middle;
+}
+
+.col-rank { width: 52px; white-space: nowrap; }
+.col-num { text-align: right; font-variant-numeric: tabular-nums; }
+.col-action { width: 56px; text-align: right; }
+
+.rank-num {
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.top-chip {
+  display: inline-flex;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.2);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  color: #fbbf24;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.pool-table .stock-name {
+  font-size: 14px;
+}
+
+.pool-table .stock-symbol {
+  font-size: 11px;
+  background: transparent;
+  padding: 0;
 }
 
 .pool-row {
   text-align: left;
-  background: rgba(42, 42, 94, 0.6);
-  border-radius: 10px;
-  border: 1px solid rgba(138, 43, 226, 0.2);
-  padding: 10px 12px;
   color: inherit;
   cursor: pointer;
 }
 
-.pool-row.selected {
-  border-color: #c4b5fd;
+.pool-row:hover td {
+  background: rgba(76, 29, 149, 0.28);
+}
+
+.pool-row.selected td {
   background: rgba(76, 29, 149, 0.55);
 }
 
-.pool-row-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+.pool-row-top td {
+  box-shadow: inset 3px 0 0 #fbbf24;
 }
 
-.pool-row-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-  font-size: 12px;
-  align-items: center;
-}
+.return-pos { color: #4ade80; font-weight: 700; }
+.return-neg { color: #f87171; font-weight: 700; }
+.return-flat { color: #94a3b8; }
 
 .muted-metric {
   color: #94a3b8;
 }
 
 .row-backtest-btn {
-  margin-top: 8px;
-  width: 100%;
+  margin: 0;
+  width: auto;
   padding: 4px 8px;
   background: transparent;
   border: 1px solid rgba(148, 163, 184, 0.35);
@@ -861,7 +927,7 @@ select {
     grid-template-columns: 1fr;
   }
   .pool-list {
-    max-height: 280px;
+    max-height: 360px;
   }
 }
 

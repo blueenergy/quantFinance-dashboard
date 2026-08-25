@@ -49,9 +49,6 @@ describe('StrategyStockPool - local backtest detail', () => {
       if (u.includes('/strategy-pool/params')) {
         return { success: true, found: true, params: strategyParams }
       }
-      if (u.includes('/strategy-pool/dates')) {
-        return { success: true, dates: ['20260109'] }
-      }
       if (u.includes('/strategy-pool/stocks')) {
         return {
           success: true,

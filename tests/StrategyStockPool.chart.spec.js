@@ -39,7 +39,6 @@ describe('StrategyStockPool chart pane', () => {
       const u = urlOf([config])
       if (u.includes('/strategy-pool/presets')) return { success: true, presets: ['dragon_default'] }
       if (u.includes('/strategy-pool/params')) return { success: true, found: true, params: { a: 1 } }
-      if (u.includes('/strategy-pool/dates')) return { success: true, dates: ['20260109'] }
       if (u.includes('/strategy-pool/stocks')) {
         return {
           success: true,
