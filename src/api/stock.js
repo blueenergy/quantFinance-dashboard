@@ -163,6 +163,17 @@ export async function getStockWorkbenchShareholders(symbol) {
 }
 
 /**
+ * 获取股票工作台公募库存分区
+ * @param {string} symbol - 股票代码
+ */
+export async function getStockWorkbenchFundInventory(symbol) {
+    return unwrapData({
+        url: `/stock/${encodeURIComponent(symbol)}/workbench/fund-inventory`,
+        method: 'get',
+    })
+}
+
+/**
  * 获取股票工作台 SWOT 信号分区
  * @param {string} symbol - 股票代码
  */

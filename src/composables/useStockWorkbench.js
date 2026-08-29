@@ -11,6 +11,7 @@ import {
   getStockWorkbench,
   getStockWorkbenchAi,
   getStockWorkbenchFinancials,
+  getStockWorkbenchFundInventory,
   getStockWorkbenchKline,
   getStockWorkbenchMoneyFlow,
   getStockWorkbenchNineTurn,
@@ -33,6 +34,7 @@ const EMPTY_SECTION_STATE = {
   ai: false,
   trading: false,
   shareholders: false,
+  fund_inventory: false,
   signals: false,
 }
 
@@ -65,6 +67,8 @@ export function useStockWorkbench(options = {}) {
   const sectionLoading = ref({ ...EMPTY_SECTION_STATE })
   const sectionLoaded = ref({ ...EMPTY_SECTION_STATE })
   const shareholderData = ref({})
+  const fundInventoryData = ref({})
+  const fundInventoryError = ref('')
   const swotData = ref({})
   const swotError = ref('')
 
@@ -146,6 +150,8 @@ export function useStockWorkbench(options = {}) {
       tasks.push(loadWorkbenchSection('valuation', { force: true }))
     } else if (activePanel.value === 'shareholders') {
       tasks.push(loadWorkbenchSection('shareholders', { force: true }))
+    } else if (activePanel.value === 'fund-inventory') {
+      tasks.push(loadWorkbenchSection('fund_inventory', { force: true }))
     } else if (activePanel.value === 'swot') {
       tasks.push(loadWorkbenchSection('signals', { force: true }))
     } else if (activePanel.value === 'analysis') {
@@ -255,6 +261,8 @@ export function useStockWorkbench(options = {}) {
     payload.value = optimistic
     loading.value = true
     error.value = ''
+    fundInventoryData.value = {}
+    fundInventoryError.value = ''
     try {
       await onBeforeLoadSymbol()
       sectionLoaded.value = { ...EMPTY_SECTION_STATE }
@@ -289,6 +297,7 @@ export function useStockWorkbench(options = {}) {
         ai: Boolean(workbench?.deep_analysis),
         trading: false,
         shareholders: false,
+        fund_inventory: false,
         signals: false,
       }
       incomeRows.value = []
@@ -397,6 +406,12 @@ export function useStockWorkbench(options = {}) {
         shareholderData.value = data || {}
         mergeWorkbenchSection('shareholders', data, {})
         await onShareholdersLoaded()
+      } else if (section === 'fund_inventory') {
+        fundInventoryError.value = ''
+        const data = await getStockWorkbenchFundInventory(symbol)
+        if (!isCurrentWorkbenchSymbol(symbol)) return
+        fundInventoryData.value = data || {}
+        mergeWorkbenchSection('fund_inventory', data, {})
       } else if (section === 'signals') {
         const data = await getStockWorkbenchSignals(symbol)
         if (!isCurrentWorkbenchSymbol(symbol)) return
@@ -409,8 +424,13 @@ export function useStockWorkbench(options = {}) {
       if (section === 'signals' && isCurrentWorkbenchSymbol(symbol)) {
         swotError.value = 'SWOT 数据加载失败，请稍后重试。'
       }
+      if (section === 'fund_inventory' && isCurrentWorkbenchSymbol(symbol)) {
+        fundInventoryError.value = loadError?.message || '公募库存数据加载失败，请稍后重试。'
+      }
     } finally {
-      sectionLoading.value = { ...sectionLoading.value, [section]: false }
+      if (isCurrentWorkbenchSymbol(symbol)) {
+        sectionLoading.value = { ...sectionLoading.value, [section]: false }
+      }
     }
   }
 
@@ -570,6 +590,8 @@ export function useStockWorkbench(options = {}) {
       await loadWorkbenchSection('valuation')
     } else if (panel === 'shareholders') {
       await loadWorkbenchSection('shareholders')
+    } else if (panel === 'fund-inventory') {
+      await loadWorkbenchSection('fund_inventory')
     } else if (panel === 'swot') {
       await loadWorkbenchSection('signals')
     } else if (panel === 'analysis') {
@@ -637,6 +659,8 @@ export function useStockWorkbench(options = {}) {
     tradingContext,
     valuationData,
     shareholderData,
+    fundInventoryData,
+    fundInventoryError,
     swotData,
     swotError,
     quoteKlineTf,

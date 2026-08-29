@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   getStockWorkbenchQuote: vi.fn(),
   getStockWorkbenchScores: vi.fn(),
   getStockWorkbenchShareholders: vi.fn(),
+  getStockWorkbenchFundInventory: vi.fn(),
   getStockWorkbenchSignals: vi.fn(),
   getStockWorkbenchTrading: vi.fn(),
   getStockWorkbenchValuation: vi.fn(),
@@ -110,6 +111,21 @@ describe('useStockWorkbench', () => {
     expect(workbench.payload.value.marker).toBe('current')
   })
 
+  it('clears the previous stock fund inventory before awaiting the new shell', async () => {
+    const response = deferred()
+    api.getStockWorkbench.mockReturnValue(response.promise)
+    const workbench = useStockWorkbench()
+    workbench.fundInventoryData.value = {
+      snapshot: { symbol: '000001', state: 'inventory_exit' },
+    }
+
+    const loading = workbench.loadSymbol('600000.SH')
+    expect(workbench.fundInventoryData.value).toEqual({})
+
+    response.resolve({ stock: { symbol: '600000.SH', name: '浦发银行' } })
+    await loading
+  })
+
   it('remembers, normalizes, and de-duplicates recent stocks', () => {
     const workbench = useStockWorkbench()
 
@@ -186,6 +202,10 @@ describe('useStockWorkbench', () => {
       summary: { holder_num: 1 },
       data_status: { found: true },
     })
+    api.getStockWorkbenchFundInventory.mockResolvedValue({
+      snapshot: null,
+      data_status: { found: false },
+    })
     api.getStockWorkbenchQuote.mockReturnValue(quote.promise)
 
     const workbench = useStockWorkbench({
@@ -204,6 +224,13 @@ describe('useStockWorkbench', () => {
 
     await workbench.loadWorkbenchSection('shareholders', { force: true })
     expect(onShareholdersLoaded).toHaveBeenCalledOnce()
+
+    api.getStockWorkbenchFundInventory.mockResolvedValue({
+      snapshot: { state: 'incumbent_strengthen' },
+      data_status: { found: true, as_of: '20260630' },
+    })
+    await workbench.loadWorkbenchSection('fund_inventory', { force: true })
+    expect(workbench.fundInventoryData.value.snapshot.state).toBe('incumbent_strengthen')
 
     const staleQuoteLoad = workbench.loadWorkbenchSection('quote', { force: true })
     workbench.directSymbol.value = '600000.SH'

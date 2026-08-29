@@ -7,6 +7,7 @@
 export const DEEP_LINK_TABS = {
   chart: ['symbol'],
   'stock-workbench': ['symbol', 'panel', 'dimension', 'findingKey'],
+  'fund-inventory': [],
   // Future: 'etf': ['symbol'], 'history': ['symbol'], ...
 }
 

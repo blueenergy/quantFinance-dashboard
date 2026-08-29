@@ -54,6 +54,7 @@
         <v-tab value="financial">财务业绩</v-tab>
         <v-tab value="valuation">估值模型</v-tab>
         <v-tab value="shareholders">股东筹码</v-tab>
+        <v-tab value="fund-inventory">公募库存</v-tab>
         <v-tab value="swot">SWOT</v-tab>
         <v-tab value="analysis">深度分析</v-tab>
       </v-tabs>
@@ -186,6 +187,14 @@
           />
         </v-window-item>
 
+        <v-window-item value="fund-inventory">
+          <WorkbenchFundInventoryPanel
+            :snapshot="fundInventorySnapshot"
+            :loading="sectionLoading.fund_inventory"
+            :error="fundInventoryError"
+          />
+        </v-window-item>
+
         <v-window-item value="swot">
           <StockWorkbenchSwotPanel
             :symbol="stockSymbol"
@@ -269,6 +278,7 @@ const WorkbenchOverviewPanel = defineAsyncComponent(() => import('../components/
 const WorkbenchQuotePanel = defineAsyncComponent(() => import('../components/stock/WorkbenchQuotePanel.vue'))
 const WorkbenchScoresPanel = defineAsyncComponent(() => import('../components/stock/WorkbenchScoresPanel.vue'))
 const WorkbenchShareholdersPanel = defineAsyncComponent(() => import('../components/stock/WorkbenchShareholdersPanel.vue'))
+const WorkbenchFundInventoryPanel = defineAsyncComponent(() => import('../components/stock/WorkbenchFundInventoryPanel.vue'))
 const WorkbenchValuationPanel = defineAsyncComponent(() => import('../components/stock/WorkbenchValuationPanel.vue'))
 
 const props = defineProps({
@@ -307,6 +317,8 @@ const {
   tradingContext,
   valuationData,
   shareholderData,
+  fundInventoryData,
+  fundInventoryError,
   swotData,
   swotError,
   quoteKlineTf,
@@ -445,6 +457,7 @@ const {
   shIntlChanges,
   shHksc,
 } = useWorkbenchShareholders({ shareholderData })
+const fundInventorySnapshot = computed(() => fundInventoryData.value?.snapshot || null)
 
 const analysisHistory = computed(() => Array.isArray(payload.value?.analysis_history) ? payload.value.analysis_history : [])
 const evaluationSummary = computed(() => payload.value?.evaluation_summary || {})
@@ -586,6 +599,7 @@ const sectionStatusItems = computed(() => {
     { key: 'financials', label: '财务业绩', panel: 'financial' },
     { key: 'valuation', label: '估值模型', panel: 'valuation' },
     { key: 'shareholders', label: '股东筹码', panel: 'shareholders' },
+    { key: 'fund_inventory', label: '公募库存', panel: 'fund-inventory' },
     { key: 'signals', label: 'SWOT', panel: 'swot' },
     { key: 'ai', label: 'AI 分析', panel: 'analysis' },
     { key: 'trading', label: '交易状态', panel: 'analysis' },
@@ -599,6 +613,7 @@ const sectionStatusItems = computed(() => {
       financials: Boolean(incomeRows.value.length || indicatorRows.value.length),
       valuation: Boolean(valuationData.value?.data_status?.found),
       shareholders: Boolean(shHolderNumbers.value.length || shHkHold.value.length),
+      fund_inventory: Boolean(fundInventorySnapshot.value),
       signals: Boolean(swotPayload.value?.data_status?.found),
       ai: dataStatus.value.deep_analysis_found,
       trading: Boolean(watchlistContext.value.in_watchlist || tradingPositions.value.length || recentTradeSignals.value.length),
