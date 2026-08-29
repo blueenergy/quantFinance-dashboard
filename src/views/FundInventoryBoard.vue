@@ -23,10 +23,18 @@
         状态
         <select v-model="state" @change="loadRows">
           <option value="">全部</option>
-          <option value="incumbent_strengthen">存量强化</option>
-          <option value="new_inventory">新建库存</option>
-          <option value="inventory_turnover">库存换手</option>
-          <option value="inventory_exit">库存退出</option>
+          <option value="incumbent_strengthen">{{ stateLabels.incumbent_strengthen }}</option>
+          <option value="new_inventory">{{ stateLabels.new_inventory }}</option>
+          <option value="inventory_turnover">{{ stateLabels.inventory_turnover }}</option>
+          <option value="inventory_exit">{{ stateLabels.inventory_exit }}</option>
+        </select>
+      </label>
+      <label>
+        市场
+        <select v-model="market" @change="loadRows">
+          <option value="">全部</option>
+          <option value="A">A 股</option>
+          <option value="HK">港股</option>
         </select>
       </label>
       <label>
@@ -38,7 +46,27 @@
       </label>
     </section>
 
+    <section v-if="quality.status" class="quality-card card" :class="{ provisional: isProvisional }">
+      <div class="quality-heading">
+        <strong>{{ isProvisional ? '前十大预览 · 披露进行中' : '正式全持仓快照' }}</strong>
+        <span class="quality-badge">{{ isProvisional ? 'PROVISIONAL' : 'OFFICIAL' }}</span>
+      </div>
+      <div class="quality-metrics">
+        <div><span>基金策略覆盖</span><strong>{{ fmtPct(quality.strategy_coverage_pct) }}</strong></div>
+        <div><span>持仓深度</span><strong>{{ fmtPct(quality.holding_depth_pct) }}</strong></div>
+        <div><span>完整快照就绪度</span><strong>{{ fmtPct(quality.full_readiness_pct) }}</strong></div>
+        <div>
+          <span>本期 / 基准策略</span>
+          <strong>{{ quality.current?.strategies ?? '-' }} / {{ quality.previous?.strategies ?? '-' }}</strong>
+        </div>
+      </div>
+      <p class="quality-warning">{{ quality.warning }}</p>
+    </section>
+
     <p v-if="lagNote" class="muted">{{ lagNote }}</p>
+    <p v-if="hasHongKongRows" class="quality-warning">
+      港股使用基金报告的 mkv/amount 推导人民币计价价格，暂未校正拆股等公司行动。
+    </p>
     <p v-if="countsLine" class="muted">{{ countsLine }}</p>
     <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
     <p v-if="loading" class="muted" role="status" aria-live="polite">加载中...</p>
@@ -49,6 +77,7 @@
           <tr>
             <th>代码</th>
             <th>名称</th>
+            <th>市场</th>
             <th>行业</th>
             <th>状态</th>
             <th>净增减</th>
@@ -70,6 +99,7 @@
               </AppLink>
             </td>
             <td>{{ row.name || '-' }}</td>
+            <td>{{ row.market === 'HK' ? '港股' : 'A股' }}</td>
             <td>{{ row.industry || '-' }}</td>
             <td>{{ row.state_label || row.state }}</td>
             <td :class="chgClass(row.net_ex_price_yi)">{{ fmtYi(row.net_ex_price_yi) }}</td>
@@ -79,7 +109,7 @@
             <td>{{ fmtYi(row.surface_mv_chg_yi) }}</td>
           </tr>
           <tr v-if="!loading && !errorMessage && !rows.length">
-            <td colspan="9" class="empty">{{ emptyMessage }}</td>
+            <td colspan="10" class="empty">{{ emptyMessage }}</td>
           </tr>
         </tbody>
       </table>
@@ -98,16 +128,35 @@ const errorMessage = ref('')
 const periods = ref([])
 const selectedPeriod = ref('')
 const state = ref('')
+const market = ref('')
 const sort = ref('net_ex_price')
 const rows = ref([])
 const counts = ref({})
+const quality = ref({})
+
+const isProvisional = computed(() => quality.value?.status === 'provisional')
+const stateLabels = computed(() => isProvisional.value
+  ? {
+      incumbent_strengthen: '前十大强化',
+      new_inventory: '新进前十大',
+      inventory_turnover: '前十大换手',
+      inventory_exit: '退出前十大',
+    }
+  : {
+      incumbent_strengthen: '存量强化',
+      new_inventory: '新建库存',
+      inventory_turnover: '库存换手',
+      inventory_exit: '库存退出',
+    })
 
 const countsLine = computed(() => {
   const c = counts.value || {}
   if (!Object.keys(c).length) return ''
-  return `存量强化 ${c.incumbent_strengthen || 0} · 新建库存 ${c.new_inventory || 0} · 库存换手 ${c.inventory_turnover || 0} · 库存退出 ${c.inventory_exit || 0}`
+  const labels = stateLabels.value
+  return `${labels.incumbent_strengthen} ${c.incumbent_strengthen || 0} · ${labels.new_inventory} ${c.new_inventory || 0} · ${labels.inventory_turnover} ${c.inventory_turnover || 0} · ${labels.inventory_exit} ${c.inventory_exit || 0}`
 })
 const lagNote = computed(() => rows.value[0]?.lag_note || '')
+const hasHongKongRows = computed(() => rows.value.some((row) => row.market === 'HK'))
 const emptyMessage = computed(() => {
   if (!periods.value.length) {
     return '暂无快照。请先回补 fund_portfolio 并运行 fund_inventory。'
@@ -131,6 +180,11 @@ function fmtYi(value) {
   if (!Number.isFinite(n)) return '-'
   const sign = n > 0 ? '+' : ''
   return `${sign}${n.toFixed(2)} 亿`
+}
+
+function fmtPct(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? `${n.toFixed(1)}%` : '-'
 }
 
 function chgClass(value) {
@@ -165,6 +219,7 @@ async function loadRows() {
     const body = await getFundInventorySnapshots({
       period: selectedPeriod.value || undefined,
       state: state.value || undefined,
+      market: market.value || undefined,
       sort: sort.value,
       limit: 100,
     })
@@ -172,6 +227,7 @@ async function loadRows() {
     if (requestId === rowsRequestId) {
       rows.value = Array.isArray(data.rows) ? data.rows : []
       counts.value = data.counts || {}
+      quality.value = data.quality || rows.value[0]?.quality || {}
       if (data.period && !selectedPeriod.value) selectedPeriod.value = data.period
     }
   } catch (err) {
@@ -228,6 +284,49 @@ onMounted(refresh)
   flex-direction: column;
   font-size: 12px;
   gap: 6px;
+}
+.quality-card {
+  border-color: rgba(52, 211, 153, .35);
+  margin-bottom: 12px;
+}
+.quality-card.provisional {
+  background: rgba(120, 53, 15, .28);
+  border-color: rgba(251, 191, 36, .55);
+}
+.quality-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.quality-badge {
+  background: rgba(52, 211, 153, .16);
+  border-radius: 999px;
+  color: #6ee7b7;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+.provisional .quality-badge {
+  background: rgba(251, 191, 36, .16);
+  color: #fbbf24;
+}
+.quality-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.quality-metrics div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.quality-metrics span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+.quality-warning {
+  color: #fcd34d;
+  margin: 12px 0 0;
 }
 .muted { color: #94a3b8; }
 .error { color: #f87171; }

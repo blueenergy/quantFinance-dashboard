@@ -9,6 +9,22 @@
       </span>
     </div>
     <p class="muted lag-note">{{ snapshot?.lag_note || '主动基金季报持仓，剥股价后看存量还是新基金在买。不是今日买卖。' }}</p>
+    <div v-if="snapshot" class="quality-strip" :class="{ provisional: isProvisional }">
+      <strong>
+        {{ snapshot.market === 'HK' ? '港股 · ' : '' }}{{ isProvisional ? '前十大预览' : '正式全持仓' }}
+      </strong>
+      <span v-if="isProvisional">
+        策略覆盖 {{ fmtPct(snapshot.quality?.strategy_coverage_pct) }} ·
+        持仓深度 {{ fmtPct(snapshot.quality?.holding_depth_pct) }} ·
+        完整就绪度 {{ fmtPct(snapshot.quality?.full_readiness_pct) }}
+      </span>
+    </div>
+    <p v-if="isProvisional && snapshot?.quality?.warning" class="preview-warning">
+      {{ snapshot.quality.warning }}
+    </p>
+    <p v-if="snapshot?.market === 'HK' && snapshot?.price_note" class="preview-warning">
+      {{ snapshot.price_note }}
+    </p>
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
     <template v-if="snapshot">
       <div class="financial-metrics">
@@ -47,7 +63,7 @@
   <section v-if="snapshot" class="workbench-card">
     <div class="card-title-row">
       <h3>四个问题</h3>
-      <span class="muted">{{ snapshot.compare_mode === 'full_vs_full' ? '全持仓对比' : '前十大对齐' }}</span>
+      <span class="muted">{{ isProvisional ? '当前披露基金 · 前十大对齐' : '全持仓对比' }}</span>
     </div>
     <div class="question-list">
       <article v-for="item in questions" :key="item.id">
@@ -66,8 +82,8 @@
     <div class="financial-metrics">
       <div><span>上期</span><strong>{{ snapshot.n_funds_prev ?? '-' }}</strong></div>
       <div><span>本期</span><strong>{{ snapshot.n_funds_curr ?? '-' }}</strong></div>
-      <div><span>新进</span><strong>{{ snapshot.n_new ?? '-' }}</strong></div>
-      <div><span>退出</span><strong>{{ snapshot.n_exited ?? '-' }}</strong></div>
+      <div><span>{{ isProvisional ? '新进前十大' : '新进' }}</span><strong>{{ snapshot.n_new ?? '-' }}</strong></div>
+      <div><span>{{ isProvisional ? '退出前十大' : '退出' }}</span><strong>{{ snapshot.n_exited ?? '-' }}</strong></div>
     </div>
   </section>
 </template>
@@ -82,6 +98,7 @@ const props = defineProps({
 })
 
 const questions = computed(() => Array.isArray(props.snapshot?.four_questions) ? props.snapshot.four_questions : [])
+const isProvisional = computed(() => props.snapshot?.quality_status === 'provisional')
 const stateClass = computed(() => {
   const state = props.snapshot?.state
   return {
@@ -100,6 +117,11 @@ function fmtYi(value) {
   return `${sign}${n.toFixed(2)} 亿`
 }
 
+function fmtPct(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? `${n.toFixed(1)}%` : '-'
+}
+
 function chgClass(value) {
   const n = Number(value)
   if (!Number.isFinite(n) || n === 0) return ''
@@ -113,6 +135,30 @@ function chgClass(value) {
 }
 .error-message {
   color: #f87171;
+  margin: 0 0 14px;
+}
+.quality-strip {
+  align-items: center;
+  background: rgba(16, 185, 129, .12);
+  border: 1px solid rgba(52, 211, 153, .35);
+  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 10px;
+  padding: 9px 12px;
+}
+.quality-strip.provisional {
+  background: rgba(120, 53, 15, .28);
+  border-color: rgba(251, 191, 36, .55);
+}
+.quality-strip span {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+.preview-warning {
+  color: #fcd34d;
+  font-size: 12px;
   margin: 0 0 14px;
 }
 .question-list {
