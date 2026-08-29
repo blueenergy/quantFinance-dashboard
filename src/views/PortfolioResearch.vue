@@ -257,6 +257,7 @@
       :error="comboError"
       :detail="comboDetail"
       :context-row="comboContextRow"
+      :identity="comboExportIdentity"
       @close="closeComboDetail"
     />
   </section>
@@ -419,6 +420,18 @@ const dataStartNotice = computed(() => {
     params.start_date || job.start_date,
     job.data_watermark?.backtest_score_min_date,
   )
+})
+
+const comboExportIdentity = computed(() => {
+  const job = selectedJob.value || {}
+  const result = resultDetail.value || {}
+  return {
+    job_id: job.job_id || selectedJobId.value || '',
+    result_id: job.result_id || result.result_id || '',
+    params: job.params || result.params || {},
+    data_watermark: job.data_watermark || result.data_watermark || {},
+    combo_key: comboContextRow.value?.combo_key || comboDetail.value?.meta?.combo_key || '',
+  }
 })
 
 function jobElapsedLabel(job) {

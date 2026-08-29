@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ResearchComboModal from '../src/components/portfolio/ResearchComboModal.vue'
 
@@ -62,9 +62,35 @@ describe('ResearchComboModal', () => {
   it('emits close from the close button', async () => {
     const wrapper = mountModal()
 
-    await wrapper.find('.link-btn').trigger('click')
+    await wrapper.find('.combo-close-btn').trigger('click')
 
     expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  it('exports a self-contained HTML file from the toolbar', async () => {
+    const click = vi.fn()
+    vi.stubGlobal('URL', {
+      createObjectURL: () => 'blob:test',
+      revokeObjectURL: vi.fn(),
+    })
+    const originalCreate = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      if (tag === 'a') return { href: '', download: '', click, remove: vi.fn() }
+      return originalCreate(tag)
+    })
+    vi.spyOn(document.body, 'appendChild').mockImplementation(() => {})
+
+    const wrapper = mountModal({
+      identity: {
+        job_id: 'job-a',
+        result_id: 'result-1',
+        data_watermark: { dataset_rows: 12 },
+      },
+    })
+    await wrapper.find('.combo-export-btn').trigger('click')
+
+    expect(click).toHaveBeenCalledTimes(1)
+    vi.restoreAllMocks()
   })
 
   it('shows the date and account value when hovering the equity curve', async () => {

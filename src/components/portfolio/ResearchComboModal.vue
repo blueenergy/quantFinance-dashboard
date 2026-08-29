@@ -14,7 +14,17 @@
             </span>
           </div>
         </div>
-        <button class="link-btn" @click="emit('close')">关闭 ✕</button>
+        <div class="combo-head-actions">
+          <button
+            type="button"
+            class="link-btn combo-export-btn"
+            :disabled="!detail || loading"
+            @click="exportHtml"
+          >
+            导出 HTML
+          </button>
+          <button type="button" class="link-btn combo-close-btn" @click="emit('close')">关闭 ✕</button>
+        </div>
       </header>
 
       <p v-if="loading" class="muted">加载成交明细中…</p>
@@ -271,6 +281,7 @@ import {
 } from '../../utils/portfolioResearchView'
 import { formatAxisValue, resolveComboTrailingStopPct } from '../../utils/sweepResultView'
 import { formatIndexRegimeLabel, formatRegimeModes, indexRegimeTone } from '../../utils/regimeCash'
+import { buildComboExportPayload, downloadComboExportHtml } from '../../utils/comboExport'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -278,6 +289,7 @@ const props = defineProps({
   error: { type: String, default: '' },
   detail: { type: Object, default: null },
   contextRow: { type: Object, default: null },
+  identity: { type: Object, default: () => ({}) },
 })
 
 const emit = defineEmits(['close'])
@@ -360,6 +372,14 @@ watch(() => [props.open, props.contextRow?.combo_key], ([open]) => {
   tradeSortDir.value = 1
 })
 
+function exportHtml() {
+  if (!props.detail) return
+  downloadComboExportHtml(buildComboExportPayload(props.detail, {
+    ...props.identity,
+    combo_key: props.identity?.combo_key || props.detail?.meta?.combo_key || props.contextRow?.combo_key,
+  }))
+}
+
 function sortTrades(key) {
   if (tradeSortKey.value === key) {
     tradeSortDir.value *= -1
@@ -427,6 +447,13 @@ function regimeBandFill(label) {
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.combo-head-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .combo-head h3 {
