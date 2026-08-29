@@ -3,7 +3,18 @@
     <header class="page-header">
       <div>
         <p class="eyebrow">Active Fund Inventory</p>
-        <h2>公募库存四态</h2>
+        <div class="title-row">
+          <h2>公募库存四态</h2>
+          <button
+            type="button"
+            class="metric-help-button"
+            aria-label="查看指标口径说明"
+            title="指标口径说明"
+            @click="showMetricHelp = true"
+          >
+            ?
+          </button>
+        </div>
         <p class="subtitle">
           剔除股价膨胀后，看主动基金是存量加仓、新建库存、内部换手还是退出。
           数据是季报截面，不是今日谁在买。
@@ -35,6 +46,15 @@
           <option value="">全部</option>
           <option value="A">A 股</option>
           <option value="HK">港股</option>
+        </select>
+      </label>
+      <label>
+        组合分类
+        <select v-model="category">
+          <option value="">全部</option>
+          <option v-for="item in categoryOptions" :key="item.value" :value="item.value">
+            {{ item.label }}
+          </option>
         </select>
       </label>
       <label>
@@ -80,6 +100,7 @@
             <th>市场</th>
             <th>行业</th>
             <th>状态</th>
+            <th>组合分类</th>
             <th>净增减</th>
             <th>新进</th>
             <th>存量变化</th>
@@ -88,7 +109,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in rows" :key="row.symbol">
+          <tr v-for="row in visibleRows" :key="row.symbol">
             <td class="mono">
               <AppLink
                 class="symbol-link"
@@ -102,18 +123,97 @@
             <td>{{ row.market === 'HK' ? '港股' : 'A股' }}</td>
             <td>{{ row.industry || '-' }}</td>
             <td>{{ row.state_label || row.state }}</td>
+            <td class="candidate-cell">
+              <span
+                class="candidate-badge"
+                :class="candidateCategoryClass(row)"
+                :title="row.candidate_classification?.hint || ''"
+              >
+                {{ row.candidate_classification?.label || '数据不足' }}
+              </span>
+              <small v-if="row.candidate_classification?.evidence?.length">
+                {{ row.candidate_classification.evidence.join(' · ') }}
+              </small>
+              <small v-if="row.candidate_classification?.caveat" class="candidate-caveat">
+                {{ row.candidate_classification.caveat }}
+              </small>
+            </td>
             <td :class="chgClass(row.net_ex_price_yi)">{{ fmtYi(row.net_ex_price_yi) }}</td>
             <td>{{ fmtYi(row.new_inflow_yi) }}</td>
             <td :class="chgClass(row.incumbent_delta_yi)">{{ fmtYi(row.incumbent_delta_yi) }}</td>
             <td>{{ fmtYi(row.mv_price_effect_yi) }}</td>
             <td>{{ fmtYi(row.surface_mv_chg_yi) }}</td>
           </tr>
-          <tr v-if="!loading && !errorMessage && !rows.length">
-            <td colspan="10" class="empty">{{ emptyMessage }}</td>
+          <tr v-if="!loading && !errorMessage && !visibleRows.length">
+            <td colspan="11" class="empty">{{ emptyMessage }}</td>
           </tr>
         </tbody>
       </table>
     </section>
+
+    <div
+      v-if="showMetricHelp"
+      class="metric-help-overlay"
+      @click.self="showMetricHelp = false"
+      @keydown.esc.stop="showMetricHelp = false"
+    >
+      <section
+        class="metric-help-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="fund-inventory-metric-help-title"
+      >
+        <header>
+          <div>
+            <p class="eyebrow">Metric Guide</p>
+            <h3 id="fund-inventory-metric-help-title">公募库存指标口径</h3>
+          </div>
+          <button
+            type="button"
+            class="metric-help-close"
+            aria-label="关闭指标口径说明"
+            autofocus
+            @click="showMetricHelp = false"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="formula-box">
+          <strong>两组核心关系</strong>
+          <code>净增减 = 表面市值变化 − 股价贡献</code>
+          <code>净增减 = 新进 + 存量变化</code>
+        </div>
+
+        <dl class="metric-definitions">
+          <div>
+            <dt>净增减</dt>
+            <dd>本期持仓市值 − 上期持仓市值 ×（1 + 区间复权涨跌幅），表示剔除价格变化后的估算持仓增减。</dd>
+          </div>
+          <div>
+            <dt>新进</dt>
+            <dd>本期出现、上期未出现的基金持仓市值之和。</dd>
+          </div>
+          <div>
+            <dt>存量变化</dt>
+            <dd>净增减 − 新进，包含原有基金加减仓，以及上期持有、本期退出基金的影响。</dd>
+          </div>
+          <div>
+            <dt>股价贡献</dt>
+            <dd>上期持仓市值 × 区间复权涨跌幅。港股口径还包含汇率影响，暂未校正拆股等公司行动。</dd>
+          </div>
+          <div>
+            <dt>表面市值变化</dt>
+            <dd>本期持仓市值 − 上期持仓市值，尚未剔除股价影响，不能直接当成基金买卖。</dd>
+          </div>
+        </dl>
+
+        <p class="metric-help-note">
+          以上均由报告期披露持仓推导，不是实际成交金额。provisional 模式中的“新进/退出”
+          仅表示进入或退出已披露基金的前十大持仓。
+        </p>
+      </section>
+    </div>
   </section>
 </template>
 
@@ -129,12 +229,29 @@ const periods = ref([])
 const selectedPeriod = ref('')
 const state = ref('')
 const market = ref('')
+const category = ref('')
 const sort = ref('net_ex_price')
 const rows = ref([])
 const counts = ref({})
 const quality = ref({})
+const showMetricHelp = ref(false)
+const categoryOptions = [
+  { value: 'underpriced', label: '尚未充分定价' },
+  { value: 'crowded_trend', label: '强势但可能拥挤' },
+  { value: 'earnings_inflection', label: '盈利拐点新库存' },
+  { value: 'high_level_turnover', label: '高位库存换手' },
+  { value: 'negative_combo', label: '明显负面组合' },
+  { value: 'other', label: '其他 / 待观察' },
+  { value: 'insufficient_data', label: '数据不足' },
+]
 
 const isProvisional = computed(() => quality.value?.status === 'provisional')
+const visibleRows = computed(() => {
+  if (!category.value) return rows.value
+  return rows.value.filter(
+    (row) => row.candidate_classification?.category === category.value,
+  )
+})
 const stateLabels = computed(() => isProvisional.value
   ? {
       incumbent_strengthen: '前十大强化',
@@ -161,6 +278,7 @@ const emptyMessage = computed(() => {
   if (!periods.value.length) {
     return '暂无快照。请先回补 fund_portfolio 并运行 fund_inventory。'
   }
+  if (category.value) return '当前加载结果中没有匹配的组合分类。'
   if (state.value) return '当前状态筛选没有匹配项。'
   return '当前报告期没有可展示的 A 股库存快照。'
 })
@@ -191,6 +309,11 @@ function chgClass(value) {
   const n = Number(value)
   if (!Number.isFinite(n) || n === 0) return ''
   return n > 0 ? 'is-up' : 'is-down'
+}
+
+function candidateCategoryClass(row) {
+  const value = row?.candidate_classification?.category || 'insufficient_data'
+  return `category-${value}`
 }
 
 async function refresh() {
@@ -254,6 +377,31 @@ onMounted(refresh)
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
+}
+.title-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+.title-row h2 {
+  margin: 0;
+}
+.metric-help-button {
+  align-items: center;
+  background: rgba(59, 130, 246, .14);
+  border: 1px solid rgba(96, 165, 250, .5);
+  border-radius: 999px;
+  color: #93c5fd;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  height: 24px;
+  justify-content: center;
+  padding: 0;
+  width: 24px;
+}
+.metric-help-button:hover {
+  background: rgba(59, 130, 246, .25);
 }
 .eyebrow {
   color: #94a3b8;
@@ -347,6 +495,120 @@ th, td { border-bottom: 1px solid rgba(148, 163, 184, .16); padding: 8px 10px; t
 .empty { color: #94a3b8; text-align: center; }
 .is-up { color: #ef4444; }
 .is-down { color: #22c55e; }
+.candidate-cell {
+  min-width: 220px;
+}
+.candidate-cell small {
+  color: #94a3b8;
+  display: block;
+  font-size: 11px;
+  line-height: 1.45;
+  margin-top: 5px;
+}
+.candidate-cell .candidate-caveat {
+  color: #fbbf24;
+}
+.candidate-badge {
+  background: rgba(100, 116, 139, .2);
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 12px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+.category-underpriced,
+.category-earnings_inflection {
+  background: rgba(16, 185, 129, .14);
+  border-color: rgba(52, 211, 153, .4);
+  color: #6ee7b7;
+}
+.category-crowded_trend,
+.category-high_level_turnover {
+  background: rgba(245, 158, 11, .14);
+  border-color: rgba(251, 191, 36, .4);
+  color: #fbbf24;
+}
+.category-negative_combo {
+  background: rgba(239, 68, 68, .14);
+  border-color: rgba(248, 113, 113, .42);
+  color: #fca5a5;
+}
+.metric-help-overlay {
+  align-items: center;
+  background: rgba(2, 6, 23, .78);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 3000;
+}
+.metric-help-dialog {
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, .32);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .45);
+  max-height: min(760px, calc(100vh - 40px));
+  max-width: 720px;
+  overflow-y: auto;
+  padding: 22px;
+  width: 100%;
+}
+.metric-help-dialog header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.metric-help-dialog h3 {
+  margin: 0;
+}
+.metric-help-close {
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 24px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.formula-box {
+  background: rgba(30, 64, 175, .18);
+  border: 1px solid rgba(96, 165, 250, .3);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 14px;
+}
+.formula-box code {
+  color: #bfdbfe;
+  font-size: 14px;
+  white-space: normal;
+}
+.metric-definitions {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+.metric-definitions div {
+  border-bottom: 1px solid rgba(148, 163, 184, .16);
+  padding-bottom: 12px;
+}
+.metric-definitions dt {
+  color: #f8fafc;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.metric-definitions dd {
+  color: #cbd5e1;
+  line-height: 1.6;
+  margin: 0;
+}
+.metric-help-note {
+  color: #fcd34d;
+  line-height: 1.6;
+  margin: 16px 0 0;
+}
 button {
   background: #1d4ed8;
   border: 0;

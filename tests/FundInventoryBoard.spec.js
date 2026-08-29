@@ -25,6 +25,13 @@ vi.mock('../src/api/fundInventory', () => ({
           surface_mv_chg_yi: 889,
           lag_note: '数据截止报告期 20260630，不是今日买卖。',
           market: 'A',
+          candidate_classification: {
+            category: 'underpriced',
+            label: '尚未充分定价',
+            hint: '基金强化、盈利改善且年内涨幅温和。',
+            evidence: ['前十大强化', '单季净利同比 +18.0%', '年内涨幅 +20.0%'],
+            caveat: '',
+          },
         },
         {
           symbol: '00700.HK',
@@ -34,6 +41,13 @@ vi.mock('../src/api/fundInventory', () => ({
           state: 'inventory_exit',
           state_label: '退出前十大',
           net_ex_price_yi: -10,
+          candidate_classification: {
+            category: 'insufficient_data',
+            label: '数据不足',
+            hint: '缺少同口径数据。',
+            evidence: ['退出前十大'],
+            caveat: '港股暂缺与 A 股同口径的盈利和估值评分。',
+          },
         },
       ],
       counts: {
@@ -77,8 +91,22 @@ describe('FundInventoryBoard', () => {
     expect(wrapper.text()).toContain('前十大预览')
     expect(wrapper.text()).toContain('持仓深度')
     expect(wrapper.text()).toContain('20.1%')
+    expect(wrapper.text()).toContain('尚未充分定价')
+    expect(wrapper.text()).toContain('单季净利同比 +18.0%')
+    expect(wrapper.text()).toContain('港股暂缺与 A 股同口径')
     expect(wrapper.text()).toContain('+789.00 亿')
     expect(wrapper.text()).toContain('前十大强化 1')
     expect(wrapper.find('.symbol-link').exists()).toBe(true)
+
+    await wrapper.get('.metric-help-button').trigger('click')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('净增减 = 表面市值变化 − 股价贡献')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('净增减 = 新进 + 存量变化')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('不是实际成交金额')
+    await wrapper.get('.metric-help-close').trigger('click')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+
+    await wrapper.findAll('select')[3].setValue('underpriced')
+    expect(wrapper.text()).toContain('新易盛')
+    expect(wrapper.text()).not.toContain('腾讯控股')
   })
 })
