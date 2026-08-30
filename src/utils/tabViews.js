@@ -13,6 +13,7 @@ const AdminDashboard = defineAsyncComponent(() => import('../components/AdminDas
 const StockRanking = defineAsyncComponent(() => import('../components/StockRanking.vue'))
 const EntropyRanking = defineAsyncComponent(() => import('../views/EntropyRanking.vue'))
 const FundInventoryBoard = defineAsyncComponent(() => import('../views/FundInventoryBoard.vue'))
+const FundCopyworkBoard = defineAsyncComponent(() => import('../views/FundCopyworkBoard.vue'))
 const MarketSpectrum = defineAsyncComponent(() => import('../components/MarketSpectrum.vue'))
 const IntradayT0 = defineAsyncComponent(() => import('../components/IntradayT0.vue'))
 const MarketInsightsRadar = defineAsyncComponent(() => import('../components/MarketInsightsRadar.vue'))
@@ -130,6 +131,12 @@ export const tabViewDefinitions = [
     component: FundInventoryBoard,
     fallbackClass: 'skeleton-table',
     fallbackText: '公募库存看板加载中...',
+  },
+  {
+    id: 'fund-copywork',
+    component: FundCopyworkBoard,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '抄作业看板加载中...',
   },
   {
     id: 'spectrum',

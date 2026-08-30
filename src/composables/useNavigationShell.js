@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import request from '../utils/request'
 
-const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v7'
+const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v8'
 const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v2'
 const ACTIVE_TAB_KEY = 'activeTab_v2'
 const ACTIVE_TAB_USER_KEY = 'activeTab_username_v2'
@@ -13,6 +13,7 @@ const LEGACY_NAV_CACHE_KEYS = [
   'nav_visible_tab_ids_v4',
   'nav_visible_tab_ids_v5',
   'nav_visible_tab_ids_v6',
+  'nav_visible_tab_ids_v7',
 ]
 
 const LEGACY_NAV_CACHE_USER_KEYS = [
@@ -116,6 +117,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'history', name: '🔍 个股深度分析' },
       { id: 'stock-workbench', name: '🔬 个股工作台' },
       { id: 'fund-inventory', name: '公募库存' },
+      { id: 'fund-copywork', name: '抄作业' },
       { id: 'analysis-task-queue', name: '任务队列' },
       { id: 'strategy-pool', name: '🎯 策略股池' },
       { id: 'ranking', name: '金榜' },

@@ -20,6 +20,7 @@ export function clearSessionCaches() {
   sessionStorage.removeItem('nav_visible_tab_ids_v5')
   sessionStorage.removeItem('nav_visible_tab_ids_v6')
   sessionStorage.removeItem('nav_visible_tab_ids_v7')
+  sessionStorage.removeItem('nav_visible_tab_ids_v8')
   sessionStorage.removeItem('nav_visible_tab_username_v1')
   sessionStorage.removeItem('nav_visible_tab_username_v2')
   try {
