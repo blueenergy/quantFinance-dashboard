@@ -218,6 +218,7 @@
             <th>股票</th>
             <th>方向</th>
             <th>数量</th>
+            <th>pair</th>
             <th>状态</th>
             <th>order_ids</th>
           </tr>
@@ -228,6 +229,7 @@
             <td>{{ row.symbol }}</td>
             <td>{{ row.action }}</td>
             <td>{{ row.quantity }}</td>
+            <td class="muted">{{ row.pair_style || '-' }} · {{ row.pair_id || '-' }}</td>
             <td>{{ row.status }}</td>
             <td class="muted">{{ (row.order_ids || []).join(', ') }}</td>
           </tr>
