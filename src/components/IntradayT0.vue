@@ -149,6 +149,29 @@
           </small>
         </div>
         <div class="execution-field">
+          <label>买入比例（买先）</label>
+          <input
+            v-model.number="executionSettings.buy_qty_ratio"
+            type="number"
+            min="0.1"
+            max="1"
+            step="0.1"
+          />
+          <small class="field-hint">
+            遇到 BUY_WATCH 且无未平 sell_first 配对时，单次买入量 = 买先额度 × 比例。
+            买先额度硬性 cap 到当日旧仓可卖量，保证后续能用旧仓卖平。
+          </small>
+        </div>
+        <div class="execution-field inline">
+          <label>
+            <input v-model="executionSettings.buy_first_enabled" type="checkbox" />
+            启用先买再卖
+          </label>
+          <small class="field-hint">
+            默认关闭。开启后，BUY_WATCH 在无 open pair 时可开 buy_first 仓；关闭时仅允许回补 sell_first。
+          </small>
+        </div>
+        <div class="execution-field">
           <label>自动阈值</label>
           <input
             v-model.number="executionSettings.auto_min_score"
@@ -268,12 +291,19 @@
         <button class="btn" :disabled="loading" @click="runDayCloseCheck">日终检查</button>
       </div>
       <div v-if="dayCloseAlerts.length" class="alert error">
-        <div v-for="alert in dayCloseAlerts" :key="alert.pair_id">{{ alert.message }}</div>
+        <div
+          v-for="alert in dayCloseAlerts"
+          :key="alert.pair_id"
+          :class="['day-close-alert', alert.code === 'uncovered_buy' ? 'uncovered-buy' : 'uncovered-sell']"
+        >
+          {{ alert.message }}
+        </div>
       </div>
       <div class="trade-summary" v-if="tradeSummary">
         <span>已平仓 {{ tradeSummary.closed_pairs }} 组</span>
         <span>未回补 {{ tradeSummary.open_pairs }} 组</span>
-        <span>裸露 {{ tradeSummary.naked_qty }} 股</span>
+        <span>卖先裸露 {{ tradeSummary.naked_sell_qty ?? 0 }} 股</span>
+        <span>买先裸露 {{ tradeSummary.naked_buy_qty ?? 0 }} 股</span>
         <span :class="numClass(tradeSummary.total_net_pnl)">净盈亏 {{ yuan(tradeSummary.total_net_pnl) }}</span>
       </div>
       <div class="mock-form trade-form">
@@ -285,7 +315,7 @@
         <input v-model.number="tradeForm.quantity" type="number" min="1" placeholder="数量" />
         <input v-model.number="tradeForm.price" type="number" min="0" step="0.01" placeholder="成交价" />
         <input v-model.number="tradeForm.fees" type="number" min="0" step="0.01" placeholder="费用" />
-        <input v-model="tradeForm.pair_id" placeholder="pair_id（买入必填）" />
+        <input v-model="tradeForm.pair_id" placeholder="pair_id（留空=开新仓）" />
         <input v-model="tradeForm.signal_id" placeholder="signal_id（可选）" />
         <button class="btn" :disabled="loading" @click="previewFromSignal">预览建议</button>
         <button class="btn primary" :disabled="loading || !tradeForm.symbol" @click="saveTrade">记录成交</button>
@@ -295,10 +325,13 @@
         <span v-if="tradePreview.warnings?.length">（{{ tradePreview.warnings.join('；') }}）</span>
       </div>
       <div v-if="openPairs.length" class="open-pairs">
-        <strong>未回补配对</strong>
+        <strong>未平配对</strong>
         <div v-for="pair in openPairs" :key="pair.pair_id" class="pair-row">
-          {{ pair.symbol }} · 裸露 {{ pair.uncovered_qty }} 股 · pair {{ pair.pair_id }}
-          <button class="btn small" @click="fillBuyFromPair(pair)">填入买入</button>
+          <span class="pair-style" :class="pair.style || 'sell_first'">
+            {{ pairStyleLabel(pair) }}
+          </span>
+          · 裸露 {{ pair.uncovered_qty }} 股 · pair {{ pair.pair_id }}
+          <button class="btn small" @click="fillCloseFromPair(pair)">{{ pairCloseButtonLabel(pair) }}</button>
         </div>
       </div>
       <table v-if="tradeRows.length">
@@ -432,6 +465,8 @@ const executionSettings = reactive({
   auto_execute_enabled: false,
   auto_min_score: 80,
   sell_qty_ratio: 0.5,
+  buy_qty_ratio: 0.5,
+  buy_first_enabled: false,
   global_auto_execute_enabled: false,
 })
 const executionRows = ref([])
@@ -553,6 +588,8 @@ async function loadExecutionSettings() {
   executionSettings.auto_execute_enabled = Boolean(data.auto_execute_enabled)
   executionSettings.auto_min_score = Number(data.auto_min_score) || 80
   executionSettings.sell_qty_ratio = Number(data.sell_qty_ratio) || 0.5
+  executionSettings.buy_qty_ratio = Number(data.buy_qty_ratio ?? data.sell_qty_ratio) || 0.5
+  executionSettings.buy_first_enabled = Boolean(data.buy_first_enabled)
   executionSettings.global_auto_execute_enabled = data.global_auto_execute_enabled
 }
 
@@ -575,6 +612,8 @@ async function saveExecutionSettings() {
       auto_execute_enabled: executionSettings.auto_execute_enabled,
       auto_min_score: executionSettings.auto_min_score,
       sell_qty_ratio: executionSettings.sell_qty_ratio,
+      buy_qty_ratio: executionSettings.buy_qty_ratio,
+      buy_first_enabled: executionSettings.buy_first_enabled,
     })
     message.value = '执行设置已保存'
     await loadExecutionSettings()
@@ -594,6 +633,7 @@ function executionPayload(signal) {
     signal_id: signal._id || signal.id,
     plan_id: executionSettings.plan_id || undefined,
     sell_qty_ratio: executionSettings.sell_qty_ratio,
+    buy_qty_ratio: executionSettings.buy_qty_ratio,
     pair_id: tradeForm.pair_id || undefined,
   }
 }
@@ -684,9 +724,20 @@ function fillTradeFromSignal(sig) {
   tradePreview.value = null
 }
 
-function fillBuyFromPair(pair) {
+function pairStyleLabel(pair) {
+  if (pair?.style === 'buy_first') {
+    return `${pair.symbol || ''} · 买先 · 待卖出`
+  }
+  return `${pair.symbol || ''} · 卖先 · 待买回`
+}
+
+function pairCloseButtonLabel(pair) {
+  return pair?.style === 'buy_first' ? '填入卖出' : '填入买入'
+}
+
+function fillCloseFromPair(pair) {
   tradeForm.symbol = pair.symbol || ''
-  tradeForm.leg = 'buy'
+  tradeForm.leg = pair.style === 'buy_first' ? 'sell' : 'buy'
   tradeForm.pair_id = pair.pair_id || ''
   tradeForm.quantity = pair.uncovered_qty || 0
 }
@@ -730,7 +781,7 @@ async function saveTrade() {
       pair_id: tradeForm.pair_id || undefined,
     })
     message.value = `已记录 ${tradeForm.leg} ${tradeForm.quantity} 股`
-    if (tradeForm.leg === 'sell' && body?.data?.pair_id) {
+    if (body?.data?.pair_id) {
       tradeForm.pair_id = body.data.pair_id
     }
     await Promise.all([loadTrades(), loadTradeSummary()])
@@ -1002,6 +1053,20 @@ select {
   flex-wrap: wrap;
   align-items: center;
   margin: 10px 0;
+}
+.pair-style.sell_first {
+  color: #15803d;
+  font-weight: 600;
+}
+.pair-style.buy_first {
+  color: #b91c1c;
+  font-weight: 600;
+}
+.day-close-alert.uncovered-buy {
+  color: #b45309;
+}
+.day-close-alert.uncovered-sell {
+  color: #b91c1c;
 }
 .trade-form {
   margin-top: 10px;
