@@ -9,6 +9,17 @@ export function formatApiDetail(detail) {
   }
 }
 
+// Summarize targets the backend refused to turn into orders. A dropped
+// reduction can be a stop-loss the broker could not fill, so it must never be
+// swallowed by an otherwise successful toast. Reason codes stay verbatim so
+// they remain searchable in logs and reports.
+export function describeDroppedTargets(dropped, limit = 4) {
+  const rows = dropped || []
+  const head = rows.slice(0, limit).map((row) => `${row.symbol}(${row.reason_code || 'unknown'})`)
+  if (rows.length > head.length) return `${head.join('、')} 等 ${rows.length} 只`
+  return head.join('、')
+}
+
 export function buildTargetsFromRows(rows) {
   const targets = {}
   for (const row of rows) targets[row.symbol] = Number(row.target)

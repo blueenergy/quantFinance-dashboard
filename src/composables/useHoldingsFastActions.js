@@ -7,6 +7,8 @@ const emptyFastActionPreview = () => ({
   description: '',
   targets: {},
   items: [],
+  droppedTargets: [],
+  cappedSymbols: [],
   blocked: false,
 })
 
@@ -135,6 +137,10 @@ export function useHoldingsFastActions({
         description,
         targets,
         items: normalizeFastPreviewItems(data),
+        // Targets the backend refused to turn into orders never reach `items`,
+        // so carry them separately or a dropped reduction stays invisible.
+        droppedTargets: data?.dropped_targets || [],
+        cappedSymbols: data?.capped_symbols || [],
         blocked: Boolean(data?.blocked),
       }
       showFastActionModal.value = true

@@ -7,6 +7,7 @@ import {
 import {
   buildTargetsFromRows,
   compactDateTimeForBatch,
+  describeDroppedTargets,
   formatApiDetail,
 } from './holdingsOpsShared'
 
@@ -175,7 +176,16 @@ export function useHoldingsManualOps({
       const count = data.changed_symbols?.length || 0
       const inserted = data.inserted_count ?? (data.new_signals?.length || 0)
       const label = data.manual_action === 'liquidate' ? '实盘清仓' : '实盘调仓'
-      onMessage(`已提交${label}：${count} 只标的、${inserted} 笔委托已下发，交易器盘中执行。`, false)
+      const dropped = data.dropped_targets || []
+      const capped = data.capped_symbols || []
+      const parts = [`已提交${label}：${count} 只标的、${inserted} 笔委托已下发，交易器盘中执行。`]
+      if (dropped.length) {
+        parts.push(`另有 ${dropped.length} 只标的未下单：${describeDroppedTargets(dropped)}。`)
+      }
+      if (capped.length) {
+        parts.push(`${capped.join('、')} 按账户可卖量缩量。`)
+      }
+      onMessage(parts.join(' '), dropped.length > 0 || capped.length > 0)
       refreshPortfolioInBackground()
       return data
     } catch (error) {

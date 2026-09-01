@@ -136,6 +136,68 @@ describe('useHoldingsOps race handling', () => {
     expect(harness.benchLoading.value).toBe(false)
   })
 
+  it('surfaces dropped reductions in the live rebalance toast', async () => {
+    api.liveRebalancePortfolio.mockResolvedValue({
+      data: {
+        manual_action: 'liquidate',
+        changed_symbols: ['600000.SH'],
+        inserted_count: 1,
+        dropped_targets: [
+          {
+            symbol: '000001.SZ',
+            reason_code: 'account_position_not_sellable',
+            current_shares: 300,
+            requested_target_shares: 0,
+            account_available_shares: 0,
+          },
+        ],
+        capped_symbols: ['600000.SH'],
+      },
+    })
+    const harness = setupHarness({
+      selectedPortfolio: ref({ latest_plan_id: 'plan-a', securities_account_id: 'acct-1' }),
+      isLivePortfolio: ref(true),
+    })
+    harness.liquidateTargets.value = ['600000.SH', '000001.SZ']
+
+    await harness.submitLiveLiquidate()
+
+    const toast = harness.messages.at(-1)
+    // A reduction the broker refused must not read as a clean success.
+    expect(toast.isError).toBe(true)
+    expect(toast.text).toContain('000001.SZ(account_position_not_sellable)')
+    expect(toast.text).toContain('按账户可卖量缩量')
+  })
+
+  it('carries dropped targets into the fast action preview', async () => {
+    api.liveRebalancePortfolio.mockResolvedValue({
+      data: {
+        items: [],
+        signals: [],
+        dropped_targets: [
+          {
+            symbol: '000001.SZ',
+            reason_code: 'sell_capped_to_zero',
+            current_shares: 300,
+            requested_target_shares: 0,
+            account_available_shares: 0,
+          },
+        ],
+        capped_symbols: [],
+      },
+    })
+    const harness = setupHarness({
+      selectedPortfolio: ref({ latest_plan_id: 'plan-a', securities_account_id: 'acct-1' }),
+      isLivePortfolio: ref(true),
+    })
+
+    harness.openQuickReduceModal({ symbol: '000001.SZ', name: '平安银行', shares: 300 }, 0)
+
+    await vi.waitFor(() => expect(harness.fastActionPreview.value.droppedTargets).toHaveLength(1))
+    expect(harness.fastActionPreview.value.droppedTargets[0].reason_code).toBe('sell_capped_to_zero')
+    expect(harness.fastActionPreview.value.items).toEqual([])
+  })
+
   it('ignores stale bench risk results after the plan changes', async () => {
     let resolvePoll
     const pollGenerationTask = vi.fn(() => new Promise((resolve) => {

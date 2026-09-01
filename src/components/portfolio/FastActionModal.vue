@@ -20,6 +20,21 @@
           </div>
         </li>
       </ul>
+      <div v-if="preview.droppedTargets?.length" class="dropped-targets">
+        <p class="warning-text">以下标的不会下单（券商可卖量不足或归一化后无变动）：</p>
+        <ul class="manual-preview">
+          <li v-for="row in preview.droppedTargets" :key="row.symbol">
+            {{ row.symbol }}：{{ row.current_shares }} → 目标 {{ row.requested_target_shares }}
+            · {{ row.reason_code }}
+            <span v-if="row.account_available_shares != null">
+              · 账户可卖 {{ row.account_available_shares }}
+            </span>
+          </li>
+        </ul>
+      </div>
+      <p v-if="preview.cappedSymbols?.length" class="warning-text">
+        {{ preview.cappedSymbols.join('、') }} 按账户可卖量缩量下单。
+      </p>
       <p v-if="preview.blocked" class="warning-text">风控拦截，无法提交。</p>
       <div class="modal-actions">
         <button type="button" @click="$emit('close')">取消</button>
@@ -40,7 +55,17 @@ import { formatShareDelta } from '../../composables/usePortfolioPlanFormat'
 
 defineProps({
   visible: { type: Boolean, default: false },
-  preview: { type: Object, default: () => ({ title: '', description: '', items: [], blocked: false }) },
+  preview: {
+    type: Object,
+    default: () => ({
+      title: '',
+      description: '',
+      items: [],
+      droppedTargets: [],
+      cappedSymbols: [],
+      blocked: false,
+    }),
+  },
   submitting: { type: Boolean, default: false },
   isLivePortfolio: { type: Boolean, default: false },
 })
@@ -98,6 +123,22 @@ function formatPrice(value) {
 .warning-text {
   color: #c2410c;
   font-weight: 600;
+}
+
+.dropped-targets {
+  border-left: 3px solid #c2410c;
+  margin: 12px 0;
+  padding-left: 10px;
+}
+
+.dropped-targets p {
+  margin: 0;
+}
+
+.dropped-targets .manual-preview {
+  color: #4b5563;
+  font-size: 12px;
+  margin: 6px 0 0;
 }
 
 .modal-actions {
