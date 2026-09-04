@@ -357,6 +357,7 @@ export function getTabProps(tabId, context) {
       strategyFrom: context.currentStrategy,
       presetFrom: context.currentPreset,
       priceAdjust: context.priceAdjust,
+      dataLoading: context.chartLoading,
     }
   }
 

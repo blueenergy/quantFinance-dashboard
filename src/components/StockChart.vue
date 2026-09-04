@@ -82,7 +82,7 @@
     <div class="chart-main-wrapper" ref="chartWrapperRef">
       <div ref="chartRef" class="chart-canvas"></div>
       <div v-if="error" class="chart-overlay error">{{ error }}</div>
-      <div v-if="loading" class="chart-overlay loading"><div class="spinner"></div></div>
+      <div v-if="loading || dataLoading" class="chart-overlay loading"><div class="spinner"></div></div>
     </div>
   </div>
 </template>
@@ -107,6 +107,7 @@ const props = defineProps({
   presetFrom: String,
   dateFrom: String,
   priceAdjust: { type: String, default: 'qfq' },
+  dataLoading: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['go-back', 'load-more', 'change-adjust'])

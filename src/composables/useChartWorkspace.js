@@ -14,7 +14,18 @@ function readStoredPriceAdjust() {
   return 'qfq'
 }
 
-export function buildRecordsUrl({ symbol, limit, sort = '-trade_date', startDate, endDate, adjust = 'qfq' }) {
+export const CHART_PREFETCH_RADIUS = 2
+export const CHART_CACHE_LIMIT = 40
+
+export function buildRecordsUrl({
+  symbol,
+  limit,
+  sort = '-trade_date',
+  startDate,
+  endDate,
+  adjust = 'qfq',
+  includeScores,
+}) {
   const params = new URLSearchParams()
   params.set('limit', String(limit))
   params.set('sort', sort)
@@ -22,6 +33,8 @@ export function buildRecordsUrl({ symbol, limit, sort = '-trade_date', startDate
   if (startDate) params.set('start_date', startDate)
   if (endDate) params.set('end_date', endDate)
   params.set('adjust', VALID_PRICE_ADJUST.includes(adjust) ? adjust : 'qfq')
+  if (includeScores === false) params.set('include_scores', 'false')
+  if (includeScores === true) params.set('include_scores', 'true')
   return `/records/?${params.toString()}`
 }
 
@@ -64,20 +77,6 @@ function normalizeDateForComparison(dateStr) {
   }
 }
 
-async function fetchMoneyFlowRecords(symbol) {
-  try {
-    const body = await request({
-      url: '/money-flow-records',
-      method: 'get',
-      params: { symbol },
-    })
-    return body.data || []
-  } catch (err) {
-    console.error('获取资金流向数据时出错:', err)
-    return []
-  }
-}
-
 export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
   const currentIndex = ref(0)
   const chartSymbols = ref([])
@@ -90,13 +89,71 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
   const currentPreset = ref('')
   const tradeMarkers = ref([])
   const priceAdjust = ref(readStoredPriceAdjust())
+  const chartLoading = ref(false)
   const chartSymbol = computed(() => (
     chartSymbols.value.length > 0 ? chartSymbols.value[currentIndex.value] : ''
   ))
   const hasPrev = computed(() => currentIndex.value > 0)
   const hasNext = computed(() => currentIndex.value < chartSymbols.value.length - 1)
 
+  const chartCache = new Map()
+  const inflightSnapshots = new Map()
   let appChartWatchlistInFlight = null
+
+  function snapshotCacheKey(symbol, adjust = priceAdjust.value) {
+    return `${symbol}|${adjust}`
+  }
+
+  function readCachedSnapshot(symbol) {
+    const key = snapshotCacheKey(symbol)
+    if (!chartCache.has(key)) return null
+    const snapshot = chartCache.get(key)
+    chartCache.delete(key)
+    chartCache.set(key, snapshot)
+    return snapshot
+  }
+
+  function writeCachedSnapshot(symbol, snapshot, adjust = priceAdjust.value) {
+    const key = snapshotCacheKey(symbol, adjust)
+    if (chartCache.has(key)) chartCache.delete(key)
+    chartCache.set(key, snapshot)
+    while (chartCache.size > CHART_CACHE_LIMIT) {
+      const oldest = chartCache.keys().next().value
+      chartCache.delete(oldest)
+    }
+  }
+
+  function applyChartSnapshot(snapshot) {
+    chartRecords.value = snapshot.records || []
+    moneyFlowRecords.value = snapshot.moneyFlow || []
+    tradeMarkers.value = snapshot.tradeMarkers || []
+    stockName.value = snapshot.stockName || ''
+  }
+
+  function readStockName(records, symbol) {
+    const rows = Array.isArray(records) ? records : []
+    const stockInfo = rows.find((row) => row?.symbol === symbol) || rows[0]
+    if (!stockInfo) return ''
+    return stockInfo.name || stockInfo.stock_name || stockInfo.company_name || stockInfo.title || ''
+  }
+
+  function chartDateWindow() {
+    const end = new Date()
+    const start = new Date()
+    start.setDate(end.getDate() - 360)
+    if (signalDates.value.length > 0) {
+      const sDate = signalDates.value[0]
+      const sDateStr = sDate.length === 8
+        ? `${sDate.slice(0, 4)}-${sDate.slice(4, 6)}-${sDate.slice(6, 8)}`
+        : sDate
+      const sigDate = new Date(sDateStr)
+      if (sigDate < start) {
+        start.setTime(sigDate.getTime() - (30 * 24 * 60 * 60 * 1000))
+      }
+    }
+    const toYmd = (date) => date.toISOString().slice(0, 10).replace(/-/g, '')
+    return { startDate: toYmd(start), endDate: toYmd(end) }
+  }
 
   async function loadAppChartWatchlist() {
     if (!localStorage.getItem('access_token') || !isAuthenticated.value) {
@@ -123,152 +180,90 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
     return appChartWatchlistInFlight
   }
 
-  async function loadStockData(symbol) {
-    if (!symbol) return
-
-    try {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(end.getDate() - 360)
-
-      if (signalDates.value.length > 0) {
-        const sDate = signalDates.value[0]
-        const sDateStr = sDate.length === 8
-          ? `${sDate.slice(0, 4)}-${sDate.slice(4, 6)}-${sDate.slice(6, 8)}`
-          : sDate
-        const sigDate = new Date(sDateStr)
-        if (sigDate < start) {
-          start.setTime(sigDate.getTime() - (30 * 24 * 60 * 60 * 1000))
-        }
-      }
-
-      const toYmd = (date) => date.toISOString().slice(0, 10).replace(/-/g, '')
-      const startDate = toYmd(start)
-      const endDate = toYmd(end)
-
+  async function fetchChartSnapshot(symbol) {
+    const adjust = priceAdjust.value
+    const key = snapshotCacheKey(symbol, adjust)
+    if (inflightSnapshots.has(key)) {
+      return inflightSnapshots.get(key)
+    }
+    const pending = (async () => {
+      const { startDate, endDate } = chartDateWindow()
       const klineUrl = buildRecordsUrl({
         symbol,
         limit: 500,
         startDate,
         endDate,
-        adjust: priceAdjust.value,
+        adjust,
+        includeScores: false,
       })
-      const klineReq = request({ url: klineUrl, method: 'get', timeout: 10000 })
-      const moneyFlowReq = fetchMoneyFlowRecords(symbol)
-
-      let tradeHistoryReq = Promise.resolve({ data: { trades: [] } })
-      if (symbol) {
-        console.log('准备获取交易历史，symbol:', symbol, 'currentStrategy:', currentStrategy.value)
-        let tradeUrl = `/strategy-pool/trade-history?symbol=${symbol}`
-        if (currentStrategy.value) {
-          tradeUrl += `&strategy=${currentStrategy.value}`
-          if (currentPreset.value) {
-            tradeUrl += `&preset=${currentPreset.value}`
-          }
-        } else {
-          console.log('未选择策略，获取所有策略的交易历史。')
-        }
-
-        console.log('正在请求交易历史:', tradeUrl)
-        tradeHistoryReq = request({ url: tradeUrl, method: 'get', timeout: 5000 })
-          .then((body) => {
-            console.log('交易历史API响应:', body)
-            console.log('完整的响应对象:', body)
-            return body
-          })
-          .catch((err) => {
-            console.warn('获取交易历史失败:', err)
-            return {
-              success: false,
-              data: {
-                symbol,
-                strategy: currentStrategy.value,
-                preset: currentPreset.value,
-                count: 0,
-                trades: [],
-              },
-            }
-          })
-      } else {
-        console.log('股票代码为空，跳过获取交易历史。')
+      const records = await request({ url: klineUrl, method: 'get', timeout: 10000 })
+      const snapshot = {
+        records: Array.isArray(records) ? records : [],
+        moneyFlow: [],
+        tradeMarkers: [],
+        stockName: readStockName(records, symbol),
       }
-
-      const [klineRes, moneyFlowRes, tradeHistoryRes] = await Promise.all([
-        klineReq,
-        moneyFlowReq,
-        tradeHistoryReq,
-      ])
-
-      const trades = tradeHistoryRes.data.trades || []
-      tradeMarkers.value = trades.map((trade) => ({
-        date: normalizeDateForComparison(trade.datetime.split(' ')[0]),
-        action: trade.action,
-        price: trade.price,
-        pnl: trade.pnl || 0,
-      }))
-
-      console.log(`股票 ${symbol} 交易历史: 共 ${trades.length} 条记录`)
-
-      const allTradeDates = trades.map((trade) => normalizeDateForComparison(trade.datetime.split(' ')[0]))
-      let adjustedStartDate = normalizeDateForComparison(startDate)
-      let adjustedEndDate = normalizeDateForComparison(endDate)
-
-      if (allTradeDates.length > 0) {
-        const earliestTradeDate = allTradeDates.reduce((earliest, current) => (
-          current < earliest ? current : earliest
-        ), adjustedEndDate)
-        if (earliestTradeDate < adjustedStartDate) {
-          adjustedStartDate = earliestTradeDate
-        }
+      writeCachedSnapshot(symbol, snapshot, adjust)
+      return snapshot
+    })()
+    inflightSnapshots.set(key, pending)
+    try {
+      return await pending
+    } finally {
+      if (inflightSnapshots.get(key) === pending) {
+        inflightSnapshots.delete(key)
       }
+    }
+  }
 
-      if (allTradeDates.length > 0) {
-        const latestTradeDate = allTradeDates.reduce((latest, current) => (
-          current > latest ? current : latest
-        ), adjustedStartDate)
-        if (latestTradeDate > adjustedEndDate) {
-          adjustedEndDate = latestTradeDate
-        }
-      }
+  function prefetchSymbol(symbol) {
+    if (!symbol) return
+    const key = snapshotCacheKey(symbol)
+    if (chartCache.has(key) || inflightSnapshots.has(key)) return
+    if (inflightSnapshots.size >= 4) return
+    void fetchChartSnapshot(symbol).catch((error) => {
+      console.warn(`prefetch kline ${symbol} failed:`, error)
+    })
+  }
 
-      if (
-        adjustedStartDate !== normalizeDateForComparison(startDate)
-        || adjustedEndDate !== normalizeDateForComparison(endDate)
-      ) {
-        console.log(`调整日期范围以包含交易记录: ${adjustedStartDate} 到 ${adjustedEndDate}`)
-        const adjustedKlineUrl = buildRecordsUrl({
-          symbol,
-          limit: 500,
-          startDate: adjustedStartDate,
-          endDate: adjustedEndDate,
-          adjust: priceAdjust.value,
-        })
-        const adjustedKlineRes = await request({ url: adjustedKlineUrl, method: 'get', timeout: 10000 })
-        chartRecords.value = adjustedKlineRes
-      } else {
-        chartRecords.value = klineRes
-      }
+  function prefetchNeighbors() {
+    const symbols = chartSymbols.value
+    const idx = currentIndex.value
+    if (!symbols.length) return
+    for (let offset = 1; offset <= CHART_PREFETCH_RADIUS; offset += 1) {
+      prefetchSymbol(symbols[idx + offset])
+      prefetchSymbol(symbols[idx - offset])
+    }
+  }
 
-      moneyFlowRecords.value = moneyFlowRes
+  async function loadStockData(symbol) {
+    if (!symbol) return
 
-      const stockInfo = chartRecords.value.find((stock) => stock.symbol === symbol)
-      if (stockInfo) {
-        const nameFields = ['name', 'stock_name', 'company_name', 'title']
-        let foundName = ''
-        nameFields.forEach((field) => {
-          if (stockInfo[field]) {
-            foundName = stockInfo[field]
-          }
-        })
-        stockName.value = foundName
-      } else {
-        stockName.value = ''
-      }
+    prefetchNeighbors()
+    const cached = readCachedSnapshot(symbol)
+    if (cached) {
+      applyChartSnapshot(cached)
+      chartLoading.value = false
+      return
+    }
+
+    chartLoading.value = true
+    try {
+      const snapshot = await fetchChartSnapshot(symbol)
+      if (chartSymbol.value !== symbol) return
+      applyChartSnapshot(snapshot)
     } catch (error) {
+      if (chartSymbol.value !== symbol) return
       console.error(`获取股票${symbol}数据失败:`, error)
       chartRecords.value = []
       moneyFlowRecords.value = []
+      tradeMarkers.value = []
       stockName.value = ''
+    } finally {
+      if (chartSymbol.value === symbol) {
+        chartLoading.value = false
+      }
+      prefetchNeighbors()
     }
   }
 
@@ -290,6 +285,7 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
         startDate: startDateStr,
         endDate: endDateStr,
         adjust: priceAdjust.value,
+        includeScores: false,
       })
 
       const [klineRes, moneyFlowRes] = await Promise.all([
@@ -315,6 +311,12 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
       newMoneyFlow.forEach((record) => moneyFlowMap.set(normalizeDateForComparison(record.trade_date), record))
       moneyFlowRecords.value.forEach((record) => moneyFlowMap.set(normalizeDateForComparison(record.trade_date), record))
       moneyFlowRecords.value = Array.from(moneyFlowMap.values()).sort((a, b) => b.trade_date.localeCompare(a.trade_date))
+      writeCachedSnapshot(symbol, {
+        records: chartRecords.value,
+        moneyFlow: moneyFlowRecords.value,
+        tradeMarkers: tradeMarkers.value,
+        stockName: stockName.value,
+      })
     } catch (error) {
       console.error('[App] handleLoadMore failed:', error)
     }
@@ -355,15 +357,28 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
     }
   }
 
+  function revealCachedSymbol(symbol) {
+    if (!symbol) return false
+    const cached = readCachedSnapshot(symbol)
+    if (!cached) return false
+    applyChartSnapshot(cached)
+    chartLoading.value = false
+    return true
+  }
+
   function prevStock() {
-    if (hasPrev.value) {
-      currentIndex.value -= 1
+    if (!hasPrev.value) return
+    currentIndex.value -= 1
+    if (!revealCachedSymbol(chartSymbol.value)) {
+      chartLoading.value = true
     }
   }
 
   function nextStock() {
-    if (hasNext.value) {
-      currentIndex.value += 1
+    if (!hasNext.value) return
+    currentIndex.value += 1
+    if (!revealCachedSymbol(chartSymbol.value)) {
+      chartLoading.value = true
     }
   }
 
@@ -374,6 +389,7 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
         : [...navSymbols, stockSymbol]
       chartSymbols.value = nextSymbols
       currentIndex.value = nextSymbols.indexOf(stockSymbol)
+      revealCachedSymbol(stockSymbol)
       return
     }
 
@@ -383,12 +399,14 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
         loadStockData(stockSymbol)
       } else {
         currentIndex.value = index
+        revealCachedSymbol(stockSymbol)
       }
       return
     }
 
     chartSymbols.value.push(stockSymbol)
     currentIndex.value = chartSymbols.value.length - 1
+    revealCachedSymbol(stockSymbol)
   }
 
   async function selectStockForChart(stockData) {
@@ -476,6 +494,7 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
     currentStrategy,
     currentPreset,
     tradeMarkers,
+    chartLoading,
     hasPrev,
     hasNext,
     loadAppChartWatchlist,

@@ -173,6 +173,15 @@ describe('useChartWorkspace', () => {
       limit: 500,
       adjust: 'hfq',
     })).toContain('adjust=hfq')
+    expect(buildRecordsUrl({
+      symbol: '600519.SH',
+      limit: 500,
+      includeScores: false,
+    })).toContain('include_scores=false')
+    expect(buildRecordsUrl({
+      symbol: '600519.SH',
+      limit: 500,
+    })).not.toContain('include_scores')
   })
 
   it('reloads kline with the chosen adjust mode', async () => {
@@ -201,5 +210,150 @@ describe('useChartWorkspace', () => {
     await nextTick()
     await Promise.resolve()
     expect(request.mock.calls.some(([config]) => String(config.url).includes('adjust=none'))).toBe(true)
+  })
+
+  function recordSymbolsRequested() {
+    return request.mock.calls
+      .map(([config]) => String(config?.url || ''))
+      .filter((url) => url.startsWith('/records/'))
+      .map((url) => new URLSearchParams(url.split('?')[1] || '').get('symbol'))
+      .filter(Boolean)
+  }
+
+  it('paints kline without waiting on money-flow or trade-history', async () => {
+    request.mockImplementation((config) => {
+      const url = String(config?.url || '')
+      if (url.startsWith('/records/')) {
+        return Promise.resolve([
+          { symbol: '600519.SH', name: '贵州茅台', trade_date: '20260904', close: 1400 },
+        ])
+      }
+      if (url.includes('money-flow') || url.includes('trade-history')) {
+        return new Promise(() => {})
+      }
+      return Promise.resolve({})
+    })
+
+    const workspace = useChartWorkspace({
+      activeTab: ref('chart'),
+      isAuthenticated: ref(true),
+      switchTab: vi.fn(),
+    })
+    workspace.chartSymbols.value = ['600519.SH']
+    workspace.currentIndex.value = 0
+
+    await vi.waitFor(() => {
+      expect(workspace.chartRecords.value[0]?.symbol).toBe('600519.SH')
+    })
+    expect(workspace.stockName.value).toBe('贵州茅台')
+    expect(workspace.chartLoading.value).toBe(false)
+    expect(request.mock.calls.some(([config]) => String(config.url).includes('money-flow'))).toBe(false)
+    expect(request.mock.calls.some(([config]) => String(config.url).includes('trade-history'))).toBe(false)
+    expect(request.mock.calls.some(([config]) => String(config.url).includes('include_scores=false'))).toBe(true)
+  })
+
+  it('prefetches neighboring watchlist kline after opening a chart', async () => {
+    request.mockImplementation((config) => {
+      const url = String(config?.url || '')
+      if (url.startsWith('/records/')) {
+        const symbol = new URLSearchParams(url.split('?')[1] || '').get('symbol')
+        return Promise.resolve([{ symbol, trade_date: '20260904', close: 1 }])
+      }
+      return Promise.resolve({})
+    })
+
+    const activeTab = ref('watchlist')
+    const workspace = useChartWorkspace({
+      activeTab,
+      isAuthenticated: ref(true),
+      switchTab: (tab) => {
+        activeTab.value = tab
+      },
+    })
+
+    await workspace.selectStockForChart({
+      symbol: '600519.SH',
+      symbols: ['000001.SZ', '600519.SH', '300750.SZ'],
+    })
+
+    await vi.waitFor(() => {
+      expect(workspace.chartRecords.value[0]?.symbol).toBe('600519.SH')
+      expect(new Set(recordSymbolsRequested())).toEqual(new Set(['000001.SZ', '600519.SH', '300750.SZ']))
+    })
+  })
+
+  it('reuses cached kline when flipping back to a previous stock', async () => {
+    request.mockImplementation((config) => {
+      const url = String(config?.url || '')
+      if (url.startsWith('/records/')) {
+        const symbol = new URLSearchParams(url.split('?')[1] || '').get('symbol')
+        return Promise.resolve([{ symbol, trade_date: '20260904', close: 1 }])
+      }
+      return Promise.resolve({})
+    })
+
+    const activeTab = ref('watchlist')
+    const workspace = useChartWorkspace({
+      activeTab,
+      isAuthenticated: ref(true),
+      switchTab: (tab) => {
+        activeTab.value = tab
+      },
+    })
+
+    await workspace.selectStockForChart({
+      symbol: '000001.SZ',
+      symbols: ['000001.SZ', '600519.SH'],
+    })
+    await vi.waitFor(() => {
+      expect(workspace.chartRecords.value[0]?.symbol).toBe('000001.SZ')
+      expect(new Set(recordSymbolsRequested())).toEqual(new Set(['000001.SZ', '600519.SH']))
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const callsAfterPrefetch = request.mock.calls.length
+    workspace.nextStock()
+    expect(workspace.chartSymbol.value).toBe('600519.SH')
+    expect(workspace.chartRecords.value[0]?.symbol).toBe('600519.SH')
+    workspace.prevStock()
+    expect(workspace.chartSymbol.value).toBe('000001.SZ')
+    expect(workspace.chartRecords.value[0]?.symbol).toBe('000001.SZ')
+    expect(request.mock.calls.length).toBe(callsAfterPrefetch)
+  })
+
+  it('ignores stale kline responses after switching stocks', async () => {
+    let releaseFirst
+    const first = new Promise((resolve) => {
+      releaseFirst = resolve
+    })
+    request.mockImplementation((config) => {
+      const url = String(config?.url || '')
+      if (!url.startsWith('/records/')) return Promise.resolve({})
+      const symbol = new URLSearchParams(url.split('?')[1] || '').get('symbol')
+      if (symbol === 'AAA.SZ') {
+        return first.then(() => [{ symbol: 'AAA.SZ', trade_date: '20260101', close: 1 }])
+      }
+      return Promise.resolve([{ symbol, trade_date: '20260102', close: 2 }])
+    })
+
+    const workspace = useChartWorkspace({
+      activeTab: ref('chart'),
+      isAuthenticated: ref(true),
+      switchTab: vi.fn(),
+    })
+    workspace.chartSymbols.value = ['AAA.SZ', 'BBB.SZ']
+    workspace.currentIndex.value = 0
+    await nextTick()
+
+    workspace.nextStock()
+    await vi.waitFor(() => {
+      expect(workspace.chartRecords.value[0]?.symbol).toBe('BBB.SZ')
+    })
+
+    releaseFirst()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(workspace.chartRecords.value[0]?.symbol).toBe('BBB.SZ')
   })
 })
