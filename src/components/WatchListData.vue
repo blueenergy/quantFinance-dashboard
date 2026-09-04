@@ -896,7 +896,7 @@ function toggleHistoryModalMaximized() {
 // 获取单个股票的最新数据
 async function fetchStockData(symbol) {
   try {
-    const records = await request.get(`/records/?symbol=${symbol}&limit=2&sort=-trade_date`)
+    const records = await request.get(`/records/?symbol=${symbol}&limit=2&sort=-trade_date&adjust=qfq`)
     
     if (records.length > 0) {
       const latest = records[0]

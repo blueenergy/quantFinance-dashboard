@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref, nextTick } from 'vue'
 import request from '../../utils/request'
-import { useChartWorkspace } from '../useChartWorkspace.js'
+import { buildRecordsUrl, useChartWorkspace } from '../useChartWorkspace.js'
 
 vi.mock('../../utils/request', () => ({
   default: vi.fn(),
@@ -12,6 +12,7 @@ describe('useChartWorkspace', () => {
     vi.clearAllMocks()
     vi.stubGlobal('localStorage', {
       getItem: (key) => (key === 'access_token' ? 'token' : null),
+      setItem: vi.fn(),
     })
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
       json: () => Promise.resolve({ data: [] }),
@@ -75,5 +76,48 @@ describe('useChartWorkspace', () => {
     expect(request).not.toHaveBeenCalledWith(
       expect.objectContaining({ url: '/user/watchlist-stocks' }),
     )
+  })
+
+  it('builds /records/ URLs with the selected adjust mode', () => {
+    expect(buildRecordsUrl({
+      symbol: '600519.SH',
+      limit: 500,
+      startDate: '20260101',
+      endDate: '20260904',
+      adjust: 'qfq',
+    })).toContain('adjust=qfq')
+    expect(buildRecordsUrl({
+      symbol: '600519.SH',
+      limit: 500,
+      adjust: 'hfq',
+    })).toContain('adjust=hfq')
+  })
+
+  it('reloads kline with the chosen adjust mode', async () => {
+    request.mockImplementation((config) => {
+      if (String(config.url).startsWith('/records/')) return Promise.resolve([])
+      if (String(config.url).startsWith('/strategy-pool/trade-history')) {
+        return Promise.resolve({ success: true, data: { trades: [] } })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    const workspace = useChartWorkspace({
+      activeTab: ref('chart'),
+      isAuthenticated: ref(true),
+      switchTab: vi.fn(),
+    })
+    workspace.chartSymbols.value = ['600519.SH']
+    workspace.currentIndex.value = 0
+    await nextTick()
+    await Promise.resolve()
+
+    const qfqCalls = request.mock.calls.filter(([config]) => String(config.url).includes('adjust=qfq'))
+    expect(qfqCalls.length).toBeGreaterThan(0)
+
+    workspace.setPriceAdjust('none')
+    await nextTick()
+    await Promise.resolve()
+    expect(request.mock.calls.some(([config]) => String(config.url).includes('adjust=none'))).toBe(true)
   })
 })

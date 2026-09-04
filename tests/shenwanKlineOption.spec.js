@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildShenwanKlineOption } from '../src/utils/echarts/shenwanKlineOption.js'
+import { buildDecisionGsChartSeries, buildShenwanKlineOption } from '../src/utils/echarts/shenwanKlineOption.js'
 
 function fmtAxis(value) {
   const s = String(value || '')
@@ -61,5 +61,47 @@ describe('buildShenwanKlineOption markers', () => {
     expect(candle.markPoint.data[0].symbol).toBe('pin')
     expect(candle.markLine.data[0].xAxis).toBe('2026-01-09')
     expect(option.dataZoom[0].start).toBeLessThan(option.dataZoom[0].end)
+  })
+
+  it('draws G/S pins and decision overlays, hiding default MA', () => {
+    const option = buildShenwanKlineOption(
+      [
+        { trade_date: '20260108', open: 10, high: 11, low: 9.5, close: 10.2, volume: 1000, mj20: 10.1, mj30: 10.0, gs_is_bull: true },
+        { trade_date: '20260109', open: 10.2, high: 11.5, low: 10, close: 11, volume: 1200, mj20: 10.2, mj30: 10.05, gs_is_bull: true, gs_signal: 'g' },
+        { trade_date: '20260112', open: 11, high: 11.2, low: 10.8, close: 10.9, volume: 800, mj20: 10.3, mj30: 10.4, gs_is_bull: false, gs_signal: 's' },
+      ],
+      formatters([
+        { kind: 'g', trade_date: '20260109', low: 10, high: 11.5 },
+        { kind: 's', trade_date: '20260112', low: 10.8, high: 11.2 },
+      ]),
+    )
+    const candle = option.series[0]
+    expect(candle.markPoint.data.map((p) => p.label)).toEqual(['G', 'S'])
+    expect(option.series.some((s) => s.name === '决策线')).toBe(true)
+    expect(option.series.some((s) => s.name === '牛线')).toBe(true)
+    expect(option.series.some((s) => s.name === '熊线')).toBe(true)
+    expect(option.series.find((s) => s.name === 'G').data).toEqual([['2026-01-09', 10]])
+    expect(option.series.find((s) => s.name === 'S').data).toEqual([['2026-01-12', 11.2]])
+    expect(option.series.some((s) => String(s.name).startsWith('MA'))).toBe(false)
+  })
+})
+
+describe('buildDecisionGsChartSeries', () => {
+  it('returns overlay and G/S scatter from record fields', () => {
+    const series = buildDecisionGsChartSeries(
+      [
+        { trade_date: '20260108', mj20: 10.1, mj30: 10.0, gs_is_bull: true },
+        { trade_date: '20260109', mj20: 10.2, mj30: 10.05, gs_is_bull: true, gs_signal: 'g', low: 10, high: 11.5 },
+        { trade_date: '20260112', mj20: 10.3, mj30: 10.4, gs_is_bull: false, gs_signal: 's', low: 10.8, high: 11.2 },
+      ],
+      fmtAxis,
+    )
+    expect(series.map((s) => s.name)).toEqual(['决策线', '牛线', '熊线', 'G', 'S'])
+    expect(series.find((s) => s.name === 'G').data).toEqual([['2026-01-09', 10]])
+    expect(series.find((s) => s.name === 'S').data).toEqual([['2026-01-12', 11.2]])
+  })
+
+  it('returns empty when mj20 is missing', () => {
+    expect(buildDecisionGsChartSeries(bars, fmtAxis)).toEqual([])
   })
 })

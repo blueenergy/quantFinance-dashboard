@@ -6,6 +6,8 @@
         <span class="symbol-badge">{{ props.symbol }}</span>
         <span class="stock-name">{{ props.stockName || '' }}</span>
         <span class="data-count">{{ kType === 'minute' ? minuteBars.length + ' 条分时' : records?.length + ' 天数据' }}</span>
+        <span v-if="kType !== 'minute' && decisionGsEnabled && decisionGsSummary" class="gs-summary">{{ decisionGsSummary }}</span>
+        <span v-if="kType !== 'minute' && adjDegradedHint" class="gs-summary">{{ adjDegradedHint }}</span>
       </div>
       
       <div class="header-actions">
@@ -43,6 +45,31 @@
         <button @click="fetchMinuteData" :disabled="loading" class="btn-refresh">🔄</button>
       </div>
 
+      <div class="toolbar-group" v-if="kType !== 'minute'">
+        <div class="interval-selector" title="K线复权口径">
+          <button
+            v-for="opt in adjustOptions"
+            :key="opt.value"
+            type="button"
+            :class="['interval-btn', { active: priceAdjust === opt.value }]"
+            @click="emit('change-adjust', opt.value)"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+      </div>
+
+      <div class="toolbar-group" v-if="kType !== 'minute'">
+        <button
+          type="button"
+          :class="['interval-btn', { active: decisionGsEnabled }]"
+          title="决策线 GS（近似 v1）"
+          @click="decisionGsEnabled = !decisionGsEnabled"
+        >
+          决策线 GS
+        </button>
+      </div>
+
       <div class="toolbar-spacer"></div>
 
       <div class="nav-controls">
@@ -61,8 +88,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
 import request from '../utils/request'
+import { buildDecisionGsChartSeries } from '../utils/echarts/shenwanKlineOption.js'
 
 const props = defineProps({
   records: { type: Array, default: () => [] },
@@ -77,10 +105,11 @@ const props = defineProps({
   hasNext: Boolean,
   strategyFrom: String,
   presetFrom: String,
-  dateFrom: String
+  dateFrom: String,
+  priceAdjust: { type: String, default: 'qfq' },
 })
 
-const emit = defineEmits(['go-back', 'load-more'])
+const emit = defineEmits(['go-back', 'load-more', 'change-adjust'])
 
 // Refs
 const containerRef = ref(null)
@@ -95,6 +124,7 @@ const selectedMinuteDate = ref('')
 const minuteBars = ref([])
 const tradeSignals = ref([])
 const theme = ref(localStorage.getItem('chart-theme') || 'dark')
+const decisionGsEnabled = ref(true)
 
 let echarts = null
 let chartInstance = null
@@ -106,6 +136,48 @@ const intervalOptions = [
   { label: '周线', value: 'week' },
   { label: '月线', value: 'month' }
 ]
+const adjustOptions = [
+  { label: '前复权', value: 'qfq' },
+  { label: '不复权', value: 'none' },
+  { label: '后复权', value: 'hfq' },
+]
+
+const decisionGsSummary = computed(() => {
+  if (kType.value === 'minute' || !decisionGsEnabled.value) return ''
+  const rows = Array.isArray(props.records) ? props.records : []
+  const visible = rows.filter((r) => {
+    const day = normalizeDate(r.trade_date)
+    if (startDate.value && day < normalizeDate(startDate.value)) return false
+    if (endDate.value && day > normalizeDate(endDate.value)) return false
+    return true
+  })
+  const signals = visible
+    .filter((r) => r.gs_signal === 'g' || r.gs_signal === 's')
+    .slice()
+    .sort((a, b) => normalizeDate(a.trade_date).localeCompare(normalizeDate(b.trade_date)))
+  if (signals.length) {
+    const g = signals.filter((r) => r.gs_signal === 'g').length
+    const s = signals.filter((r) => r.gs_signal === 's').length
+    const last = signals[signals.length - 1]
+    return `G×${g} · S×${s} · 最近 ${String(last.gs_signal).toUpperCase()} ${normalizeDate(last.trade_date)}`
+  }
+  if (visible.some((r) => r.mj20 != null)) {
+    return '当前窗口没有 G/S 拐点（可拉长日期或拖动缩放）'
+  }
+  if (rows.length) {
+    return '未拿到决策线字段，请刷新后重进 K 线'
+  }
+  return ''
+})
+
+const adjDegradedHint = computed(() => {
+  if (kType.value === 'minute') return ''
+  const rows = Array.isArray(props.records) ? props.records : []
+  if (rows.some((row) => row?.adj_degraded)) {
+    return '复权因子不足，当前按未复权显示'
+  }
+  return ''
+})
 
 // --- Utils ---
 const normalizeDate = (d) => {
@@ -211,8 +283,8 @@ function renderDaily() {
   const times = data.map(r => normalizeDate(r.trade_date))
   const option = getBaseOption(`${props.symbol} ${kType.value}`, times)
   const closes = data.map(r => Number.isFinite(Number(r.close)) ? Number(r.close) : null)
-  const ma55 = movingAverage(closes, 55)
-  const ma233 = movingAverage(closes, 233)
+  const showGs = decisionGsEnabled.value && data.some((r) => r.mj20 != null)
+  const gsSeries = showGs ? buildDecisionGsChartSeries(data, normalizeDate) : []
   
   option.series = [
     {
@@ -223,28 +295,34 @@ function renderDaily() {
         borderColor: theme.value === 'dark' ? '#ef5350' : '#eb4444',
         borderColor0: theme.value === 'dark' ? '#26a69a' : '#22ab94'
       }
-    },
-    {
-      name: 'MA55',
-      type: 'line',
-      data: ma55,
-      showSymbol: false,
-      connectNulls: false,
-      lineStyle: { width: 1.2, color: '#facc15' },
-      emphasis: { focus: 'series' },
-      z: 3
-    },
-    {
-      name: 'MA233',
-      type: 'line',
-      data: ma233,
-      showSymbol: false,
-      connectNulls: false,
-      lineStyle: { width: 1.2, color: '#a855f7' },
-      emphasis: { focus: 'series' },
-      z: 2
     }
   ]
+  if (gsSeries.length) {
+    option.series.push(...gsSeries)
+  } else {
+    option.series.push(
+      {
+        name: 'MA55',
+        type: 'line',
+        data: movingAverage(closes, 55),
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 1.2, color: '#facc15' },
+        emphasis: { focus: 'series' },
+        z: 3
+      },
+      {
+        name: 'MA233',
+        type: 'line',
+        data: movingAverage(closes, 233),
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 1.2, color: '#a855f7' },
+        emphasis: { focus: 'series' },
+        z: 2
+      }
+    )
+  }
 
   // 3. Restore or calculate new dataZoom state
   const newDataLength = data.length;
@@ -392,6 +470,7 @@ onBeforeUnmount(() => {
 
 watch(() => kType.value, (t) => t === 'minute' ? fetchMinuteData() : drawChart())
 watch(() => props.symbol, () => kType.value === 'minute' ? fetchMinuteData() : drawChart())
+watch(() => decisionGsEnabled.value, () => drawChart())
 
 watch(() => props.records, (newRecs) => {
   if (newRecs?.length > 0) {
@@ -462,7 +541,9 @@ const goBack = () => emit('go-back', { strategy: props.strategyFrom, preset: pro
 .symbol-badge { color: #fff; padding: 2px 6px; border-radius: 3px; font-weight: bold; margin-right: 10px; font-size: 13px; }
 .stock-name { font-size: 16px; font-weight: 600; }
 .data-count { color: #768390; font-size: 11px; margin-left: 10px; }
+.gs-summary { color: #768390; font-size: 11px; margin-left: 10px; }
 .light .data-count { color: #586069; }
+.light .gs-summary { color: #586069; }
 
 .chart-toolbar {
   display: flex;

@@ -89,14 +89,27 @@
             {{ item.label }}
           </button>
         </div>
-        <span class="muted">最近 {{ quoteKlineRows.length }} 根</span>
+        <button
+          type="button"
+          class="quote-gs-toggle"
+          :class="{ on: decisionGsEnabled }"
+          @click="decisionGsEnabled = !decisionGsEnabled"
+        >
+          决策线 GS
+        </button>
+        <span class="muted">最近 {{ quoteKlineRows.length }} 根 · 近似 v1</span>
       </div>
     </div>
     <StockKLineChart
       v-if="quoteKlineRows.length"
       :records="quoteKlineRows"
+      :markers="decisionGsMarkers"
       :tf="quoteKlineTf"
+      :chart-meta="quoteChartMeta"
     />
+    <p v-if="decisionGsEnabled && decisionGsSummary" class="quote-gs-summary">
+      {{ decisionGsSummary }}
+    </p>
     <details v-if="quoteKlineRows.length" class="quote-details">
       <summary>展开最近 10 根{{ quoteKlineShortLabel }}行情明细</summary>
       <div class="quote-table-wrap">
@@ -148,6 +161,7 @@
 </template>
 
 <script setup>
+import { computed, ref } from 'vue'
 import MoneyFlowPanel from '../MoneyFlowPanel.vue'
 import StockKLineChart from '../StockKLineChart.vue'
 import {
@@ -157,7 +171,7 @@ import {
   pctClass,
 } from '../../utils/workbenchFormat'
 
-defineProps({
+const props = defineProps({
   quoteSectionDate: { type: String, default: '' },
   loading: { type: Boolean, default: false },
   quoteMetrics: { type: Array, default: () => [] },
@@ -182,6 +196,48 @@ defineEmits(['refresh'])
 const quoteKlineTf = defineModel('quoteKlineTf', {
   type: String,
   default: '1d',
+})
+
+const decisionGsEnabled = ref(true)
+const decisionGsMarkers = computed(() => {
+  if (!decisionGsEnabled.value) return []
+  return (props.quoteKlineRows || [])
+    .filter((row) => row?.gs_signal === 'g' || row?.gs_signal === 's')
+    .map((row) => ({
+      kind: row.gs_signal,
+      trade_date: row.trade_date,
+      price: row.gs_signal === 'g' ? row.low : row.high,
+      low: row.low,
+      high: row.high,
+    }))
+})
+const decisionGsSummary = computed(() => {
+  const markers = decisionGsMarkers.value
+  if (!markers.length) {
+    const hasOverlay = (props.quoteKlineRows || []).some((row) => row?.mj20 != null)
+    return hasOverlay
+      ? '当前窗口没有 G/S 拐点（v1 一年通常只有几次；可拖动下方缩放条查看更早 K 线）'
+      : '未拿到决策线字段，请刷新行情。若仍没有，需要重启后端 API（uvicorn --reload）'
+  }
+  const fmt = (value) => {
+    const s = String(value || '')
+    if (s.length === 8 && /^\d+$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+    return s.slice(0, 10)
+  }
+  const g = markers.filter((item) => item.kind === 'g').map((item) => fmt(item.trade_date)).slice(0, 4)
+  const s = markers.filter((item) => item.kind === 's').map((item) => fmt(item.trade_date)).slice(0, 4)
+  return `G×${markers.filter((item) => item.kind === 'g').length}${g.length ? ` ${g.join('、')}` : ''}　S×${markers.filter((item) => item.kind === 's').length}${s.length ? ` ${s.join('、')}` : ''}`
+})
+const quoteChartMeta = computed(() => {
+  const rows = props.quoteKlineRows || []
+  const latest = rows[0]?.trade_date
+  return {
+    showDecisionGs: decisionGsEnabled.value,
+    showMa: !decisionGsEnabled.value,
+    focusDate: latest,
+    focusBarsBefore: 90,
+    focusBarsAfter: 2,
+  }
 })
 </script>
 
@@ -216,6 +272,29 @@ const quoteKlineTf = defineModel('quoteKlineTf', {
 .quote-kline-tf button.on {
   background: rgba(37, 99, 235, .88);
   color: #fff;
+}
+.quote-gs-toggle {
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 999px;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+.quote-gs-toggle:hover {
+  color: #dbeafe;
+}
+.quote-gs-toggle.on {
+  background: rgba(234, 179, 8, .16);
+  border-color: rgba(250, 204, 21, .45);
+  color: #fde68a;
+}
+.quote-gs-summary {
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 10px 0 0;
 }
 .entry-risk-badge {
   border: 1px solid rgba(148, 163, 184, .28);

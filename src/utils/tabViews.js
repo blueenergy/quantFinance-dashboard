@@ -356,6 +356,7 @@ export function getTabProps(tabId, context) {
       hasNext: context.hasNext,
       strategyFrom: context.currentStrategy,
       presetFrom: context.currentPreset,
+      priceAdjust: context.priceAdjust,
     }
   }
 
@@ -414,6 +415,7 @@ export function getTabListeners(tabId, handlers) {
     return {
       'go-back': handlers.goBackToStrategyPool,
       'load-more': handlers.handleLoadMore,
+      'change-adjust': handlers.setPriceAdjust,
     }
   }
 

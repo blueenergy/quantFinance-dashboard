@@ -66,6 +66,48 @@ describe('WorkbenchQuotePanel', () => {
     expect(wrapper.get('.partial-kline-tag').text()).toBe('未完')
   })
 
+  it('passes G/S markers to the chart and can hide the overlay', async () => {
+    const wrapper = mount(WorkbenchQuotePanel, {
+      props: {
+        quoteKlineTitle: '日线行情',
+        quoteKlineShortLabel: '日线',
+        quoteKlineRows: [
+          {
+            trade_date: '20260717',
+            close: 10,
+            high: 11,
+            low: 9,
+            gs_signal: 'g',
+            mj20: 9.8,
+            mj30: 9.5,
+            gs_is_bull: true,
+          },
+        ],
+        quoteKlineTf: '1d',
+      },
+      global: {
+        stubs: {
+          StockKLineChart: {
+            name: 'StockKLineChart',
+            props: ['records', 'markers', 'tf', 'chartMeta'],
+            template: '<div class="kline-stub" />',
+          },
+          MoneyFlowPanel: true,
+        },
+      },
+    })
+
+    const chart = wrapper.findComponent({ name: 'StockKLineChart' })
+    expect(chart.props('markers')).toEqual([
+      { kind: 'g', trade_date: '20260717', price: 9, low: 9, high: 11 },
+    ])
+    expect(chart.props('chartMeta')).toMatchObject({ showDecisionGs: true, showMa: false })
+    expect(wrapper.text()).toContain('G×1')
+    await wrapper.get('.quote-gs-toggle').trigger('click')
+    expect(chart.props('markers')).toEqual([])
+    expect(chart.props('chartMeta')).toMatchObject({ showDecisionGs: false, showMa: true })
+  })
+
   it('shows empty money-flow and loading kline states', () => {
     const wrapper = shallowMount(WorkbenchQuotePanel, {
       props: {

@@ -94,6 +94,18 @@ async function renderChart() {
       vol: row.vol ?? row.volume,
     }))
 
+  const markers = Array.isArray(props.markers) && props.markers.length
+    ? props.markers
+    : rows
+      .filter((row) => row.gs_signal === 'g' || row.gs_signal === 's')
+      .map((row) => ({
+        kind: row.gs_signal,
+        trade_date: row.trade_date,
+        price: row.gs_signal === 'g' ? row.low : row.high,
+        low: row.low,
+        high: row.high,
+      }))
+
   instance.setOption(
     buildShenwanKlineOption(rows, {
       fmtAxis,
@@ -102,7 +114,7 @@ async function renderChart() {
       formatVolShow,
       formatAmount: formatAmountByUnit,
       formatMvWan,
-      markers: props.markers,
+      markers,
     }, { tf: props.tf, ...(props.chartMeta || {}) }),
     true,
   )

@@ -200,6 +200,8 @@ const {
   prevStock,
   nextStock,
   selectStockForChart,
+  priceAdjust,
+  setPriceAdjust,
 } = useChartWorkspace({
   activeTab,
   isAuthenticated,
@@ -344,6 +346,7 @@ function getTabProps(tabId) {
     hasNext: hasNext.value,
     currentStrategy: currentStrategy.value,
     currentPreset: currentPreset.value,
+    priceAdjust: priceAdjust.value,
     user: user.value,
     pendingEtfNavigation: pendingEtfNavigation.value,
     pendingStockWorkbenchNavigation: pendingStockWorkbenchNavigation.value,
@@ -356,6 +359,7 @@ function getTabListeners(tabId) {
     openEtfAnalysis,
     goBackToStrategyPool,
     handleLoadMore,
+    setPriceAdjust,
   })
 }
 

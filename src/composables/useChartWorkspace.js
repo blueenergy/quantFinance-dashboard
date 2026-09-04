@@ -1,6 +1,30 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import request from '../utils/request'
 
+export const PRICE_ADJUST_STORAGE_KEY = 'chart-price-adjust'
+export const VALID_PRICE_ADJUST = ['qfq', 'none', 'hfq']
+
+function readStoredPriceAdjust() {
+  try {
+    const stored = localStorage.getItem(PRICE_ADJUST_STORAGE_KEY)
+    if (VALID_PRICE_ADJUST.includes(stored)) return stored
+  } catch {
+    // ignore quota / private-mode failures
+  }
+  return 'qfq'
+}
+
+export function buildRecordsUrl({ symbol, limit, sort = '-trade_date', startDate, endDate, adjust = 'qfq' }) {
+  const params = new URLSearchParams()
+  params.set('limit', String(limit))
+  params.set('sort', sort)
+  if (symbol) params.set('symbol', symbol)
+  if (startDate) params.set('start_date', startDate)
+  if (endDate) params.set('end_date', endDate)
+  params.set('adjust', VALID_PRICE_ADJUST.includes(adjust) ? adjust : 'qfq')
+  return `/records/?${params.toString()}`
+}
+
 function normalizeDateForComparison(dateStr) {
   if (!dateStr) return ''
 
@@ -51,6 +75,7 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
   const currentStrategy = ref('')
   const currentPreset = ref('')
   const tradeMarkers = ref([])
+  const priceAdjust = ref(readStoredPriceAdjust())
   const chartSymbol = computed(() => (
     chartSymbols.value.length > 0 ? chartSymbols.value[currentIndex.value] : ''
   ))
@@ -107,7 +132,13 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
       const startDate = toYmd(start)
       const endDate = toYmd(end)
 
-      const klineUrl = `/records/?limit=500&sort=-trade_date&symbol=${symbol}&start_date=${startDate}&end_date=${endDate}`
+      const klineUrl = buildRecordsUrl({
+        symbol,
+        limit: 500,
+        startDate,
+        endDate,
+        adjust: priceAdjust.value,
+      })
       const klineReq = request({ url: klineUrl, method: 'get', timeout: 10000 })
       const moneyFlowReq = fetchMoneyFlowRecords(symbol)
 
@@ -191,7 +222,13 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
         || adjustedEndDate !== normalizeDateForComparison(endDate)
       ) {
         console.log(`调整日期范围以包含交易记录: ${adjustedStartDate} 到 ${adjustedEndDate}`)
-        const adjustedKlineUrl = `/records/?limit=500&sort=-trade_date&symbol=${symbol}&start_date=${adjustedStartDate}&end_date=${adjustedEndDate}`
+        const adjustedKlineUrl = buildRecordsUrl({
+          symbol,
+          limit: 500,
+          startDate: adjustedStartDate,
+          endDate: adjustedEndDate,
+          adjust: priceAdjust.value,
+        })
         const adjustedKlineRes = await request({ url: adjustedKlineUrl, method: 'get', timeout: 10000 })
         chartRecords.value = adjustedKlineRes
       } else {
@@ -233,7 +270,13 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
       const toYmd = (date) => date.toISOString().slice(0, 10).replace(/-/g, '')
       const startDateStr = toYmd(prevStart)
       const endDateStr = earliestDate.replace(/-/g, '')
-      const klineUrl = `/records/?limit=1000&sort=-trade_date&symbol=${symbol}&start_date=${startDateStr}&end_date=${endDateStr}`
+      const klineUrl = buildRecordsUrl({
+        symbol,
+        limit: 1000,
+        startDate: startDateStr,
+        endDate: endDateStr,
+        adjust: priceAdjust.value,
+      })
 
       const [klineRes, moneyFlowRes] = await Promise.all([
         request({ url: klineUrl, method: 'get', timeout: 15000 }),
@@ -359,6 +402,20 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
     window.currentSourceInfo = sourceInfo
   }
 
+  function setPriceAdjust(mode) {
+    const next = VALID_PRICE_ADJUST.includes(mode) ? mode : 'qfq'
+    if (priceAdjust.value === next) return
+    priceAdjust.value = next
+    try {
+      localStorage.setItem(PRICE_ADJUST_STORAGE_KEY, next)
+    } catch {
+      // ignore
+    }
+    if (chartSymbol.value) {
+      void loadStockData(chartSymbol.value)
+    }
+  }
+
   watch(activeTab, (tabId) => {
     if (tabId === 'watchlist') {
       void loadAppChartWatchlist()
@@ -391,5 +448,7 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
     prevStock,
     nextStock,
     selectStockForChart,
+    priceAdjust,
+    setPriceAdjust,
   }
 }
