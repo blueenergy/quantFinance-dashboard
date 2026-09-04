@@ -90,7 +90,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
 import request from '../utils/request'
-import { buildDecisionGsChartSeries, padKlinePriceAxis } from '../utils/echarts/shenwanKlineOption.js'
+import { buildDecisionGsChartSeries, formatKlinePriceLabel, padKlinePriceAxis } from '../utils/echarts/shenwanKlineOption.js'
 
 const props = defineProps({
   records: { type: Array, default: () => [] },
@@ -398,6 +398,39 @@ function movingAverage(values, windowSize) {
   return result
 }
 
+function formatChartNum2(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n.toFixed(2) : '-'
+}
+
+function formatStockChartTooltip(params) {
+  if (!params?.length) return ''
+  const date = params[0].axisValue ?? params[0].name ?? ''
+  const lines = []
+  for (const p of params) {
+    if (p.seriesName === 'K线') {
+      const arr = Array.isArray(p.data) ? p.data : p.value
+      if (Array.isArray(arr) && arr.length >= 4) {
+        lines.push(`开 ${formatChartNum2(arr[0])}　收 ${formatChartNum2(arr[1])}<br/>低 ${formatChartNum2(arr[2])}　高 ${formatChartNum2(arr[3])}`)
+      }
+      continue
+    }
+    if (p.seriesName === 'G' || p.seriesName === 'S') {
+      const price = p.data && typeof p.data === 'object' && !Array.isArray(p.data) ? p.data.price : null
+      if (price != null) lines.push(`${p.seriesName} ${formatChartNum2(price)}`)
+      continue
+    }
+    if (
+      p.data != null &&
+      (p.seriesName === '决策线' || p.seriesName === '牛线' || p.seriesName === '熊线'
+        || (typeof p.seriesName === 'string' && /^MA\d+$/.test(p.seriesName)))
+    ) {
+      lines.push(`${p.seriesName} ${formatChartNum2(p.data)}`)
+    }
+  }
+  return `<div class="k-tip"><strong>${date}</strong><br/>${lines.join('<br/>')}</div>`
+}
+
 function getBaseOption(xData, { legendData } = {}) {
   const isDark = theme.value === 'dark'
   const names = Array.isArray(legendData) ? legendData.filter(Boolean) : []
@@ -415,7 +448,20 @@ function getBaseOption(xData, { legendData } = {}) {
       data: names,
       textStyle: { color: isDark ? '#adbac7' : '#444d56', fontSize: 11 },
     },
-    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    tooltip: {
+      trigger: 'axis',
+      confine: true,
+      axisPointer: {
+        type: 'cross',
+        label: {
+          formatter (params) {
+            if (params?.axisDimension === 'x') return String(params.value ?? '')
+            return formatKlinePriceLabel(params?.value)
+          }
+        }
+      },
+      formatter: formatStockChartTooltip
+    },
     grid: { left: '50', right: '20', top: names.length ? 36 : 16, bottom: '20' },
     xAxis: { 
       type: 'category', 
@@ -426,7 +472,8 @@ function getBaseOption(xData, { legendData } = {}) {
     yAxis: { 
       scale: true, 
       splitLine: { lineStyle: { color: isDark ? '#2d333b' : '#eaecef' } }, 
-      axisLabel: { color: isDark ? '#768390' : '#586069', fontSize: 11 } 
+      axisLabel: { color: isDark ? '#768390' : '#586069', fontSize: 11, formatter: formatKlinePriceLabel },
+      axisPointer: { label: { formatter: (p) => formatKlinePriceLabel(p?.value) } }
     },
     dataZoom: [{ type: 'inside' }],
     animation: false

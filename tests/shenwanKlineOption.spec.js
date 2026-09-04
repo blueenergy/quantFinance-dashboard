@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDecisionGsChartSeries, buildShenwanKlineOption, padKlinePriceAxis } from '../src/utils/echarts/shenwanKlineOption.js'
+import { buildDecisionGsChartSeries, buildShenwanKlineOption, formatKlinePriceLabel, padKlinePriceAxis } from '../src/utils/echarts/shenwanKlineOption.js'
 
 function fmtAxis(value) {
   const s = String(value || '')
@@ -83,8 +83,8 @@ describe('buildShenwanKlineOption markers', () => {
     expect(option.series.some((s) => s.name === '熊线')).toBe(true)
     const g = option.series.find((s) => s.name === 'G')
     const s = option.series.find((s) => s.name === 'S')
-    expect(g.data).toEqual([['2026-01-09', 10 * 0.988]])
-    expect(s.data).toEqual([['2026-01-12', 11.2 * 1.012]])
+    expect(g.data).toEqual([{ value: ['2026-01-09', 10 * 0.988], price: 10 }])
+    expect(s.data).toEqual([{ value: ['2026-01-12', 11.2 * 1.012], price: 11.2 }])
     expect(g.symbolSize).toBeGreaterThanOrEqual(22)
     expect(g.clip).toBe(false)
     expect(g.itemStyle.color).toBe('#fde047')
@@ -105,8 +105,8 @@ describe('buildDecisionGsChartSeries', () => {
       fmtAxis,
     )
     expect(series.map((s) => s.name)).toEqual(['决策线', '牛线', '熊线', 'G', 'S'])
-    expect(series.find((s) => s.name === 'G').data).toEqual([['2026-01-09', 10 * 0.988]])
-    expect(series.find((s) => s.name === 'S').data).toEqual([['2026-01-12', 11.2 * 1.012]])
+    expect(series.find((s) => s.name === 'G').data).toEqual([{ value: ['2026-01-09', 10 * 0.988], price: 10 }])
+    expect(series.find((s) => s.name === 'S').data).toEqual([{ value: ['2026-01-12', 11.2 * 1.012], price: 11.2 }])
     expect(series.find((s) => s.name === 'G').itemStyle.color).toBe('#fde047')
     expect(series.find((s) => s.name === 'S').itemStyle.color).toBe('#fb923c')
     expect(series.find((s) => s.name === 'G').label.color).toBe('#fffbeb')
@@ -139,5 +139,53 @@ describe('padKlinePriceAxis', () => {
     const axis = padKlinePriceAxis({ type: 'value', scale: true })
     expect(axis.min({ min: 10, max: 20 })).toBe(9.4)
     expect(axis.max({ min: 10, max: 20 })).toBe(20.6)
+  })
+
+  it('formats price-axis labels and crosshair to two decimals', () => {
+    const axis = padKlinePriceAxis({ type: 'value', scale: true })
+    expect(axis.axisLabel.formatter(10.51 * 0.988)).toBe('10.38')
+    expect(axis.axisPointer.label.formatter({ value: 11.2 * 1.012 })).toBe('11.33')
+    expect(formatKlinePriceLabel(10.51 * 0.988)).toBe('10.38')
+  })
+})
+
+describe('kline tooltip price digits', () => {
+  const gsBars = [
+    { trade_date: '20260108', open: 10, high: 11, low: 9.5, close: 10.2, volume: 1000, mj20: 10.1, mj30: 10.0, gs_is_bull: true },
+    { trade_date: '20260109', open: 10.2, high: 11.5, low: 10.51, close: 11, volume: 1200, mj20: 10.2, mj30: 10.05, gs_is_bull: true, gs_signal: 'g' },
+    { trade_date: '20260112', open: 11, high: 11.2, low: 10.8, close: 10.9, volume: 800, mj20: 10.3, mj30: 10.4, gs_is_bull: false, gs_signal: 's' },
+  ]
+
+  it('shows G/S at the real high/low with two decimals, not the padded scatter Y', () => {
+    const option = buildShenwanKlineOption(gsBars, formatters([
+      { kind: 'g', trade_date: '20260109', low: 10.51, high: 11.5 },
+      { kind: 's', trade_date: '20260112', low: 10.8, high: 11.2 },
+    ]))
+    const html = option.tooltip.formatter([
+      {
+        seriesName: 'G',
+        dataIndex: 0,
+        axisValue: '2026-01-09',
+        data: option.series.find((s) => s.name === 'G').data[0],
+      },
+      {
+        seriesName: 'K线',
+        dataIndex: 1,
+        data: [10.2, 11, 10.51, 11.5],
+      },
+    ])
+    expect(html).toContain('G 10.51')
+    expect(html).not.toContain(String(10.51 * 0.988))
+    expect(html).toContain('开 10.20')
+    expect(html).toContain('低 10.51')
+  })
+
+  it('formats the price-axis crosshair to two decimals', () => {
+    const option = buildShenwanKlineOption(gsBars, formatters([
+      { kind: 'g', trade_date: '20260109', low: 10.51, high: 11.5 },
+    ]))
+    const yAxis = Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis
+    expect(yAxis.axisPointer.label.formatter({ value: 10.51 * 0.988 })).toBe('10.38')
+    expect(yAxis.axisLabel.formatter(10.51)).toBe('10.51')
   })
 })

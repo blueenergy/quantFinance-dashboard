@@ -120,11 +120,73 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
   return option
 }
 
+/** A-share prices: always two decimals in labels / crosshair / tooltip. */
+export function formatKlinePriceLabel (value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n.toFixed(2) : ''
+}
+
+function priceAxisPointerFormatter (params) {
+  const raw = params && typeof params === 'object' && 'value' in params ? params.value : params
+  return formatKlinePriceLabel(raw)
+}
+
+function withPriceAxisFormat (axis) {
+  if (!axis || typeof axis !== 'object') return axis
+  return {
+    ...axis,
+    axisLabel: {
+      ...(axis.axisLabel || {}),
+      formatter: axis.axisLabel?.formatter || formatKlinePriceLabel
+    },
+    axisPointer: {
+      ...(axis.axisPointer || {}),
+      label: {
+        ...(axis.axisPointer?.label || {}),
+        formatter: axis.axisPointer?.label?.formatter || priceAxisPointerFormatter
+      }
+    }
+  }
+}
+
+function priceValueAxis (extra = {}) {
+  return withPriceAxisFormat({
+    type: 'value',
+    scale: true,
+    splitLine: { lineStyle: { color: '#333' } },
+    ...extra
+  })
+}
+
+function pctValueAxis (extra = {}) {
+  return {
+    type: 'value',
+    scale: true,
+    name: '涨跌%',
+    nameTextStyle: { color: '#888' },
+    position: 'right',
+    splitLine: { show: false },
+    ...extra,
+    axisLabel: {
+      formatter: formatKlinePriceLabel,
+      ...(extra.axisLabel || {})
+    },
+    axisPointer: {
+      label: {
+        formatter (params) {
+          const s = priceAxisPointerFormatter(params)
+          return s ? `${s}%` : ''
+        }
+      }
+    }
+  }
+}
+
 /** Leave room above/below candles so G/S labels are not clipped. */
 export function padKlinePriceAxis (yAxis, fraction = 0.06) {
   const padAxis = (axis) => {
     if (!axis || typeof axis !== 'object') return axis
-    return {
+    return withPriceAxisFormat({
       ...axis,
       min (extent) {
         const span = Number(extent.max) - Number(extent.min)
@@ -136,7 +198,7 @@ export function padKlinePriceAxis (yAxis, fraction = 0.06) {
         const pad = span > 0 ? span * fraction : Math.max(Math.abs(Number(extent.max)) * 0.01, 0.01)
         return Number(extent.max) + pad
       }
-    }
+    })
   }
   if (Array.isArray(yAxis)) {
     if (!yAxis.length) return yAxis
@@ -224,22 +286,14 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
     return {
       grid: [{ left: 48, right: hasPct ? 56 : 20, top: 36, bottom: 56 }],
       xAxis: { type: 'category', data: times, axisLine: { lineStyle: { color: '#666' } } },
-      yAxis: hasPct
-        ? [
-            { type: 'value', scale: true, splitLine: { lineStyle: { color: '#333' } } },
-            { type: 'value', scale: true, name: '涨跌%', nameTextStyle: { color: '#888' }, position: 'right', splitLine: { show: false } }
-          ]
-        : { type: 'value', scale: true, splitLine: { lineStyle: { color: '#333' } } },
+      yAxis: hasPct ? [priceValueAxis(), pctValueAxis()] : priceValueAxis(),
       xZoomIdx: [0]
     }
   }
   if (subBoth) {
     const yMain = hasPct
-      ? [
-          { type: 'value', scale: true, gridIndex: 0, splitLine: { lineStyle: { color: '#333' } } },
-          { type: 'value', scale: true, name: '涨跌%', nameTextStyle: { color: '#888' }, position: 'right', gridIndex: 0, splitLine: { show: false } }
-        ]
-      : [{ type: 'value', scale: true, gridIndex: 0, splitLine: { lineStyle: { color: '#333' } } }]
+      ? [priceValueAxis({ gridIndex: 0 }), pctValueAxis({ gridIndex: 0 })]
+      : [priceValueAxis({ gridIndex: 0 })]
     return {
       grid: [
         { left: 50, right: hasPct ? 56 : 20, top: 32, height: '44%' },
@@ -256,6 +310,7 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
           nameGap: 0,
           nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
           axisLabel: { formatter: compactVolumeLabel },
+          axisPointer: { label: { formatter: (p) => compactVolumeLabel(p?.value) } },
           scale: true,
           gridIndex: 1,
           splitLine: { show: true, lineStyle: { color: '#2a2a2a' } }
@@ -267,6 +322,7 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
           nameGap: 0,
           nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
           axisLabel: { formatter: compactNumberLabel },
+          axisPointer: { label: { formatter: (p) => compactNumberLabel(p?.value) } },
           scale: true,
           gridIndex: 2,
           splitLine: { show: true, lineStyle: { color: '#2a2a2a' } }
@@ -276,11 +332,8 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
     }
   }
   const yMainSingle = hasPct
-    ? [
-        { type: 'value', scale: true, gridIndex: 0, splitLine: { lineStyle: { color: '#333' } } },
-        { type: 'value', scale: true, name: '涨跌%', nameTextStyle: { color: '#888' }, position: 'right', gridIndex: 0, splitLine: { show: false } }
-      ]
-    : [{ type: 'value', scale: true, gridIndex: 0, splitLine: { lineStyle: { color: '#333' } } }]
+    ? [priceValueAxis({ gridIndex: 0 }), pctValueAxis({ gridIndex: 0 })]
+    : [priceValueAxis({ gridIndex: 0 })]
   return {
     grid: [
       { left: 50, right: hasPct ? 56 : 20, top: 32, height: '52%' },
@@ -296,6 +349,7 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
         nameGap: 0,
         nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
         axisLabel: { formatter: hasVol ? compactVolumeLabel : compactNumberLabel },
+        axisPointer: { label: { formatter: (p) => (hasVol ? compactVolumeLabel : compactNumberLabel)(p?.value) } },
         scale: true,
         gridIndex: 1,
         splitLine: { show: true, lineStyle: { color: '#2a2a2a' } }
@@ -505,10 +559,19 @@ const GS_S_COLOR = '#fb923c'
 const GS_LABEL_COLOR = '#fffbeb'
 const GS_LABEL_BORDER = '#111827'
 
-function gsMarkerY (kind, marker) {
+function gsRawPrice (kind, marker) {
   const raw = Number(kind === 'g' ? (marker.low ?? marker.price) : (marker.high ?? marker.price))
-  if (!Number.isFinite(raw)) return null
-  return kind === 'g' ? raw * (1 - GS_Y_PAD) : raw * (1 + GS_Y_PAD)
+  return Number.isFinite(raw) ? raw : null
+}
+
+function gsMarkerY (kind, price) {
+  return kind === 'g' ? price * (1 - GS_Y_PAD) : price * (1 + GS_Y_PAD)
+}
+
+function gsScatterDatum (kind, marker, date) {
+  const price = gsRawPrice(kind, marker)
+  if (price == null) return null
+  return { value: [date, gsMarkerY(kind, price)], price }
 }
 
 function gsScatterSeriesSpec ({ name, color, data, rotate = 0, labelPosition }) {
@@ -562,11 +625,11 @@ function buildGsScatterSeries (markers, fmtAxis) {
       const date = fmtAxis(marker.trade_date)
       if (!date) return
       if (marker.kind === 'g') {
-        const y = gsMarkerY('g', marker)
-        if (y != null) gData.push([date, y])
+        const point = gsScatterDatum('g', marker, date)
+        if (point) gData.push(point)
       } else if (marker.kind === 's') {
-        const y = gsMarkerY('s', marker)
-        if (y != null) sData.push([date, y])
+        const point = gsScatterDatum('s', marker, date)
+        if (point) sData.push(point)
       }
     })
   }
@@ -683,6 +746,25 @@ function buildMarkerPoints (markers, fmtAxis) {
     .filter(Boolean)
 }
 
+function resolveTooltipBar (params, data, fmtAxis) {
+  if (!params?.length || !Array.isArray(data) || !data.length) return null
+  const candle = params.find((p) => p.seriesName === 'K线')
+  if (candle != null && data[candle.dataIndex]) return data[candle.dataIndex]
+  const axisValue = params[0]?.axisValue ?? params[0]?.name
+  if (axisValue != null && typeof fmtAxis === 'function') {
+    const key = String(axisValue)
+    const hit = data.find((row) => fmtAxis(row.trade_date) === key)
+    if (hit) return hit
+  }
+  return data[params[0]?.dataIndex] || null
+}
+
+function gsHoverPrice (item) {
+  const raw = item?.data
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && raw.price != null) return raw.price
+  return null
+}
+
 function buildShenwanTooltip (data, fmt) {
   return {
     trigger: 'axis',
@@ -690,9 +772,6 @@ function buildShenwanTooltip (data, fmt) {
     confine: true,
     formatter (params) {
       if (!params || !params.length) return ''
-      const idx = params[0].dataIndex
-      const d = data[idx]
-      if (!d) return ''
       const {
         fmtAxis,
         formatNum2,
@@ -701,6 +780,8 @@ function buildShenwanTooltip (data, fmt) {
         formatAmount,
         formatMvWan
       } = fmt
+      const d = resolveTooltipBar(params, data, fmtAxis)
+      if (!d) return ''
       const t = params.map((p) => {
         if (p.seriesName === 'K线') {
           const o = toNumOrNull(d.open)
@@ -708,6 +789,10 @@ function buildShenwanTooltip (data, fmt) {
           const l = toNumOrNull(d.low)
           const h = toNumOrNull(d.high)
           return `开 ${formatNum2(o)}　收 ${formatNum2(c)}<br/>低 ${formatNum2(l)}　高 ${formatNum2(h)}`
+        }
+        if (p.seriesName === 'G' || p.seriesName === 'S') {
+          const price = gsHoverPrice(p)
+          return price == null ? '' : `${p.seriesName} ${formatNum2(price)}`
         }
         if (p.seriesName === '涨跌幅%' && p.data != null) {
           return `涨跌幅 ${Number(p.data).toFixed(2)}%`
