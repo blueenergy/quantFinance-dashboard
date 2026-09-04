@@ -112,7 +112,37 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
     barsBefore: _meta?.focusBarsBefore,
     barsAfter: _meta?.focusBarsAfter
   })
+  const hasGsMarks = (Array.isArray(markers) && markers.some((m) => m?.kind === 'g' || m?.kind === 's'))
+    || data.some((r) => r?.gs_signal === 'g' || r?.gs_signal === 's')
+  if (hasGsMarks) {
+    option.yAxis = padKlinePriceAxis(option.yAxis)
+  }
   return option
+}
+
+/** Leave room above/below candles so G/S labels are not clipped. */
+export function padKlinePriceAxis (yAxis, fraction = 0.06) {
+  const padAxis = (axis) => {
+    if (!axis || typeof axis !== 'object') return axis
+    return {
+      ...axis,
+      min (extent) {
+        const span = Number(extent.max) - Number(extent.min)
+        const pad = span > 0 ? span * fraction : Math.max(Math.abs(Number(extent.min)) * 0.01, 0.01)
+        return Number(extent.min) - pad
+      },
+      max (extent) {
+        const span = Number(extent.max) - Number(extent.min)
+        const pad = span > 0 ? span * fraction : Math.max(Math.abs(Number(extent.max)) * 0.01, 0.01)
+        return Number(extent.max) + pad
+      }
+    }
+  }
+  if (Array.isArray(yAxis)) {
+    if (!yAxis.length) return yAxis
+    return [padAxis(yAxis[0]), ...yAxis.slice(1)]
+  }
+  return padAxis(yAxis)
 }
 
 function barUpDnColor (o, c) {
@@ -346,8 +376,8 @@ function buildSeries (ctx) {
     s.push(movingAverageSeries('决策线', mj20, '#facc15', 8, { width: 2.4, connectNulls: true }))
     s.push(movingAverageSeries('牛线', mj30Bull, '#ef4444', 7, { width: 2.2 }))
     s.push(movingAverageSeries('熊线', mj30Bear, '#22c55e', 7, { width: 2.2 }))
-    s.push(...buildGsScatterSeries(markers, fmtAxis))
   }
+  s.push(...buildGsScatterSeries(markers, fmtAxis))
   if (hasPct) {
     s.push({
       name: '涨跌幅%',
@@ -434,7 +464,7 @@ function movingAverageSeries (name, data, color, z, { width = 1.2, connectNulls 
     connectNulls,
     itemStyle: { color },
     lineStyle: { width, color },
-    emphasis: { focus: 'series' },
+    emphasis: { focus: 'none' },
     z,
     clip: false,
   }
@@ -468,6 +498,62 @@ export function buildDecisionGsChartSeries (rows, fmtAxis) {
   ]
 }
 
+const GS_Y_PAD = 0.012
+const GS_SYMBOL_SIZE = 22
+const GS_G_COLOR = '#fde047'
+const GS_S_COLOR = '#fb923c'
+const GS_LABEL_COLOR = '#fffbeb'
+const GS_LABEL_BORDER = '#111827'
+
+function gsMarkerY (kind, marker) {
+  const raw = Number(kind === 'g' ? (marker.low ?? marker.price) : (marker.high ?? marker.price))
+  if (!Number.isFinite(raw)) return null
+  return kind === 'g' ? raw * (1 - GS_Y_PAD) : raw * (1 + GS_Y_PAD)
+}
+
+function gsScatterSeriesSpec ({ name, color, data, rotate = 0, labelPosition }) {
+  return {
+    name,
+    type: 'scatter',
+    color,
+    xAxisIndex: 0,
+    yAxisIndex: 0,
+    data,
+    symbol: 'triangle',
+    symbolRotate: rotate,
+    symbolSize: GS_SYMBOL_SIZE,
+    legendHoverLink: false,
+    clip: false,
+    z: 20,
+    itemStyle: {
+      color,
+      borderColor: GS_LABEL_BORDER,
+      borderWidth: 1.5,
+      shadowBlur: 8,
+      shadowColor: 'rgba(0, 0, 0, 0.45)'
+    },
+    label: {
+      show: true,
+      formatter: name,
+      position: labelPosition,
+      color: GS_LABEL_COLOR,
+      fontWeight: 800,
+      fontSize: 14,
+      distance: 8,
+      textBorderColor: GS_LABEL_BORDER,
+      textBorderWidth: 2
+    },
+    emphasis: {
+      scale: 1.15,
+      itemStyle: { borderWidth: 2 }
+    },
+    blur: {
+      itemStyle: { opacity: 1 },
+      label: { opacity: 1 }
+    }
+  }
+}
+
 function buildGsScatterSeries (markers, fmtAxis) {
   const gData = []
   const sData = []
@@ -476,61 +562,22 @@ function buildGsScatterSeries (markers, fmtAxis) {
       const date = fmtAxis(marker.trade_date)
       if (!date) return
       if (marker.kind === 'g') {
-        const y = Number(marker.low ?? marker.price)
-        if (Number.isFinite(y)) gData.push([date, y])
+        const y = gsMarkerY('g', marker)
+        if (y != null) gData.push([date, y])
       } else if (marker.kind === 's') {
-        const y = Number(marker.high ?? marker.price)
-        if (Number.isFinite(y)) sData.push([date, y])
+        const y = gsMarkerY('s', marker)
+        if (y != null) sData.push([date, y])
       }
     })
   }
-  return [
-    {
-      name: 'G',
-      type: 'scatter',
-      color: '#ef4444',
-      xAxisIndex: 0,
-      yAxisIndex: 0,
-      data: gData,
-      symbol: 'triangle',
-      symbolSize: 14,
-      legendHoverLink: false,
-      itemStyle: { color: '#ef4444' },
-      label: {
-        show: true,
-        formatter: 'G',
-        position: 'bottom',
-        color: '#fca5a5',
-        fontWeight: 800,
-        fontSize: 12,
-        distance: 4
-      },
-      z: 20
-    },
-    {
-      name: 'S',
-      type: 'scatter',
-      color: '#22c55e',
-      xAxisIndex: 0,
-      yAxisIndex: 0,
-      data: sData,
-      symbol: 'triangle',
-      symbolRotate: 180,
-      symbolSize: 14,
-      legendHoverLink: false,
-      itemStyle: { color: '#22c55e' },
-      label: {
-        show: true,
-        formatter: 'S',
-        position: 'top',
-        color: '#86efac',
-        fontWeight: 800,
-        fontSize: 12,
-        distance: 4
-      },
-      z: 20
-    }
-  ]
+  const series = []
+  if (gData.length) {
+    series.push(gsScatterSeriesSpec({ name: 'G', color: GS_G_COLOR, data: gData, labelPosition: 'bottom' }))
+  }
+  if (sData.length) {
+    series.push(gsScatterSeriesSpec({ name: 'S', color: GS_S_COLOR, data: sData, rotate: 180, labelPosition: 'top' }))
+  }
+  return series
 }
 
 function compactVolumeLabel (value) {
@@ -593,17 +640,17 @@ function buildMarkerPoints (markers, fmtAxis) {
       const kind = markerKind(marker)
       const date = fmtAxis(marker.trade_date)
       if (!date) return null
-      if (kind === 'buy' || kind === 'sell' || kind === 'g' || kind === 's') {
-        const isBuy = kind === 'buy' || kind === 'g'
+      if (kind === 'g' || kind === 's') return null
+      if (kind === 'buy' || kind === 'sell') {
+        const isBuy = kind === 'buy'
         const priced = Number(marker.price)
         const rawY = Number.isFinite(priced)
           ? priced
           : Number(isBuy ? marker.low : marker.high)
         if (!Number.isFinite(rawY)) return null
-        const isGs = kind === 'g' || kind === 's'
-        const label = isGs ? (isBuy ? 'G' : 'S') : (isBuy ? '买' : '卖')
+        const label = isBuy ? '买' : '卖'
         return {
-          name: isGs ? (isBuy ? '决策线G' : '决策线S') : (isBuy ? '买入' : '卖出'),
+          name: isBuy ? '买入' : '卖出',
           coord: [date, rawY],
           value: label,
           label,

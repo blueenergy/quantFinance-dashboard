@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDecisionGsChartSeries, buildShenwanKlineOption } from '../src/utils/echarts/shenwanKlineOption.js'
+import { buildDecisionGsChartSeries, buildShenwanKlineOption, padKlinePriceAxis } from '../src/utils/echarts/shenwanKlineOption.js'
 
 function fmtAxis(value) {
   const s = String(value || '')
@@ -64,7 +64,7 @@ describe('buildShenwanKlineOption markers', () => {
     expect(option.dataZoom[0].start).toBeLessThan(option.dataZoom[0].end)
   })
 
-  it('draws G/S pins and decision overlays, hiding default MA', () => {
+  it('draws G/S scatter (not pins) and decision overlays, hiding default MA', () => {
     const option = buildShenwanKlineOption(
       [
         { trade_date: '20260108', open: 10, high: 11, low: 9.5, close: 10.2, volume: 1000, mj20: 10.1, mj30: 10.0, gs_is_bull: true },
@@ -77,13 +77,19 @@ describe('buildShenwanKlineOption markers', () => {
       ]),
     )
     const candle = option.series[0]
-    expect(candle.markPoint.data.map((p) => p.label)).toEqual(['G', 'S'])
-    expect(candle.markPoint.data.map((p) => p.itemStyle.color)).toEqual(['#ef4444', '#22c55e'])
+    expect(candle.markPoint).toBeUndefined()
     expect(option.series.some((s) => s.name === '决策线')).toBe(true)
     expect(option.series.some((s) => s.name === '牛线')).toBe(true)
     expect(option.series.some((s) => s.name === '熊线')).toBe(true)
-    expect(option.series.find((s) => s.name === 'G').data).toEqual([['2026-01-09', 10]])
-    expect(option.series.find((s) => s.name === 'S').data).toEqual([['2026-01-12', 11.2]])
+    const g = option.series.find((s) => s.name === 'G')
+    const s = option.series.find((s) => s.name === 'S')
+    expect(g.data).toEqual([['2026-01-09', 10 * 0.988]])
+    expect(s.data).toEqual([['2026-01-12', 11.2 * 1.012]])
+    expect(g.symbolSize).toBeGreaterThanOrEqual(22)
+    expect(g.clip).toBe(false)
+    expect(g.itemStyle.color).toBe('#fde047')
+    expect(s.itemStyle.color).toBe('#fb923c')
+    expect(typeof option.yAxis.min === 'function' || typeof option.yAxis[0]?.min === 'function').toBe(true)
     expect(option.series.some((s) => String(s.name).startsWith('MA'))).toBe(false)
   })
 })
@@ -99,12 +105,15 @@ describe('buildDecisionGsChartSeries', () => {
       fmtAxis,
     )
     expect(series.map((s) => s.name)).toEqual(['决策线', '牛线', '熊线', 'G', 'S'])
-    expect(series.find((s) => s.name === 'G').data).toEqual([['2026-01-09', 10]])
-    expect(series.find((s) => s.name === 'S').data).toEqual([['2026-01-12', 11.2]])
-    expect(series.find((s) => s.name === 'G').itemStyle.color).toBe('#ef4444')
-    expect(series.find((s) => s.name === 'S').itemStyle.color).toBe('#22c55e')
-    expect(series.find((s) => s.name === 'G').label.color).toBe('#fca5a5')
-    expect(series.find((s) => s.name === 'S').label.color).toBe('#86efac')
+    expect(series.find((s) => s.name === 'G').data).toEqual([['2026-01-09', 10 * 0.988]])
+    expect(series.find((s) => s.name === 'S').data).toEqual([['2026-01-12', 11.2 * 1.012]])
+    expect(series.find((s) => s.name === 'G').itemStyle.color).toBe('#fde047')
+    expect(series.find((s) => s.name === 'S').itemStyle.color).toBe('#fb923c')
+    expect(series.find((s) => s.name === 'G').label.color).toBe('#fffbeb')
+    expect(series.find((s) => s.name === 'S').label.color).toBe('#fffbeb')
+    expect(series.find((s) => s.name === 'G').clip).toBe(false)
+    expect(series.find((s) => s.name === 'G').symbolSize).toBeGreaterThanOrEqual(22)
+    expect(series.find((s) => s.name === 'G').label.textBorderWidth).toBeGreaterThanOrEqual(2)
     const decision = series.find((s) => s.name === '决策线')
     const bull = series.find((s) => s.name === '牛线')
     const bear = series.find((s) => s.name === '熊线')
@@ -122,5 +131,13 @@ describe('buildDecisionGsChartSeries', () => {
 
   it('returns empty when mj20 is missing', () => {
     expect(buildDecisionGsChartSeries(bars, fmtAxis)).toEqual([])
+  })
+})
+
+describe('padKlinePriceAxis', () => {
+  it('adds min/max padding on the price axis', () => {
+    const axis = padKlinePriceAxis({ type: 'value', scale: true })
+    expect(axis.min({ min: 10, max: 20 })).toBe(9.4)
+    expect(axis.max({ min: 10, max: 20 })).toBe(20.6)
   })
 })

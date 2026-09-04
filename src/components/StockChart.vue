@@ -90,7 +90,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
 import request from '../utils/request'
-import { buildDecisionGsChartSeries } from '../utils/echarts/shenwanKlineOption.js'
+import { buildDecisionGsChartSeries, padKlinePriceAxis } from '../utils/echarts/shenwanKlineOption.js'
 
 const props = defineProps({
   records: { type: Array, default: () => [] },
@@ -160,7 +160,7 @@ const decisionGsSummary = computed(() => {
     const g = signals.filter((r) => r.gs_signal === 'g').length
     const s = signals.filter((r) => r.gs_signal === 's').length
     const last = signals[signals.length - 1]
-    return `G×${g} · S×${s} · 最近 ${String(last.gs_signal).toUpperCase()} ${normalizeDate(last.trade_date)}　黄=决策线　红=牛线　绿=熊线`
+    return `G×${g} · S×${s} · 最近 ${String(last.gs_signal).toUpperCase()} ${normalizeDate(last.trade_date)}　金三角=G/S　黄=决策线　红=牛线　绿=熊线`
   }
   if (visible.some((r) => r.mj20 != null)) {
     return '当前窗口没有 G/S 拐点（可拉长日期或拖动缩放）'
@@ -304,6 +304,7 @@ function renderDaily() {
   ]
   if (gsSeries.length) {
     option.series.push(...gsSeries)
+    option.yAxis = padKlinePriceAxis(option.yAxis)
   } else {
     option.series.push(
       {
