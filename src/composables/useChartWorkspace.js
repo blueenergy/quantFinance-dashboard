@@ -25,6 +25,20 @@ export function buildRecordsUrl({ symbol, limit, sort = '-trade_date', startDate
   return `/records/?${params.toString()}`
 }
 
+export function normalizeChartNavSymbols(symbols) {
+  if (!Array.isArray(symbols)) return []
+  const seen = new Set()
+  const out = []
+  for (const item of symbols) {
+    if (typeof item !== 'string') continue
+    const symbol = item.trim()
+    if (!symbol || seen.has(symbol)) continue
+    seen.add(symbol)
+    out.push(symbol)
+  }
+  return out
+}
+
 function normalizeDateForComparison(dateStr) {
   if (!dateStr) return ''
 
@@ -353,11 +367,36 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
     }
   }
 
+  function applyChartSymbolSelection(stockSymbol, navSymbols) {
+    if (navSymbols.length > 0) {
+      const nextSymbols = navSymbols.includes(stockSymbol)
+        ? [...navSymbols]
+        : [...navSymbols, stockSymbol]
+      chartSymbols.value = nextSymbols
+      currentIndex.value = nextSymbols.indexOf(stockSymbol)
+      return
+    }
+
+    const index = chartSymbols.value.indexOf(stockSymbol)
+    if (index !== -1) {
+      if (currentIndex.value === index) {
+        loadStockData(stockSymbol)
+      } else {
+        currentIndex.value = index
+      }
+      return
+    }
+
+    chartSymbols.value.push(stockSymbol)
+    currentIndex.value = chartSymbols.value.length - 1
+  }
+
   async function selectStockForChart(stockData) {
     let stockSymbol = ''
     let signalDate = null
     let strategy = ''
     let preset = ''
+    let navSymbols = []
     const sourceTab = activeTab.value
 
     if (typeof stockData === 'string') {
@@ -367,9 +406,16 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
       signalDate = stockData.signalDate
       strategy = stockData.strategy || ''
       preset = stockData.preset || ''
+      navSymbols = normalizeChartNavSymbols(stockData.symbols)
     }
 
     if (!stockSymbol) return
+
+    // Opening from the watchlist tab should cycle the current 自选股 list.
+    // Deep links / ranking still pass a single symbol so they stay isolated.
+    if (navSymbols.length === 0 && sourceTab === 'watchlist') {
+      navSymbols = normalizeChartNavSymbols(watchlist.value)
+    }
 
     currentStrategy.value = strategy
     currentPreset.value = preset
@@ -386,17 +432,7 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
       signalDates.value = []
     }
 
-    const index = chartSymbols.value.indexOf(stockSymbol)
-    if (index !== -1) {
-      if (currentIndex.value === index) {
-        loadStockData(stockSymbol)
-      } else {
-        currentIndex.value = index
-      }
-    } else {
-      chartSymbols.value.push(stockSymbol)
-      currentIndex.value = chartSymbols.value.length - 1
-    }
+    applyChartSymbolSelection(stockSymbol, navSymbols)
 
     switchTab('chart')
     window.currentSourceInfo = sourceInfo

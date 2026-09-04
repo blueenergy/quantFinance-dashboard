@@ -489,12 +489,12 @@ function buildGsScatterSeries (markers, fmtAxis) {
       data: gData,
       symbol: 'triangle',
       symbolSize: 14,
-      itemStyle: { color: '#4ade80' },
+      itemStyle: { color: '#ef4444' },
       label: {
         show: true,
         formatter: 'G',
         position: 'bottom',
-        color: '#86efac',
+        color: '#fca5a5',
         fontWeight: 800,
         fontSize: 12,
         distance: 4
@@ -510,12 +510,12 @@ function buildGsScatterSeries (markers, fmtAxis) {
       symbol: 'triangle',
       symbolRotate: 180,
       symbolSize: 14,
-      itemStyle: { color: '#f87171' },
+      itemStyle: { color: '#22c55e' },
       label: {
         show: true,
         formatter: 'S',
         position: 'top',
-        color: '#fca5a5',
+        color: '#86efac',
         fontWeight: 800,
         fontSize: 12,
         distance: 4
@@ -603,7 +603,7 @@ function buildMarkerPoints (markers, fmtAxis) {
           symbolSize: marker.highlighted ? 42 : 34,
           symbolOffset: isBuy ? [0, 10] : [0, -10],
           itemStyle: {
-            color: isBuy ? '#22c55e' : '#ef4444',
+            color: isBuy ? '#ef4444' : '#22c55e',
             borderColor: marker.highlighted ? '#fde68a' : '#f8fafc',
             borderWidth: marker.highlighted ? 2 : 1
           }

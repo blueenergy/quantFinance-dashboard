@@ -58,6 +58,7 @@ describe('buildShenwanKlineOption markers', () => {
     const candle = option.series[0]
     expect(option.series.some((s) => String(s.name).startsWith('MA'))).toBe(false)
     expect(candle.markPoint.data.map((p) => p.label)).toEqual(['买', '卖'])
+    expect(candle.markPoint.data.map((p) => p.itemStyle.color)).toEqual(['#ef4444', '#22c55e'])
     expect(candle.markPoint.data[0].symbol).toBe('pin')
     expect(candle.markLine.data[0].xAxis).toBe('2026-01-09')
     expect(option.dataZoom[0].start).toBeLessThan(option.dataZoom[0].end)
@@ -77,6 +78,7 @@ describe('buildShenwanKlineOption markers', () => {
     )
     const candle = option.series[0]
     expect(candle.markPoint.data.map((p) => p.label)).toEqual(['G', 'S'])
+    expect(candle.markPoint.data.map((p) => p.itemStyle.color)).toEqual(['#ef4444', '#22c55e'])
     expect(option.series.some((s) => s.name === '决策线')).toBe(true)
     expect(option.series.some((s) => s.name === '牛线')).toBe(true)
     expect(option.series.some((s) => s.name === '熊线')).toBe(true)
@@ -99,6 +101,10 @@ describe('buildDecisionGsChartSeries', () => {
     expect(series.map((s) => s.name)).toEqual(['决策线', '牛线', '熊线', 'G', 'S'])
     expect(series.find((s) => s.name === 'G').data).toEqual([['2026-01-09', 10]])
     expect(series.find((s) => s.name === 'S').data).toEqual([['2026-01-12', 11.2]])
+    expect(series.find((s) => s.name === 'G').itemStyle.color).toBe('#ef4444')
+    expect(series.find((s) => s.name === 'S').itemStyle.color).toBe('#22c55e')
+    expect(series.find((s) => s.name === 'G').label.color).toBe('#fca5a5')
+    expect(series.find((s) => s.name === 'S').label.color).toBe('#86efac')
   })
 
   it('returns empty when mj20 is missing', () => {

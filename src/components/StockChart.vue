@@ -390,10 +390,21 @@ function getBaseOption(title, xData) {
   const isDark = theme.value === 'dark'
   return {
     backgroundColor: 'transparent',
-    title: { text: title, left: 'center', textStyle: { color: isDark ? '#adbac7' : '#444d56', fontSize: 14 } },
-    legend: { top: 22, textStyle: { color: isDark ? '#adbac7' : '#444d56', fontSize: 11 } },
+    title: {
+      text: title,
+      left: 8,
+      top: 0,
+      padding: [2, 0, 0, 0],
+      textStyle: { color: isDark ? '#adbac7' : '#444d56', fontSize: 13, fontWeight: 600 },
+    },
+    legend: {
+      top: 26,
+      left: 'center',
+      itemGap: 14,
+      textStyle: { color: isDark ? '#adbac7' : '#444d56', fontSize: 11 },
+    },
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-    grid: { left: '50', right: '20', top: '50', bottom: '20' },
+    grid: { left: '50', right: '20', top: 58, bottom: '20' },
     xAxis: { 
       type: 'category', 
       data: xData, 
@@ -534,11 +545,34 @@ const goBack = () => emit('go-back', { strategy: props.strategyFrom, preset: pro
 .chart-header {
   display: flex;
   justify-content: space-between;
-  padding: 10px 15px;
-  align-items: center;
+  padding: 8px 15px 10px;
+  align-items: flex-start;
+  gap: 12px;
 }
 
-.symbol-badge { color: #fff; padding: 2px 6px; border-radius: 3px; font-weight: bold; margin-right: 10px; font-size: 13px; }
+.stock-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  row-gap: 4px;
+}
+
+.header-actions {
+  flex-shrink: 0;
+}
+
+.symbol-badge {
+  color: #fff;
+  background: #2ea44f;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: bold;
+  margin-right: 10px;
+  font-size: 13px;
+  line-height: 1.3;
+}
 .stock-name { font-size: 16px; font-weight: 600; }
 .data-count { color: #768390; font-size: 11px; margin-left: 10px; }
 .gs-summary { color: #768390; font-size: 11px; margin-left: 10px; }
@@ -547,6 +581,7 @@ const goBack = () => emit('go-back', { strategy: props.strategyFrom, preset: pro
 
 .chart-toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 15px;
   padding: 8px 15px;
   align-items: center;
@@ -558,8 +593,9 @@ const goBack = () => emit('go-back', { strategy: props.strategyFrom, preset: pro
 .theme-input { border: 1px solid; padding: 3px 6px; border-radius: 3px; font-size: 12px; outline: none; transition: border-color 0.2s; }
 .theme-input:focus { border-color: #0366d6; }
 
-.nav-controls { display: flex; gap: 4px; }
+.nav-controls { display: flex; gap: 4px; flex-shrink: 0; margin-left: auto; }
 .btn-nav, .btn-action { border: 1px solid; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; font-weight: 500; transition: background 0.2s; }
+.btn-nav:disabled, .btn-action:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .theme-toggle { font-size: 14px; margin-right: 5px; }
 

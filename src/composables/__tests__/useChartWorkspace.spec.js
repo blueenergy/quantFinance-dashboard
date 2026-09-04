@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref, nextTick } from 'vue'
 import request from '../../utils/request'
-import { buildRecordsUrl, useChartWorkspace } from '../useChartWorkspace.js'
+import { buildRecordsUrl, normalizeChartNavSymbols, useChartWorkspace } from '../useChartWorkspace.js'
 
 vi.mock('../../utils/request', () => ({
   default: vi.fn(),
@@ -14,9 +14,19 @@ describe('useChartWorkspace', () => {
       getItem: (key) => (key === 'access_token' ? 'token' : null),
       setItem: vi.fn(),
     })
+    vi.stubGlobal('window', { currentSourceInfo: null })
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
       json: () => Promise.resolve({ data: [] }),
     })))
+    request.mockImplementation((config) => {
+      const url = String(config?.url || '')
+      if (url.startsWith('/records/')) return Promise.resolve([])
+      if (url.startsWith('/strategy-pool/trade-history')) {
+        return Promise.resolve({ success: true, data: { trades: [] } })
+      }
+      if (url === '/money-flow-records') return Promise.resolve({ data: [] })
+      return Promise.resolve({})
+    })
   })
 
   it('keeps chart symbols independent from loaded watchlist data', async () => {
@@ -76,6 +86,78 @@ describe('useChartWorkspace', () => {
     expect(request).not.toHaveBeenCalledWith(
       expect.objectContaining({ url: '/user/watchlist-stocks' }),
     )
+  })
+
+  it('seeds chart navigation from provided watchlist symbols so prev/next work', async () => {
+    const activeTab = ref('watchlist')
+    const workspace = useChartWorkspace({
+      activeTab,
+      isAuthenticated: ref(true),
+      switchTab: (tab) => {
+        activeTab.value = tab
+      },
+    })
+
+    await workspace.selectStockForChart({
+      symbol: '600519.SH',
+      symbols: ['000001.SZ', '600519.SH', '300750.SZ'],
+    })
+
+    expect(workspace.chartSymbols.value).toEqual(['000001.SZ', '600519.SH', '300750.SZ'])
+    expect(workspace.currentIndex.value).toBe(1)
+    expect(workspace.hasPrev.value).toBe(true)
+    expect(workspace.hasNext.value).toBe(true)
+    expect(activeTab.value).toBe('chart')
+
+    workspace.nextStock()
+    expect(workspace.chartSymbol.value).toBe('300750.SZ')
+    expect(workspace.hasNext.value).toBe(false)
+
+    workspace.prevStock()
+    workspace.prevStock()
+    expect(workspace.chartSymbol.value).toBe('000001.SZ')
+    expect(workspace.hasPrev.value).toBe(false)
+  })
+
+  it('falls back to the loaded watchlist when opening a chart from the watchlist tab', async () => {
+    const activeTab = ref('watchlist')
+    const workspace = useChartWorkspace({
+      activeTab,
+      isAuthenticated: ref(true),
+      switchTab: (tab) => {
+        activeTab.value = tab
+      },
+    })
+    workspace.watchlist.value = ['000001.SZ', '600519.SH']
+
+    await workspace.selectStockForChart('000001.SZ')
+
+    expect(workspace.chartSymbols.value).toEqual(['000001.SZ', '600519.SH'])
+    expect(workspace.currentIndex.value).toBe(0)
+    expect(workspace.hasNext.value).toBe(true)
+  })
+
+  it('does not replace chart symbols when opening a ranking/deep-link symbol', async () => {
+    const activeTab = ref('ranking')
+    const workspace = useChartWorkspace({
+      activeTab,
+      isAuthenticated: ref(true),
+      switchTab: (tab) => {
+        activeTab.value = tab
+      },
+    })
+    workspace.watchlist.value = ['000001.SZ', '600519.SH']
+
+    await workspace.selectStockForChart('688766.SH')
+
+    expect(workspace.chartSymbols.value).toEqual(['688766.SH'])
+    expect(workspace.hasPrev.value).toBe(false)
+    expect(workspace.hasNext.value).toBe(false)
+  })
+
+  it('dedupes chart navigation symbols', () => {
+    expect(normalizeChartNavSymbols(['000001.SZ', ' 000001.SZ ', '', '600519.SH', 12]))
+      .toEqual(['000001.SZ', '600519.SH'])
   })
 
   it('builds /records/ URLs with the selected adjust mode', () => {

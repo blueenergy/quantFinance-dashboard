@@ -668,9 +668,16 @@ async function removeStock(symbol) {
   }
 }
 
-// 选择股票查看K线图
+function getChartNavSymbols() {
+  return [
+    ...filteredStocksData.value.map((stock) => stock.symbol),
+    ...filteredStocksWithoutData.value,
+  ].filter(Boolean)
+}
+
+// 选择股票查看K线图。带上当前列表，供 K 线右上角 ▲▼ 在自选股间切换。
 function selectChart(symbol) {
-  emit('select-chart', symbol)
+  emit('select-chart', { symbol, symbols: getChartNavSymbols() })
 }
 
 // 获取股票名称
