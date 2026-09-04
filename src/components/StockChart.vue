@@ -159,7 +159,7 @@ const decisionGsSummary = computed(() => {
     const g = signals.filter((r) => r.gs_signal === 'g').length
     const s = signals.filter((r) => r.gs_signal === 's').length
     const last = signals[signals.length - 1]
-    return `G×${g} · S×${s} · 最近 ${String(last.gs_signal).toUpperCase()} ${normalizeDate(last.trade_date)}`
+    return `G×${g} · S×${s} · 最近 ${String(last.gs_signal).toUpperCase()} ${normalizeDate(last.trade_date)}　黄=决策线　红=牛线　绿=熊线`
   }
   if (visible.some((r) => r.mj20 != null)) {
     return '当前窗口没有 G/S 拐点（可拉长日期或拖动缩放）'
@@ -246,9 +246,10 @@ function renderMinute() {
   const times = minuteBars.value.map(b => b.trade_date.slice(8, 12).replace(/(\d{2})(\d{2})/, '$1:$2'))
   const data = minuteBars.value.map(b => [b.open, b.close, b.low, b.high])
   
-  const option = getBaseOption(`${props.symbol} 分时`, times)
+  const option = getBaseOption(times)
   option.series = [{
     name: 'K线', type: 'candlestick', data,
+    legendHoverLink: false,
     itemStyle: { 
       color: theme.value === 'dark' ? '#ef5350' : '#eb4444', 
       color0: theme.value === 'dark' ? '#26a69a' : '#22ab94', 
@@ -281,14 +282,17 @@ function renderDaily() {
   if (endDate.value) data = data.filter(r => normalizeDate(r.trade_date) <= normalizeDate(endDate.value))
   
   const times = data.map(r => normalizeDate(r.trade_date))
-  const option = getBaseOption(`${props.symbol} ${kType.value}`, times)
   const closes = data.map(r => Number.isFinite(Number(r.close)) ? Number(r.close) : null)
   const showGs = decisionGsEnabled.value && data.some((r) => r.mj20 != null)
   const gsSeries = showGs ? buildDecisionGsChartSeries(data, normalizeDate) : []
+  const option = getBaseOption(times, {
+    legendData: showGs ? ['决策线', '牛线', '熊线'] : ['MA55', 'MA233'],
+  })
   
   option.series = [
     {
       name: 'K线', type: 'candlestick', data: data.map(r => [r.open, r.close, r.low, r.high]),
+      legendHoverLink: false,
       itemStyle: {
         color: theme.value === 'dark' ? '#ef5350' : '#eb4444',
         color0: theme.value === 'dark' ? '#26a69a' : '#22ab94',
@@ -304,9 +308,12 @@ function renderDaily() {
       {
         name: 'MA55',
         type: 'line',
+        color: '#facc15',
         data: movingAverage(closes, 55),
+        symbol: 'none',
         showSymbol: false,
         connectNulls: false,
+        itemStyle: { color: '#facc15' },
         lineStyle: { width: 1.2, color: '#facc15' },
         emphasis: { focus: 'series' },
         z: 3
@@ -314,9 +321,12 @@ function renderDaily() {
       {
         name: 'MA233',
         type: 'line',
+        color: '#a855f7',
         data: movingAverage(closes, 233),
+        symbol: 'none',
         showSymbol: false,
         connectNulls: false,
+        itemStyle: { color: '#a855f7' },
         lineStyle: { width: 1.2, color: '#a855f7' },
         emphasis: { focus: 'series' },
         z: 2
@@ -386,25 +396,25 @@ function movingAverage(values, windowSize) {
   return result
 }
 
-function getBaseOption(title, xData) {
+function getBaseOption(xData, { legendData } = {}) {
   const isDark = theme.value === 'dark'
+  const names = Array.isArray(legendData) ? legendData.filter(Boolean) : []
   return {
     backgroundColor: 'transparent',
-    title: {
-      text: title,
-      left: 8,
-      top: 0,
-      padding: [2, 0, 0, 0],
-      textStyle: { color: isDark ? '#adbac7' : '#444d56', fontSize: 13, fontWeight: 600 },
-    },
+    title: { show: false },
     legend: {
-      top: 26,
+      show: names.length > 0,
+      top: 8,
       left: 'center',
-      itemGap: 14,
+      icon: 'rect',
+      itemWidth: 18,
+      itemHeight: 3,
+      itemGap: 16,
+      data: names,
       textStyle: { color: isDark ? '#adbac7' : '#444d56', fontSize: 11 },
     },
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-    grid: { left: '50', right: '20', top: 58, bottom: '20' },
+    grid: { left: '50', right: '20', top: names.length ? 36 : 16, bottom: '20' },
     xAxis: { 
       type: 'category', 
       data: xData, 

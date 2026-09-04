@@ -343,9 +343,9 @@ function buildSeries (ctx) {
     s.push(movingAverageSeries(`MA${maPeriods.slow}`, maSlow, '#a855f7', 2))
   }
   if (showDecisionGs) {
-    s.push(movingAverageSeries('决策线', mj20, '#facc15', 4))
-    s.push(movingAverageSeries('牛线', mj30Bull, '#ef4444', 3))
-    s.push(movingAverageSeries('熊线', mj30Bear, '#22c55e', 3))
+    s.push(movingAverageSeries('决策线', mj20, '#facc15', 8, { width: 2.4, connectNulls: true }))
+    s.push(movingAverageSeries('牛线', mj30Bull, '#ef4444', 7, { width: 2.2 }))
+    s.push(movingAverageSeries('熊线', mj30Bear, '#22c55e', 7, { width: 2.2 }))
     s.push(...buildGsScatterSeries(markers, fmtAxis))
   }
   if (hasPct) {
@@ -420,19 +420,23 @@ function movingAverage (values, windowSize) {
   return result
 }
 
-function movingAverageSeries (name, data, color, z) {
+function movingAverageSeries (name, data, color, z, { width = 1.2, connectNulls = false } = {}) {
   return {
     name,
     type: 'line',
+    color,
     xAxisIndex: 0,
     yAxisIndex: 0,
     data,
+    symbol: 'none',
     showSymbol: false,
     smooth: false,
-    connectNulls: false,
-    lineStyle: { width: 1.2, color },
+    connectNulls,
+    itemStyle: { color },
+    lineStyle: { width, color },
     emphasis: { focus: 'series' },
-    z
+    z,
+    clip: false,
   }
 }
 
@@ -457,9 +461,9 @@ export function buildDecisionGsChartSeries (rows, fmtAxis) {
     })
   })
   return [
-    movingAverageSeries('决策线', mj20, '#facc15', 4),
-    movingAverageSeries('牛线', mj30Bull, '#ef4444', 3),
-    movingAverageSeries('熊线', mj30Bear, '#22c55e', 3),
+    movingAverageSeries('决策线', mj20, '#facc15', 8, { width: 2.4, connectNulls: true }),
+    movingAverageSeries('牛线', mj30Bull, '#ef4444', 7, { width: 2.2 }),
+    movingAverageSeries('熊线', mj30Bear, '#22c55e', 7, { width: 2.2 }),
     ...buildGsScatterSeries(markers, fmtAxis)
   ]
 }
@@ -484,11 +488,13 @@ function buildGsScatterSeries (markers, fmtAxis) {
     {
       name: 'G',
       type: 'scatter',
+      color: '#ef4444',
       xAxisIndex: 0,
       yAxisIndex: 0,
       data: gData,
       symbol: 'triangle',
       symbolSize: 14,
+      legendHoverLink: false,
       itemStyle: { color: '#ef4444' },
       label: {
         show: true,
@@ -504,12 +510,14 @@ function buildGsScatterSeries (markers, fmtAxis) {
     {
       name: 'S',
       type: 'scatter',
+      color: '#22c55e',
       xAxisIndex: 0,
       yAxisIndex: 0,
       data: sData,
       symbol: 'triangle',
       symbolRotate: 180,
       symbolSize: 14,
+      legendHoverLink: false,
       itemStyle: { color: '#22c55e' },
       label: {
         show: true,
