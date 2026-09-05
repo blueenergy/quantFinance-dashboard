@@ -1,12 +1,43 @@
 <template>
-  <div class="stock-kline-chart" :class="toneClass">
-    <div ref="chartRef" class="stock-kline-chart__canvas"></div>
-    <div v-if="!records.length" class="stock-kline-chart__empty">暂无 K 线数据</div>
+  <div
+    class="stock-kline-chart-anchor"
+    :class="{ 'stock-kline-chart-anchor--held': maximized }"
+  >
+    <Teleport to="body" :disabled="!maximized">
+      <div :class="maximized ? 'kline-fullscreen-shell' : 'kline-inline-shell'">
+        <div
+          v-if="maximized"
+          class="kline-fullscreen-backdrop"
+          aria-hidden="true"
+          @click="exitDetailFullscreen"
+        />
+        <div
+          ref="containerRef"
+          class="stock-kline-chart"
+          :class="[toneClass, { 'stock-kline-chart--fullscreen': maximized }]"
+          :role="maximized ? 'dialog' : undefined"
+          :aria-modal="maximized ? 'true' : undefined"
+          aria-label="K线图"
+        >
+          <button
+            type="button"
+            class="kline-fullscreen-btn"
+            :title="maximized ? '退出全屏' : '全屏查看 K 线'"
+            @click.stop="toggleDetailFullscreen"
+          >
+            {{ maximized ? '退出全屏' : '全屏' }}
+          </button>
+          <div ref="chartRef" class="stock-kline-chart__canvas"></div>
+          <div v-if="!records.length" class="stock-kline-chart__empty">暂无 K 线数据</div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useDetailFullscreen } from '../composables/useDetailFullscreen'
 import { waitForChartDom } from '../utils/chartDom'
 import { buildShenwanKlineOption, collectDecisionGsMarkers } from '../utils/echarts/shenwanKlineOption'
 
@@ -35,7 +66,9 @@ const props = defineProps({
 })
 
 const toneClass = computed(() => `stock-kline-chart--${props.tone}`)
+const { detailMaximized: maximized, toggleDetailFullscreen, exitDetailFullscreen } = useDetailFullscreen()
 
+const containerRef = ref(null)
 const chartRef = ref(null)
 let echarts = null
 let chart = null
@@ -45,9 +78,9 @@ let chartTone = null
 onMounted(async () => {
   await nextTick()
   await renderChart()
-  if (typeof ResizeObserver !== 'undefined' && chartRef.value) {
+  if (typeof ResizeObserver !== 'undefined' && containerRef.value) {
     resizeObserver = new ResizeObserver(() => chart?.resize())
-    resizeObserver.observe(chartRef.value)
+    resizeObserver.observe(containerRef.value)
   }
 })
 
@@ -68,6 +101,11 @@ watch(
   },
   { deep: true },
 )
+
+watch(maximized, async () => {
+  await nextTick()
+  chart?.resize()
+})
 
 function disposeChart() {
   if (chart) {
@@ -171,11 +209,47 @@ function formatMvWan(value) {
 </script>
 
 <style scoped>
+.stock-kline-chart-anchor--held {
+  min-height: 380px;
+}
+
+.kline-inline-shell {
+  display: contents;
+}
+
+.kline-fullscreen-shell {
+  position: fixed;
+  z-index: 3000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.kline-fullscreen-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.56);
+}
+
 .stock-kline-chart {
   border-radius: 14px;
+  display: flex;
+  flex-direction: column;
   min-height: 380px;
   overflow: hidden;
   position: relative;
+}
+
+.stock-kline-chart--fullscreen {
+  position: relative;
+  z-index: 1;
+  width: min(98vw, 100%);
+  height: calc(100vh - 32px);
+  max-height: calc(100vh - 32px);
+  min-height: 0;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.32);
 }
 
 .stock-kline-chart--on-dark {
@@ -189,8 +263,46 @@ function formatMvWan(value) {
 }
 
 .stock-kline-chart__canvas {
+  flex: 1;
   height: 380px;
+  min-height: 0;
   width: 100%;
+}
+
+.stock-kline-chart--fullscreen .stock-kline-chart__canvas {
+  height: 100%;
+}
+
+.kline-fullscreen-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  color: #e2e8f0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 6px 10px;
+}
+
+.kline-fullscreen-btn:hover {
+  background: rgba(30, 41, 59, 0.92);
+  color: #fff;
+}
+
+.stock-kline-chart--on-light .kline-fullscreen-btn {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.stock-kline-chart--on-light .kline-fullscreen-btn:hover {
+  background: #fff;
+  color: #0f172a;
 }
 
 .stock-kline-chart__empty {
@@ -198,6 +310,7 @@ function formatMvWan(value) {
   display: flex;
   inset: 0;
   justify-content: center;
+  pointer-events: none;
   position: absolute;
 }
 

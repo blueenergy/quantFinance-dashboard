@@ -56,40 +56,71 @@
           <div v-else class="muted">请在左侧点选行业指数，下方将显示 K 线。</div>
         </div>
 
-        <div class="toolbar">
-          <div class="tf-btns">
-            <button type="button" :class="{ on: tf === '1d' }" @click="onTfClick('1d')">日 K</button>
-            <button type="button" :class="{ on: tf === '1w' }" @click="onTfClick('1w')">周 K</button>
-            <button type="button" :class="{ on: tf === '1m' }" @click="onTfClick('1m')">月 K</button>
-          </div>
-          <div class="dates">
-            <label>开始             <input v-model="startD" class="d-inp" type="date" @change="_startDIsDefault = false" /></label>
-            <label>结束 <input v-model="endD" class="d-inp" type="date" /></label>
-            <span class="muted sm">不填起止则由服务端拉足够长的日线后截断到最近 {{ klineLimit }} 根</span>
-          </div>
-        </div>
-
         <div
-          v-if="klineData.length && !klineLoading"
-          class="kline-info"
-          :title="klineInfoTitle"
+          class="kline-stage-anchor"
+          :class="{ 'kline-stage-anchor--held': klineMaximized }"
         >
-          <span>最新 <strong class="d">{{ klineInfoDate }}</strong></span>
-          <span v-if="klineInfoPct != null" :class="pctClass(klineInfoPct)">涨跌 {{ klineInfoPct > 0 ? '+' : '' }}{{ klineInfoPct.toFixed(2) }}%</span>
-          <span v-if="klineInfoChg != null" :class="pctClass(klineInfoChg)">涨跌额 {{ klineInfoChg > 0 ? '+' : '' }}{{ formatNum2(klineInfoChg) }}</span>
-          <span v-if="klineInfoFloat != null" title="流通市值（数据为万元，已换算显示）">流通 {{ formatMvWan(klineInfoFloat) }}</span>
-          <span v-if="klineInfoTotal != null" title="总市值（数据为万元，已换算显示）">总市值 {{ formatMvWan(klineInfoTotal) }}</span>
-        </div>
+          <Teleport to="body" :disabled="!klineMaximized">
+            <div :class="klineMaximized ? 'kline-fullscreen-shell' : 'kline-inline-shell'">
+              <div
+                v-if="klineMaximized"
+                class="kline-fullscreen-backdrop"
+                aria-hidden="true"
+                @click="exitDetailFullscreen"
+              />
+              <div
+                class="kline-stage"
+                :class="{ 'kline-stage--fullscreen': klineMaximized }"
+                :role="klineMaximized ? 'dialog' : undefined"
+                :aria-modal="klineMaximized ? 'true' : undefined"
+                aria-label="申万行业 K线图"
+              >
+                <div class="toolbar">
+                  <div class="tf-btns">
+                    <button type="button" :class="{ on: tf === '1d' }" @click="onTfClick('1d')">日 K</button>
+                    <button type="button" :class="{ on: tf === '1w' }" @click="onTfClick('1w')">周 K</button>
+                    <button type="button" :class="{ on: tf === '1m' }" @click="onTfClick('1m')">月 K</button>
+                  </div>
+                  <div class="dates">
+                    <label>开始             <input v-model="startD" class="d-inp" type="date" @change="_startDIsDefault = false" /></label>
+                    <label>结束 <input v-model="endD" class="d-inp" type="date" /></label>
+                    <span class="muted sm">不填起止则由服务端拉足够长的日线后截断到最近 {{ klineLimit }} 根</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="kline-fullscreen-btn"
+                    :title="klineMaximized ? '退出全屏' : '全屏查看 K 线'"
+                    @click.stop="toggleDetailFullscreen"
+                  >
+                    {{ klineMaximized ? '退出全屏' : '全屏' }}
+                  </button>
+                </div>
 
-        <div class="chart-box" ref="chartBoxRef">
-          <div v-if="klineLoading" class="overlay">加载 K 线…</div>
-          <div v-else-if="klineError" class="overlay err">{{ klineError }}</div>
-          <div v-else-if="klineMsg && !klineData.length" class="overlay hint">{{ klineMsg }}</div>
-          <div
-            v-show="klineData.length && !klineLoading"
-            ref="chartElRef"
-            class="chart-canvas"
-          />
+                <div
+                  v-if="klineData.length && !klineLoading"
+                  class="kline-info"
+                  :title="klineInfoTitle"
+                >
+                  <span>最新 <strong class="d">{{ klineInfoDate }}</strong></span>
+                  <span v-if="klineInfoPct != null" :class="pctClass(klineInfoPct)">涨跌 {{ klineInfoPct > 0 ? '+' : '' }}{{ klineInfoPct.toFixed(2) }}%</span>
+                  <span v-if="klineInfoChg != null" :class="pctClass(klineInfoChg)">涨跌额 {{ klineInfoChg > 0 ? '+' : '' }}{{ formatNum2(klineInfoChg) }}</span>
+                  <span v-if="klineInfoFloat != null" title="流通市值（数据为万元，已换算显示）">流通 {{ formatMvWan(klineInfoFloat) }}</span>
+                  <span v-if="klineInfoTotal != null" title="总市值（数据为万元，已换算显示）">总市值 {{ formatMvWan(klineInfoTotal) }}</span>
+                </div>
+
+                <div class="chart-box" ref="chartBoxRef">
+                  <div v-if="klineLoading" class="overlay">加载 K 线…</div>
+                  <div v-else-if="klineError" class="overlay err">{{ klineError }}</div>
+                  <div v-else-if="klineMsg && !klineData.length" class="overlay hint">{{ klineMsg }}</div>
+                  <div
+                    v-show="klineData.length && !klineLoading"
+                    ref="chartElRef"
+                    class="chart-canvas"
+                  />
+                </div>
+              </div>
+            </div>
+          </Teleport>
         </div>
         <p class="footer-hint">
           若分类或走势为空，请在服务器执行 <code>quant_data_engine</code> 的
@@ -251,6 +282,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, reactive } from 'vue'
 import request from '../utils/request'
+import { useDetailFullscreen } from '../composables/useDetailFullscreen'
 import { buildShenwanKlineOption } from '../utils/echarts/shenwanKlineOption.js'
 import AnalysisDetailContent from '../components/AnalysisDetailContent.vue'
 import MoneyFlowPanel from '../components/MoneyFlowPanel.vue'
@@ -570,6 +602,7 @@ const klineMsg = ref('')
 
 const chartBoxRef = ref(null)
 const chartElRef = ref(null)
+const { detailMaximized: klineMaximized, toggleDetailFullscreen, exitDetailFullscreen } = useDetailFullscreen()
 let echarts = null
 let chartInstance = null
 let ro = null
@@ -859,6 +892,12 @@ watch([klineIndexCode, tf, startD, endD], () => {
   }
 })
 
+watch(klineMaximized, async () => {
+  await nextTick()
+  await new Promise((r) => requestAnimationFrame(r))
+  chartInstance?.resize()
+})
+
 watch(pepbData, () => {
   drawPepb()
 })
@@ -976,6 +1015,65 @@ async function onNavigateToIndustry (e) {
 .code-line code { color: #ffcc80; }
 .name { margin-left: 8px; color: #eee; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin: 0.5rem 0; }
+.kline-stage-anchor--held { min-height: 580px; }
+.kline-inline-shell { display: contents; }
+.kline-fullscreen-shell {
+  position: fixed;
+  z-index: 3000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.kline-fullscreen-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.56);
+}
+.kline-stage { display: contents; }
+.kline-stage--fullscreen {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(98vw, 100%);
+  height: calc(100vh - 32px);
+  max-height: calc(100vh - 32px);
+  min-height: 0;
+  padding: 8px 16px 16px;
+  overflow: hidden;
+  background: #121212;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.32);
+}
+.kline-stage--fullscreen .toolbar { flex-shrink: 0; }
+.kline-stage--fullscreen .kline-info { flex-shrink: 0; }
+.kline-stage--fullscreen .chart-box {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+.kline-stage--fullscreen .chart-canvas,
+.kline-stage--fullscreen .chart-box > :deep(.echarts) {
+  min-height: 0;
+}
+.kline-fullscreen-btn {
+  margin-left: auto;
+  background: #333;
+  color: #e2e8f0;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+}
+.kline-fullscreen-btn:hover {
+  background: #444;
+  color: #fff;
+}
 .tf-btns button {
   background: #333; color: #ccc; border: 1px solid #555; padding: 4px 10px; margin-right: 4px; border-radius: 4px; cursor: pointer;
 }

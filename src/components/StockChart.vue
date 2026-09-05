@@ -1,5 +1,13 @@
 <template>
-  <div :class="['unified-chart-container', theme]" ref="containerRef">
+  <div class="stock-chart-anchor" :class="{ 'stock-chart-anchor--held': detailMaximized }">
+    <Teleport to="body" :disabled="!detailMaximized">
+      <div
+        :class="['unified-chart-container', theme, { 'is-fullscreen': detailMaximized }]"
+        ref="containerRef"
+        :role="detailMaximized ? 'dialog' : undefined"
+        :aria-modal="detailMaximized ? 'true' : undefined"
+        :aria-label="detailMaximized ? `${props.symbol || ''} K线图` : undefined"
+      >
     <!-- Header: Info & Basic Controls -->
     <div class="chart-header">
       <div class="stock-info">
@@ -14,6 +22,14 @@
         <!-- Theme Toggle -->
         <button @click="toggleTheme" class="btn-action theme-toggle" :title="theme === 'dark' ? '切换到亮色模式' : '切换到深色模式'">
           {{ theme === 'dark' ? '☀️' : '🌙' }}
+        </button>
+        <button
+          type="button"
+          class="btn-action"
+          :title="detailMaximized ? '退出全屏' : '全屏查看 K 线'"
+          @click="toggleDetailFullscreen"
+        >
+          {{ detailMaximized ? '退出全屏' : '全屏' }}
         </button>
         <button @click="goBack" class="btn-action">← 返回</button>
       </div>
@@ -86,12 +102,15 @@
       <div v-if="error" class="chart-overlay error">{{ error }}</div>
       <div v-if="loading || dataLoading" class="chart-overlay loading"><div class="spinner"></div></div>
     </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
 import request from '../utils/request'
+import { useDetailFullscreen } from '../composables/useDetailFullscreen'
 import { buildDecisionGsChartSeries, collectDecisionGsMarkers, formatKlinePriceLabel, padKlinePriceAxis } from '../utils/echarts/shenwanKlineOption.js'
 import {
   earliestTradeDate,
@@ -121,6 +140,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['go-back', 'load-more', 'change-adjust'])
+const { detailMaximized, toggleDetailFullscreen } = useDetailFullscreen()
 
 // Refs
 const containerRef = ref(null)
@@ -635,10 +655,19 @@ watch(() => props.records, (newRecs) => {
   drawChart()
 }, { deep: true })
 
+watch(detailMaximized, async () => {
+  await nextTick()
+  chartInstance?.resize()
+})
+
 const goBack = () => emit('go-back', { strategy: props.strategyFrom, preset: props.presetFrom })
 </script>
 
 <style scoped>
+.stock-chart-anchor--held {
+  height: 600px;
+}
+
 .unified-chart-container {
   display: flex;
   flex-direction: column;
@@ -647,6 +676,16 @@ const goBack = () => emit('go-back', { strategy: props.strategyFrom, preset: pro
   transition: background 0.3s, color 0.3s, border-color 0.3s;
   overflow: hidden;
   border: 1px solid transparent;
+}
+
+.unified-chart-container.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  height: 100vh;
+  width: 100vw;
+  max-height: none;
+  border-radius: 0;
 }
 
 /* Soft Dark (Dimmed) Theme */
@@ -699,7 +738,10 @@ const goBack = () => emit('go-back', { strategy: props.strategyFrom, preset: pro
 }
 
 .header-actions {
+  display: flex;
   flex-shrink: 0;
+  gap: 6px;
+  align-items: center;
 }
 
 .symbol-badge {
