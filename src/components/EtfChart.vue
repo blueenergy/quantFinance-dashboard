@@ -18,6 +18,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, computed, nextTick } from 'vue'
+import { formatAssetPrice } from '../utils/assetPriceFormat.js'
 
 const props = defineProps({
   symbol: String,
@@ -142,7 +143,29 @@ async function drawChart() {
     textStyle: { color: '#475569' },
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'cross' }
+      axisPointer: { type: 'cross' },
+      formatter: (params) => {
+        if (!Array.isArray(params) || !params.length) return ''
+        const lines = [String(params[0].axisValue ?? '')]
+        for (const p of params) {
+          if (p.seriesType === 'candlestick') {
+            const arr = Array.isArray(p.data) ? p.data : p.value
+            if (Array.isArray(arr) && arr.length >= 4) {
+              lines.push(
+                `开 ${formatAssetPrice(arr[0], 'etf')}　收 ${formatAssetPrice(arr[1], 'etf')}<br/>`
+                + `低 ${formatAssetPrice(arr[2], 'etf')}　高 ${formatAssetPrice(arr[3], 'etf')}`
+              )
+            }
+            continue
+          }
+          if (p.seriesName) {
+            const raw = Array.isArray(p.data) ? p.data : p.value
+            const value = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw.value : raw
+            lines.push(`${p.marker || ''}${p.seriesName}: ${value ?? '-'}`)
+          }
+        }
+        return lines.filter(Boolean).join('<br/>')
+      },
     },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
     grid: [
@@ -178,8 +201,9 @@ async function drawChart() {
         scale: true,
         gridIndex: 0,
         splitLine: { show: true, lineStyle: { color: '#e2e8f0' } },
-        axisLabel: { color: '#64748b' },
-        axisLine: { lineStyle: { color: '#94a3b8' } }
+        axisLabel: { color: '#64748b', formatter: (v) => formatAssetPrice(v, 'etf') },
+        axisLine: { lineStyle: { color: '#94a3b8' } },
+        axisPointer: { label: { formatter: (p) => formatAssetPrice(p?.value, 'etf') } },
       },
       {
         scale: true,

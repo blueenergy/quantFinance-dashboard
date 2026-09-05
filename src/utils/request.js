@@ -23,6 +23,7 @@ export function clearSessionCaches() {
   sessionStorage.removeItem('nav_visible_tab_ids_v8')
   sessionStorage.removeItem('nav_visible_tab_username_v1')
   sessionStorage.removeItem('nav_visible_tab_username_v2')
+  sessionStorage.removeItem('watchlist_session_snapshot_v1')
   try {
     window.currentSourceInfo = null
   } catch {

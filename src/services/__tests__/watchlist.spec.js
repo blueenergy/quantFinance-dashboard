@@ -6,7 +6,13 @@ vi.mock('../../utils/request', () => ({
   default: (...args) => requestMock(...args),
 }))
 
-import { watchlistService } from '../watchlist.js'
+import {
+  watchlistService,
+  WATCHLIST_SESSION_SNAPSHOT_KEY,
+  mapRealtimeWatchlistRows,
+  mapHistoryWatchlistRows,
+  symbolsFromWatchlistRows,
+} from '../watchlist.js'
 
 describe('watchlistService return contracts', () => {
   beforeEach(() => {
@@ -104,5 +110,47 @@ describe('watchlistService return contracts', () => {
       data: { symbols: ['a'] },
     })
     expect(body).toEqual({ success: true, data: { symbols: ['a'] } })
+  })
+
+  it('session snapshot is per-user and ignored when username mismatches', () => {
+    sessionStorage.clear()
+    watchlistService.setSessionSnapshot('alice', {
+      symbols: ['000001.SZ'],
+      stocks: [{ symbol: '000001.SZ', name: '平安银行' }],
+    })
+
+    expect(watchlistService.getSessionSnapshot('alice')).toEqual({
+      symbols: ['000001.SZ'],
+      stocks: [{ symbol: '000001.SZ', name: '平安银行' }],
+    })
+    expect(watchlistService.getSessionSnapshot('bob')).toBeNull()
+
+    watchlistService.clearSessionSnapshot()
+    expect(sessionStorage.getItem(WATCHLIST_SESSION_SNAPSHOT_KEY)).toBeNull()
+    expect(watchlistService.getSessionSnapshot('alice')).toBeNull()
+  })
+
+  it('maps realtime and history rows for the watchlist table', () => {
+    expect(mapRealtimeWatchlistRows([
+      { symbol: '000001.SZ', name: '平安银行', price: 10.5, change_pct: 1.2 },
+    ])).toEqual([
+      expect.objectContaining({
+        symbol: '000001.SZ',
+        name: '平安银行',
+        price: 10.5,
+        close: 10.5,
+        change_pct: 1.2,
+      }),
+    ])
+    expect(mapHistoryWatchlistRows([
+      { symbol: '510300.SH', name: '沪深300ETF', close: 4.2, trade_date: '20260701' },
+    ])).toEqual([
+      expect.objectContaining({
+        symbol: '510300.SH',
+        close: 4.2,
+        date: '20260701',
+      }),
+    ])
+    expect(symbolsFromWatchlistRows([{ symbol: '000001.SZ' }, {}])).toEqual(['000001.SZ'])
   })
 })

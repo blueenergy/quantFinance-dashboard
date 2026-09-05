@@ -5,6 +5,54 @@
 
 import request from '../utils/request'
 
+export const WATCHLIST_SESSION_SNAPSHOT_KEY = 'watchlist_session_snapshot_v1'
+
+export function mapRealtimeWatchlistRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map((stock) => ({
+    symbol: stock.symbol,
+    name: stock.name,
+    asset_type: stock.asset_type,
+    industry: stock.industry,
+    sw_industry: stock.sw_industry,
+    price: stock.price,
+    open: stock.open,
+    high: stock.high,
+    low: stock.low,
+    close: stock.price,
+    change: stock.change,
+    change_pct: stock.change_pct,
+    volume: stock.volume,
+    update_time: stock.update_time,
+  }))
+}
+
+export function mapHistoryWatchlistRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map((stock) => ({
+    symbol: stock.symbol,
+    name: stock.name,
+    asset_type: stock.asset_type,
+    industry: stock.industry,
+    sw_industry: stock.sw_industry,
+    close: stock.close,
+    open: stock.open,
+    high: stock.high,
+    low: stock.low,
+    change: stock.change,
+    change_percent: stock.change_percent,
+    volume: stock.volume,
+    turnover: stock.turnover,
+    turnover_rate: stock.turnover_rate,
+    pe: stock.pe,
+    market_cap: stock.market_cap,
+    circ_market_cap: stock.circ_market_cap,
+    date: stock.trade_date,
+  }))
+}
+
+export function symbolsFromWatchlistRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map((stock) => stock?.symbol).filter(Boolean)
+}
+
 class WatchlistService {
   // 获取认证头部（部分组件仍直接传 headers，过渡期保留）
   getAuthHeaders() {
@@ -164,6 +212,42 @@ class WatchlistService {
   // 设置本地自选股（用于未登录用户）
   setLocalWatchlist(symbols) {
     localStorage.setItem('watchList', JSON.stringify(symbols))
+  }
+
+  getSessionSnapshot(username) {
+    if (!username) return null
+    try {
+      const raw = sessionStorage.getItem(WATCHLIST_SESSION_SNAPSHOT_KEY)
+      if (!raw) return null
+      const parsed = JSON.parse(raw)
+      if (!parsed || parsed.username !== username) return null
+      const symbols = Array.isArray(parsed.symbols) ? parsed.symbols : []
+      const stocks = Array.isArray(parsed.stocks) ? parsed.stocks : []
+      return { symbols, stocks }
+    } catch {
+      return null
+    }
+  }
+
+  setSessionSnapshot(username, { symbols = [], stocks = [] } = {}) {
+    if (!username) return
+    try {
+      sessionStorage.setItem(WATCHLIST_SESSION_SNAPSHOT_KEY, JSON.stringify({
+        username,
+        symbols: Array.isArray(symbols) ? symbols : [],
+        stocks: Array.isArray(stocks) ? stocks : [],
+      }))
+    } catch {
+      /* storage quota / private mode */
+    }
+  }
+
+  clearSessionSnapshot() {
+    try {
+      sessionStorage.removeItem(WATCHLIST_SESSION_SNAPSHOT_KEY)
+    } catch {
+      /* ignore */
+    }
   }
 }
 

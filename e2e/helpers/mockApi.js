@@ -101,7 +101,22 @@ export async function installApiMocks(page) {
     }
 
     if (path === '/user/watchlist-stocks/realtime' && method === 'GET') {
-      return json({ success: true, data: [] })
+      return json({
+        success: true,
+        data: [{
+          symbol: '000001.SZ',
+          name: '平安银行',
+          asset_type: 'stock',
+          price: 10.5,
+          open: 10.0,
+          high: 10.8,
+          low: 9.9,
+          change: 0.5,
+          change_pct: 5.0,
+          volume: 12345,
+          update_time: '2026-07-01 10:15:00',
+        }],
+      })
     }
 
     // Home summary / market reads — soft empty success

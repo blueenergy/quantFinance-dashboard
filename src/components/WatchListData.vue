@@ -74,7 +74,10 @@
 
     <!-- 自选股数据表格 -->
     <div class="watchlist-table">
-      <div v-if="watchList.length === 0" class="empty-watchlist">
+      <div v-if="showWatchlistLoading" class="empty-watchlist">
+        <p>自选股加载中...</p>
+      </div>
+      <div v-else-if="watchList.length === 0" class="empty-watchlist">
         <p>暂无自选股，请添加股票代码</p>
       </div>
       
@@ -140,13 +143,15 @@
                   {{ stock.symbol }}
                 </span>
               </td>
-              <td class="stock-name">{{ stock.name || stock.symbol }}</td>
-              <td class="price">{{ formatPrice(stock.price || stock.close) }}</td>
-              <td class="price">{{ formatPrice(stock.open) }}</td>
-              <td class="price">{{ formatPrice(stock.high) }}</td>
-              <td class="price">{{ formatPrice(stock.low) }}</td>
+              <td class="stock-name">
+                <span class="stock-name-text" :title="stock.name || stock.symbol">{{ stock.name || stock.symbol }}</span>
+              </td>
+              <td class="price">{{ formatPrice(stock.price || stock.close, stock) }}</td>
+              <td class="price">{{ formatPrice(stock.open, stock) }}</td>
+              <td class="price">{{ formatPrice(stock.high, stock) }}</td>
+              <td class="price">{{ formatPrice(stock.low, stock) }}</td>
               <td :class="getPriceChangeClass(stock.change)">
-                {{ formatChange(stock.change) }}
+                {{ formatChange(stock.change, stock) }}
               </td>
               <td :class="getPriceChangeClass(stock.change_percent || stock.change_pct)">
                 {{ formatPercent(stock.change_percent || stock.change_pct) }}
@@ -174,7 +179,9 @@
                   {{ symbol }}
                 </span>
               </td>
-              <td class="stock-name">{{ getStockName(symbol) || symbol }}</td>
+              <td class="stock-name">
+                <span class="stock-name-text" :title="getStockName(symbol) || symbol">{{ getStockName(symbol) || symbol }}</span>
+              </td>
               <td colspan="7" class="no-data">暂无数据</td>
               <td v-if="useRealtimeData" class="no-data"></td>
               <td>
@@ -231,21 +238,54 @@
 import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
 import request from '../utils/request'
 import { useAuth } from '../services/auth.js'
-import { watchlistService } from '../services/watchlist.js'
+import {
+  watchlistService,
+  mapRealtimeWatchlistRows,
+  mapHistoryWatchlistRows,
+  symbolsFromWatchlistRows,
+} from '../services/watchlist.js'
 import { useAnalysisHistory } from '../composables/useAnalysisHistory'
 // checkUserLlmConfig import removed - old AI analysis feature deprecated
 import HistoryAnalysis from './HistoryAnalysis.vue'
 import StockSearchInput from './StockSearchInput.vue'
 import { searchStocks } from '../api/stock'
+import { formatAssetChange, formatAssetPrice } from '../utils/assetPriceFormat.js'
 
 const emit = defineEmits(['select-chart', 'open-etf-analysis'])
-const { isAuthenticated, currentUser } = useAuth()
+const { isAuthenticated, user } = useAuth()
 const { analysisHistory, loadHistory } = useAnalysisHistory()
 
 const inputSymbol = ref('')
 const watchList = ref([])
 const stocksData = ref([])
-const loading = ref(false)
+const loading = ref(true)
+
+function currentUsername() {
+  return user?.value?.username || user?.value?.id || ''
+}
+
+function hydrateFromSessionCache() {
+  if (!isAuthenticated?.value) return
+  const snap = watchlistService.getSessionSnapshot(currentUsername())
+  if (!snap) return
+  if (snap.symbols.length) watchList.value = snap.symbols
+  if (snap.stocks.length) stocksData.value = snap.stocks
+}
+
+function persistSessionSnapshot() {
+  const username = currentUsername()
+  if (!isAuthenticated?.value || !username) return
+  watchlistService.setSessionSnapshot(username, {
+    symbols: watchList.value,
+    stocks: stocksData.value,
+  })
+}
+
+hydrateFromSessionCache()
+
+const showWatchlistLoading = computed(() => (
+  loading.value && watchList.value.length === 0
+))
 const deepAnalyzingStock = ref('')
 const snackbar = ref(false)
 const snackbarMessage = ref('')
@@ -452,8 +492,7 @@ watch(watchlistFilter, (filter) => {
 async function handleUserLogin() {
   try {
     loading.value = true
-    
-    // 尝试迁移本地自选股到服务器
+
     const migrated = await watchlistService.migrateFromLocalStorage()
     if (migrated) {
       migrationComplete.value = true
@@ -461,62 +500,30 @@ async function handleUserLogin() {
         migrationComplete.value = false
       }, 3000)
     }
-    
-    // 加载服务器端自选股
-    await loadUserWatchlist()
-    
+
+    await refreshAll()
   } catch (error) {
     console.error('处理用户登录失败:', error)
-    // 登录失败时回退到本地模式
-    loadLocalWatchlist()
+    await loadLocalWatchlist()
   } finally {
     loading.value = false
   }
 }
-// 处理用户登出
+
 async function handleUserLogout() {
-  // 清空服务器数据，切换到本地模式
+  watchlistService.clearSessionSnapshot()
   watchList.value = []
   stocksData.value = []
-  loadLocalWatchlist()
-}
-// 加载用户自选股（服务器端）
-async function loadUserWatchlist() {
-  try {
-    console.log('🔍 loadUserWatchlist开始执行，认证状态:', isAuthenticated?.value)
-    
-    if (!isAuthenticated?.value) {
-      console.log('❌ 用户未认证，加载本地自选股')
-      loadLocalWatchlist()
-      return
-    }
-    
-    console.log('✅ 用户已认证，开始获取服务器端自选股')
-    const symbols = await watchlistService.getUserWatchlist()
-    console.log('📊 获取到的symbols:', symbols, '数量:', symbols?.length)
-    
-    watchList.value = symbols
-    console.log('💾 已设置watchList.value:', watchList.value)
-    
-    if (symbols.length > 0) {
-      console.log('🔄 symbols数量>0，开始refreshAll')
-      await refreshAll()
-    } else {
-      console.log('⚠️ symbols数组为空，跳过refreshAll')
-    }
-  } catch (error) {
-    console.error('❌ 加载用户自选股失败:', error)
-    // 失败时回退到本地模式
-    loadLocalWatchlist()
-  }
+  await loadLocalWatchlist()
 }
 
-// 加载本地自选股
-function loadLocalWatchlist() {
+async function loadLocalWatchlist() {
   watchList.value = watchlistService.getLocalWatchlist()
   if (watchList.value.length > 0) {
-    refreshAll()
+    await refreshAll()
+    return
   }
+  loading.value = false
 }
 
 // 添加股票到自选
@@ -549,8 +556,8 @@ async function addStock() {
     }
     
     inputSymbol.value = ''
-    // 立即获取新添加股票的数据
     await fetchStockData(symbol)
+    persistSessionSnapshot()
     
   } catch (error) {
     console.error('添加股票失败:', error)
@@ -581,8 +588,8 @@ async function addSampleStock() {
       watchlistService.setLocalWatchlist(watchList.value)
     }
     
-    // 立即获取示例股票的数据
     await fetchStockData(sampleSymbol)
+    persistSessionSnapshot()
     
   } catch (error) {
     console.error('添加示例股票失败:', error)
@@ -599,7 +606,7 @@ async function removeStock(symbol) {
   
   // 安全检查：确保isAuthenticated存在
   const isAuthenticatedValue = isAuthenticated?.value || false
-  const currentUserValue = currentUser?.value || null
+  const currentUserValue = user?.value || null
   
   console.log('当前认证状态:', isAuthenticatedValue)
   console.log('当前用户:', currentUserValue)
@@ -647,7 +654,8 @@ async function removeStock(symbol) {
     // 更新本地状态
     watchList.value = watchList.value.filter(s => s !== symbol)
     stocksData.value = stocksData.value.filter(s => s.symbol !== symbol)
-    
+    persistSessionSnapshot()
+
     console.log('股票移除成功:', symbol)
     
   } catch (error) {
@@ -940,89 +948,51 @@ async function fetchStockData(symbol) {
   }
 }
 
-// 刷新所有自选股数据
+function applyServerWatchlistRows(rows, mapper) {
+  const mapped = mapper(rows)
+  watchList.value = symbolsFromWatchlistRows(mapped)
+  stocksData.value = mapped
+  persistSessionSnapshot()
+}
+
 async function refreshAll() {
-  if (watchList.value.length === 0) return
-  
+  const authenticated = !!isAuthenticated?.value
+  if (!authenticated && watchList.value.length === 0) {
+    loading.value = false
+    return
+  }
+
   loading.value = true
-  stocksData.value = []
-  
+
   try {
-    if (isAuthenticated?.value) {
-      // 用户已登录，根据 useRealtimeData 选择数据源
+    if (authenticated) {
       if (useRealtimeData.value) {
-        // 使用实时数据 API
         const response = await watchlistService.getUserWatchlistRealtime()
-        stocksData.value = response.map(stock => ({
-          symbol: stock.symbol,
-          name: stock.name,
-          asset_type: stock.asset_type,
-          industry: stock.industry,
-          sw_industry: stock.sw_industry,
-          price: stock.price,           // 最新价格
-          open: stock.open,             // 开盘价
-          high: stock.high,             // 最高价
-          low: stock.low,               // 最低价
-          close: stock.price,           // 兼容性
-          change: stock.change,         // 涨跌额
-          change_pct: stock.change_pct, // 涨跌幅
-          volume: stock.volume,         // 成交量
-          update_time: stock.update_time // 更新时间
-        }))
+        applyServerWatchlistRows(response, mapRealtimeWatchlistRows)
       } else {
-        // 使用历史数据 API
         const response = await watchlistService.getUserWatchlistStocks()
-        stocksData.value = response.map(stock => ({
-          symbol: stock.symbol,
-          name: stock.name,
-          asset_type: stock.asset_type,
-          industry: stock.industry,
-          sw_industry: stock.sw_industry,
-          close: stock.close,
-          change: stock.change,
-          change_percent: stock.change_percent,
-          volume: stock.volume,
-          turnover: stock.turnover,
-          turnover_rate: stock.turnover_rate,
-          pe: stock.pe,
-          market_cap: stock.market_cap,
-          circ_market_cap: stock.circ_market_cap,
-          date: stock.trade_date
-        }))
+        applyServerWatchlistRows(response, mapHistoryWatchlistRows)
       }
+      return
+    }
+
+    const symbolsStr = watchList.value.join(',')
+    const body = await request.get(`/watchlist-stocks?symbols=${symbolsStr}`)
+
+    if (body && body.success) {
+      stocksData.value = mapHistoryWatchlistRows(body.data)
     } else {
-      // 未登录，使用传统批量API
-      const symbolsStr = watchList.value.join(',')
-      const body = await request.get(`/watchlist-stocks?symbols=${symbolsStr}`)
-      
-      if (body && body.success) {
-        stocksData.value = body.data.map(stock => ({
-          symbol: stock.symbol,
-          name: stock.name,
-          asset_type: stock.asset_type,
-          industry: stock.industry,
-          sw_industry: stock.sw_industry,
-          close: stock.close,
-          change: stock.change,
-          change_percent: stock.change_percent,
-          volume: stock.volume,
-          turnover: stock.turnover,
-          pe: stock.pe,
-          market_cap: stock.market_cap,
-          circ_market_cap: stock.circ_market_cap,
-          date: stock.trade_date
-        }))
-      } else {
-        console.error('获取自选股数据失败:', body?.message)
-        // Fallback to individual requests
-        const promises = watchList.value.map(symbol => fetchStockData(symbol))
-        await Promise.all(promises)
-      }
+      console.error('获取自选股数据失败:', body?.message)
+      const promises = watchList.value.map(symbol => fetchStockData(symbol))
+      await Promise.all(promises)
     }
   } catch (error) {
     console.error('刷新自选股数据失败:', error)
-    // Fallback to individual requests
     try {
+      if (authenticated && watchList.value.length === 0) {
+        const symbols = await watchlistService.getUserWatchlist()
+        watchList.value = symbols
+      }
       const promises = watchList.value.map(symbol => fetchStockData(symbol))
       await Promise.all(promises)
     } catch (fallbackError) {
@@ -1045,14 +1015,12 @@ function formatDate(dateStr) {
   return dateStr.substring(0, 10)
 }
 
-function formatPrice(price) {
-  if (price === undefined || price === null) return '-'
-  return Number(price).toFixed(2)
+function formatPrice(price, stock) {
+  return formatAssetPrice(price, stock?.asset_type)
 }
 
-function formatChange(change) {
-  if (change === undefined || change === null) return '-'
-  return change >= 0 ? `+${change.toFixed(2)}` : change.toFixed(2)
+function formatChange(change, stock) {
+  return formatAssetChange(change, stock?.asset_type)
 }
 
 function formatUpdateTime(timeStr) {
@@ -1108,11 +1076,10 @@ function getPriceChangeClass(value) {
 
 // 组件挂载时初始化
 onMounted(async () => {
-  // 初始化时检查登录状态并加载相应的自选股
   if (isAuthenticated?.value) {
     await handleUserLogin()
   } else {
-    loadLocalWatchlist()
+    await loadLocalWatchlist()
   }
 })
 </script>
@@ -1452,9 +1419,12 @@ onMounted(async () => {
   border-collapse: collapse;
   background: rgba(30, 30, 63, 0.8);
   border-radius: 12px;
-  overflow-x: auto;
   box-shadow: 0 4px 20px rgba(138, 43, 226, 0.2);
   border: 1px solid rgba(138, 43, 226, 0.2);
+}
+
+.watchlist-table {
+  overflow-x: auto;
 }
 
 .data-table th,
@@ -1490,7 +1460,16 @@ onMounted(async () => {
 .stock-name {
   color: #d1d5db;
   font-weight: 500;
-  max-width: 120px;
+  max-width: 11em;
+}
+
+.data-table td.stock-name {
+  max-width: 11em;
+  overflow: hidden;
+}
+
+.stock-name-text {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1500,6 +1479,7 @@ onMounted(async () => {
   font-weight: 600;
   color: #fbbf24;
   font-family: 'Courier New', monospace;
+  white-space: nowrap;
 }
 
 .positive {
@@ -1733,8 +1713,6 @@ onMounted(async () => {
 /* 表格悬停效果 */
 .data-table tr:hover {
   background: rgba(138, 43, 226, 0.1);
-  transform: scale(1.01);
-  transition: all 0.2s;
 }
 
 /* 滚动条样式 */

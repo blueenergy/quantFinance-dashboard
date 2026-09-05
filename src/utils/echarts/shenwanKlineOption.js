@@ -120,10 +120,10 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
   return option
 }
 
-/** A-share prices: always two decimals in labels / crosshair / tooltip. */
-export function formatKlinePriceLabel (value) {
+/** A-share prices: stocks two decimals; pass 3 for listed ETFs. */
+export function formatKlinePriceLabel (value, digits = 2) {
   const n = Number(value)
-  return Number.isFinite(n) ? n.toFixed(2) : ''
+  return Number.isFinite(n) ? n.toFixed(digits) : ''
 }
 
 function priceAxisPointerFormatter (params) {

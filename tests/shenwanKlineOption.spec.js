@@ -146,6 +146,7 @@ describe('padKlinePriceAxis', () => {
     expect(axis.axisLabel.formatter(10.51 * 0.988)).toBe('10.38')
     expect(axis.axisPointer.label.formatter({ value: 11.2 * 1.012 })).toBe('11.33')
     expect(formatKlinePriceLabel(10.51 * 0.988)).toBe('10.38')
+    expect(formatKlinePriceLabel(1.234, 3)).toBe('1.234')
   })
 })
 
