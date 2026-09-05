@@ -642,28 +642,6 @@ onUnmounted(() => {
   gap: 10px;
 }
 
-.search-controls input {
-  padding: 12px;
-  border: 2px solid rgba(138, 43, 226, 0.3);
-  border-radius: 8px;
-  font-size: 16px;
-  min-width: 250px;
-  background: rgba(30, 30, 63, 0.8);
-  color: #e6e6fa;
-  transition: all 0.3s;
-}
-
-.search-controls input:focus {
-  outline: none;
-  border-color: #8a2be2;
-  box-shadow: 0 0 15px rgba(138, 43, 226, 0.5);
-  background: rgba(30, 30, 63, 1);
-}
-
-.search-controls input::placeholder {
-  color: rgba(230, 230, 250, 0.6);
-}
-
 .search-controls button {
   padding: 12px 24px;
   background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);

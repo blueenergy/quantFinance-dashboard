@@ -13,6 +13,8 @@ function mountSearchBar(props = {}) {
     global: {
       stubs: {
         StockSearchInput: {
+          name: 'StockSearchInput',
+          props: ['tone'],
           template: '<input class="stock-search-stub" />',
         },
         'v-btn': {
@@ -24,6 +26,13 @@ function mountSearchBar(props = {}) {
 }
 
 describe('WorkbenchSearchBar', () => {
+  it('passes tone on-dark to StockSearchInput', () => {
+    const wrapper = mountSearchBar()
+    const input = wrapper.findComponent({ name: 'StockSearchInput' })
+    expect(input.props('tone')).toBe('on-dark')
+    wrapper.unmount()
+  })
+
   it('emits load-symbol from quick example buttons', async () => {
     const wrapper = mountSearchBar()
     const buttons = wrapper.findAll('.quick-symbols button')

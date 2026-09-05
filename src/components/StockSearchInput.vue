@@ -8,11 +8,8 @@
       :variant="variant"
       :density="density"
       :hide-details="hideDetails"
-      :theme="theme"
-      :bg-color="bgColor"
-      :color="color"
-      :base-color="baseColor"
-      :class="inputClass"
+      :bg-color="resolvedBgColor"
+      :class="fieldClass"
       :loading="searching"
       :rules="rules"
       :hint="hint"
@@ -55,7 +52,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { searchStocks } from '../api/stock'
 
 const props = defineProps({
@@ -87,18 +84,27 @@ const props = defineProps({
     type: [Boolean, String],
     default: true,
   },
+  tone: {
+    type: String,
+    default: 'on-light',
+    validator: (value) => ['on-dark', 'on-light'].includes(value),
+  },
+  /** @deprecated Use tone="on-dark" | "on-light" instead. */
   theme: {
     type: String,
     default: undefined,
   },
+  /** @deprecated Use tone instead. */
   bgColor: {
     type: String,
     default: undefined,
   },
+  /** @deprecated Use tone instead. */
   color: {
     type: String,
     default: undefined,
   },
+  /** @deprecated Use tone instead. */
   baseColor: {
     type: String,
     default: undefined,
@@ -135,6 +141,63 @@ const results = ref([])
 const searching = ref(false)
 const showMenu = ref(false)
 let searchTimer = null
+const deprecatedWarned = new Set()
+
+const fieldClass = computed(() => {
+  const classes = []
+  if (props.tone === 'on-dark') {
+    classes.push('stock-search-input-on-dark')
+  }
+  if (props.inputClass) {
+    if (Array.isArray(props.inputClass)) {
+      classes.push(...props.inputClass)
+    } else {
+      classes.push(props.inputClass)
+    }
+  }
+  return classes
+})
+
+const resolvedBgColor = computed(() => (
+  props.tone === 'on-dark' ? 'rgba(255,255,255,.06)' : undefined
+))
+
+function warnDeprecated(propName) {
+  if (deprecatedWarned.has(propName)) return
+  deprecatedWarned.add(propName)
+  console.warn(
+    `[StockSearchInput] ${propName} is deprecated; use tone="on-dark" | "on-light" instead.`,
+  )
+}
+
+watch(
+  () => props.theme,
+  (value) => {
+    if (value !== undefined) warnDeprecated('theme')
+  },
+  { immediate: true },
+)
+watch(
+  () => props.bgColor,
+  (value) => {
+    if (value !== undefined) warnDeprecated('bgColor')
+  },
+  { immediate: true },
+)
+watch(
+  () => props.color,
+  (value) => {
+    if (value !== undefined) warnDeprecated('color')
+  },
+  { immediate: true },
+)
+watch(
+  () => props.baseColor,
+  (value) => {
+    if (value !== undefined) warnDeprecated('baseColor')
+  },
+  { immediate: true },
+)
 
 watch(
   () => props.modelValue,
@@ -212,11 +275,15 @@ function marketLabel(item) {
   min-width: 0;
 }
 
-/* Dark-canvas callers (watchlist / workbench) pass input-class="stock-code-input".
- * Vuetify light theme otherwise paints on-surface (near-black) glyphs on the
- * purple glass, so typed text looks covered. Do not use theme="dark". */
-.stock-search-input :deep(.stock-code-input .v-field__input),
-.stock-search-input :deep(.stock-code-input input) {
+/* on-dark: Vuetify light theme paints on-surface (near-black) on purple glass.
+ * Do not use theme="dark" (opens color-scheme: dark). */
+.stock-search-input :deep(.stock-search-input-on-dark) {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+.stock-search-input :deep(.stock-search-input-on-dark .v-field__input),
+.stock-search-input :deep(.stock-search-input-on-dark input) {
   color: #e2e8f0 !important;
   -webkit-text-fill-color: #e2e8f0 !important;
   caret-color: #e2e8f0;
@@ -224,14 +291,14 @@ function marketLabel(item) {
   opacity: 1;
 }
 
-.stock-search-input :deep(.stock-code-input .v-label) {
+.stock-search-input :deep(.stock-search-input-on-dark .v-label) {
   color: #94a3b8 !important;
   opacity: 1;
 }
 
-.stock-search-input :deep(.stock-code-input input:-webkit-autofill),
-.stock-search-input :deep(.stock-code-input input:-webkit-autofill:hover),
-.stock-search-input :deep(.stock-code-input input:-webkit-autofill:focus) {
+.stock-search-input :deep(.stock-search-input-on-dark input:-webkit-autofill),
+.stock-search-input :deep(.stock-search-input-on-dark input:-webkit-autofill:hover),
+.stock-search-input :deep(.stock-search-input-on-dark input:-webkit-autofill:focus) {
   -webkit-text-fill-color: #e2e8f0 !important;
   caret-color: #e2e8f0;
   box-shadow: 0 0 0 1000px rgba(15, 23, 42, 0.92) inset;

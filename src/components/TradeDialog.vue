@@ -40,6 +40,7 @@
             label="股票代码/名称/拼音"
             placeholder="如: 000001, 平安银行, PAYH"
             density="compact"
+            tone="on-light"
             input-class="mb-3"
             :rules="[v => !!v || '请输入股票代码']"
             hint="输入2位以上自动搜索，6位数字自动补全"

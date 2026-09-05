@@ -11,6 +11,7 @@
           label="股票代码/名称/拼音"
           placeholder="输入股票代码、名称或拼音，如 600519、平安银行、PAYH"
           density="compact"
+          tone="on-light"
           class="symbol-search-input"
           input-class="symbol-input"
           @select="selectStockCandidate"

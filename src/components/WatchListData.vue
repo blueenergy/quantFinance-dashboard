@@ -28,8 +28,7 @@
             label="股票代码/名称/拼音"
             placeholder="如: 000001, 平安银行, PAYH"
             density="comfortable"
-            bg-color="rgba(255,255,255,.06)"
-            input-class="stock-code-input"
+            tone="on-dark"
             @select="selectStockCandidate"
             @submit="addStock"
           />
@@ -1769,11 +1768,6 @@ onMounted(async () => {
   position: relative;
   z-index: 10;
   color: #e2e8f0;
-}
-
-.stock-code-input {
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
 }
 
 </style>

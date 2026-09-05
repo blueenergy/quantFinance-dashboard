@@ -1,0 +1,23 @@
+---
+description: StockSearchInput tone contract; forbid theme="dark" on inputs
+globs: "**/*.{vue,css}"
+alwaysApply: false
+---
+
+# StockSearchInput tone (dashboard theme P0)
+
+Vuetify `defaultTheme` is **light**. Do not mix per-control `theme="dark"` on the purple glass shell.
+
+## Rules
+
+- On **dark canvas** (watchlist, workbench): use `StockSearchInput` with `tone="on-dark"`.
+- On **white card** pages (trade dialog, deep analysis): use `tone="on-light"` or omit (default is `on-light`).
+- **Never** set `theme="dark"` on `v-text-field` or `StockSearchInput` — it enables `color-scheme: dark` and breaks typed text contrast.
+- **Never** use Vuetify `color="white"` as input text color; use `tone` instead.
+- Do not pass `bg-color` / `color` / `baseColor` to `StockSearchInput` for theming (deprecated).
+- Do not use `input-class="stock-code-input"` as a theme switch; use `tone`.
+
+## Reference
+
+- Wiki: `llm-wiki/projects/trading/dashboard-theme-improvement-plan.md` (P0)
+- Component: `src/components/StockSearchInput.vue`

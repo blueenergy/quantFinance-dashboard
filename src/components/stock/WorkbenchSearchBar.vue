@@ -13,8 +13,7 @@
           label="输入股票代码 / 名称 / 拼音"
           placeholder="例如 600519、平安银行、PAYH、600519.SH"
           density="comfortable"
-          bg-color="rgba(255,255,255,.06)"
-          input-class="stock-code-input"
+          tone="on-dark"
           @update:model-value="$emit('update:modelValue', $event)"
           @select="$emit('select', $event)"
           @submit="$emit('submit')"
@@ -121,10 +120,6 @@ h2 {
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(0, 1fr) auto;
-}
-.stock-code-input {
-  background: rgba(255,255,255,.06);
-  border-radius: 12px;
 }
 .quick-symbols {
   align-items: center;

@@ -178,14 +178,14 @@ describe('WatchListData first paint', () => {
     wrapper.unmount()
   })
 
-  it('keeps the add-stock input on the light Vuetify theme like the workbench', async () => {
+  it('uses tone on-dark for the add-stock input like the workbench', async () => {
     requestMock.mockResolvedValue({ success: true, data: [] })
     const wrapper = mount(WatchListData, {
       global: {
         stubs: {
           StockSearchInput: {
             name: 'StockSearchInput',
-            props: ['theme', 'bgColor', 'color', 'baseColor', 'inputClass', 'density'],
+            props: ['tone', 'theme', 'bgColor', 'color', 'baseColor', 'inputClass', 'density'],
             template: '<div class="stock-search-stub" />',
           },
           HistoryAnalysis: true,
@@ -196,12 +196,13 @@ describe('WatchListData first paint', () => {
     await nextTick()
 
     const input = wrapper.findComponent({ name: 'StockSearchInput' })
+    expect(input.props('tone')).toBe('on-dark')
     expect(input.props('theme')).toBeUndefined()
     expect(input.props('color')).toBeUndefined()
     expect(input.props('baseColor')).toBeUndefined()
+    expect(input.props('bgColor')).toBeUndefined()
     expect(input.props('density')).toBe('comfortable')
-    expect(input.props('bgColor')).toBe('rgba(255,255,255,.06)')
-    expect(input.props('inputClass')).toBe('stock-code-input')
+    expect(input.props('inputClass')).toBeFalsy()
     wrapper.unmount()
   })
 })
