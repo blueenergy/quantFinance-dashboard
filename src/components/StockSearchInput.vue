@@ -212,6 +212,32 @@ function marketLabel(item) {
   min-width: 0;
 }
 
+/* Dark-canvas callers (watchlist / workbench) pass input-class="stock-code-input".
+ * Vuetify light theme otherwise paints on-surface (near-black) glyphs on the
+ * purple glass, so typed text looks covered. Do not use theme="dark". */
+.stock-search-input :deep(.stock-code-input .v-field__input),
+.stock-search-input :deep(.stock-code-input input) {
+  color: #e2e8f0 !important;
+  -webkit-text-fill-color: #e2e8f0 !important;
+  caret-color: #e2e8f0;
+  background-color: transparent;
+  opacity: 1;
+}
+
+.stock-search-input :deep(.stock-code-input .v-label) {
+  color: #94a3b8 !important;
+  opacity: 1;
+}
+
+.stock-search-input :deep(.stock-code-input input:-webkit-autofill),
+.stock-search-input :deep(.stock-code-input input:-webkit-autofill:hover),
+.stock-search-input :deep(.stock-code-input input:-webkit-autofill:focus) {
+  -webkit-text-fill-color: #e2e8f0 !important;
+  caret-color: #e2e8f0;
+  box-shadow: 0 0 0 1000px rgba(15, 23, 42, 0.92) inset;
+  transition: background-color 99999s ease-out;
+}
+
 :global(.stock-search-input-menu) {
   background: rgba(15, 23, 42, .98);
   border: 1px solid rgba(148, 163, 184, .22);

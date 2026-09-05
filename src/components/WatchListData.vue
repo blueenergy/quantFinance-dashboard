@@ -27,12 +27,9 @@
             input-id="watchlist-stock-input"
             label="股票代码/名称/拼音"
             placeholder="如: 000001, 平安银行, PAYH"
-            density="compact"
-            bg-color="rgba(30, 30, 63, 0.7)"
-            color="white"
-            base-color="rgba(230, 230, 250, 0.8)"
-            input-class="custom-stock-input"
-            theme="dark"
+            density="comfortable"
+            bg-color="rgba(255,255,255,.06)"
+            input-class="stock-code-input"
             @select="selectStockCandidate"
             @submit="addStock"
           />
@@ -1087,6 +1084,7 @@ onMounted(async () => {
 <style scoped>
 .watchlist-data {
   padding: 20px;
+  color: #e2e8f0;
   background: rgba(30, 30, 63, 0.5);
   border-radius: 12px;
   border: 1px solid rgba(138, 43, 226, 0.2);
@@ -1188,28 +1186,6 @@ onMounted(async () => {
   gap: 10px;
   align-items: center;
   margin-bottom: 20px;
-}
-
-.add-stock input {
-  padding: 10px 15px;
-  border: 2px solid rgba(138, 43, 226, 0.3);
-  border-radius: 8px;
-  font-size: 14px;
-  min-width: 200px;
-  background: rgba(30, 30, 63, 0.8);
-  color: #e6e6fa;
-  transition: all 0.3s;
-}
-
-.add-stock input:focus {
-  outline: none;
-  border-color: #8a2be2;
-  box-shadow: 0 0 15px rgba(138, 43, 226, 0.5);
-  background: rgba(30, 30, 63, 1);
-}
-
-.add-stock input::placeholder {
-  color: rgba(230, 230, 250, 0.6);
 }
 
 .add-stock button {
@@ -1790,25 +1766,14 @@ onMounted(async () => {
 
 .stock-input-wrapper {
   min-width: 300px;
-}
-
-/* Customizing v-text-field for dark glassmorphism theme */
-.stock-input-wrapper :deep(.v-field__outline) {
-  --v-field-border-opacity: 0.6;
-}
-
-.stock-input-wrapper {
   position: relative;
   z-index: 10;
+  color: #e2e8f0;
 }
 
-.custom-stock-input :deep(input) {
-  color: #ffffff !important;
-  font-weight: 500;
-}
-
-.custom-stock-input :deep(.v-label) {
-  color: rgba(230, 230, 250, 0.8) !important;
+.stock-code-input {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
 }
 
 </style>
