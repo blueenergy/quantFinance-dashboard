@@ -79,6 +79,7 @@ describe('request', () => {
     localStorage.setItem('activeTab', 'watchlist')
     sessionStorage.setItem('nav_visible_tab_ids_v2', '["watchlist"]')
     sessionStorage.setItem('watchlist_session_snapshot_v1', '{"username":"alice","symbols":["000001.SZ"]}')
+    localStorage.setItem('watchlist_session_snapshot_v1', '{"username":"alice","symbols":["000001.SZ"]}')
 
     const clearAuthSpy = vi.spyOn(
       (await import('../../services/auth.js')).authService,
@@ -100,6 +101,7 @@ describe('request', () => {
     expect(localStorage.getItem('activeTab')).toBeNull()
     expect(sessionStorage.getItem('nav_visible_tab_ids_v2')).toBeNull()
     expect(sessionStorage.getItem('watchlist_session_snapshot_v1')).toBeNull()
+    expect(localStorage.getItem('watchlist_session_snapshot_v1')).toBeNull()
     expect(window.location.href).toBe('/login')
   })
 

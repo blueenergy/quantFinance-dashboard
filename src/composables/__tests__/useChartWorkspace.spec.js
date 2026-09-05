@@ -32,10 +32,10 @@ describe('useChartWorkspace', () => {
   it('keeps chart symbols independent from loaded watchlist data', async () => {
     request.mockImplementation((config) => {
       const url = config.url
-      if (url === '/user/watchlist-stocks') {
+      if (url === '/user/watchlist') {
         return Promise.resolve({
           success: true,
-          data: [{ symbol: '000001.SZ' }],
+          data: { symbols: ['000001.SZ'] },
         })
       }
       if (String(url).startsWith('/records/')) {

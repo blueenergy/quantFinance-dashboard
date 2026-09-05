@@ -6,6 +6,7 @@
 import request from '../utils/request'
 
 export const WATCHLIST_SESSION_SNAPSHOT_KEY = 'watchlist_session_snapshot_v1'
+const REALTIME_CACHE_TTL_MS = 15000
 
 export function mapRealtimeWatchlistRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((stock) => ({
@@ -54,6 +55,12 @@ export function symbolsFromWatchlistRows(rows) {
 }
 
 class WatchlistService {
+  constructor() {
+    this._realtimeInflight = null
+    this._realtimeCache = null
+    this._realtimeGen = 0
+  }
+
   // 获取认证头部（部分组件仍直接传 headers，过渡期保留）
   getAuthHeaders() {
     const token = localStorage.getItem('access_token')
@@ -103,22 +110,54 @@ class WatchlistService {
     }
   }
 
-  // 获取用户自选股实时数据（基于分钟K线）→ data 数组
-  async getUserWatchlistRealtime() {
-    try {
-      const body = await request({
-        url: '/user/watchlist-stocks/realtime',
-        method: 'get',
-      })
+  invalidateRealtimeCache() {
+    this._realtimeCache = null
+    this._realtimeGen += 1
+    this._realtimeInflight = null
+  }
 
-      if (body.success) {
-        return body.data || []
-      }
-      throw new Error(body.message || '获取实时数据失败')
-    } catch (error) {
-      console.error('获取实时数据失败:', error)
-      throw error
+  prefetchRealtime() {
+    if (!localStorage.getItem('access_token')) return null
+    return this.getUserWatchlistRealtime()
+  }
+
+  // 获取用户自选股实时数据 → data 数组。短 TTL + 进行中请求合并，避免启动流与表格各打一次。
+  async getUserWatchlistRealtime({ force = false } = {}) {
+    const now = Date.now()
+    if (!force && this._realtimeCache && (now - this._realtimeCache.at) < REALTIME_CACHE_TTL_MS) {
+      return this._realtimeCache.data
     }
+    if (!force && this._realtimeInflight) {
+      return this._realtimeInflight
+    }
+    if (force) this._realtimeGen += 1
+    const gen = this._realtimeGen
+
+    const pending = (async () => {
+      try {
+        const body = await request({
+          url: '/user/watchlist-stocks/realtime',
+          method: 'get',
+        })
+
+        if (body.success) {
+          const data = body.data || []
+          if (gen === this._realtimeGen) {
+            this._realtimeCache = { at: Date.now(), data }
+          }
+          return data
+        }
+        throw new Error(body.message || '获取实时数据失败')
+      } catch (error) {
+        console.error('获取实时数据失败:', error)
+        throw error
+      } finally {
+        if (this._realtimeInflight === pending) this._realtimeInflight = null
+      }
+    })()
+
+    this._realtimeInflight = pending
+    return pending
   }
 
   // 添加股票到自选股 → 整段 envelope body
@@ -131,6 +170,7 @@ class WatchlistService {
       })
 
       if (body.success) {
+        this.invalidateRealtimeCache()
         return body
       }
       throw new Error(body.message || '添加自选股失败')
@@ -149,6 +189,7 @@ class WatchlistService {
       })
 
       if (body.success) {
+        this.invalidateRealtimeCache()
         return body
       }
       throw new Error(body.message || '移除自选股失败')
@@ -168,6 +209,7 @@ class WatchlistService {
       })
 
       if (body.success) {
+        this.invalidateRealtimeCache()
         return body
       }
       throw new Error(body.message || '更新自选股失败')
@@ -214,10 +256,19 @@ class WatchlistService {
     localStorage.setItem('watchList', JSON.stringify(symbols))
   }
 
+  _readSnapshotRaw() {
+    try {
+      return sessionStorage.getItem(WATCHLIST_SESSION_SNAPSHOT_KEY)
+        || localStorage.getItem(WATCHLIST_SESSION_SNAPSHOT_KEY)
+    } catch {
+      return null
+    }
+  }
+
   getSessionSnapshot(username) {
     if (!username) return null
     try {
-      const raw = sessionStorage.getItem(WATCHLIST_SESSION_SNAPSHOT_KEY)
+      const raw = this._readSnapshotRaw()
       if (!raw) return null
       const parsed = JSON.parse(raw)
       if (!parsed || parsed.username !== username) return null
@@ -231,12 +282,18 @@ class WatchlistService {
 
   setSessionSnapshot(username, { symbols = [], stocks = [] } = {}) {
     if (!username) return
+    const payload = JSON.stringify({
+      username,
+      symbols: Array.isArray(symbols) ? symbols : [],
+      stocks: Array.isArray(stocks) ? stocks : [],
+    })
     try {
-      sessionStorage.setItem(WATCHLIST_SESSION_SNAPSHOT_KEY, JSON.stringify({
-        username,
-        symbols: Array.isArray(symbols) ? symbols : [],
-        stocks: Array.isArray(stocks) ? stocks : [],
-      }))
+      sessionStorage.setItem(WATCHLIST_SESSION_SNAPSHOT_KEY, payload)
+    } catch {
+      /* storage quota / private mode */
+    }
+    try {
+      localStorage.setItem(WATCHLIST_SESSION_SNAPSHOT_KEY, payload)
     } catch {
       /* storage quota / private mode */
     }
@@ -248,6 +305,12 @@ class WatchlistService {
     } catch {
       /* ignore */
     }
+    try {
+      localStorage.removeItem(WATCHLIST_SESSION_SNAPSHOT_KEY)
+    } catch {
+      /* ignore */
+    }
+    this.invalidateRealtimeCache()
   }
 }
 

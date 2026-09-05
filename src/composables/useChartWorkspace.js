@@ -164,9 +164,10 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
     }
     appChartWatchlistInFlight = (async () => {
       try {
-        const body = await request({ url: '/user/watchlist-stocks', method: 'get' })
-        if (body && body.success && Array.isArray(body.data)) {
-          watchlist.value = body.data.map((stock) => stock.symbol)
+        const body = await request({ url: '/user/watchlist', method: 'get' })
+        const symbols = body?.data?.symbols
+        if (body && body.success && Array.isArray(symbols)) {
+          watchlist.value = symbols
         } else {
           watchlist.value = ['000001', '000002', '000003']
         }

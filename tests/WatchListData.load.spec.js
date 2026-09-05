@@ -50,6 +50,7 @@ describe('WatchListData first paint', () => {
     requestGetMock.mockReset()
     sessionStorage.clear()
     localStorage.removeItem('watchList')
+    watchlistService.clearSessionSnapshot()
   })
 
   afterEach(() => {

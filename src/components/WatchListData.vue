@@ -497,7 +497,7 @@ async function handleUserLogin() {
       }, 3000)
     }
 
-    await refreshAll()
+    await refreshAll({ force: migrated })
   } catch (error) {
     console.error('处理用户登录失败:', error)
     await loadLocalWatchlist()
@@ -951,7 +951,7 @@ function applyServerWatchlistRows(rows, mapper) {
   persistSessionSnapshot()
 }
 
-async function refreshAll() {
+async function refreshAll({ force = false } = {}) {
   const authenticated = !!isAuthenticated?.value
   if (!authenticated && watchList.value.length === 0) {
     loading.value = false
@@ -963,7 +963,7 @@ async function refreshAll() {
   try {
     if (authenticated) {
       if (useRealtimeData.value) {
-        const response = await watchlistService.getUserWatchlistRealtime()
+        const response = await watchlistService.getUserWatchlistRealtime({ force })
         applyServerWatchlistRows(response, mapRealtimeWatchlistRows)
       } else {
         const response = await watchlistService.getUserWatchlistStocks()
@@ -1002,7 +1002,7 @@ async function refreshAll() {
 // 切换数据源
 function toggleDataSource() {
   useRealtimeData.value = !useRealtimeData.value
-  refreshAll()  // 切换后立即刷新数据
+  refreshAll({ force: true })
 }
 
 // 格式化函数

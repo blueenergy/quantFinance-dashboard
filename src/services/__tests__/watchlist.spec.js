@@ -17,6 +17,10 @@ import {
 describe('watchlistService return contracts', () => {
   beforeEach(() => {
     requestMock.mockReset()
+    sessionStorage.clear()
+    localStorage.removeItem('watchList')
+    localStorage.removeItem('watchlist_session_snapshot_v1')
+    watchlistService.clearSessionSnapshot()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -125,9 +129,49 @@ describe('watchlistService return contracts', () => {
     })
     expect(watchlistService.getSessionSnapshot('bob')).toBeNull()
 
+    expect(localStorage.getItem(WATCHLIST_SESSION_SNAPSHOT_KEY)).toContain('alice')
+
     watchlistService.clearSessionSnapshot()
     expect(sessionStorage.getItem(WATCHLIST_SESSION_SNAPSHOT_KEY)).toBeNull()
+    expect(localStorage.getItem(WATCHLIST_SESSION_SNAPSHOT_KEY)).toBeNull()
     expect(watchlistService.getSessionSnapshot('alice')).toBeNull()
+  })
+
+  it('hydrates snapshot from localStorage when sessionStorage is empty', () => {
+    localStorage.setItem(WATCHLIST_SESSION_SNAPSHOT_KEY, JSON.stringify({
+      username: 'alice',
+      symbols: ['510300.SH'],
+      stocks: [{ symbol: '510300.SH', name: '沪深300ETF' }],
+    }))
+
+    expect(watchlistService.getSessionSnapshot('alice')).toEqual({
+      symbols: ['510300.SH'],
+      stocks: [{ symbol: '510300.SH', name: '沪深300ETF' }],
+    })
+  })
+
+  it('coalesces in-flight realtime fetches and reuses the short cache', async () => {
+    let resolve
+    const pending = new Promise((r) => {
+      resolve = r
+    })
+    requestMock.mockReturnValue(pending)
+
+    const first = watchlistService.getUserWatchlistRealtime()
+    const second = watchlistService.getUserWatchlistRealtime()
+    expect(requestMock).toHaveBeenCalledTimes(1)
+
+    resolve({ success: true, data: [{ symbol: '000001.SZ', price: 10.5 }] })
+    await expect(first).resolves.toEqual([{ symbol: '000001.SZ', price: 10.5 }])
+    await expect(second).resolves.toEqual([{ symbol: '000001.SZ', price: 10.5 }])
+
+    await expect(watchlistService.getUserWatchlistRealtime()).resolves.toEqual([
+      { symbol: '000001.SZ', price: 10.5 },
+    ])
+    expect(requestMock).toHaveBeenCalledTimes(1)
+
+    await watchlistService.getUserWatchlistRealtime({ force: true })
+    expect(requestMock).toHaveBeenCalledTimes(2)
   })
 
   it('maps realtime and history rows for the watchlist table', () => {

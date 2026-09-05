@@ -1,5 +1,12 @@
 import { onMounted, ref } from 'vue'
 import request from '../utils/request'
+import { watchlistService } from '../services/watchlist.js'
+import { prefetchWatchlistTab } from '../utils/tabViews.js'
+
+function prefetchWatchlistAssets() {
+  void prefetchWatchlistTab()
+  void watchlistService.prefetchRealtime()
+}
 
 export function useAppStartupFlow({
   user,
@@ -41,6 +48,9 @@ export function useAppStartupFlow({
     console.log('登录成功:', authData.user.username)
     setAuth(authData)
     window.currentSourceInfo = null
+    if (readSavedActiveTab() === 'watchlist') {
+      prefetchWatchlistAssets()
+    }
 
     let ids = null
     const navReq = request({ url: '/user/navigation-tabs', method: 'get' })
@@ -63,6 +73,7 @@ export function useAppStartupFlow({
 
     if (tryApplyDeepLinkFromUrl(visibleIds)) {
       refreshVisibleHomeSummaries()
+      if (activeTab.value === 'watchlist') prefetchWatchlistAssets()
       return
     }
 
@@ -76,6 +87,7 @@ export function useAppStartupFlow({
       activeTab.value = ''
     }
 
+    if (activeTab.value === 'watchlist') prefetchWatchlistAssets()
     refreshVisibleHomeSummaries()
   }
 
@@ -112,6 +124,10 @@ export function useAppStartupFlow({
 
     if (!localStorage.getItem('access_token')) return
 
+    if (readSavedActiveTab() === 'watchlist') {
+      prefetchWatchlistAssets()
+    }
+
     const [tokenValid] = await Promise.all([
       validateToken(),
       loadNavigationTabs(),
@@ -128,7 +144,8 @@ export function useAppStartupFlow({
     if (tryApplyDeepLinkFromUrl(visibleIds)) {
       refreshVisibleHomeSummaries()
       if (activeTab.value === 'watchlist') {
-        await loadAppChartWatchlist()
+        prefetchWatchlistAssets()
+        void loadAppChartWatchlist()
       }
       return
     }
@@ -151,7 +168,8 @@ export function useAppStartupFlow({
     refreshVisibleHomeSummaries()
 
     if (activeTab.value === 'watchlist') {
-      await loadAppChartWatchlist()
+      prefetchWatchlistAssets()
+      void loadAppChartWatchlist()
     }
   })
 
