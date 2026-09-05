@@ -8,8 +8,16 @@
         <div v-for="(slot, idx) in ['A', 'B']" :key="slot" class="symbol-slot">
           <span class="slot-badge" :class="idx === 0 ? 'badge-a' : 'badge-b'">{{ slot }}</span>
           <select v-model="preset[slot]" @change="onPresetChange(slot)" class="preset-sel">
-            <option value="">— 选指数 —</option>
-            <option v-for="p in PRESET_INDICES" :key="p.symbol" :value="p.symbol">{{ p.name }}</option>
+            <option value="">— 选手动输入 —</option>
+            <optgroup label="A股指数">
+              <option v-for="p in PRESET_INDICES" :key="p.symbol" :value="p.symbol">{{ p.name }}</option>
+            </optgroup>
+            <optgroup label="股指期货">
+              <option v-for="p in PRESET_INDEX_FUTURES" :key="p.symbol" :value="p.symbol">{{ p.name }}</option>
+            </optgroup>
+            <optgroup label="商品期货">
+              <option v-for="p in PRESET_COMMODITY_FUTURES" :key="p.symbol" :value="p.symbol">{{ p.name }}</option>
+            </optgroup>
           </select>
           <span class="or-text">或</span>
           <input
@@ -98,7 +106,28 @@ const PRESET_INDICES = [
   { symbol: '000001.SH', name: '上证指数' },
   { symbol: '399001.SZ', name: '深证成指' },
 ]
-const PRESET_MAP = Object.fromEntries(PRESET_INDICES.map(p => [p.symbol, p.name]))
+const PRESET_INDEX_FUTURES = [
+  { symbol: 'IF.CFX', name: '沪深300期货', spot: '000300.SH' },
+  { symbol: 'IH.CFX', name: '上证50期货', spot: '000016.SH' },
+  { symbol: 'IC.CFX', name: '中证500期货', spot: '000905.SH' },
+  { symbol: 'IM.CFX', name: '中证1000期货', spot: '000852.SH' },
+]
+const PRESET_COMMODITY_FUTURES = [
+  { symbol: 'AU.SHF', name: '黄金' },
+  { symbol: 'CU.SHF', name: '沪铜' },
+  { symbol: 'AL.SHF', name: '沪铝' },
+  { symbol: 'RB.SHF', name: '螺纹钢' },
+  { symbol: 'I.DCE', name: '铁矿石' },
+  { symbol: 'SC.INE', name: '原油' },
+  { symbol: 'J.DCE', name: '焦炭' },
+  { symbol: 'JM.DCE', name: '焦煤' },
+  { symbol: 'M.DCE', name: '豆粕' },
+  { symbol: 'CF.ZCE', name: '棉花' },
+  { symbol: 'TA.ZCE', name: 'PTA' },
+  { symbol: 'LC.GFE', name: '碳酸锂' },
+]
+const PRESET_ALL = [...PRESET_INDICES, ...PRESET_INDEX_FUTURES, ...PRESET_COMMODITY_FUTURES]
+const PRESET_MAP = Object.fromEntries(PRESET_ALL.map(p => [p.symbol, p.name]))
 
 const QUICK_RANGES = [
   { days: 30, label: '1M' },
@@ -112,8 +141,8 @@ const QUICK_RANGES = [
 const today = new Date().toISOString().slice(0, 10)
 
 // State
-const sym = ref({ A: '000300.SH', B: '000852.SH' })
-const preset = ref({ A: '000300.SH', B: '000852.SH' })
+const sym = ref({ A: '000300.SH', B: 'IF.CFX' })
+const preset = ref({ A: '000300.SH', B: 'IF.CFX' })
 const startDate = ref((() => {
   const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().slice(0, 10)
 })())
@@ -424,8 +453,20 @@ function handleResize() { chartInstance?.resize() }
 
 watch(chartMode, () => renderChart())
 
+async function loadPresetNamesFromApi() {
+  try {
+    const body = await request({ method: 'get', url: '/futures/varieties' })
+    const rows = body?.data?.all || []
+    for (const row of rows) {
+      if (row?.ts_code && row?.name) PRESET_MAP[row.ts_code] = row.name
+    }
+  } catch (e) {
+    console.warn('futures varieties preload failed', e)
+  }
+}
+
 onMounted(() => {
-  fetchAll()
+  loadPresetNamesFromApi().finally(() => fetchAll())
 })
 
 onBeforeUnmount(() => {
