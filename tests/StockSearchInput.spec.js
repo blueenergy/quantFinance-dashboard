@@ -49,7 +49,7 @@ describe('StockSearchInput tone', () => {
     const wrapper = mountInput({ tone: 'on-dark' })
     const field = wrapper.findComponent({ name: 'VTextField' })
     expect(field.props('class')).toContain('stock-search-input-on-dark')
-    expect(field.props('bgColor')).toBe('rgba(255,255,255,.06)')
+    expect(field.props('bgColor')).toBe('var(--field-bg-on-dark)')
     expect(field.props('theme')).toBeUndefined()
     wrapper.unmount()
   })

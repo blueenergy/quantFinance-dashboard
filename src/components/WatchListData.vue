@@ -28,7 +28,7 @@
             label="股票代码/名称/拼音"
             placeholder="如: 000001, 平安银行, PAYH"
             density="comfortable"
-            tone="on-dark"
+            tone="on-light"
             @select="selectStockCandidate"
             @submit="addStock"
           />
@@ -1083,10 +1083,11 @@ onMounted(async () => {
 <style scoped>
 .watchlist-data {
   padding: 20px;
-  color: #e2e8f0;
-  background: rgba(30, 30, 63, 0.5);
+  color: var(--text-primary);
+  background: var(--surface-bg);
   border-radius: 12px;
-  border: 1px solid rgba(138, 43, 226, 0.2);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
 }
 
 .action-btn-group {
@@ -1108,8 +1109,7 @@ onMounted(async () => {
 
 .watchlist-header h3 {
   margin: 0 0 15px 0;
-  color: #e6e6fa;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  color: var(--text-primary);
   font-size: 20px;
 }
 
@@ -1246,18 +1246,18 @@ onMounted(async () => {
   gap: 8px;
   padding: 6px 10px;
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(96, 165, 250, 0.25);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--surface-border);
 }
 
 .analysis-mode-label {
-  color: #cbd5e1;
+  color: var(--text-subtle);
   font-size: 13px;
   white-space: nowrap;
 }
 
 .analysis-mode-hint {
-  color: #93c5fd;
+  color: var(--color-primary);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -1265,15 +1265,15 @@ onMounted(async () => {
 .mode-btn {
   min-width: 72px;
   padding: 8px 12px;
-  background: rgba(51, 65, 85, 0.85);
-  color: #cbd5e1;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: var(--surface-bg);
+  color: var(--text-subtle);
+  border: 1px solid var(--border-subtle);
   box-shadow: none;
 }
 
 .mode-btn:not(.active):hover:not(:disabled) {
   transform: none;
-  background: rgba(71, 85, 105, 0.95);
+  background: var(--surface-bg-muted);
   box-shadow: none;
 }
 
@@ -1299,32 +1299,33 @@ onMounted(async () => {
 }
 
 .update-time {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
 .empty-watchlist {
   text-align: center;
   padding: 40px;
-  color: #b19cd9;
-  background: #f9fafb;
+  color: var(--text-muted);
+  background: var(--surface-bg-muted);
   border-radius: 8px;
+  border: 1px dashed var(--border-subtle);
 }
 
 .watchlist-summary-panel {
-  background: rgba(30, 30, 63, 0.75);
-  border: 1px solid rgba(138, 43, 226, 0.22);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   padding: 12px;
   margin-bottom: 12px;
-  box-shadow: 0 4px 20px rgba(138, 43, 226, 0.15);
+  box-shadow: none;
 }
 
 .watchlist-summary {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  color: #e6e6fa;
+  color: var(--text-subtle);
   font-size: 13px;
   margin-bottom: 10px;
 }
@@ -1337,9 +1338,9 @@ onMounted(async () => {
 }
 
 .filter-chip {
-  border: 1px solid rgba(147, 112, 219, 0.35);
-  background: rgba(49, 46, 129, 0.55);
-  color: #e6e6fa;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-bg);
+  color: var(--text-subtle);
   border-radius: 999px;
   padding: 5px 10px;
   cursor: pointer;
@@ -1349,12 +1350,13 @@ onMounted(async () => {
 .filter-chip:hover,
 .filter-chip.active {
   background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);
-  border-color: rgba(230, 230, 250, 0.6);
+  border-color: rgba(138, 43, 226, 0.35);
+  color: #ffffff;
   transform: translateY(-1px);
 }
 
 .filter-count {
-  color: #c4b5fd;
+  color: var(--text-muted);
   margin-left: 3px;
 }
 
@@ -1368,23 +1370,23 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: #c4b5fd;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .toggle-collapse-btn,
 .watchlist-more-footer button {
-  border: 1px solid rgba(96, 165, 250, 0.4);
-  background: rgba(37, 99, 235, 0.25);
-  color: #bfdbfe;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-bg);
+  color: var(--color-primary);
   border-radius: 8px;
   padding: 5px 10px;
   cursor: pointer;
 }
 
 .watchlist-more-footer {
-  background: rgba(30, 30, 63, 0.65);
-  border: 1px solid rgba(138, 43, 226, 0.18);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--surface-border);
   border-radius: 0 0 12px 12px;
   padding: 10px 12px;
 }
@@ -1392,10 +1394,10 @@ onMounted(async () => {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  background: rgba(30, 30, 63, 0.8);
+  background: var(--surface-bg);
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(138, 43, 226, 0.2);
-  border: 1px solid rgba(138, 43, 226, 0.2);
+  box-shadow: none;
+  border: 1px solid var(--surface-border);
 }
 
 .watchlist-table {
@@ -1406,8 +1408,8 @@ onMounted(async () => {
 .data-table td {
   padding: 12px;
   text-align: left;
-  border-bottom: 1px solid rgba(138, 43, 226, 0.2);
-  color: #e6e6fa;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
   overflow: visible;
 }
 
@@ -1433,7 +1435,7 @@ onMounted(async () => {
 }
 
 .stock-name {
-  color: #d1d5db;
+  color: var(--text-subtle);
   font-weight: 500;
   max-width: 11em;
 }
@@ -1470,7 +1472,7 @@ onMounted(async () => {
 }
 
 .neutral {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .chart-btn {
@@ -1562,14 +1564,14 @@ onMounted(async () => {
 }
 
 .modal-content {
-  background: linear-gradient(135deg, #1e1e3f 0%, #2a2a5e 100%);
+  background: var(--surface-bg);
   border-radius: 16px;
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
   overflow-y: auto;
-  box-shadow: 0 20px 50px rgba(138, 43, 226, 0.3);
-  border: 1px solid rgba(138, 43, 226, 0.2);
+  box-shadow: var(--surface-shadow);
+  border: 1px solid var(--surface-border);
 }
 
 .modal-content--maximized {
@@ -1637,8 +1639,8 @@ onMounted(async () => {
 
 .modal-body {
   padding: 20px;
-  background: rgba(30, 30, 63, 0.5);
-  color: #e6e6fa;
+  background: var(--surface-bg);
+  color: var(--text-primary);
 }
 
 .analysis-section {
@@ -1647,14 +1649,14 @@ onMounted(async () => {
 
 .analysis-section h4 {
   margin: 0 0 10px 0;
-  color: #d1d5db;
+  color: var(--text-subtle);
   font-size: 16px;
   font-weight: 600;
 }
 
 .analysis-section p {
   margin: 0;
-  color: #e6e6fa;
+  color: var(--text-primary);
   line-height: 1.6;
   white-space: pre-wrap;
 }
@@ -1677,17 +1679,17 @@ onMounted(async () => {
 .analysis-meta {
   margin-top: 20px;
   padding-top: 15px;
-  border-top: 1px solid rgba(138, 43, 226, 0.2);
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-wrap: wrap;
   gap: 15px;
   font-size: 12px;
-  color: #b19cd9;
+  color: var(--text-muted);
 }
 
 /* 表格悬停效果 */
 .data-table tr:hover {
-  background: rgba(138, 43, 226, 0.1);
+  background: var(--surface-bg-muted);
 }
 
 /* 滚动条样式 */
@@ -1696,7 +1698,7 @@ onMounted(async () => {
 }
 
 .modal-content::-webkit-scrollbar-track {
-  background: rgba(30, 30, 63, 0.5);
+  background: var(--surface-bg-muted);
 }
 
 .modal-content::-webkit-scrollbar-thumb {
@@ -1767,7 +1769,6 @@ onMounted(async () => {
   min-width: 300px;
   position: relative;
   z-index: 10;
-  color: #e2e8f0;
 }
 
 </style>

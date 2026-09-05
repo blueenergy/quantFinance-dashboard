@@ -1,23 +1,24 @@
 ---
-description: StockSearchInput tone contract; forbid theme="dark" on inputs
+description: Dashboard A′ theme — purple canvas, light surfaces, StockSearchInput tone
 globs: "**/*.{vue,css}"
 alwaysApply: false
 ---
 
-# StockSearchInput tone (dashboard theme P0)
+# Dashboard theme A′ (purple frame + light surfaces)
 
-Vuetify `defaultTheme` is **light**. Do not mix per-control `theme="dark"` on the purple glass shell.
+Vuetify `defaultTheme` is **light**. Product decision (2026-09-05): keep `App.vue` purple canvas; tab **content** uses light surfaces (`--surface-bg`). See wiki `dashboard-theme-improvement-plan.md`.
 
 ## Rules
 
-- On **dark canvas** (watchlist, workbench): use `StockSearchInput` with `tone="on-dark"`.
-- On **white card** pages (trade dialog, deep analysis): use `tone="on-light"` or omit (default is `on-light`).
-- **Never** set `theme="dark"` on `v-text-field` or `StockSearchInput` — it enables `color-scheme: dark` and breaks typed text contrast.
-- **Never** use Vuetify `color="white"` as input text color; use `tone` instead.
-- Do not pass `bg-color` / `color` / `baseColor` to `StockSearchInput` for theming (deprecated).
-- Do not use `input-class="stock-code-input"` as a theme switch; use `tone`.
+- **New tab content**: white/light gray card on purple canvas. No full-page `rgba(30,30,63)` glass as the main surface.
+- **StockSearchInput** on light surfaces: `tone="on-light"` or omit (default).
+- **StockSearchInput** on unmigrated dark panels (workbench until P3.2): `tone="on-dark"`.
+- **Never** `theme="dark"` on inputs — use `tone`, not Vuetify dark theme.
+- **Never** `color="white"` as input text color.
+- Use `design-tokens.css` (`--surface-bg`, `--text-primary`, `--field-fg`, …) on migrated pages; no raw `#e2e8f0` / `rgba(30,30,63)` on content cards.
+- Do **not** change `App.vue` `.main-content` purple gradient to light gray (that would be full A, not A′).
 
 ## Reference
 
-- Wiki: `llm-wiki/projects/trading/dashboard-theme-improvement-plan.md` (P0)
-- Component: `src/components/StockSearchInput.vue`
+- `src/assets/styles/design-tokens.css`
+- `src/components/StockSearchInput.vue`

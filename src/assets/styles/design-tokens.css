@@ -17,6 +17,34 @@
   --radius-lg: 8px;
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
   --shadow-md: 0 2px 6px rgba(0,0,0,0.10);
+
+  /* A′ canvas frame (App.vue .main-content — reference only until shell uses vars) */
+  --canvas-bg-start: #1e1e3f;
+  --canvas-bg-end: #2a2a5e;
+
+  /* A′ content surfaces (default for tab panels) */
+  --surface-bg: #ffffff;
+  --surface-bg-muted: #f9fafb;
+  --surface-border: #dbe3ef;
+  --surface-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+
+  --text-primary: #172033;
+  --text-muted: #64748b;
+  --text-subtle: #475569;
+
+  --field-fg: #172033;
+  --field-bg: #f8fafc;
+  --field-border: #cbd5e1;
+  --border-subtle: #e2e8f0;
+
+  /* Transitional: unmigrated dark content panels (e.g. workbench) */
+  --surface-bg-on-dark: rgba(15, 23, 42, 0.76);
+  --text-primary-on-dark: #e2e8f0;
+  --text-muted-on-dark: #94a3b8;
+  --field-fg-on-dark: #e2e8f0;
+  --field-bg-on-dark: rgba(255, 255, 255, 0.06);
+  --field-autofill-inset-on-dark: rgba(15, 23, 42, 0.92);
+
   /* Advice / Risk state colors */
   --tag-buy-bg: #d4edda;
   --tag-buy-fg: #155724;

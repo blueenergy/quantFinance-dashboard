@@ -1,5 +1,5 @@
 <template>
-  <div class="stock-search-input">
+  <div class="stock-search-input" :class="toneRootClass">
     <v-text-field
       :id="inputId"
       :model-value="modelValue"
@@ -28,7 +28,7 @@
       :open-on-focus="false"
       location="bottom start"
       :offset="5"
-      content-class="stock-search-input-menu"
+      :content-class="menuContentClass"
     >
       <div v-if="results.length" class="stock-search-input-scroll">
         <v-list density="compact" class="stock-search-input-list">
@@ -159,7 +159,15 @@ const fieldClass = computed(() => {
 })
 
 const resolvedBgColor = computed(() => (
-  props.tone === 'on-dark' ? 'rgba(255,255,255,.06)' : undefined
+  props.tone === 'on-dark' ? 'var(--field-bg-on-dark)' : undefined
+))
+
+const toneRootClass = computed(() => `stock-search-input--${props.tone}`)
+
+const menuContentClass = computed(() => (
+  props.tone === 'on-dark'
+    ? 'stock-search-input-menu stock-search-input-menu--on-dark'
+    : 'stock-search-input-menu stock-search-input-menu--on-light'
 ))
 
 function warnDeprecated(propName) {
@@ -275,43 +283,51 @@ function marketLabel(item) {
   min-width: 0;
 }
 
-/* on-dark: Vuetify light theme paints on-surface (near-black) on purple glass.
- * Do not use theme="dark" (opens color-scheme: dark). */
+/* on-dark: unmigrated dark panels (workbench). Do not use theme="dark". */
 .stock-search-input :deep(.stock-search-input-on-dark) {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--field-bg-on-dark);
   border-radius: 12px;
 }
 
 .stock-search-input :deep(.stock-search-input-on-dark .v-field__input),
 .stock-search-input :deep(.stock-search-input-on-dark input) {
-  color: #e2e8f0 !important;
-  -webkit-text-fill-color: #e2e8f0 !important;
-  caret-color: #e2e8f0;
+  color: var(--field-fg-on-dark) !important;
+  -webkit-text-fill-color: var(--field-fg-on-dark) !important;
+  caret-color: var(--field-fg-on-dark);
   background-color: transparent;
   opacity: 1;
 }
 
 .stock-search-input :deep(.stock-search-input-on-dark .v-label) {
-  color: #94a3b8 !important;
+  color: var(--text-muted-on-dark) !important;
   opacity: 1;
 }
 
 .stock-search-input :deep(.stock-search-input-on-dark input:-webkit-autofill),
 .stock-search-input :deep(.stock-search-input-on-dark input:-webkit-autofill:hover),
 .stock-search-input :deep(.stock-search-input-on-dark input:-webkit-autofill:focus) {
-  -webkit-text-fill-color: #e2e8f0 !important;
-  caret-color: #e2e8f0;
-  box-shadow: 0 0 0 1000px rgba(15, 23, 42, 0.92) inset;
+  -webkit-text-fill-color: var(--field-fg-on-dark) !important;
+  caret-color: var(--field-fg-on-dark);
+  box-shadow: 0 0 0 1000px var(--field-autofill-inset-on-dark) inset;
   transition: background-color 99999s ease-out;
 }
 
 :global(.stock-search-input-menu) {
-  background: rgba(15, 23, 42, .98);
-  border: 1px solid rgba(148, 163, 184, .22);
   border-radius: 12px;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, .28);
   max-height: 340px;
   overflow: hidden;
+}
+
+:global(.stock-search-input-menu--on-dark) {
+  background: rgba(15, 23, 42, .98);
+  border: 1px solid rgba(148, 163, 184, .22);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .28);
+}
+
+:global(.stock-search-input-menu--on-light) {
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
 }
 
 :global(.stock-search-input-scroll) {
@@ -322,35 +338,67 @@ function marketLabel(item) {
 }
 
 :global(.stock-search-input-list) {
-  background: rgba(15, 23, 42, .98) !important;
-  color: #e2e8f0 !important;
   min-width: 320px;
 }
 
-:global(.stock-search-input-list .v-list-item-title) {
+:global(.stock-search-input-menu--on-dark .stock-search-input-list) {
+  background: rgba(15, 23, 42, .98) !important;
+  color: var(--text-primary-on-dark) !important;
+}
+
+:global(.stock-search-input-menu--on-light .stock-search-input-list) {
+  background: var(--surface-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+:global(.stock-search-input-menu--on-dark .stock-search-input-list .v-list-item-title) {
   color: #ffffff !important;
   font-size: 14px;
   font-weight: 800;
   opacity: 1 !important;
 }
 
-:global(.stock-search-input-list .v-list-item-subtitle) {
+:global(.stock-search-input-menu--on-light .stock-search-input-list .v-list-item-title) {
+  color: var(--text-primary) !important;
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 1 !important;
+}
+
+:global(.stock-search-input-menu--on-dark .stock-search-input-list .v-list-item-subtitle) {
   color: #dbeafe !important;
   opacity: 1 !important;
 }
 
-:global(.stock-search-input-list .v-list-item) {
+:global(.stock-search-input-menu--on-light .stock-search-input-list .v-list-item-subtitle) {
+  color: var(--text-muted) !important;
+  opacity: 1 !important;
+}
+
+:global(.stock-search-input-menu--on-dark .stock-search-input-list .v-list-item) {
   color: #f8fafc !important;
 }
 
-:global(.stock-search-input-list .v-list-item:hover) {
+:global(.stock-search-input-menu--on-light .stock-search-input-list .v-list-item) {
+  color: var(--text-primary) !important;
+}
+
+:global(.stock-search-input-menu--on-dark .stock-search-input-list .v-list-item:hover) {
   background: rgba(96, 165, 250, .18) !important;
 }
 
-:global(.stock-search-input-list .v-chip) {
+:global(.stock-search-input-menu--on-light .stock-search-input-list .v-list-item:hover) {
+  background: var(--surface-bg-muted) !important;
+}
+
+:global(.stock-search-input-menu--on-dark .stock-search-input-list .v-chip) {
   background: rgba(59, 130, 246, .35) !important;
   color: #ffffff !important;
   font-weight: 800;
+}
+
+:global(.stock-search-input-menu--on-light .stock-search-input-list .v-chip) {
+  font-weight: 700;
 }
 
 :global(.stock-search-input-scroll::-webkit-scrollbar) {
@@ -362,7 +410,11 @@ function marketLabel(item) {
   border-radius: 999px;
 }
 
-:global(.stock-search-input-scroll::-webkit-scrollbar-track) {
+:global(.stock-search-input-menu--on-dark .stock-search-input-scroll::-webkit-scrollbar-track) {
   background: rgba(15, 23, 42, .55);
+}
+
+:global(.stock-search-input-menu--on-light .stock-search-input-scroll::-webkit-scrollbar-track) {
+  background: var(--surface-bg-muted);
 }
 </style>

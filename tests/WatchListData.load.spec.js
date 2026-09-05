@@ -178,7 +178,7 @@ describe('WatchListData first paint', () => {
     wrapper.unmount()
   })
 
-  it('uses tone on-dark for the add-stock input like the workbench', async () => {
+  it('uses tone on-light for the add-stock input on the light surface card', async () => {
     requestMock.mockResolvedValue({ success: true, data: [] })
     const wrapper = mount(WatchListData, {
       global: {
@@ -196,7 +196,7 @@ describe('WatchListData first paint', () => {
     await nextTick()
 
     const input = wrapper.findComponent({ name: 'StockSearchInput' })
-    expect(input.props('tone')).toBe('on-dark')
+    expect(input.props('tone')).toBe('on-light')
     expect(input.props('theme')).toBeUndefined()
     expect(input.props('color')).toBeUndefined()
     expect(input.props('baseColor')).toBeUndefined()
