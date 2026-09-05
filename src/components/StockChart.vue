@@ -38,6 +38,8 @@
         <input type="date" v-model="startDate" @change="drawChart" class="theme-input" />
         <span class="sep">至</span>
         <input type="date" v-model="endDate" @change="drawChart" class="theme-input" />
+        <button type="button" class="interval-btn window-btn" title="显示当前缓存全部 K 线" @click="showFullCache">全部</button>
+        <button type="button" class="interval-btn window-btn" title="向前扩展可见区间或加载更早历史" @click="shiftEarlier">再往前</button>
       </div>
 
       <div class="toolbar-group" v-else>
@@ -91,6 +93,14 @@
 import { ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
 import request from '../utils/request'
 import { buildDecisionGsChartSeries, collectDecisionGsMarkers, formatKlinePriceLabel, padKlinePriceAxis } from '../utils/echarts/shenwanKlineOption.js'
+import {
+  earliestTradeDate,
+  fullCacheVisibleRange,
+  latestTradeDate,
+  nextVisibleRange,
+  normalizeChartDate,
+  shiftVisibleEarlier,
+} from '../utils/chartVisibleWindow.js'
 
 const props = defineProps({
   records: { type: Array, default: () => [] },
@@ -190,11 +200,64 @@ const adjDegradedHint = computed(() => {
 })
 
 // --- Utils ---
-const normalizeDate = (d) => {
-  if (!d) return ''
-  if (d.includes('T')) return d.split('T')[0]
-  if (d.length === 8 && !d.includes('-')) return `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`
-  return d
+const normalizeDate = normalizeChartDate
+
+let prevSymbol = null
+let prevRecords = []
+
+function updateMinuteDateFromRecords(records) {
+  const latest = latestTradeDate(records)
+  if (!latest) return
+  selectedMinuteDate.value = (props.signalDates?.length)
+    ? normalizeDate(props.signalDates[0])
+    : latest
+}
+
+function applyVisibleWindow(records) {
+  const rows = Array.isArray(records) ? records : []
+  const range = nextVisibleRange({
+    symbol: props.symbol,
+    prevSymbol,
+    records: rows,
+    prevRecords,
+    startDate: startDate.value,
+    endDate: endDate.value,
+  })
+  startDate.value = range.start
+  endDate.value = range.end
+  if (props.symbol !== prevSymbol) {
+    updateMinuteDateFromRecords(rows)
+  }
+  prevSymbol = props.symbol
+  prevRecords = rows
+}
+
+function showFullCache() {
+  const range = fullCacheVisibleRange(props.records)
+  startDate.value = range.start
+  endDate.value = range.end
+  drawChart()
+}
+
+function shiftEarlier() {
+  const result = shiftVisibleEarlier({
+    records: props.records,
+    startDate: startDate.value,
+    endDate: endDate.value,
+  })
+  if (result.action === 'shift') {
+    startDate.value = result.start
+    endDate.value = result.end
+    drawChart()
+    return
+  }
+  if (result.action === 'load-more') {
+    const earliest = earliestTradeDate(props.records)
+    if (!earliest || isPaging) return
+    isPaging = true
+    emit('load-more', earliest)
+    setTimeout(() => { isPaging = false }, 2500)
+  }
 }
 
 const toggleTheme = () => {
@@ -372,14 +435,8 @@ function renderDaily() {
       // so we don't accidentally fall into the 'default' zoom logic.
       isPaging = false; 
   } else if (!isPaging) {
-     // Default zoom for first load: show the most recent 100 points
-     if (newDataLength > 100) {
-         option.dataZoom[0].start = ((newDataLength - 100) / newDataLength) * 100;
-         option.dataZoom[0].end = 100;
-     } else {
-         option.dataZoom[0].start = 0;
-         option.dataZoom[0].end = 100;
-     }
+    option.dataZoom[0].start = 0
+    option.dataZoom[0].end = 100
   }
 
   chartInstance.setOption(option, true)
@@ -502,28 +559,36 @@ function handleDataZoom(params) {
     start = params.start
   }
 
-  // If scrolled to the left (start <= 1% is the threshold)
   if (start <= 1 && props.records?.length > 0) {
-    // Collect all unique dates and sort them to find the earliest
-    const dates = props.records.map(r => normalizeDate(r.trade_date)).sort()
-    const earliestDate = dates[0]
-    
-    isPaging = true
-    emit('load-more', earliestDate)
-    
-    // Throttling to prevent multiple calls for the same event
-    setTimeout(() => { isPaging = false }, 2500)
+    const result = shiftVisibleEarlier({
+      records: props.records,
+      startDate: startDate.value,
+      endDate: endDate.value,
+    })
+    if (result.action === 'shift') {
+      startDate.value = result.start
+      endDate.value = result.end
+      drawChart()
+      return
+    }
+    if (result.action === 'load-more') {
+      const earliestDate = earliestTradeDate(props.records)
+      if (!earliestDate) return
+      isPaging = true
+      emit('load-more', earliestDate)
+      setTimeout(() => { isPaging = false }, 2500)
+    }
   }
 }
 
 // --- Lifecycle ---
 onMounted(async () => {
   if (props.records?.length) {
-    const dates = props.records.map(r => normalizeDate(r.trade_date)).sort()
-    endDate.value = dates[dates.length - 1]
-    const s = new Date(endDate.value); s.setMonth(s.getMonth() - 2)
-    startDate.value = s.toISOString().split('T')[0]
-    selectedMinuteDate.value = (props.signalDates?.length) ? normalizeDate(props.signalDates[0]) : endDate.value
+    if (kType.value === 'minute') {
+      updateMinuteDateFromRecords(props.records)
+    } else {
+      applyVisibleWindow(props.records)
+    }
   }
 
   resizeObserver = new ResizeObserver(async (entries) => {
@@ -548,18 +613,24 @@ onBeforeUnmount(() => {
 })
 
 watch(() => kType.value, (t) => t === 'minute' ? fetchMinuteData() : drawChart())
-watch(() => props.symbol, () => kType.value === 'minute' ? fetchMinuteData() : drawChart())
 watch(() => decisionGsEnabled.value, () => drawChart())
 
+watch(() => props.symbol, (sym, prev) => {
+  if (sym === prev || prev === undefined) return
+  startDate.value = ''
+  endDate.value = ''
+  prevRecords = []
+  prevSymbol = sym
+  if (kType.value === 'minute') {
+    selectedMinuteDate.value = ''
+    fetchMinuteData()
+  }
+})
+
 watch(() => props.records, (newRecs) => {
-  if (newRecs?.length > 0) {
-    // If our current startDate is later than the earliest record, 
-    // it means more historical data was loaded, so we should expand the view.
-    const dates = newRecs.map(r => normalizeDate(r.trade_date)).sort()
-    const earliest = dates[0]
-    if (!startDate.value || earliest < startDate.value) {
-      startDate.value = earliest
-    }
+  if (kType.value === 'minute') return
+  if (newRecs?.length) {
+    applyVisibleWindow(newRecs)
   }
   drawChart()
 }, { deep: true })
@@ -657,6 +728,7 @@ const goBack = () => emit('go-back', { strategy: props.strategyFrom, preset: pro
 
 .interval-selector { display: flex; border-radius: 4px; padding: 2px; }
 .interval-btn { padding: 3px 10px; border: none; background: transparent; font-size: 12px; cursor: pointer; border-radius: 3px; font-weight: 500; }
+.window-btn { margin-left: 4px; }
 
 .theme-input { border: 1px solid; padding: 3px 6px; border-radius: 3px; font-size: 12px; outline: none; transition: border-color 0.2s; }
 .theme-input:focus { border-color: #0366d6; }
