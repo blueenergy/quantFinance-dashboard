@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDecisionGsChartSeries, buildShenwanKlineOption, formatKlinePriceLabel, padKlinePriceAxis } from '../src/utils/echarts/shenwanKlineOption.js'
+import { buildDecisionGsChartSeries, buildShenwanKlineOption, collectDecisionGsMarkers, formatKlinePriceLabel, padKlinePriceAxis } from '../src/utils/echarts/shenwanKlineOption.js'
 
 function fmtAxis(value) {
   const s = String(value || '')
@@ -129,8 +129,43 @@ describe('buildDecisionGsChartSeries', () => {
     expect(series.find((s) => s.name === 'S').legendHoverLink).toBe(false)
   })
 
+  it('draws a weaker S? marker on the first s_watch bar only', () => {
+    const series = buildDecisionGsChartSeries(
+      [
+        { trade_date: '20260108', mj20: 10.4, mj30: 10.0, gs_is_bull: true, low: 10.5, high: 11 },
+        { trade_date: '20260109', mj20: 10.3, mj30: 10.0, gs_is_bull: true, gs_watch: 's', low: 9.8, high: 10.2 },
+        { trade_date: '20260112', mj20: 10.2, mj30: 10.0, gs_is_bull: true, gs_watch: 's', low: 9.6, high: 10.0 },
+        { trade_date: '20260113', mj20: 10.1, mj30: 10.05, gs_is_bull: false, gs_signal: 's', low: 9.4, high: 9.8 },
+      ],
+      fmtAxis,
+    )
+    const watch = series.find((s) => s.name === 'S?')
+    expect(series.map((s) => s.name)).toEqual(['决策线', '牛线', '熊线', 'S', 'S?'])
+    expect(watch.data).toEqual([{ value: ['2026-01-09', 10.2 * 1.012], price: 10.2 }])
+    expect(watch.symbolSize).toBe(14)
+    expect(watch.itemStyle.color).toBe('rgba(251, 146, 60, 0.12)')
+    expect(watch.itemStyle.borderColor).toBe('#fb923c')
+    expect(watch.label.formatter).toBe('S?')
+  })
+
   it('returns empty when mj20 is missing', () => {
     expect(buildDecisionGsChartSeries(bars, fmtAxis)).toEqual([])
+  })
+})
+
+describe('collectDecisionGsMarkers', () => {
+  it('emits s_watch only on the first consecutive watch bar, newest-first input included', () => {
+    const markers = collectDecisionGsMarkers([
+      { trade_date: '20260113', gs_signal: 's', gs_watch: null, low: 9.4, high: 9.8 },
+      { trade_date: '20260112', gs_watch: 's', low: 9.6, high: 10.0 },
+      { trade_date: '20260109', gs_watch: 's', low: 9.8, high: 10.2 },
+      { trade_date: '20260108', gs_signal: 'g', low: 10, high: 11.5 },
+    ])
+    expect(markers.map((item) => [item.kind, item.trade_date])).toEqual([
+      ['g', '20260108'],
+      ['s_watch', '20260109'],
+      ['s', '20260113'],
+    ])
   })
 })
 
@@ -179,6 +214,30 @@ describe('kline tooltip price digits', () => {
     expect(html).not.toContain(String(10.51 * 0.988))
     expect(html).toContain('开 10.20')
     expect(html).toContain('低 10.51')
+  })
+
+  it('shows S? at the real high with two decimals', () => {
+    const option = buildShenwanKlineOption([
+      { trade_date: '20260108', open: 10, high: 11, low: 9.5, close: 10.2, volume: 1000, mj20: 10.4, mj30: 10.0, gs_is_bull: true },
+      { trade_date: '20260109', open: 10.2, high: 10.2, low: 9.8, close: 9.9, volume: 1200, mj20: 10.3, mj30: 10.0, gs_is_bull: true, gs_watch: 's' },
+    ], formatters([
+      { kind: 's_watch', trade_date: '20260109', low: 9.8, high: 10.2 },
+    ]))
+    const html = option.tooltip.formatter([
+      {
+        seriesName: 'S?',
+        dataIndex: 0,
+        axisValue: '2026-01-09',
+        data: option.series.find((s) => s.name === 'S?').data[0],
+      },
+      {
+        seriesName: 'K线',
+        dataIndex: 1,
+        data: [10.2, 9.9, 9.8, 10.2],
+      },
+    ])
+    expect(html).toContain('S? 10.20')
+    expect(html).not.toContain(String(10.2 * 1.012))
   })
 
   it('formats the price-axis crosshair to two decimals', () => {

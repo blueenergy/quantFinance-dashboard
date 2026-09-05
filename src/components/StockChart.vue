@@ -90,7 +90,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
 import request from '../utils/request'
-import { buildDecisionGsChartSeries, formatKlinePriceLabel, padKlinePriceAxis } from '../utils/echarts/shenwanKlineOption.js'
+import { buildDecisionGsChartSeries, collectDecisionGsMarkers, formatKlinePriceLabel, padKlinePriceAxis } from '../utils/echarts/shenwanKlineOption.js'
 
 const props = defineProps({
   records: { type: Array, default: () => [] },
@@ -156,11 +156,20 @@ const decisionGsSummary = computed(() => {
     .filter((r) => r.gs_signal === 'g' || r.gs_signal === 's')
     .slice()
     .sort((a, b) => normalizeDate(a.trade_date).localeCompare(normalizeDate(b.trade_date)))
-  if (signals.length) {
+  const watchMarkers = collectDecisionGsMarkers(visible).filter((item) => item.kind === 's_watch')
+  const latestClosed = [...visible]
+    .sort((a, b) => normalizeDate(a.trade_date).localeCompare(normalizeDate(b.trade_date)))
+    .reverse()
+    .find((r) => !r.is_partial)
+  const watchActive = latestClosed?.gs_watch === 's'
+  if (signals.length || watchMarkers.length) {
     const g = signals.filter((r) => r.gs_signal === 'g').length
     const s = signals.filter((r) => r.gs_signal === 's').length
     const last = signals[signals.length - 1]
-    return `G×${g} · S×${s} · 最近 ${String(last.gs_signal).toUpperCase()} ${normalizeDate(last.trade_date)}　金三角=G/S　黄=决策线　红=牛线　绿=熊线`
+    const parts = [`G×${g} · S×${s}`]
+    if (last) parts.push(`最近 ${String(last.gs_signal).toUpperCase()} ${normalizeDate(last.trade_date)}`)
+    if (watchMarkers.length) parts.push(`S?×${watchMarkers.length}${watchActive ? ' 进行中' : ''}`)
+    return `${parts.join(' · ')}　金三角=G/S　空心三角=S?　黄=决策线　红=牛线　绿=熊线`
   }
   if (visible.some((r) => r.mj20 != null)) {
     return '当前窗口没有 G/S 拐点（可拉长日期或拖动缩放）'
@@ -415,7 +424,7 @@ function formatStockChartTooltip(params) {
       }
       continue
     }
-    if (p.seriesName === 'G' || p.seriesName === 'S') {
+    if (p.seriesName === 'G' || p.seriesName === 'S' || p.seriesName === 'S?') {
       const price = p.data && typeof p.data === 'object' && !Array.isArray(p.data) ? p.data.price : null
       if (price != null) lines.push(`${p.seriesName} ${formatChartNum2(price)}`)
       continue

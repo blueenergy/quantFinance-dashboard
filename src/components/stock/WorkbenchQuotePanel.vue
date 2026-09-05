@@ -164,6 +164,7 @@
 import { computed, ref } from 'vue'
 import MoneyFlowPanel from '../MoneyFlowPanel.vue'
 import StockKLineChart from '../StockKLineChart.vue'
+import { collectDecisionGsMarkers } from '../../utils/echarts/shenwanKlineOption'
 import {
   fmtKlineAmount,
   fmtNumber,
@@ -201,32 +202,36 @@ const quoteKlineTf = defineModel('quoteKlineTf', {
 const decisionGsEnabled = ref(true)
 const decisionGsMarkers = computed(() => {
   if (!decisionGsEnabled.value) return []
-  return (props.quoteKlineRows || [])
-    .filter((row) => row?.gs_signal === 'g' || row?.gs_signal === 's')
-    .map((row) => ({
-      kind: row.gs_signal,
-      trade_date: row.trade_date,
-      price: row.gs_signal === 'g' ? row.low : row.high,
-      low: row.low,
-      high: row.high,
-    }))
+  return collectDecisionGsMarkers(props.quoteKlineRows || [])
 })
 const decisionGsSummary = computed(() => {
   const markers = decisionGsMarkers.value
-  if (!markers.length) {
-    const hasOverlay = (props.quoteKlineRows || []).some((row) => row?.mj20 != null)
-    return hasOverlay
-      ? '当前窗口没有 G/S 拐点（v1 一年通常只有几次；可拖动下方缩放条查看更早 K 线）'
-      : '未拿到决策线字段，请刷新行情。若仍没有，需要重启后端 API（uvicorn --reload）'
-  }
+  const rows = props.quoteKlineRows || []
+  const hasOverlay = rows.some((row) => row?.mj20 != null)
   const fmt = (value) => {
     const s = String(value || '')
     if (s.length === 8 && /^\d+$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
     return s.slice(0, 10)
   }
-  const g = markers.filter((item) => item.kind === 'g').map((item) => fmt(item.trade_date)).slice(0, 4)
-  const s = markers.filter((item) => item.kind === 's').map((item) => fmt(item.trade_date)).slice(0, 4)
-  return `G×${markers.filter((item) => item.kind === 'g').length}${g.length ? ` ${g.join('、')}` : ''}　S×${markers.filter((item) => item.kind === 's').length}${s.length ? ` ${s.join('、')}` : ''}`
+  if (!markers.length) {
+    return hasOverlay
+      ? '当前窗口没有 G/S 拐点（v1 一年通常只有几次；可拖动下方缩放条查看更早 K 线）'
+      : '未拿到决策线字段，请刷新行情。若仍没有，需要重启后端 API（uvicorn --reload）'
+  }
+  const gDates = markers.filter((item) => item.kind === 'g').map((item) => fmt(item.trade_date)).slice(0, 4)
+  const sDates = markers.filter((item) => item.kind === 's').map((item) => fmt(item.trade_date)).slice(0, 4)
+  const watch = markers.filter((item) => item.kind === 's_watch').map((item) => fmt(item.trade_date)).slice(0, 4)
+  const latestClosed = rows.find((row) => !row?.is_partial)
+  const watchActive = latestClosed?.gs_watch === 's'
+  const gCount = markers.filter((item) => item.kind === 'g').length
+  const sCount = markers.filter((item) => item.kind === 's').length
+  const parts = []
+  if (gCount) parts.push(`G×${gCount}${gDates.length ? ` ${gDates.join('、')}` : ''}`)
+  if (sCount) parts.push(`S×${sCount}${sDates.length ? ` ${sDates.join('、')}` : ''}`)
+  if (watch.length || watchActive) {
+    parts.push(`S?×${watch.length}${watch.length ? ` ${watch.join('、')}` : ''}${watchActive ? ' 进行中' : ''}`)
+  }
+  return `${parts.join('　')}　空心三角=S?（破决策线、斜率未翻）`
 })
 const quoteChartMeta = computed(() => {
   const rows = props.quoteKlineRows || []

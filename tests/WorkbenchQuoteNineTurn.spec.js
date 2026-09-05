@@ -108,6 +108,55 @@ describe('WorkbenchQuotePanel', () => {
     expect(chart.props('chartMeta')).toMatchObject({ showDecisionGs: false, showMa: true })
   })
 
+  it('passes S? onset markers and keeps later watch bars unmarked', () => {
+    const wrapper = mount(WorkbenchQuotePanel, {
+      props: {
+        quoteKlineTitle: '日线行情',
+        quoteKlineShortLabel: '日线',
+        quoteKlineRows: [
+          {
+            trade_date: '20260718',
+            close: 9.5,
+            high: 9.8,
+            low: 9.2,
+            gs_watch: 's',
+            mj20: 10.1,
+            mj30: 9.9,
+            gs_is_bull: true,
+          },
+          {
+            trade_date: '20260717',
+            close: 9.7,
+            high: 10.0,
+            low: 9.4,
+            gs_watch: 's',
+            mj20: 10.2,
+            mj30: 9.9,
+            gs_is_bull: true,
+          },
+        ],
+        quoteKlineTf: '1d',
+      },
+      global: {
+        stubs: {
+          StockKLineChart: {
+            name: 'StockKLineChart',
+            props: ['records', 'markers', 'tf', 'chartMeta'],
+            template: '<div class="kline-stub" />',
+          },
+          MoneyFlowPanel: true,
+        },
+      },
+    })
+
+    const chart = wrapper.findComponent({ name: 'StockKLineChart' })
+    expect(chart.props('markers')).toEqual([
+      { kind: 's_watch', trade_date: '20260717', price: 10.0, low: 9.4, high: 10.0 },
+    ])
+    expect(wrapper.text()).toContain('S?×1')
+    expect(wrapper.text()).toContain('进行中')
+  })
+
   it('shows empty money-flow and loading kline states', () => {
     const wrapper = shallowMount(WorkbenchQuotePanel, {
       props: {

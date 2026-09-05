@@ -112,8 +112,8 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
     barsBefore: _meta?.focusBarsBefore,
     barsAfter: _meta?.focusBarsAfter
   })
-  const hasGsMarks = (Array.isArray(markers) && markers.some((m) => m?.kind === 'g' || m?.kind === 's'))
-    || data.some((r) => r?.gs_signal === 'g' || r?.gs_signal === 's')
+  const hasGsMarks = (Array.isArray(markers) && markers.some((m) => isGsMarkerKind(m?.kind)))
+    || data.some((r) => r?.gs_signal === 'g' || r?.gs_signal === 's' || r?.gs_watch === 's')
   if (hasGsMarks) {
     option.yAxis = padKlinePriceAxis(option.yAxis)
   }
@@ -524,6 +524,36 @@ function movingAverageSeries (name, data, color, z, { width = 1.2, connectNulls 
   }
 }
 
+export function collectDecisionGsMarkers (rows) {
+  if (!Array.isArray(rows) || !rows.length) return []
+  const chrono = [...rows].sort((a, b) => String(a.trade_date || '').localeCompare(String(b.trade_date || '')))
+  const markers = []
+  let prevWatch = null
+  chrono.forEach((row) => {
+    if (row.gs_signal === 'g' || row.gs_signal === 's') {
+      markers.push({
+        kind: row.gs_signal,
+        trade_date: row.trade_date,
+        low: row.low,
+        high: row.high,
+        price: row.gs_signal === 'g' ? row.low : row.high
+      })
+    }
+    const watch = row.gs_watch === 's' ? 's' : null
+    if (watch && prevWatch !== 's' && row.gs_signal !== 's') {
+      markers.push({
+        kind: 's_watch',
+        trade_date: row.trade_date,
+        low: row.low,
+        high: row.high,
+        price: row.high
+      })
+    }
+    prevWatch = watch
+  })
+  return markers
+}
+
 export function buildDecisionGsChartSeries (rows, fmtAxis) {
   if (!Array.isArray(rows) || !rows.some((r) => r.mj20 != null)) return []
   const toNum = (value) => {
@@ -533,31 +563,29 @@ export function buildDecisionGsChartSeries (rows, fmtAxis) {
   const mj20 = rows.map((r) => toNum(r.mj20))
   const mj30Bull = rows.map((r) => (r.gs_is_bull ? toNum(r.mj30) : null))
   const mj30Bear = rows.map((r) => (r.gs_is_bull === false ? toNum(r.mj30) : null))
-  const markers = []
-  rows.forEach((r) => {
-    if (r.gs_signal !== 'g' && r.gs_signal !== 's') return
-    markers.push({
-      kind: r.gs_signal,
-      trade_date: r.trade_date,
-      low: r.low,
-      high: r.high,
-      price: r.gs_signal === 'g' ? r.low : r.high
-    })
-  })
   return [
     movingAverageSeries('决策线', mj20, '#facc15', 8, { width: 2.4, connectNulls: true }),
     movingAverageSeries('牛线', mj30Bull, '#ef4444', 7, { width: 2.2 }),
     movingAverageSeries('熊线', mj30Bear, '#22c55e', 7, { width: 2.2 }),
-    ...buildGsScatterSeries(markers, fmtAxis)
+    ...buildGsScatterSeries(collectDecisionGsMarkers(rows), fmtAxis)
   ]
 }
 
 const GS_Y_PAD = 0.012
 const GS_SYMBOL_SIZE = 22
+const GS_WATCH_SYMBOL_SIZE = 14
 const GS_G_COLOR = '#fde047'
 const GS_S_COLOR = '#fb923c'
 const GS_LABEL_COLOR = '#fffbeb'
 const GS_LABEL_BORDER = '#111827'
+
+function isGsMarkerKind (kind) {
+  return kind === 'g' || kind === 's' || kind === 's_watch'
+}
+
+function isSellSideGsKind (kind) {
+  return kind === 's' || kind === 's_watch'
+}
 
 function gsRawPrice (kind, marker) {
   const raw = Number(kind === 'g' ? (marker.low ?? marker.price) : (marker.high ?? marker.price))
@@ -565,7 +593,7 @@ function gsRawPrice (kind, marker) {
 }
 
 function gsMarkerY (kind, price) {
-  return kind === 'g' ? price * (1 - GS_Y_PAD) : price * (1 + GS_Y_PAD)
+  return isSellSideGsKind(kind) ? price * (1 + GS_Y_PAD) : price * (1 - GS_Y_PAD)
 }
 
 function gsScatterDatum (kind, marker, date) {
@@ -574,7 +602,7 @@ function gsScatterDatum (kind, marker, date) {
   return { value: [date, gsMarkerY(kind, price)], price }
 }
 
-function gsScatterSeriesSpec ({ name, color, data, rotate = 0, labelPosition }) {
+function gsScatterSeriesSpec ({ name, color, data, rotate = 0, labelPosition, weak = false }) {
   return {
     name,
     type: 'scatter',
@@ -584,27 +612,34 @@ function gsScatterSeriesSpec ({ name, color, data, rotate = 0, labelPosition }) 
     data,
     symbol: 'triangle',
     symbolRotate: rotate,
-    symbolSize: GS_SYMBOL_SIZE,
+    symbolSize: weak ? GS_WATCH_SYMBOL_SIZE : GS_SYMBOL_SIZE,
     legendHoverLink: false,
     clip: false,
-    z: 20,
-    itemStyle: {
-      color,
-      borderColor: GS_LABEL_BORDER,
-      borderWidth: 1.5,
-      shadowBlur: 8,
-      shadowColor: 'rgba(0, 0, 0, 0.45)'
-    },
+    z: weak ? 19 : 20,
+    itemStyle: weak
+      ? {
+          color: 'rgba(251, 146, 60, 0.12)',
+          borderColor: color,
+          borderWidth: 2,
+          shadowBlur: 0
+        }
+      : {
+          color,
+          borderColor: GS_LABEL_BORDER,
+          borderWidth: 1.5,
+          shadowBlur: 8,
+          shadowColor: 'rgba(0, 0, 0, 0.45)'
+        },
     label: {
       show: true,
       formatter: name,
       position: labelPosition,
-      color: GS_LABEL_COLOR,
-      fontWeight: 800,
-      fontSize: 14,
-      distance: 8,
+      color: weak ? GS_S_COLOR : GS_LABEL_COLOR,
+      fontWeight: weak ? 700 : 800,
+      fontSize: weak ? 11 : 14,
+      distance: weak ? 6 : 8,
       textBorderColor: GS_LABEL_BORDER,
-      textBorderWidth: 2
+      textBorderWidth: weak ? 1 : 2
     },
     emphasis: {
       scale: 1.15,
@@ -620,6 +655,7 @@ function gsScatterSeriesSpec ({ name, color, data, rotate = 0, labelPosition }) 
 function buildGsScatterSeries (markers, fmtAxis) {
   const gData = []
   const sData = []
+  const watchData = []
   if (Array.isArray(markers)) {
     markers.forEach((marker) => {
       const date = fmtAxis(marker.trade_date)
@@ -630,6 +666,9 @@ function buildGsScatterSeries (markers, fmtAxis) {
       } else if (marker.kind === 's') {
         const point = gsScatterDatum('s', marker, date)
         if (point) sData.push(point)
+      } else if (marker.kind === 's_watch') {
+        const point = gsScatterDatum('s_watch', marker, date)
+        if (point) watchData.push(point)
       }
     })
   }
@@ -639,6 +678,16 @@ function buildGsScatterSeries (markers, fmtAxis) {
   }
   if (sData.length) {
     series.push(gsScatterSeriesSpec({ name: 'S', color: GS_S_COLOR, data: sData, rotate: 180, labelPosition: 'top' }))
+  }
+  if (watchData.length) {
+    series.push(gsScatterSeriesSpec({
+      name: 'S?',
+      color: GS_S_COLOR,
+      data: watchData,
+      rotate: 180,
+      labelPosition: 'top',
+      weak: true
+    }))
   }
   return series
 }
@@ -689,7 +738,7 @@ function applyFocusZoom (option, times, { focusDate, fmtAxis, barsBefore, barsAf
 }
 
 function markerKind (marker) {
-  if (marker?.kind === 'buy' || marker?.kind === 'sell' || marker?.kind === 'g' || marker?.kind === 's') {
+  if (isGsMarkerKind(marker?.kind) || marker?.kind === 'buy' || marker?.kind === 'sell') {
     return marker.kind
   }
   if (marker?.direction === 'up' || marker?.direction === 'down') return 'nineturn'
@@ -703,7 +752,7 @@ function buildMarkerPoints (markers, fmtAxis) {
       const kind = markerKind(marker)
       const date = fmtAxis(marker.trade_date)
       if (!date) return null
-      if (kind === 'g' || kind === 's') return null
+      if (kind === 'g' || kind === 's' || kind === 's_watch') return null
       if (kind === 'buy' || kind === 'sell') {
         const isBuy = kind === 'buy'
         const priced = Number(marker.price)
@@ -790,7 +839,7 @@ function buildShenwanTooltip (data, fmt) {
           const h = toNumOrNull(d.high)
           return `开 ${formatNum2(o)}　收 ${formatNum2(c)}<br/>低 ${formatNum2(l)}　高 ${formatNum2(h)}`
         }
-        if (p.seriesName === 'G' || p.seriesName === 'S') {
+        if (p.seriesName === 'G' || p.seriesName === 'S' || p.seriesName === 'S?') {
           const price = gsHoverPrice(p)
           return price == null ? '' : `${p.seriesName} ${formatNum2(price)}`
         }

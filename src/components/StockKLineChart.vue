@@ -8,7 +8,7 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { waitForChartDom } from '../utils/chartDom'
-import { buildShenwanKlineOption } from '../utils/echarts/shenwanKlineOption'
+import { buildShenwanKlineOption, collectDecisionGsMarkers } from '../utils/echarts/shenwanKlineOption'
 
 const props = defineProps({
   records: {
@@ -96,15 +96,7 @@ async function renderChart() {
 
   const markers = Array.isArray(props.markers) && props.markers.length
     ? props.markers
-    : rows
-      .filter((row) => row.gs_signal === 'g' || row.gs_signal === 's')
-      .map((row) => ({
-        kind: row.gs_signal,
-        trade_date: row.trade_date,
-        price: row.gs_signal === 'g' ? row.low : row.high,
-        low: row.low,
-        high: row.high,
-      }))
+    : collectDecisionGsMarkers(rows)
 
   instance.setOption(
     buildShenwanKlineOption(rows, {
