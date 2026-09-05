@@ -63,6 +63,7 @@
           v-else
           :records="klineRows"
           :tf="'1d'"
+          tone="on-light"
           :chart-meta="{ showDecisionGs: false, showMa: true }"
         />
         <p v-if="!activeCode && !loadingVarieties" class="muted empty-hint">请在左侧选择期货品种。</p>

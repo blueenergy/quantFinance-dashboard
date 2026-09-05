@@ -4,9 +4,48 @@
  *
  * @param {Array<Record<string, *>>} data  sw_daily 行（时间升序）
  * @param {object} formatters  来自视图层的展示函数
- * @param {object} [_meta]  预留，如 { tf: '1d' } 供日后同步标题
+ * @param {object} [_meta]  预留，如 { tf: '1d', tone: 'on-light' } 供日后同步标题
  */
+
+export const KLINE_PALETTE = {
+  'on-dark': {
+    text: '#ccc',
+    axis: '#666',
+    name: '#888',
+    split: '#333',
+    subSplit: '#2a2a2a',
+    sliderBorder: '#444',
+    background: 'transparent',
+    tooltipBg: '#1e1e2e',
+    tooltipBorder: '#444',
+    tooltipText: '#eee',
+  },
+  'on-light': {
+    text: '#475569',
+    axis: '#94a3b8',
+    name: '#64748b',
+    split: '#e2e8f0',
+    subSplit: '#e2e8f0',
+    sliderBorder: '#cbd5e1',
+    background: '#ffffff',
+    tooltipBg: '#ffffff',
+    tooltipBorder: '#e2e8f0',
+    tooltipText: '#1e293b',
+  },
+}
+
+let activePalette = KLINE_PALETTE['on-dark']
+
+export function resolveKlineTone (tone) {
+  return tone === 'on-light' ? KLINE_PALETTE['on-light'] : KLINE_PALETTE['on-dark']
+}
+
+function palette () {
+  return activePalette
+}
+
 export function buildShenwanKlineOption (data, formatters, _meta = {}) {
+  activePalette = resolveKlineTone(_meta?.tone)
   const {
     fmtAxis,
     formatNum2,
@@ -66,8 +105,8 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
   const xAmt = hasSub && subBoth ? 2 : (hasSub && hasAmt ? 1 : 0)
 
   const option = {
-    backgroundColor: 'transparent',
-    textStyle: { color: '#ccc' },
+    backgroundColor: palette().background,
+    textStyle: { color: palette().text },
     axisPointer: { link: [{ xAxisIndex: 'all' }], type: 'cross' },
     grid: gxy.grid,
     xAxis: gxy.xAxis,
@@ -75,9 +114,9 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
     dataZoom: hasSub
       ? [
           { type: 'inside', xAxisIndex: gxy.xZoomIdx },
-          { type: 'slider', xAxisIndex: gxy.xZoomIdx, height: 20, bottom: 4, borderColor: '#444' }
+          { type: 'slider', xAxisIndex: gxy.xZoomIdx, height: 20, bottom: 4, borderColor: palette().sliderBorder, textStyle: { color: palette().name } }
         ]
-      : [{ type: 'inside' }, { type: 'slider', height: 18, bottom: 6 }],
+      : [{ type: 'inside' }, { type: 'slider', height: 18, bottom: 6, borderColor: palette().sliderBorder, textStyle: { color: palette().name } }],
     series: buildSeries({
       ohlc,
       maFast,
@@ -153,7 +192,8 @@ function priceValueAxis (extra = {}) {
   return withPriceAxisFormat({
     type: 'value',
     scale: true,
-    splitLine: { lineStyle: { color: '#333' } },
+    axisLabel: { color: palette().name },
+    splitLine: { lineStyle: { color: palette().split } },
     ...extra
   })
 }
@@ -163,7 +203,7 @@ function pctValueAxis (extra = {}) {
     type: 'value',
     scale: true,
     name: '涨跌%',
-    nameTextStyle: { color: '#888' },
+    nameTextStyle: { color: palette().name },
     position: 'right',
     splitLine: { show: false },
     ...extra,
@@ -251,7 +291,8 @@ function xAxis0 (times) {
     data: times,
     scale: true,
     gridIndex: 0,
-    axisLine: { lineStyle: { color: '#666' } }
+    axisLine: { lineStyle: { color: palette().axis } },
+    axisLabel: { color: palette().name }
   }
 }
 
@@ -274,7 +315,8 @@ function xAxisSubBottom (times, gi) {
     data: times,
     gridIndex: gi,
     scale: true,
-    axisLine: { lineStyle: { color: '#666' } }
+    axisLine: { lineStyle: { color: palette().axis } },
+    axisLabel: { color: palette().name }
   }
 }
 
@@ -285,7 +327,12 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
   if (!hasSub) {
     return {
       grid: [{ left: 48, right: hasPct ? 56 : 20, top: 36, bottom: 56 }],
-      xAxis: { type: 'category', data: times, axisLine: { lineStyle: { color: '#666' } } },
+      xAxis: {
+        type: 'category',
+        data: times,
+        axisLine: { lineStyle: { color: palette().axis } },
+        axisLabel: { color: palette().name },
+      },
       yAxis: hasPct ? [priceValueAxis(), pctValueAxis()] : priceValueAxis(),
       xZoomIdx: [0]
     }
@@ -308,24 +355,24 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
           name: '量(手)',
           nameLocation: 'end',
           nameGap: 0,
-          nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
+          nameTextStyle: { color: palette().name, fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
           axisLabel: { formatter: compactVolumeLabel },
           axisPointer: { label: { formatter: (p) => compactVolumeLabel(p?.value) } },
           scale: true,
           gridIndex: 1,
-          splitLine: { show: true, lineStyle: { color: '#2a2a2a' } }
+          splitLine: { show: true, lineStyle: { color: palette().subSplit } }
         },
         {
           type: 'value',
           name: '额(亿)',
           nameLocation: 'end',
           nameGap: 0,
-          nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
+          nameTextStyle: { color: palette().name, fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
           axisLabel: { formatter: compactNumberLabel },
           axisPointer: { label: { formatter: (p) => compactNumberLabel(p?.value) } },
           scale: true,
           gridIndex: 2,
-          splitLine: { show: true, lineStyle: { color: '#2a2a2a' } }
+          splitLine: { show: true, lineStyle: { color: palette().subSplit } }
         }
       ],
       xZoomIdx: [0, 1, 2]
@@ -347,12 +394,12 @@ function buildGridsXAxesYAxes ({ times, hasPct, hasVol, hasAmt, hasSub, subBoth 
         name: hasVol ? '量(手)' : '额(亿)',
         nameLocation: 'end',
         nameGap: 0,
-        nameTextStyle: { color: '#888', fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
+        nameTextStyle: { color: palette().name, fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
         axisLabel: { formatter: hasVol ? compactVolumeLabel : compactNumberLabel },
         axisPointer: { label: { formatter: (p) => (hasVol ? compactVolumeLabel : compactNumberLabel)(p?.value) } },
         scale: true,
         gridIndex: 1,
-        splitLine: { show: true, lineStyle: { color: '#2a2a2a' } }
+        splitLine: { show: true, lineStyle: { color: palette().subSplit } }
       }
     ],
     xZoomIdx: [0, 1]
@@ -819,6 +866,9 @@ function buildShenwanTooltip (data, fmt) {
     trigger: 'axis',
     axisPointer: { type: 'cross' },
     confine: true,
+    backgroundColor: palette().tooltipBg,
+    borderColor: palette().tooltipBorder,
+    textStyle: { color: palette().tooltipText },
     formatter (params) {
       if (!params || !params.length) return ''
       const {

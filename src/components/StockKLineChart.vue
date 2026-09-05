@@ -1,12 +1,12 @@
 <template>
-  <div class="stock-kline-chart">
+  <div class="stock-kline-chart" :class="toneClass">
     <div ref="chartRef" class="stock-kline-chart__canvas"></div>
     <div v-if="!records.length" class="stock-kline-chart__empty">暂无 K 线数据</div>
   </div>
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { waitForChartDom } from '../utils/chartDom'
 import { buildShenwanKlineOption, collectDecisionGsMarkers } from '../utils/echarts/shenwanKlineOption'
 
@@ -23,16 +23,24 @@ const props = defineProps({
     type: String,
     default: '1d',
   },
+  tone: {
+    type: String,
+    default: 'on-dark',
+    validator: (value) => ['on-dark', 'on-light'].includes(value),
+  },
   chartMeta: {
     type: Object,
     default: () => ({}),
   },
 })
 
+const toneClass = computed(() => `stock-kline-chart--${props.tone}`)
+
 const chartRef = ref(null)
 let echarts = null
 let chart = null
 let resizeObserver = null
+let chartTone = null
 
 onMounted(async () => {
   await nextTick()
@@ -48,14 +56,11 @@ onBeforeUnmount(() => {
     resizeObserver.disconnect()
     resizeObserver = null
   }
-  if (chart) {
-    chart.dispose()
-    chart = null
-  }
+  disposeChart()
 })
 
 watch(
-  () => [props.records, props.markers, props.tf, props.chartMeta],
+  () => [props.records, props.markers, props.tf, props.chartMeta, props.tone],
   () => {
     nextTick(() => {
       void renderChart()
@@ -64,16 +69,28 @@ watch(
   { deep: true },
 )
 
+function disposeChart() {
+  if (chart) {
+    chart.dispose()
+    chart = null
+    chartTone = null
+  }
+}
+
 async function ensureChart() {
   if (!chartRef.value) return null
   if (!echarts) {
     const mod = await import('echarts')
     echarts = mod.default || mod
   }
+  if (chart && chartTone !== props.tone) {
+    disposeChart()
+  }
   if (!chart) {
     const ready = await waitForChartDom(chartRef.value)
     if (!ready || !chartRef.value) return null
-    chart = echarts.init(chartRef.value, 'dark')
+    chartTone = props.tone
+    chart = echarts.init(chartRef.value, props.tone === 'on-light' ? undefined : 'dark')
   }
   return chart
 }
@@ -107,7 +124,7 @@ async function renderChart() {
       formatAmount: formatAmountByUnit,
       formatMvWan,
       markers,
-    }, { tf: props.tf, ...(props.chartMeta || {}) }),
+    }, { tf: props.tf, tone: props.tone, ...(props.chartMeta || {}) }),
     true,
   )
   instance.resize()
@@ -155,12 +172,20 @@ function formatMvWan(value) {
 
 <style scoped>
 .stock-kline-chart {
-  background: rgba(2, 6, 23, .38);
-  border: 1px solid rgba(148, 163, 184, .14);
   border-radius: 14px;
   min-height: 380px;
   overflow: hidden;
   position: relative;
+}
+
+.stock-kline-chart--on-dark {
+  background: rgba(2, 6, 23, .38);
+  border: 1px solid rgba(148, 163, 184, .14);
+}
+
+.stock-kline-chart--on-light {
+  background: #fff;
+  border: 1px solid var(--border-subtle, #e2e8f0);
 }
 
 .stock-kline-chart__canvas {
@@ -170,10 +195,17 @@ function formatMvWan(value) {
 
 .stock-kline-chart__empty {
   align-items: center;
-  color: #94a3b8;
   display: flex;
   inset: 0;
   justify-content: center;
   position: absolute;
+}
+
+.stock-kline-chart--on-dark .stock-kline-chart__empty {
+  color: #94a3b8;
+}
+
+.stock-kline-chart--on-light .stock-kline-chart__empty {
+  color: var(--text-muted, #64748b);
 }
 </style>

@@ -248,4 +248,13 @@ describe('kline tooltip price digits', () => {
     expect(yAxis.axisPointer.label.formatter({ value: 10.51 * 0.988 })).toBe('10.38')
     expect(yAxis.axisLabel.formatter(10.51)).toBe('10.51')
   })
+
+  it('uses light palette when tone is on-light', () => {
+    const option = buildShenwanKlineOption(bars, formatters(), { tone: 'on-light' })
+    expect(option.backgroundColor).toBe('#ffffff')
+    expect(option.textStyle.color).toBe('#475569')
+    expect(option.tooltip.backgroundColor).toBe('#ffffff')
+    const yAxis = Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis
+    expect(yAxis.splitLine.lineStyle.color).toBe('#e2e8f0')
+  })
 })
