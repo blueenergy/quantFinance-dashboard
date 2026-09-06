@@ -233,3 +233,15 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/blueenergy/quant-infrastructure/dispatches \
             -d "{\"event_type\":\"deploy\",\"client_payload\":{\"services\":\"quant-web\",\"tag\":\"${TAG}\"}}"
+
+  notify-dingtalk:
+    name: Notify DingTalk on failure
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    needs: [test-build, e2e-smoke, docker-build, docker-manifest, release]
+    uses: blueenergy/quant-infrastructure/.github/workflows/notify-dingtalk.yml@main
+    secrets:
+      DATA_CONTRACT_WEBHOOK_URL: ${{ secrets.DATA_CONTRACT_WEBHOOK_URL }}
+      DATA_CONTRACT_WEBHOOK_SECRET: ${{ secrets.DATA_CONTRACT_WEBHOOK_SECRET }}
+    with:
+      workflow: ${{ github.workflow }}
+      needs_json: ${{ toJSON(needs) }}
