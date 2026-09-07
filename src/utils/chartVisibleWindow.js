@@ -6,10 +6,20 @@ export const DEFAULT_VISIBLE_MONTHS = 6
 export function normalizeChartDate(d) {
   if (!d) return ''
   if (typeof d === 'string' && d.includes('T')) return d.split('T')[0]
-  if (typeof d === 'string' && d.length === 8 && !d.includes('-')) {
-    return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`
+  const digits = String(d).replace(/\D/g, '')
+  if (digits.length >= 8) {
+    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
   }
   return String(d)
+}
+
+/** 30m/60m axis: `MM-DD HH:MM` from `YYYYMMDDHHMM`. */
+export function formatIntradayAxis(d) {
+  const digits = String(d || '').replace(/\D/g, '')
+  if (digits.length >= 12) {
+    return `${digits.slice(4, 6)}-${digits.slice(6, 8)} ${digits.slice(8, 10)}:${digits.slice(10, 12)}`
+  }
+  return normalizeChartDate(d)
 }
 
 /**

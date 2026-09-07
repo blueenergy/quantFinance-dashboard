@@ -13,9 +13,9 @@
       <div class="stock-info">
         <span class="symbol-badge">{{ props.symbol }}</span>
         <span class="stock-name">{{ props.stockName || '' }}</span>
-        <span class="data-count">{{ kType === 'minute' ? minuteBars.length + ' 条分时' : records?.length + ' 天数据' }}</span>
-        <span v-if="kType !== 'minute' && decisionGsEnabled && decisionGsSummary" class="gs-summary">{{ decisionGsSummary }}</span>
-        <span v-if="kType !== 'minute' && adjDegradedHint" class="gs-summary">{{ adjDegradedHint }}</span>
+        <span class="data-count">{{ dataCountLabel }}</span>
+        <span v-if="showGsToolbar && decisionGsEnabled && decisionGsSummary" class="gs-summary">{{ decisionGsSummary }}</span>
+        <span v-if="showAdjustToolbar && adjDegradedHint" class="gs-summary">{{ adjDegradedHint }}</span>
       </div>
       
       <div class="header-actions">
@@ -50,12 +50,12 @@
         </div>
       </div>
 
-      <div class="toolbar-group" v-if="kType !== 'minute'">
+      <div class="toolbar-group" v-if="showDateRange">
         <input type="date" v-model="startDate" @change="drawChart" class="theme-input" />
         <span class="sep">至</span>
         <input type="date" v-model="endDate" @change="drawChart" class="theme-input" />
         <button type="button" class="interval-btn window-btn" title="显示当前缓存全部 K 线" @click="showFullCache">全部</button>
-        <button type="button" class="interval-btn window-btn" title="向前扩展可见区间或加载更早历史" @click="shiftEarlier">再往前</button>
+        <button v-if="showDailyPaging" type="button" class="interval-btn window-btn" title="向前扩展可见区间或加载更早历史" @click="shiftEarlier">再往前</button>
       </div>
 
       <div class="toolbar-group" v-else>
@@ -63,7 +63,7 @@
         <button @click="fetchMinuteData" :disabled="loading" class="btn-refresh">🔄</button>
       </div>
 
-      <div class="toolbar-group" v-if="kType !== 'minute'">
+      <div class="toolbar-group" v-if="showAdjustToolbar">
         <div class="interval-selector" title="K线复权口径">
           <button
             v-for="opt in adjustOptions"
@@ -77,7 +77,7 @@
         </div>
       </div>
 
-      <div class="toolbar-group" v-if="kType !== 'minute'">
+      <div class="toolbar-group" v-if="showGsToolbar">
         <button
           type="button"
           :class="['interval-btn', { active: decisionGsEnabled }]"
@@ -117,6 +117,7 @@ import {
   fullCacheVisibleRange,
   latestTradeDate,
   nextVisibleRange,
+  formatIntradayAxis,
   normalizeChartDate,
   shiftVisibleEarlier,
 } from '../utils/chartVisibleWindow.js'
@@ -164,19 +165,53 @@ let resizeObserver = null
 
 const intervalOptions = [
   { label: '分时', value: 'minute' },
+  { label: '30分', value: '30m' },
+  { label: '60分', value: '60m' },
   { label: '日线', value: 'day' },
   { label: '周线', value: 'week' },
   { label: '月线', value: 'month' }
 ]
+const isOneDayMinute = computed(() => kType.value === 'minute')
+const isIntradayGs = computed(() => kType.value === '30m' || kType.value === '60m')
+const showDateRange = computed(() => !isOneDayMinute.value)
+const showAdjustToolbar = computed(() => !isOneDayMinute.value && !isIntradayGs.value)
+const showGsToolbar = computed(() => !isOneDayMinute.value)
+const showDailyPaging = computed(() => showAdjustToolbar.value)
+const kTypeLabel = computed(() => {
+  if (kType.value === '30m') return '30分钟'
+  if (kType.value === '60m') return '60分钟'
+  if (kType.value === 'minute') return '分时'
+  return '天'
+})
+const dataCountLabel = computed(() => {
+  if (isOneDayMinute.value) return `${minuteBars.value.length} 条分时`
+  if (isIntradayGs.value) return `${minuteBars.value.length} 根${kTypeLabel.value}`
+  return `${props.records?.length || 0} 天数据`
+})
+const intradayCache = new Map()
 const adjustOptions = [
   { label: '前复权', value: 'qfq' },
   { label: '不复权', value: 'none' },
   { label: '后复权', value: 'hfq' },
 ]
 
+function activeKlineRows() {
+  if (isIntradayGs.value) return Array.isArray(minuteBars.value) ? minuteBars.value : []
+  return Array.isArray(props.records) ? props.records : []
+}
+
+function barOrderKey(row) {
+  return String(row?.trade_date || '')
+}
+
+function formatGsWhen(row) {
+  if (!row) return ''
+  return isIntradayGs.value ? formatIntradayAxis(row.trade_date) : normalizeDate(row.trade_date)
+}
+
 const decisionGsSummary = computed(() => {
-  if (kType.value === 'minute' || !decisionGsEnabled.value) return ''
-  const rows = Array.isArray(props.records) ? props.records : []
+  if (isOneDayMinute.value || !decisionGsEnabled.value) return ''
+  const rows = activeKlineRows()
   const visible = rows.filter((r) => {
     const day = normalizeDate(r.trade_date)
     if (startDate.value && day < normalizeDate(startDate.value)) return false
@@ -186,10 +221,10 @@ const decisionGsSummary = computed(() => {
   const signals = visible
     .filter((r) => r.gs_signal === 'g' || r.gs_signal === 's')
     .slice()
-    .sort((a, b) => normalizeDate(a.trade_date).localeCompare(normalizeDate(b.trade_date)))
+    .sort((a, b) => barOrderKey(a).localeCompare(barOrderKey(b)))
   const watchMarkers = collectDecisionGsMarkers(visible).filter((item) => item.kind === 's_watch')
   const latestClosed = [...visible]
-    .sort((a, b) => normalizeDate(a.trade_date).localeCompare(normalizeDate(b.trade_date)))
+    .sort((a, b) => barOrderKey(a).localeCompare(barOrderKey(b)))
     .reverse()
     .find((r) => !r.is_partial)
   const watchActive = latestClosed?.gs_watch === 's'
@@ -198,7 +233,7 @@ const decisionGsSummary = computed(() => {
     const s = signals.filter((r) => r.gs_signal === 's').length
     const last = signals[signals.length - 1]
     const parts = [`G×${g} · S×${s}`]
-    if (last) parts.push(`最近 ${String(last.gs_signal).toUpperCase()} ${normalizeDate(last.trade_date)}`)
+    if (last) parts.push(`最近 ${String(last.gs_signal).toUpperCase()} ${formatGsWhen(last)}`)
     if (watchMarkers.length) parts.push(`S?×${watchMarkers.length}${watchActive ? ' 进行中' : ''}`)
     return `${parts.join(' · ')}　金三角=G/S　空心三角=S?　黄=决策线　红=牛线　绿=熊线`
   }
@@ -212,7 +247,7 @@ const decisionGsSummary = computed(() => {
 })
 
 const adjDegradedHint = computed(() => {
-  if (kType.value === 'minute') return ''
+  if (isOneDayMinute.value || isIntradayGs.value) return ''
   const rows = Array.isArray(props.records) ? props.records : []
   if (rows.some((row) => row?.adj_degraded)) {
     return '复权因子不足，当前按未复权显示'
@@ -254,7 +289,7 @@ function applyVisibleWindow(records) {
 }
 
 function showFullCache() {
-  const range = fullCacheVisibleRange(props.records)
+  const range = fullCacheVisibleRange(activeKlineRows())
   startDate.value = range.start
   endDate.value = range.end
   drawChart()
@@ -313,6 +348,39 @@ async function fetchMinuteData() {
   }
 }
 
+function intradayCacheKey(symbol, tf) {
+  return `${symbol || ''}|${tf || ''}`
+}
+
+async function fetchIntradayGsBars() {
+  if (!props.symbol || !isIntradayGs.value) return
+  const key = intradayCacheKey(props.symbol, kType.value)
+  if (intradayCache.has(key)) {
+    minuteBars.value = intradayCache.get(key)
+    applyVisibleWindow(minuteBars.value)
+    drawChart()
+    return
+  }
+  loading.value = true
+  error.value = ''
+  try {
+    const res = await request({
+      method: 'get',
+      url: '/minute-bars/',
+      params: { symbol: props.symbol, tf: kType.value, limit: 800 },
+    })
+    const rows = Array.isArray(res?.data) ? res.data : []
+    minuteBars.value = rows
+    intradayCache.set(key, rows)
+    applyVisibleWindow(rows)
+    drawChart()
+  } catch (e) {
+    error.value = '加载失败'
+  } finally {
+    loading.value = false
+  }
+}
+
 // --- Chart Rendering ---
 async function initECharts() {
   if (!echarts) {
@@ -354,7 +422,8 @@ function renderMinute() {
 }
 
 function renderDaily() {
-  if (!props.records.length) { chartInstance.clear(); return; }
+  const source = activeKlineRows()
+  if (!source.length) { chartInstance.clear(); return; }
   
   // 1. Get current dataZoom state if it exists
   let currentZoomStart = null;
@@ -370,14 +439,15 @@ function renderDaily() {
   }
   
   // 2. Prepare and filter data
-  let data = [...props.records].sort((a,b) => new Date(normalizeDate(a.trade_date)) - new Date(normalizeDate(b.trade_date)))
+  let data = [...source].sort((a, b) => barOrderKey(a).localeCompare(barOrderKey(b)))
   if (startDate.value) data = data.filter(r => normalizeDate(r.trade_date) >= normalizeDate(startDate.value))
   if (endDate.value) data = data.filter(r => normalizeDate(r.trade_date) <= normalizeDate(endDate.value))
   
-  const times = data.map(r => normalizeDate(r.trade_date))
+  const axisFmt = isIntradayGs.value ? formatIntradayAxis : normalizeDate
+  const times = data.map(r => axisFmt(r.trade_date))
   const closes = data.map(r => Number.isFinite(Number(r.close)) ? Number(r.close) : null)
   const showGs = decisionGsEnabled.value && data.some((r) => r.mj20 != null)
-  const gsSeries = showGs ? buildDecisionGsChartSeries(data, normalizeDate) : []
+  const gsSeries = showGs ? buildDecisionGsChartSeries(data, axisFmt) : []
   const option = getBaseOption(times, {
     legendData: showGs ? ['决策线', '牛线', '熊线'] : ['MA55', 'MA233'],
   })
@@ -569,7 +639,7 @@ function getBaseOption(xData, { legendData } = {}) {
 // --- Data Zoom / Infinite Scroll ---
 let isPaging = false
 function handleDataZoom(params) {
-  if (isPaging || kType.value === 'minute') return
+  if (isPaging || isOneDayMinute.value || isIntradayGs.value) return
   
   // Get the start percentage of the zoom scale
   let start = 100
@@ -632,7 +702,19 @@ onBeforeUnmount(() => {
   chartInstance?.dispose()
 })
 
-watch(() => kType.value, (t) => t === 'minute' ? fetchMinuteData() : drawChart())
+watch(() => kType.value, (t) => {
+  if (t === 'minute') {
+    fetchMinuteData()
+    return
+  }
+  if (t === '30m' || t === '60m') {
+    fetchIntradayGsBars()
+    return
+  }
+  startDate.value = ''
+  if (props.records?.length) applyVisibleWindow(props.records)
+  drawChart()
+})
 watch(() => decisionGsEnabled.value, () => drawChart())
 
 watch(() => props.symbol, (sym, prev) => {
@@ -644,11 +726,13 @@ watch(() => props.symbol, (sym, prev) => {
   if (kType.value === 'minute') {
     selectedMinuteDate.value = ''
     fetchMinuteData()
+  } else if (isIntradayGs.value) {
+    fetchIntradayGsBars()
   }
 })
 
 watch(() => props.records, (newRecs) => {
-  if (kType.value === 'minute') return
+  if (isOneDayMinute.value || isIntradayGs.value) return
   if (newRecs?.length) {
     applyVisibleWindow(newRecs)
   }

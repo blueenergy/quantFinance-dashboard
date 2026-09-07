@@ -5,6 +5,7 @@ import {
   formatLocalYmd,
   fullCacheVisibleRange,
   nextVisibleRange,
+  formatIntradayAxis,
   normalizeChartDate,
   parseLocalYmd,
   shiftVisibleEarlier,
@@ -27,6 +28,12 @@ describe('chartVisibleWindow', () => {
   it('normalizes compact trade_date to YYYY-MM-DD', () => {
     expect(normalizeChartDate('20250315')).toBe('2025-03-15')
     expect(normalizeChartDate('2025-03-15T08:00:00')).toBe('2025-03-15')
+    expect(normalizeChartDate('202503151030')).toBe('2025-03-15')
+  })
+
+  it('formats 30m/60m axis labels with day and time', () => {
+    expect(formatIntradayAxis('202503151030')).toBe('03-15 10:30')
+    expect(formatIntradayAxis('20250315')).toBe('2025-03-15')
   })
 
   it('defaultVisibleRange uses latest minus 6 months, not earliest bar', () => {
