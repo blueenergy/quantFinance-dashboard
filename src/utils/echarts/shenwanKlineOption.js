@@ -145,6 +145,22 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
     tooltip: buildShenwanTooltip(data, { fmtAxis, formatNum2, toNumOrNull, formatVolShow, formatAmount, formatMvWan })
   }
 
+  if (showMa) {
+    option.legend = {
+      data: [
+        { name: `MA${maPeriods.fast}`, itemStyle: { color: '#facc15' } },
+        { name: `MA${maPeriods.slow}`, itemStyle: { color: '#a855f7' } },
+      ],
+      top: 0,
+      left: 8,
+      itemWidth: 16,
+      itemHeight: 3,
+      itemGap: 14,
+      icon: 'roundRect',
+      textStyle: { color: palette().text, fontSize: 11 },
+    }
+  }
+
   applyFocusZoom(option, times, {
     focusDate: _meta?.focusDate,
     fmtAxis,
@@ -522,7 +538,7 @@ function buildSeries (ctx) {
   return s
 }
 
-function movingAveragePeriods (tf) {
+export function movingAveragePeriods (tf) {
   const normalized = String(tf || '1d').toLowerCase()
   if (normalized === '1w' || normalized === 'w') return { fast: 11, slow: 46 }
   if (normalized === '1m' || normalized === 'm') return { fast: 12, slow: 36 }

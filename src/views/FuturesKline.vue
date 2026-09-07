@@ -47,6 +47,12 @@
             <code v-if="activeCode">{{ activeCode }}</code>
             <span v-if="activeName" class="active-name">{{ activeName }}</span>
             <span v-if="latestContract" class="muted">主力合约 {{ latestContract }}</span>
+            <span class="ma-legend" title="收盘价简单移动平均">
+              <span class="ma-swatch ma-swatch--fast" aria-hidden="true"></span>
+              黄线 MA{{ maPeriods.fast }}
+              <span class="ma-swatch ma-swatch--slow" aria-hidden="true"></span>
+              紫线 MA{{ maPeriods.slow }}
+            </span>
           </div>
           <div class="date-row">
             <label>开始 <input v-model="startDate" type="date" :max="today" /></label>
@@ -62,7 +68,7 @@
         <StockKLineChart
           v-else
           :records="klineRows"
-          :tf="'1d'"
+          :tf="klineTf"
           tone="on-light"
           :chart-meta="{ showDecisionGs: false, showMa: true }"
         />
@@ -76,6 +82,10 @@
 import { computed, onMounted, ref } from 'vue'
 import request from '../utils/request'
 import StockKLineChart from '../components/StockKLineChart.vue'
+import { movingAveragePeriods } from '../utils/echarts/shenwanKlineOption'
+
+const klineTf = '1d'
+const maPeriods = movingAveragePeriods(klineTf)
 
 const today = new Date().toISOString().slice(0, 10)
 const startDate = ref((() => {
@@ -252,6 +262,30 @@ onMounted(() => {
 
 .active-name {
   font-weight: 600;
+}
+
+.ma-legend {
+  align-items: center;
+  color: var(--text-muted, #64748b);
+  display: inline-flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.ma-swatch {
+  border-radius: 999px;
+  display: inline-block;
+  height: 3px;
+  width: 16px;
+}
+
+.ma-swatch--fast {
+  background: #facc15;
+}
+
+.ma-swatch--slow {
+  background: #a855f7;
 }
 
 .date-row {

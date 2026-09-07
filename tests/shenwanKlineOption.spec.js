@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDecisionGsChartSeries, buildShenwanKlineOption, collectDecisionGsMarkers, formatKlinePriceLabel, padKlinePriceAxis } from '../src/utils/echarts/shenwanKlineOption.js'
+import { buildDecisionGsChartSeries, buildShenwanKlineOption, collectDecisionGsMarkers, formatKlinePriceLabel, movingAveragePeriods, padKlinePriceAxis } from '../src/utils/echarts/shenwanKlineOption.js'
 
 function fmtAxis(value) {
   const s = String(value || '')
@@ -256,5 +256,18 @@ describe('kline tooltip price digits', () => {
     expect(option.tooltip.backgroundColor).toBe('#ffffff')
     const yAxis = Array.isArray(option.yAxis) ? option.yAxis[0] : option.yAxis
     expect(yAxis.splitLine.lineStyle.color).toBe('#e2e8f0')
+  })
+
+  it('labels daily MA legend as yellow MA55 and purple MA233', () => {
+    const option = buildShenwanKlineOption(bars, formatters(), {
+      showDecisionGs: false,
+      showMa: true,
+      tf: '1d',
+    })
+    expect(movingAveragePeriods('1d')).toEqual({ fast: 55, slow: 233 })
+    expect(movingAveragePeriods('1w')).toEqual({ fast: 11, slow: 46 })
+    expect(option.legend.data.map((item) => item.name)).toEqual(['MA55', 'MA233'])
+    expect(option.series.find((s) => s.name === 'MA55').lineStyle.color).toBe('#facc15')
+    expect(option.series.find((s) => s.name === 'MA233').lineStyle.color).toBe('#a855f7')
   })
 })
