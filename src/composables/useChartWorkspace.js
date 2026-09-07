@@ -1,5 +1,6 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import request from '../utils/request'
+import { prefetchEcharts } from '../utils/echarts/loadEcharts.js'
 
 export const PRICE_ADJUST_STORAGE_KEY = 'chart-price-adjust'
 export const VALID_PRICE_ADJUST = ['qfq', 'none', 'hfq']
@@ -429,6 +430,8 @@ export function useChartWorkspace({ activeTab, isAuthenticated, switchTab }) {
     }
 
     if (!stockSymbol) return
+
+    prefetchEcharts()
 
     // Opening from the watchlist tab should cycle the current 自选股 list.
     // Deep links / ranking still pass a single symbol so they stay isolated.

@@ -2,9 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
 const requestMock = vi.fn()
+const prefetchEchartsForTab = vi.fn()
 
 vi.mock('../../utils/request', () => ({
   default: (...args) => requestMock(...args),
+}))
+
+vi.mock('../../utils/echarts/loadEcharts.js', () => ({
+  prefetchEchartsForTab: (...args) => prefetchEchartsForTab(...args),
+  prefetchEcharts: vi.fn(),
+  loadEcharts: vi.fn(),
 }))
 
 import { useNavigationShell } from '../useNavigationShell.js'
@@ -17,6 +24,7 @@ describe('useNavigationShell loadNavigationTabs', () => {
 
   beforeEach(() => {
     requestMock.mockReset()
+    prefetchEchartsForTab.mockReset()
     localMem = {}
     sessionMem = {}
     vi.stubGlobal('localStorage', {
@@ -96,5 +104,18 @@ describe('useNavigationShell loadNavigationTabs', () => {
 
     expect(shell.serverVisibleTabIds.value).toBeNull()
     expect(shell.navPolicyResolved.value).toBe(true)
+  })
+
+  it('prefetches echarts when opening a kline tab', () => {
+    const user = ref({ username: 'alice' })
+    const isAuthenticated = ref(true)
+    const shell = useNavigationShell({ user, isAuthenticated })
+
+    shell.activateTab('watchlist')
+    expect(prefetchEchartsForTab).toHaveBeenCalledWith('watchlist')
+    shell.activateTab('stock-workbench')
+    expect(prefetchEchartsForTab).toHaveBeenCalledWith('stock-workbench')
+    shell.activateTab('')
+    expect(prefetchEchartsForTab).toHaveBeenCalledTimes(2)
   })
 })

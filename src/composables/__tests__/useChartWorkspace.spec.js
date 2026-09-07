@@ -7,9 +7,15 @@ vi.mock('../../utils/request', () => ({
   default: vi.fn(),
 }))
 
+const prefetchEcharts = vi.fn()
+vi.mock('../../utils/echarts/loadEcharts.js', () => ({
+  prefetchEcharts: (...args) => prefetchEcharts(...args),
+}))
+
 describe('useChartWorkspace', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    prefetchEcharts.mockClear()
     vi.stubGlobal('localStorage', {
       getItem: (key) => (key === 'access_token' ? 'token' : null),
       setItem: vi.fn(),
@@ -108,6 +114,7 @@ describe('useChartWorkspace', () => {
     expect(workspace.hasPrev.value).toBe(true)
     expect(workspace.hasNext.value).toBe(true)
     expect(activeTab.value).toBe('chart')
+    expect(prefetchEcharts).toHaveBeenCalled()
 
     workspace.nextStock()
     expect(workspace.chartSymbol.value).toBe('300750.SZ')

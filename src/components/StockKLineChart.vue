@@ -40,6 +40,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useDetailFullscreen } from '../composables/useDetailFullscreen'
 import { waitForChartDom } from '../utils/chartDom'
 import { buildShenwanKlineOption, collectDecisionGsMarkers } from '../utils/echarts/shenwanKlineOption'
+import { loadEcharts } from '../utils/echarts/loadEcharts'
 
 const props = defineProps({
   records: {
@@ -118,8 +119,7 @@ function disposeChart() {
 async function ensureChart() {
   if (!chartRef.value) return null
   if (!echarts) {
-    const mod = await import('echarts')
-    echarts = mod.default || mod
+    echarts = await loadEcharts()
   }
   if (chart && chartTone !== props.tone) {
     disposeChart()

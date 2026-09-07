@@ -120,6 +120,7 @@ import {
   normalizeChartDate,
   shiftVisibleEarlier,
 } from '../utils/chartVisibleWindow.js'
+import { loadEcharts } from '../utils/echarts/loadEcharts.js'
 
 const props = defineProps({
   records: { type: Array, default: () => [] },
@@ -315,8 +316,7 @@ async function fetchMinuteData() {
 // --- Chart Rendering ---
 async function initECharts() {
   if (!echarts) {
-    const mod = await import('echarts')
-    echarts = mod.default || mod
+    echarts = await loadEcharts()
   }
   if (!chartInstance && chartRef.value) {
     // We use null for light theme to use ECharts default, 

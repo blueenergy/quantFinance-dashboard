@@ -1,17 +1,28 @@
 import { defineAsyncComponent } from 'vue'
 import EtfView from '../views/EtfView.vue'
+import { prefetchEcharts } from './echarts/loadEcharts.js'
 
 function loadWatchListData() {
   return import('../components/WatchListData.vue')
 }
 
+function loadStockChart() {
+  return import('../components/StockChart.vue')
+}
+
 const WatchListData = defineAsyncComponent(loadWatchListData)
 
 export function prefetchWatchlistTab() {
+  prefetchEcharts()
   return loadWatchListData()
 }
 
-const StockChart = defineAsyncComponent(() => import('../components/StockChart.vue'))
+export function prefetchChartTab() {
+  prefetchEcharts()
+  return loadStockChart()
+}
+
+const StockChart = defineAsyncComponent(loadStockChart)
 const AIAnalysisHistory = defineAsyncComponent(() => import('../components/AIAnalysisHistory.vue'))
 const AnalysisTaskQueue = defineAsyncComponent(() => import('../components/AnalysisTaskQueue.vue'))
 const DataPulse = defineAsyncComponent(() => import('../components/DataPulse.vue'))

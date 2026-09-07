@@ -1,5 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import request from '../utils/request'
+import { prefetchEchartsForTab } from '../utils/echarts/loadEcharts.js'
 
 const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v8'
 const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v2'
@@ -201,6 +202,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
     }
     mountedTabs.value.add(tabId)
     activeTab.value = tabId
+    prefetchEchartsForTab(tabId)
   }
 
   function toggleTab(tabId) {
