@@ -25,7 +25,7 @@
         >
           {{ planRelationBadge(plan, selectedPlanId, selectedDetail, allPlans).text }}
         </span>
-        {{ plan.status }}
+        {{ planStatusLabel(plan.status) }}
       </em>
     </button>
     <p v-if="!loading && !plans.length" class="muted">{{ onlyActionRequired ? '暂无需要处理的计划。' : '暂无计划。' }}</p>
@@ -35,7 +35,7 @@
 <script setup>
 import {
   capitalBasisLabel, money, planBaselineEquity, planCadenceBadge,
-  planParamSummary, planRelationBadge, planRowClass,
+  planParamSummary, planRelationBadge, planRowClass, planStatusLabel,
 } from '../../composables/usePortfolioPlanFormat'
 
 defineProps({

@@ -3,7 +3,7 @@
     <header class="overview-header">
       <h2>组合总览（实盘 + 纸面）</h2>
       <p class="muted">
-        按策略参数血缘（params_hash）合并多期 plan；实盘需有 live 成交回报才标为实盘，纸面展示 paper 净值与观察周期。
+        按策略参数血缘合并多期计划。实盘表示该组合已向券商发过 live 信号；纸面展示模拟净值与观察周期。
       </p>
     </header>
 

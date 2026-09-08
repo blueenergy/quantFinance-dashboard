@@ -7,7 +7,7 @@
           <span class="cadence-tag" :class="planCadenceBadge(detail.plan).cls">{{ planCadenceBadge(detail.plan).text }}</span>
         </h3>
         <p class="muted">
-          {{ detail.plan.base_date }} → {{ detail.plan.execute_date || '-' }} · {{ detail.plan.status }}
+          {{ detail.plan.base_date }} → {{ detail.plan.execute_date || '-' }} · {{ planStatusLabel(detail.plan.status) }}
           · {{ planParamSummary(detail.plan) }} · initial capital {{ money(effectiveInitialCapital(detail.plan)) }}
           <span v-if="detail.plan.previous_rebalance_date"> · 上次调仓 {{ detail.plan.previous_rebalance_date }}</span>
           <span v-if="detail.plan.rebalance_days"> · 周期 {{ detail.plan.rebalance_days }} 个交易日</span>
@@ -39,7 +39,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { effectiveInitialCapital, money, planCadenceBadge, planParamSummary } from '../../composables/usePortfolioPlanFormat'
+import { effectiveInitialCapital, money, planCadenceBadge, planParamSummary, planStatusLabel } from '../../composables/usePortfolioPlanFormat'
 import { REGIME_CASH_REMINDER } from '../../utils/regimeCash'
 
 const props = defineProps({

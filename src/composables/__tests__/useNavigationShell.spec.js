@@ -106,6 +106,25 @@ describe('useNavigationShell loadNavigationTabs', () => {
     expect(shell.navPolicyResolved.value).toBe(true)
   })
 
+  it('labels the overview tab without a live-only suffix', async () => {
+    localMem.access_token = 'tok'
+    localMem.user_info = JSON.stringify({ username: 'alice' })
+    requestMock.mockResolvedValue({
+      success: true,
+      data: { visible_tab_ids: ['portfolio-overview'] },
+    })
+
+    const user = ref({ username: 'alice' })
+    const isAuthenticated = ref(true)
+    const shell = useNavigationShell({ user, isAuthenticated })
+
+    await shell.loadNavigationTabs()
+
+    expect(shell.adminTabs.value).toEqual([
+      { id: 'portfolio-overview', name: '📊 组合总览' },
+    ])
+  })
+
   it('prefetches echarts when opening a kline tab', () => {
     const user = ref({ username: 'alice' })
     const isAuthenticated = ref(true)

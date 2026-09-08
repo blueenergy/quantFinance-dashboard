@@ -22,13 +22,13 @@
       <label>
         状态
         <select v-model="statusFilter" @change="loadPlans">
-          <option value="">全部</option>
-          <option value="generated">generated</option>
-          <option value="needs_review">needs_review</option>
-          <option value="approved">approved</option>
-          <option value="rejected">rejected</option>
-          <option value="executed_paper">executed_paper</option>
-          <option value="partially_executed">partially_executed</option>
+          <option
+            v-for="option in PLAN_STATUS_FILTER_OPTIONS"
+            :key="option.value || 'all'"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
         </select>
       </label>
       <label class="inline-check">
@@ -45,7 +45,7 @@
       <div class="task-list-header">
         <div>
           <h3>运维工具</h3>
-          <p class="muted">数据水位、Worker 状态等内部功能，默认折叠。</p>
+          <p class="muted">生成计划、数据水位、Worker、实盘监控、任务历史，默认折叠。</p>
         </div>
         <button type="button" @click="opsWorkbenchExpanded = !opsWorkbenchExpanded">
           {{ opsWorkbenchExpanded ? '折叠' : '展开' }}
@@ -95,6 +95,7 @@
     <PlanWorkerStatusPanel v-if="opsWorkbenchExpanded" :workers="workerStatuses" :loading="workerStatusLoading" @refresh="loadWorkerStatus" />
 
     <LiveOpsMonitorPanel
+      v-if="opsWorkbenchExpanded"
       v-model:account-id="monitorAccountId"
       :plan-id="selectedPlanId"
       :signal-summary="formatSummary(liveSignalStatusSummary)"
@@ -111,6 +112,7 @@
     />
 
     <PlanTaskHistoryPanel
+      v-if="opsWorkbenchExpanded"
       :tasks="generationTasks"
       :latest-task="latestGenerationTask"
       :current-task-id="currentGenerationTask?.task_id || ''"
@@ -342,6 +344,7 @@ import {
   buildEquityRows,
   formatSummary,
   formatSignalReviewAt,
+  PLAN_STATUS_FILTER_OPTIONS,
   scoringRunText,
   signalReviewStatusText,
   summarizeByStatus,

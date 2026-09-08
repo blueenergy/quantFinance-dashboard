@@ -19,6 +19,33 @@ export function priceSourceLabel(source) {
   return labels[source] || source || '-'
 }
 
+export const PLAN_STATUS_LABELS = {
+  generated: '已生成',
+  draft: '草稿',
+  needs_review: '待审批',
+  approved: '已批准',
+  rejected: '已拒绝',
+  cancelled: '已作废',
+  canceled: '已作废',
+  executed_paper: '纸面已执行',
+  partially_executed: '部分成交',
+}
+
+export const PLAN_STATUS_FILTER_OPTIONS = [
+  { value: '', label: '全部' },
+  { value: 'needs_review', label: '待审批' },
+  { value: 'generated', label: '已生成' },
+  { value: 'approved', label: '已批准' },
+  { value: 'rejected', label: '已拒绝' },
+  { value: 'executed_paper', label: '纸面已执行' },
+  { value: 'partially_executed', label: '部分成交' },
+]
+
+export function planStatusLabel(status) {
+  if (!status) return '-'
+  return PLAN_STATUS_LABELS[status] || status
+}
+
 export function priceSourceClass(source) {
   if (source === 'realtime') return 'price-source-realtime'
   if (source === 'daily_close') return 'price-source-daily'

@@ -24,6 +24,7 @@ import {
   planParamSummary,
   planRelationBadge,
   planRowClass,
+  planStatusLabel,
   previousPlanIdFor,
   riskDisplaySeverity,
   scoringRunText,
@@ -322,5 +323,17 @@ describe('portfolio plan view formatting', () => {
       upstream: false,
       downstream: false,
     })
+  })
+
+  it('maps plan status codes to Chinese labels without changing the codes', () => {
+    expect(planStatusLabel('needs_review')).toBe('待审批')
+    expect(planStatusLabel('generated')).toBe('已生成')
+    expect(planStatusLabel('approved')).toBe('已批准')
+    expect(planStatusLabel('rejected')).toBe('已拒绝')
+    expect(planStatusLabel('executed_paper')).toBe('纸面已执行')
+    expect(planStatusLabel('partially_executed')).toBe('部分成交')
+    expect(planStatusLabel('cancelled')).toBe('已作废')
+    expect(planStatusLabel('unknown_status')).toBe('unknown_status')
+    expect(planStatusLabel('')).toBe('-')
   })
 })
