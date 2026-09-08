@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import HoldingsTable from '../HoldingsTable.vue'
 import PortfolioIdentityCard from '../PortfolioIdentityCard.vue'
+import PortfolioPlanDetailHeader from '../PortfolioPlanDetailHeader.vue'
 import PortfolioReconcileBanner from '../PortfolioReconcileBanner.vue'
 
 const copyTextToClipboard = vi.fn(async () => true)
@@ -155,5 +156,47 @@ describe('PortfolioIdentityCard', () => {
     expect(wrapper.text()).toContain('该组合已暂停自动调仓')
     await wrapper.get('.paused-banner button').trigger('click')
     expect(wrapper.emitted('resume-lineage')).toHaveLength(1)
+  })
+})
+
+describe('PortfolioPlanDetailHeader', () => {
+  it('links to the overview lineage for the selected plan', () => {
+    const wrapper = mount(PortfolioPlanDetailHeader, {
+      props: {
+        detail: {
+          plan: {
+            plan_id: 'plan-1',
+            strategy_template_id: 'alpha',
+            params_hash: 'hash-a',
+            base_date: '2026-09-01',
+            status: 'approved',
+          },
+        },
+        displayTitle: () => 'Alpha',
+      },
+    })
+
+    const link = wrapper.get('a.app-link')
+    expect(link.text()).toContain('在总览打开')
+    expect(link.attributes('href')).toBe(
+      '/?tab=portfolio-overview&strategy=alpha&params_hash=hash-a&plan_id=plan-1',
+    )
+  })
+
+  it('hides the overview link when the plan has no lineage key', () => {
+    const wrapper = mount(PortfolioPlanDetailHeader, {
+      props: {
+        detail: {
+          plan: {
+            plan_id: 'plan-1',
+            base_date: '2026-09-01',
+            status: 'approved',
+          },
+        },
+        displayTitle: () => 'Alpha',
+      },
+    })
+
+    expect(wrapper.find('a.app-link').exists()).toBe(false)
   })
 })

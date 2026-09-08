@@ -2,6 +2,37 @@ export function portfolioKey(portfolio) {
   return `${portfolio.strategy_template_id}:${portfolio.params_hash}`
 }
 
+/**
+ * Query params for /?tab=portfolio-overview. `strategy` is strategy_template_id.
+ * @param {{ strategy_template_id?: string, params_hash?: string } | null | undefined} row
+ * @param {Record<string, string | number | boolean | undefined | null>} [extra]
+ */
+export function overviewDeepLinkParams(row, extra = {}) {
+  const params = {}
+  const strategy = String(row?.strategy_template_id || '').trim()
+  const paramsHash = String(row?.params_hash || '').trim()
+  if (strategy) params.strategy = strategy
+  if (paramsHash) params.params_hash = paramsHash
+  for (const [key, value] of Object.entries(extra || {})) {
+    if (value === undefined || value === null) continue
+    const text = String(value).trim()
+    if (!text) continue
+    params[key] = text
+  }
+  return params
+}
+
+/**
+ * @param {{ strategy?: string, params_hash?: string } | null | undefined} params
+ * @returns {string} portfolioKey, or '' when strategy or params_hash is missing
+ */
+export function overviewPortfolioKeyFromParams(params) {
+  const strategy = String(params?.strategy || '').trim()
+  const paramsHash = String(params?.params_hash || '').trim()
+  if (!strategy || !paramsHash) return ''
+  return portfolioKey({ strategy_template_id: strategy, params_hash: paramsHash })
+}
+
 export function portfolioOptionLabel(portfolio) {
   const name = portfolio.strategy_name || portfolio.strategy_template_id || '组合'
   const params = portfolio.param_summary || '参数未记录'

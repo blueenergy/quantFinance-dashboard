@@ -45,4 +45,37 @@ describe('app deep links', () => {
       },
     })
   })
+
+  it('builds portfolio overview links with lineage params', () => {
+    expect(
+      buildDeepLinkHref('portfolio-overview', {
+        strategy: 'growth_cycle_active',
+        params_hash: 'abc123',
+        panel: 'cycle',
+        plan_id: 'plan-9',
+      }),
+    ).toBe(
+      '/?tab=portfolio-overview&strategy=growth_cycle_active&params_hash=abc123&panel=cycle&plan_id=plan-9',
+    )
+  })
+
+  it('parses portfolio overview links without requiring strategy or hash', () => {
+    expect(parseDeepLinkFromUrl('?tab=portfolio-overview')).toEqual({
+      tab: 'portfolio-overview',
+      params: {},
+    })
+    expect(
+      parseDeepLinkFromUrl(
+        '?tab=portfolio-overview&strategy=alpha&params_hash=hash-a&panel=holdings&plan_id=plan-1',
+      ),
+    ).toEqual({
+      tab: 'portfolio-overview',
+      params: {
+        strategy: 'alpha',
+        params_hash: 'hash-a',
+        panel: 'holdings',
+        plan_id: 'plan-1',
+      },
+    })
+  })
 })

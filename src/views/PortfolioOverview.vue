@@ -372,6 +372,13 @@ import {
 const ExecutionsPanel = defineAsyncComponent(() => import('../components/portfolio/ExecutionsPanel.vue'))
 const HoldingsPanel = defineAsyncComponent(() => import('../components/portfolio/HoldingsPanel.vue'))
 
+const props = defineProps({
+  pendingNavigation: {
+    type: Object,
+    default: null,
+  },
+})
+
 const {
   portfolios,
   selectedPortfolioKey,
@@ -414,6 +421,7 @@ const {
   pollGenerationTask,
   toggleTimelineDetail,
 } = usePortfolioOverviewWorkbench({
+  pendingNavigation: () => props.pendingNavigation,
   onBeforeSelect: () => {
     resetHoldingsOpsState()
     resetPlanOpsState()

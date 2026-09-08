@@ -412,6 +412,12 @@ export function getTabProps(tabId, context) {
     }
   }
 
+  if (tabId === 'portfolio-overview') {
+    return {
+      pendingNavigation: context.pendingPortfolioOverviewNavigation,
+    }
+  }
+
   if (tabId === 'spectrum') {
     return {
       defaultMode: 'daily',

@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, toValue, watch } from 'vue'
 import {
   enqueuePortfolioLlmRisk,
   forceRebalanceLineage,
@@ -17,7 +17,7 @@ import {
 } from '../api/portfolioPlans'
 import { getSecuritiesAccounts } from '../api/trader'
 import { executionVenueFromPortfolio } from './usePortfolioPlanViewModel'
-import { portfolioKey } from '../utils/portfolioOverviewFormat'
+import { overviewPortfolioKeyFromParams, portfolioKey } from '../utils/portfolioOverviewFormat'
 import { isSubmittingForKey } from '../utils/scopedSubmitting'
 
 export const CANCELLED_POLL_RESULT = Object.freeze({ cancelled: true })
@@ -34,6 +34,7 @@ export function formatApiDetail(detail) {
 }
 
 export function usePortfolioOverviewWorkbench({
+  pendingNavigation = null,
   onBeforeSelect = () => {},
   onPlanDetailLoaded = () => {},
   onDetailLoaded = () => {},
@@ -48,6 +49,7 @@ export function usePortfolioOverviewWorkbench({
   const portfolioSummary = ref(null)
   const loadingList = ref(false)
   const loadingDetail = ref(false)
+  const listSettled = ref(false)
   const message = ref('')
   const messageIsError = ref(false)
 
@@ -61,6 +63,7 @@ export function usePortfolioOverviewWorkbench({
   const timelineData = ref(null)
   const latestPlanDetail = ref(null)
   const expandedTimelinePlanId = ref(null)
+  const pendingExpandPlanId = ref('')
   const reviewAiRiskLoading = ref(false)
   const reviewLlmRiskLoading = ref(false)
   const opsLlmRiskLoading = ref(false)
@@ -73,6 +76,7 @@ export function usePortfolioOverviewWorkbench({
   let requestEpoch = 0
   let listRequestEpoch = 0
   let accountsRequestEpoch = 0
+  let appliedNavigationRequestId = null
   const pollingContexts = new Set()
 
   const selectedPortfolio = computed(() => (
@@ -250,7 +254,10 @@ export function usePortfolioOverviewWorkbench({
       message.value = formatApiDetail(error.response?.data?.detail) || error.message || '加载组合列表失败'
       messageIsError.value = true
     } finally {
-      if (active && listRequestEpoch === epoch) loadingList.value = false
+      if (active && listRequestEpoch === epoch) {
+        loadingList.value = false
+        listSettled.value = true
+      }
     }
   }
 
@@ -410,6 +417,7 @@ export function usePortfolioOverviewWorkbench({
       positionRows.value = detailData.positionRows
       positionSummary.value = detailData.positionSummary
       tradeRows.value = detailData.tradeRows
+      consumePendingExpand(nextTimeline)
       onReconcileData(detailData.reconcile)
       onPlanDetailLoaded()
       syncSelectedLiveAccount()
@@ -584,6 +592,54 @@ export function usePortfolioOverviewWorkbench({
     expandedTimelinePlanId.value = expandedTimelinePlanId.value === planId ? null : planId
   }
 
+  function timelineContainsPlanId(timeline, planId) {
+    if (!planId) return false
+    return (timeline?.timeline || []).some((node) => node?.plan_id === planId)
+  }
+
+  function consumePendingExpand(timeline) {
+    const planId = pendingExpandPlanId.value
+    if (!planId) return
+    if (timelineContainsPlanId(timeline, planId)) {
+      expandedTimelinePlanId.value = planId
+    }
+    pendingExpandPlanId.value = ''
+  }
+
+  function applyPendingNavigation() {
+    const detail = toValue(pendingNavigation)
+    if (!detail) return
+    const requestId = detail.requestId
+    if (requestId == null) return
+    if (appliedNavigationRequestId === requestId) return
+
+    const key = overviewPortfolioKeyFromParams(detail)
+    if (!key) {
+      appliedNavigationRequestId = requestId
+      return
+    }
+    if (!listSettled.value || loadingList.value) return
+
+    appliedNavigationRequestId = requestId
+    const found = portfolios.value.some((row) => portfolioKey(row) === key)
+    if (!found) {
+      message.value = '深链指定的组合不在当前列表中。'
+      messageIsError.value = true
+      return
+    }
+
+    message.value = ''
+    messageIsError.value = false
+    pendingExpandPlanId.value = String(detail.plan_id || '').trim()
+    if (selectedPortfolioKey.value !== key) {
+      selectedPortfolioKey.value = key
+      return
+    }
+    if (pendingExpandPlanId.value && timelineData.value) {
+      consumePendingExpand(timelineData.value)
+    }
+  }
+
   watch(selectedPortfolioKey, (key) => {
     requestEpoch += 1
     cancelPolling()
@@ -597,6 +653,18 @@ export function usePortfolioOverviewWorkbench({
     clearDetailState()
     if (key) refreshDetail()
   })
+
+  watch(
+    () => [
+      toValue(pendingNavigation),
+      loadingList.value,
+      listSettled.value,
+      portfolios.value,
+    ],
+    () => {
+      applyPendingNavigation()
+    },
+  )
 
   onMounted(() => {
     loadSecuritiesAccounts()

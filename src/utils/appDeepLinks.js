@@ -9,7 +9,7 @@ export const DEEP_LINK_TABS = {
   'stock-workbench': ['symbol', 'panel', 'dimension', 'findingKey'],
   'fund-inventory': [],
   'fund-copywork': ['period', 'view', 'symbol', 'fundKey'],
-  // Future: 'etf': ['symbol'], 'history': ['symbol'], ...
+  'portfolio-overview': ['strategy', 'params_hash', 'panel', 'plan_id'],
 }
 
 function normalizeBasePath() {

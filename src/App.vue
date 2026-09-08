@@ -222,6 +222,7 @@ const {
 
 const pendingEtfNavigation = ref(null)
 const pendingStockWorkbenchNavigation = ref(null)
+const pendingPortfolioOverviewNavigation = ref(null)
 
 /**
  * @param {{ tab: string, params?: Record<string, string> }} payload
@@ -246,6 +247,13 @@ function applyDeepLink({ tab, params = {} }) {
     pendingStockWorkbenchNavigation.value = {
       ...params,
       symbol,
+      requestId: Date.now(),
+    }
+  }
+
+  if (tab === 'portfolio-overview') {
+    pendingPortfolioOverviewNavigation.value = {
+      ...params,
       requestId: Date.now(),
     }
   }
@@ -352,6 +360,7 @@ function getTabProps(tabId) {
     user: user.value,
     pendingEtfNavigation: pendingEtfNavigation.value,
     pendingStockWorkbenchNavigation: pendingStockWorkbenchNavigation.value,
+    pendingPortfolioOverviewNavigation: pendingPortfolioOverviewNavigation.value,
   })
 }
 

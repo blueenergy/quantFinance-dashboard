@@ -17,9 +17,17 @@
         </p>
         <p v-if="signalReviewSummary" class="muted">AI风险/机会最近分析：{{ signalReviewSummary }}</p>
       </div>
-      <div v-if="showReviewActions && detail.plan.status === 'needs_review'" class="actions">
-        <button :disabled="actionLoading" @click="$emit('review', 'approved')">审核通过</button>
-        <button class="danger" :disabled="actionLoading" @click="$emit('review', 'rejected')">驳回</button>
+      <div v-if="overviewLinkParams || showHeaderReviewActions" class="actions">
+        <AppLink
+          v-if="overviewLinkParams"
+          class="link-btn link-btn--primary"
+          tab="portfolio-overview"
+          :params="overviewLinkParams"
+        >在总览打开</AppLink>
+        <template v-if="showHeaderReviewActions">
+          <button :disabled="actionLoading" @click="$emit('review', 'approved')">审核通过</button>
+          <button class="danger" :disabled="actionLoading" @click="$emit('review', 'rejected')">驳回</button>
+        </template>
       </div>
     </div>
     <p v-if="regimeCashNote" class="monitor-note">{{ regimeCashNote }}</p>
@@ -39,8 +47,10 @@
 
 <script setup>
 import { computed } from 'vue'
+import AppLink from '../common/AppLink.vue'
 import { effectiveInitialCapital, money, planCadenceBadge, planParamSummary, planStatusLabel } from '../../composables/usePortfolioPlanFormat'
 import { REGIME_CASH_REMINDER } from '../../utils/regimeCash'
+import { overviewDeepLinkParams } from '../../utils/portfolioOverviewFormat'
 
 const props = defineProps({
   detail: { type: Object, required: true },
@@ -54,6 +64,17 @@ const props = defineProps({
 })
 
 defineEmits(['review'])
+
+const showHeaderReviewActions = computed(() => (
+  props.showReviewActions && props.detail?.plan?.status === 'needs_review'
+))
+
+const overviewLinkParams = computed(() => {
+  const plan = props.detail?.plan
+  const params = overviewDeepLinkParams(plan, { plan_id: plan?.plan_id })
+  if (!params.strategy || !params.params_hash) return null
+  return params
+})
 
 const regimeCashNote = computed(() => {
   const overlay = props.detail?.plan?.regime_cash

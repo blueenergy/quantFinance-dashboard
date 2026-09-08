@@ -4,6 +4,8 @@ import {
   foldedTimeline,
   formatSyncedAt,
   planCompletionIncompleteCount,
+  overviewDeepLinkParams,
+  overviewPortfolioKeyFromParams,
   portfolioKey,
   shouldShowCatchUpPanel,
   shouldShowOverviewCatchUpGrid,
@@ -78,6 +80,22 @@ describe('portfolio overview formatting', () => {
     ]
 
     expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it('maps overview deep-link params to the existing portfolio key', () => {
+    const row = { strategy_template_id: 'alpha', params_hash: 'hash-a', plan_id: 'plan-1' }
+    expect(overviewDeepLinkParams(row, { plan_id: row.plan_id, panel: 'cycle' })).toEqual({
+      strategy: 'alpha',
+      params_hash: 'hash-a',
+      plan_id: 'plan-1',
+      panel: 'cycle',
+    })
+    expect(overviewPortfolioKeyFromParams({ strategy: 'alpha', params_hash: 'hash-a' })).toBe(
+      portfolioKey(row),
+    )
+    expect(overviewPortfolioKeyFromParams({ strategy: 'alpha' })).toBe('')
+    expect(overviewPortfolioKeyFromParams({ params_hash: 'hash-a' })).toBe('')
+    expect(overviewDeepLinkParams({}, { plan_id: '  ', panel: null })).toEqual({})
   })
 
   it('preserves cycle progress calculation and caps it at one hundred', () => {

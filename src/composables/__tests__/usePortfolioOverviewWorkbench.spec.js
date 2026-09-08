@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, nextTick } from 'vue'
+import { defineComponent, nextTick, ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 
 const api = vi.hoisted(() => ({
@@ -218,5 +218,98 @@ describe('usePortfolioOverviewWorkbench', () => {
 
     expect(vi.getTimerCount()).toBe(0)
     await expect(portfolioBPolling).resolves.toEqual({ cancelled: true })
+  })
+
+  it('selects the deep-linked lineage after the portfolio list loads', async () => {
+    const list = deferred()
+    api.listPortfolios.mockReturnValueOnce(list.promise)
+    const pendingNavigation = ref({
+      strategy: 'strategy-a',
+      params_hash: 'hash-a',
+      requestId: 1,
+    })
+    const host = mountWorkbench({ pendingNavigation })
+    await flushPromises()
+
+    expect(host.workbench.selectedPortfolioKey.value).toBe('')
+    expect(host.workbench.loadingList.value).toBe(true)
+
+    list.resolve({ data: { portfolios: [portfolio('a'), portfolio('b')] } })
+    await flushPromises()
+
+    expect(host.workbench.selectedPortfolioKey.value).toBe('strategy-a:hash-a')
+    host.wrapper.unmount()
+  })
+
+  it('does not change the current selection when the deep-linked lineage is missing', async () => {
+    const pendingNavigation = ref(null)
+    const host = mountWorkbench({ pendingNavigation })
+    await flushPromises()
+    host.workbench.selectedPortfolioKey.value = 'strategy-a:hash-a'
+    await flushPromises()
+
+    pendingNavigation.value = {
+      strategy: 'missing',
+      params_hash: 'nope',
+      requestId: 2,
+    }
+    await flushPromises()
+
+    expect(host.workbench.selectedPortfolioKey.value).toBe('strategy-a:hash-a')
+    expect(host.workbench.messageIsError.value).toBe(true)
+    expect(host.workbench.message.value).toContain('深链指定的组合不在当前列表中')
+    host.wrapper.unmount()
+  })
+
+  it('ignores a replayed requestId and reapplies when requestId changes', async () => {
+    const pendingNavigation = ref({
+      strategy: 'strategy-a',
+      params_hash: 'hash-a',
+      requestId: 1,
+    })
+    const host = mountWorkbench({ pendingNavigation })
+    await flushPromises()
+    expect(host.workbench.selectedPortfolioKey.value).toBe('strategy-a:hash-a')
+
+    host.workbench.selectedPortfolioKey.value = 'strategy-b:hash-b'
+    await flushPromises()
+    pendingNavigation.value = {
+      strategy: 'strategy-a',
+      params_hash: 'hash-a',
+      requestId: 1,
+    }
+    await flushPromises()
+    expect(host.workbench.selectedPortfolioKey.value).toBe('strategy-b:hash-b')
+
+    pendingNavigation.value = {
+      strategy: 'strategy-a',
+      params_hash: 'hash-a',
+      requestId: 2,
+    }
+    await flushPromises()
+    expect(host.workbench.selectedPortfolioKey.value).toBe('strategy-a:hash-a')
+    host.wrapper.unmount()
+  })
+
+  it('expands a timeline plan_id after detail loads', async () => {
+    api.getPortfolioPlanLineageTimeline.mockImplementation((planId) => Promise.resolve({
+      data: {
+        operation_plan: { plan_id: planId },
+        marker: planId,
+        timeline: [{ plan_id: planId, node_type: 'rebalance' }],
+      },
+    }))
+    const pendingNavigation = ref({
+      strategy: 'strategy-a',
+      params_hash: 'hash-a',
+      plan_id: 'plan-a',
+      requestId: 3,
+    })
+    const host = mountWorkbench({ pendingNavigation })
+    await flushPromises()
+
+    expect(host.workbench.selectedPortfolioKey.value).toBe('strategy-a:hash-a')
+    expect(host.workbench.expandedTimelinePlanId.value).toBe('plan-a')
+    host.wrapper.unmount()
   })
 })

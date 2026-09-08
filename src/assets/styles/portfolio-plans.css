@@ -28,6 +28,13 @@
   justify-content: space-between;
 }
 
+:where(.portfolio-plans) .detail-header .actions{
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 :where(.portfolio-plans) .eyebrow,
 :where(.portfolio-plans) .muted{
   color: #374151;
