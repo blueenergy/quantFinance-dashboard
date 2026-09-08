@@ -1,7 +1,14 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import HoldingsTable from '../HoldingsTable.vue'
+import PortfolioIdentityCard from '../PortfolioIdentityCard.vue'
 import PortfolioReconcileBanner from '../PortfolioReconcileBanner.vue'
+
+const copyTextToClipboard = vi.fn(async () => true)
+
+vi.mock('../../../utils/clipboard', () => ({
+  copyTextToClipboard: (...args) => copyTextToClipboard(...args),
+}))
 
 const tableFunctions = {
   effectiveTarget: () => 100,
@@ -67,5 +74,86 @@ describe('HoldingsTable', () => {
     expect(wrapper.text()).toContain('600000.SH')
     expect(wrapper.text()).toContain('浦发银行')
     expect(wrapper.text()).toContain('1,100')
+  })
+})
+
+const FULL_HASH = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789'
+
+describe('PortfolioIdentityCard', () => {
+  beforeEach(() => {
+    copyTextToClipboard.mockClear()
+  })
+
+  it('renders a compact row without the full params_hash', () => {
+    const wrapper = mount(PortfolioIdentityCard, {
+      props: {
+        portfolio: {
+          strategy_name: '成长周期',
+          strategy_template_id: 'growth_cycle_active',
+          execution_venue: 'live',
+          param_summary: 'CSI1000 · Top10 · 40日',
+          first_base_date: '2025-01-02',
+          last_base_date: '2026-09-08',
+          plan_count: 12,
+          params_hash: FULL_HASH,
+          params_hash_short: 'abcdef01',
+        },
+      },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('成长周期')
+    expect(text).toContain('实盘')
+    expect(text).toContain('CSI1000 · Top10 · 40日')
+    expect(text).toContain('2025-01-02 → 2026-09-08')
+    expect(text).toContain('#abcdef01 复制')
+    expect(text).not.toContain('组合标识')
+    expect(text).not.toContain(FULL_HASH)
+    expect(wrapper.get('.copy-hash').attributes('title')).toBe(FULL_HASH)
+  })
+
+  it('keeps paper snapshot on a secondary line and copies the full hash', async () => {
+    const wrapper = mount(PortfolioIdentityCard, {
+      props: {
+        portfolio: {
+          strategy_name: '纸面组合',
+          execution_venue: 'paper',
+          paper_snapshot_date: '2026-09-07',
+          paper_holding_count: 8,
+          paper_equity: 123456,
+          paper_execution_mode: 'auto_shadow',
+          params_hash: FULL_HASH,
+          params_hash_short: 'abcdef01',
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('纸面')
+    expect(wrapper.text()).toContain('快照 2026-09-07')
+    expect(wrapper.text()).toContain('持仓 8 只')
+    expect(wrapper.text()).toContain('自动跟跑')
+    expect(wrapper.text()).not.toContain(FULL_HASH)
+
+    await wrapper.get('.copy-hash').trigger('click')
+    expect(copyTextToClipboard).toHaveBeenCalledWith(FULL_HASH)
+  })
+
+  it('keeps the paused resume banner', async () => {
+    const wrapper = mount(PortfolioIdentityCard, {
+      props: {
+        portfolio: {
+          strategy_name: '已暂停组合',
+          execution_venue: 'live',
+          paused: true,
+          params_hash: 'hash-1',
+          params_hash_short: 'hash-1',
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('已暂停')
+    expect(wrapper.text()).toContain('该组合已暂停自动调仓')
+    await wrapper.get('.paused-banner button').trigger('click')
+    expect(wrapper.emitted('resume-lineage')).toHaveLength(1)
   })
 })
