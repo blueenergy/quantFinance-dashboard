@@ -14,6 +14,11 @@
         <span class="symbol-badge">{{ props.symbol }}</span>
         <span class="stock-name">{{ props.stockName || '' }}</span>
         <span class="data-count">{{ dataCountLabel }}</span>
+        <span
+          v-if="latestDayPct != null"
+          class="day-pct"
+          :style="{ color: pctChangeColor(latestDayPct) }"
+        >{{ formatPctChange(latestDayPct) }}</span>
         <span v-if="showGsToolbar && decisionGsEnabled && decisionGsSummary" class="gs-summary">{{ decisionGsSummary }}</span>
         <span v-if="showAdjustToolbar && adjDegradedHint" class="gs-summary">{{ adjDegradedHint }}</span>
       </div>
@@ -122,6 +127,14 @@ import {
   shiftVisibleEarlier,
 } from '../utils/chartVisibleWindow.js'
 import { loadEcharts } from '../utils/echarts/loadEcharts.js'
+import {
+  changePct,
+  compactYmd,
+  dayChangePctForBar,
+  formatChartNum2,
+  formatPctChange,
+  pctChangeColor,
+} from '../utils/klineTooltip.js'
 
 const props = defineProps({
   records: { type: Array, default: () => [] },
@@ -161,6 +174,7 @@ const decisionGsEnabled = ref(true)
 let echarts = null
 let chartInstance = null
 let resizeObserver = null
+let tooltipRows = []
 
 const intervalOptions = [
   { label: '分时', value: 'minute' },
@@ -181,6 +195,14 @@ const kTypeLabel = computed(() => {
   if (kType.value === '60m') return '60分钟'
   if (kType.value === 'minute') return '分时'
   return '天'
+})
+const latestDayPct = computed(() => {
+  const rows = isOneDayMinute.value || isIntradayGs.value
+    ? (Array.isArray(minuteBars.value) ? minuteBars.value : [])
+    : (Array.isArray(props.records) ? props.records : [])
+  if (!rows.length) return null
+  const last = rows[rows.length - 1]
+  return dayChangePctForBar(last, rows.length - 1, rows, props.records)
 })
 const dataCountLabel = computed(() => {
   if (isOneDayMinute.value) return `${minuteBars.value.length} 条分时`
@@ -321,11 +343,6 @@ function barsFromMinuteResponse(res) {
   return Array.isArray(res?.data) ? res.data : []
 }
 
-function compactYmd(value) {
-  const digits = String(value || '').replace(/\D/g, '')
-  return digits.length >= 8 ? digits.slice(0, 8) : ''
-}
-
 function applyMinuteDay(res, bars) {
   const ymd = compactYmd(res?.day) || compactYmd(bars[0]?.trade_date)
   if (ymd) selectedMinuteDate.value = normalizeDate(ymd)
@@ -428,21 +445,59 @@ function drawChart() {
   else renderDaily()
 }
 
+function candleLabelColors() {
+  const isDark = theme.value === 'dark'
+  return {
+    up: isDark ? '#ef5350' : '#eb4444',
+    down: isDark ? '#26a69a' : '#22ab94',
+    flat: isDark ? '#768390' : '#586069',
+  }
+}
+
+function barChangePct(row, index, rows) {
+  if (kType.value === 'week' || kType.value === 'month') {
+    return changePct(row?.close, rows[index - 1]?.close)
+  }
+  return dayChangePctForBar(row, index, rows, props.records)
+}
+
+function toCandleItems(rows) {
+  const colors = candleLabelColors()
+  return rows.map((row, index) => {
+    const pct = barChangePct(row, index, rows)
+    const text = formatPctChange(pct)
+    return {
+      value: [row.open, row.close, row.low, row.high],
+      label: {
+        show: Boolean(text),
+        formatter: text,
+        color: pctChangeColor(pct, colors),
+      },
+    }
+  })
+}
+
+function candlestickItemStyle() {
+  return {
+    color: theme.value === 'dark' ? '#ef5350' : '#eb4444',
+    color0: theme.value === 'dark' ? '#26a69a' : '#22ab94',
+    borderColor: theme.value === 'dark' ? '#ef5350' : '#eb4444',
+    borderColor0: theme.value === 'dark' ? '#26a69a' : '#22ab94',
+  }
+}
+
 function renderMinute() {
   if (!minuteBars.value.length) { chartInstance.clear(); return; }
-  const times = minuteBars.value.map(b => minuteAxisLabel(b.trade_date))
-  const data = minuteBars.value.map(b => [b.open, b.close, b.low, b.high])
-  
+  tooltipRows = minuteBars.value
+  const times = tooltipRows.map(b => minuteAxisLabel(b.trade_date))
   const option = getBaseOption(times)
   option.series = [{
-    name: 'K线', type: 'candlestick', data,
+    name: 'K线',
+    type: 'candlestick',
+    data: toCandleItems(tooltipRows),
     legendHoverLink: false,
-    itemStyle: { 
-      color: theme.value === 'dark' ? '#ef5350' : '#eb4444', 
-      color0: theme.value === 'dark' ? '#26a69a' : '#22ab94', 
-      borderColor: theme.value === 'dark' ? '#ef5350' : '#eb4444', 
-      borderColor0: theme.value === 'dark' ? '#26a69a' : '#22ab94' 
-    }
+    label: { show: true, position: 'top', fontSize: 10, hideOverlap: true },
+    itemStyle: candlestickItemStyle(),
   }]
   chartInstance.setOption(option, true)
 }
@@ -477,17 +532,16 @@ function renderDaily() {
   const option = getBaseOption(times, {
     legendData: showGs ? ['决策线', '牛线', '熊线'] : ['MA55', 'MA233'],
   })
+  tooltipRows = data
   
   option.series = [
     {
-      name: 'K线', type: 'candlestick', data: data.map(r => [r.open, r.close, r.low, r.high]),
+      name: 'K线',
+      type: 'candlestick',
+      data: toCandleItems(data),
       legendHoverLink: false,
-      itemStyle: {
-        color: theme.value === 'dark' ? '#ef5350' : '#eb4444',
-        color0: theme.value === 'dark' ? '#26a69a' : '#22ab94',
-        borderColor: theme.value === 'dark' ? '#ef5350' : '#eb4444',
-        borderColor0: theme.value === 'dark' ? '#26a69a' : '#22ab94'
-      }
+      label: { show: true, position: 'top', fontSize: 10, hideOverlap: true },
+      itemStyle: candlestickItemStyle(),
     }
   ]
   if (gsSeries.length) {
@@ -580,23 +634,25 @@ function movingAverage(values, windowSize) {
   return result
 }
 
-function formatChartNum2(value) {
-  const n = Number(value)
-  return Number.isFinite(n) ? n.toFixed(2) : '-'
-}
-
 function formatStockChartTooltip(params) {
   if (!params?.length) return ''
   const date = params[0].axisValue ?? params[0].name ?? ''
+  const candle = params.find((p) => p.seriesName === 'K线' || p.seriesType === 'candlestick')
+  const idx = candle?.dataIndex ?? params[0]?.dataIndex
+  const row = Number.isInteger(idx) ? tooltipRows[idx] : null
   const lines = []
+  if (row) {
+    const pct = barChangePct(row, idx, tooltipRows)
+    const pctText = formatPctChange(pct)
+    const pctHtml = pctText
+      ? `　<span style="color:${pctChangeColor(pct, candleLabelColors())}">${pctText}</span>`
+      : ''
+    lines.push(
+      `开 ${formatChartNum2(row.open)}　收 ${formatChartNum2(row.close)}${pctHtml}<br/>低 ${formatChartNum2(row.low)}　高 ${formatChartNum2(row.high)}`
+    )
+  }
   for (const p of params) {
-    if (p.seriesName === 'K线') {
-      const arr = Array.isArray(p.data) ? p.data : p.value
-      if (Array.isArray(arr) && arr.length >= 4) {
-        lines.push(`开 ${formatChartNum2(arr[0])}　收 ${formatChartNum2(arr[1])}<br/>低 ${formatChartNum2(arr[2])}　高 ${formatChartNum2(arr[3])}`)
-      }
-      continue
-    }
+    if (p.seriesName === 'K线') continue
     if (p.seriesName === 'G' || p.seriesName === 'S' || p.seriesName === 'S?') {
       const price = p.data && typeof p.data === 'object' && !Array.isArray(p.data) ? p.data.price : null
       if (price != null) lines.push(`${p.seriesName} ${formatChartNum2(price)}`)
@@ -644,7 +700,7 @@ function getBaseOption(xData, { legendData } = {}) {
       },
       formatter: formatStockChartTooltip
     },
-    grid: { left: '50', right: '20', top: names.length ? 36 : 16, bottom: '20' },
+    grid: { left: '50', right: '20', top: names.length ? 40 : 28, bottom: '20' },
     xAxis: { 
       type: 'category', 
       data: xData, 
@@ -865,6 +921,7 @@ const goBack = () => emit('go-back', { strategy: props.strategyFrom, preset: pro
 .stock-name { font-size: 16px; font-weight: 600; }
 .data-count { color: #768390; font-size: 11px; margin-left: 10px; }
 .gs-summary { color: #768390; font-size: 11px; margin-left: 10px; }
+.day-pct { font-size: 12px; font-weight: 600; margin-left: 8px; }
 .light .data-count { color: #586069; }
 .light .gs-summary { color: #586069; }
 
