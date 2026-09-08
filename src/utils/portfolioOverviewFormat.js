@@ -33,6 +33,19 @@ export function overviewPortfolioKeyFromParams(params) {
   return portfolioKey({ strategy_template_id: strategy, params_hash: paramsHash })
 }
 
+export const OVERVIEW_PANEL_IDS = ['holdings', 'cycle', 'fills']
+
+export function normalizeOverviewPanel(panel) {
+  const value = String(panel || '').trim()
+  return OVERVIEW_PANEL_IDS.includes(value) ? value : 'holdings'
+}
+
+/** Panel to select from a deep link, or null when the link does not name a lineage. */
+export function overviewPanelFromPending(detail) {
+  if (!overviewPortfolioKeyFromParams(detail)) return null
+  return normalizeOverviewPanel(detail?.panel)
+}
+
 export function portfolioOptionLabel(portfolio) {
   const name = portfolio.strategy_name || portfolio.strategy_template_id || '组合'
   const params = portfolio.param_summary || '参数未记录'

@@ -182,73 +182,98 @@
         @confirm="publishLiveSignals"
       />
 
-      <PortfolioSummaryCards
-        :position-summary="positionSummary"
-        :pnl-summary="latestHoldingsPnlSummary"
-        :total-pnl-title="latestHoldingsPnlTitle"
-      />
+      <div class="overview-panel-tabs" role="tablist" aria-label="组合视图">
+        <button
+          v-for="tab in overviewPanelTabs"
+          :key="tab.id"
+          type="button"
+          role="tab"
+          class="overview-panel-tab"
+          :class="{ active: activeOverviewPanel === tab.id }"
+          :aria-selected="activeOverviewPanel === tab.id"
+          @click="activeOverviewPanel = tab.id"
+        >{{ tab.label }}</button>
+      </div>
 
-      <HoldingsPanel
-        :selected-latest-plan-id="selectedLatestPlanId"
-        :risk-loading="riskLoading"
-        :manual-change-rows="manualChangeRows"
-        :latest-holding-rows="latestHoldingRows"
-        :trades-by-symbol="tradesBySymbol"
-        :liquidate-submitting="liquidateSubmitting"
-        :is-live-portfolio="isLivePortfolio"
-        :external-manual-submitting="externalManualSubmitting"
-        :holdings-risk="holdingsRisk"
-        :holdings-risk-by-symbol="holdingsRiskBySymbol"
-        :holding-plan-risk-by-symbol="holdingPlanRiskBySymbol"
-        :holding-plan-opportunity-by-symbol="holdingPlanOpportunityBySymbol"
-        :holding-plan-internal-swot-by-symbol="holdingPlanInternalSwotBySymbol"
-        :holdings-risk-by-symbol-high="holdingsRiskBySymbolHigh"
-        :bench-data="benchData"
-        :bench-expanded="benchExpanded"
-        :bench-loading="benchLoading"
-        :bench-risk="benchRisk"
-        :bench-risk-by-symbol="benchRiskBySymbol"
-        :bench-risk-loading="benchRiskLoading"
-        :bench-llm-risk-loading="benchLlmRiskLoading"
-        :effective-target="effectiveTarget"
-        :manual-delta="manualDelta"
-        :risk-row-class="riskRowClass"
-        :format-risk-time="formatRiskTime"
-        :half-target-shares="halfTargetShares"
-        :signed-money="signedMoney"
-        @load-risk="loadHoldingsRisk(true)"
-        @open-manual="openManualModal"
-        @open-liquidate="openLiquidateModal"
-        @open-external-manual="openExternalManualModal"
-        @update-target="setManualTarget"
-        @open-swap="openSwapModal"
-        @quick-reduce="openQuickReduceModal"
-        @toggle-bench="benchExpanded = !benchExpanded"
-        @load-bench-risk="loadBenchRisk"
-        @load-bench-llm-risk="loadBenchLlmRisk"
-      />
+      <div v-if="activeOverviewPanel === 'holdings'" class="overview-panel" role="tabpanel">
+        <PortfolioSummaryCards
+          :position-summary="positionSummary"
+          :pnl-summary="latestHoldingsPnlSummary"
+          :total-pnl-title="latestHoldingsPnlTitle"
+        />
 
-      <TrailingStopMonitorPanel
-        v-if="!isLivePortfolio"
-        :latest-run="timelineData?.latest_trailing_stop_run"
-        :trailing-stop-setting="timelineData?.trailing_stop_setting"
-        :plan-id="selectedLatestPlanId"
-        :default-expanded="trailingStopDefaultExpanded"
-        :triggers-only="trailingStopTriggersOnly"
-        @setting-updated="refreshDetail"
-      />
+        <HoldingsPanel
+          :selected-latest-plan-id="selectedLatestPlanId"
+          :risk-loading="riskLoading"
+          :manual-change-rows="manualChangeRows"
+          :latest-holding-rows="latestHoldingRows"
+          :trades-by-symbol="tradesBySymbol"
+          :liquidate-submitting="liquidateSubmitting"
+          :is-live-portfolio="isLivePortfolio"
+          :external-manual-submitting="externalManualSubmitting"
+          :holdings-risk="holdingsRisk"
+          :holdings-risk-by-symbol="holdingsRiskBySymbol"
+          :holding-plan-risk-by-symbol="holdingPlanRiskBySymbol"
+          :holding-plan-opportunity-by-symbol="holdingPlanOpportunityBySymbol"
+          :holding-plan-internal-swot-by-symbol="holdingPlanInternalSwotBySymbol"
+          :holdings-risk-by-symbol-high="holdingsRiskBySymbolHigh"
+          :bench-data="benchData"
+          :bench-expanded="benchExpanded"
+          :bench-loading="benchLoading"
+          :bench-risk="benchRisk"
+          :bench-risk-by-symbol="benchRiskBySymbol"
+          :bench-risk-loading="benchRiskLoading"
+          :bench-llm-risk-loading="benchLlmRiskLoading"
+          :effective-target="effectiveTarget"
+          :manual-delta="manualDelta"
+          :risk-row-class="riskRowClass"
+          :format-risk-time="formatRiskTime"
+          :half-target-shares="halfTargetShares"
+          :signed-money="signedMoney"
+          @load-risk="loadHoldingsRisk(true)"
+          @open-manual="openManualModal"
+          @open-liquidate="openLiquidateModal"
+          @open-external-manual="openExternalManualModal"
+          @update-target="setManualTarget"
+          @open-swap="openSwapModal"
+          @quick-reduce="openQuickReduceModal"
+          @toggle-bench="benchExpanded = !benchExpanded"
+          @load-bench-risk="loadBenchRisk"
+          @load-bench-llm-risk="loadBenchLlmRisk"
+        />
+      </div>
 
-      <LineageTimeline
-        :entries="foldedTimeline"
-        :expanded-plan-id="expandedTimelinePlanId"
-        @toggle-detail="toggleTimelineDetail"
-      />
+      <div v-if="activeOverviewPanel === 'cycle'" class="overview-panel" role="tabpanel">
+        <TrailingStopMonitorPanel
+          v-if="!isLivePortfolio"
+          :latest-run="timelineData?.latest_trailing_stop_run"
+          :trailing-stop-setting="timelineData?.trailing_stop_setting"
+          :plan-id="selectedLatestPlanId"
+          :default-expanded="trailingStopDefaultExpanded"
+          :triggers-only="trailingStopTriggersOnly"
+          @setting-updated="refreshDetail"
+        />
 
-      <PortfolioEquityChart
-        :equity-rows="equityRows"
-        :book-equity="bookEquity"
-        :equity-caveat="equityCaveat"
-      />
+        <LineageTimeline
+          :entries="foldedTimeline"
+          :expanded-plan-id="expandedTimelinePlanId"
+          @toggle-detail="toggleTimelineDetail"
+        />
+
+        <PortfolioEquityChart
+          :equity-rows="equityRows"
+          :book-equity="bookEquity"
+          :equity-caveat="equityCaveat"
+        />
+      </div>
+
+      <div v-if="activeOverviewPanel === 'fills'" class="overview-panel" role="tabpanel">
+        <ExecutionsPanel
+          :rows="tradeDetailRows"
+          :totals="tradeTotals"
+          :is-live="isLivePortfolio"
+        />
+      </div>
 
       <SwapModal
         :visible="showSwapModal"
@@ -312,18 +337,12 @@
         @remove-row="removeExternalManualRow"
         @update-row="updateExternalManualRow"
       />
-
-      <ExecutionsPanel
-        :rows="tradeDetailRows"
-        :totals="tradeTotals"
-        :is-live="isLivePortfolio"
-      />
     </template>
   </div>
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import PortfolioIdentityCard from '../components/portfolio/PortfolioIdentityCard.vue'
 import CurrentPeriodStatus from '../components/portfolio/CurrentPeriodStatus.vue'
 import CatchUpPanel from '../components/portfolio/CatchUpPanel.vue'
@@ -358,6 +377,7 @@ import {
   cycleProgressPct as calculateCycleProgressPct,
   executionVenueLabel,
   foldedTimeline as foldTimeline,
+  overviewPanelFromPending,
   planCompletionIncompleteCount,
   portfolioKey,
   portfolioOptionLabel,
@@ -378,6 +398,26 @@ const props = defineProps({
     default: null,
   },
 })
+
+const overviewPanelTabs = [
+  { id: 'holdings', label: '持仓' },
+  { id: 'cycle', label: '周期' },
+  { id: 'fills', label: '成交' },
+]
+const activeOverviewPanel = ref('holdings')
+let appliedPanelRequestId = null
+
+watch(
+  () => props.pendingNavigation,
+  (detail) => {
+    if (!detail || detail.requestId == null) return
+    if (appliedPanelRequestId === detail.requestId) return
+    appliedPanelRequestId = detail.requestId
+    const nextPanel = overviewPanelFromPending(detail)
+    if (nextPanel) activeOverviewPanel.value = nextPanel
+  },
+  { immediate: true },
+)
 
 const {
   portfolios,

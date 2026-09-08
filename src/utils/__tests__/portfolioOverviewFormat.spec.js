@@ -5,7 +5,9 @@ import {
   formatSyncedAt,
   planCompletionIncompleteCount,
   overviewDeepLinkParams,
+  overviewPanelFromPending,
   overviewPortfolioKeyFromParams,
+  normalizeOverviewPanel,
   portfolioKey,
   shouldShowCatchUpPanel,
   shouldShowOverviewCatchUpGrid,
@@ -96,6 +98,22 @@ describe('portfolio overview formatting', () => {
     expect(overviewPortfolioKeyFromParams({ strategy: 'alpha' })).toBe('')
     expect(overviewPortfolioKeyFromParams({ params_hash: 'hash-a' })).toBe('')
     expect(overviewDeepLinkParams({}, { plan_id: '  ', panel: null })).toEqual({})
+  })
+
+  it('normalizes overview panel ids and ignores tab-only deep links', () => {
+    expect(normalizeOverviewPanel('cycle')).toBe('cycle')
+    expect(normalizeOverviewPanel('fills')).toBe('fills')
+    expect(normalizeOverviewPanel('holdings')).toBe('holdings')
+    expect(normalizeOverviewPanel('unknown')).toBe('holdings')
+    expect(normalizeOverviewPanel('')).toBe('holdings')
+    expect(normalizeOverviewPanel(null)).toBe('holdings')
+    expect(overviewPanelFromPending({ strategy: 'alpha', params_hash: 'hash-a' })).toBe('holdings')
+    expect(overviewPanelFromPending({
+      strategy: 'alpha',
+      params_hash: 'hash-a',
+      panel: 'cycle',
+    })).toBe('cycle')
+    expect(overviewPanelFromPending({ requestId: 1, panel: 'fills' })).toBeNull()
   })
 
   it('preserves cycle progress calculation and caps it at one hundred', () => {

@@ -124,3 +124,34 @@
   height: 100%;
   margin-bottom: 0;
 }
+
+:where(.portfolio-overview) .overview-panel-tabs {
+  display: inline-flex;
+  margin: 16px 0 12px;
+}
+
+:where(.portfolio-overview) .overview-panel-tab {
+  background: #fff;
+  border: 1px solid #111827;
+  border-radius: 0;
+  color: #111827;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  margin-left: -1px;
+  padding: 8px 14px;
+}
+
+:where(.portfolio-overview) .overview-panel-tab:first-child {
+  border-radius: 4px 0 0 4px;
+  margin-left: 0;
+}
+
+:where(.portfolio-overview) .overview-panel-tab:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+:where(.portfolio-overview) .overview-panel-tab.active {
+  background: #111827;
+  color: #fff;
+}
