@@ -113,6 +113,10 @@
     align-items: start;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   }
+
+  :where(.portfolio-overview) .overview-catchup-grid--single {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 :where(.portfolio-overview) .overview-catchup-grid .catch-up-card,

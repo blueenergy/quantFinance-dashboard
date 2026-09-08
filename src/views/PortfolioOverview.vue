@@ -57,10 +57,12 @@
       />
 
       <div
-        v-if="isLivePortfolio && selectedOperationPlanId"
+        v-if="showOverviewCatchUpGrid"
         class="overview-catchup-grid"
+        :class="{ 'overview-catchup-grid--single': !(showCatchUpPanel && showPlanCompletionPanel) }"
       >
         <CatchUpPanel
+          v-if="showCatchUpPanel"
           :visible="true"
           :loading="catchUpLoading"
           :error="catchUpError"
@@ -81,20 +83,11 @@
         />
 
         <PlanCompletionPanel
+          v-if="showPlanCompletionPanel"
           :visible="true"
           :rows="planCompletionRows"
         />
       </div>
-
-      <TrailingStopMonitorPanel
-        v-if="!isLivePortfolio"
-        :latest-run="timelineData?.latest_trailing_stop_run"
-        :trailing-stop-setting="timelineData?.trailing_stop_setting"
-        :plan-id="selectedLatestPlanId"
-        :default-expanded="trailingStopDefaultExpanded"
-        :triggers-only="trailingStopTriggersOnly"
-        @setting-updated="refreshDetail"
-      />
 
       <PlanReviewPanel
         :visible="needsReviewPlan && Boolean(reviewPlanId)"
@@ -189,18 +182,6 @@
         @confirm="publishLiveSignals"
       />
 
-      <LineageTimeline
-        :entries="foldedTimeline"
-        :expanded-plan-id="expandedTimelinePlanId"
-        @toggle-detail="toggleTimelineDetail"
-      />
-
-      <PortfolioEquityChart
-        :equity-rows="equityRows"
-        :book-equity="bookEquity"
-        :equity-caveat="equityCaveat"
-      />
-
       <PortfolioSummaryCards
         :position-summary="positionSummary"
         :pnl-summary="latestHoldingsPnlSummary"
@@ -245,6 +226,28 @@
         @toggle-bench="benchExpanded = !benchExpanded"
         @load-bench-risk="loadBenchRisk"
         @load-bench-llm-risk="loadBenchLlmRisk"
+      />
+
+      <TrailingStopMonitorPanel
+        v-if="!isLivePortfolio"
+        :latest-run="timelineData?.latest_trailing_stop_run"
+        :trailing-stop-setting="timelineData?.trailing_stop_setting"
+        :plan-id="selectedLatestPlanId"
+        :default-expanded="trailingStopDefaultExpanded"
+        :triggers-only="trailingStopTriggersOnly"
+        @setting-updated="refreshDetail"
+      />
+
+      <LineageTimeline
+        :entries="foldedTimeline"
+        :expanded-plan-id="expandedTimelinePlanId"
+        @toggle-detail="toggleTimelineDetail"
+      />
+
+      <PortfolioEquityChart
+        :equity-rows="equityRows"
+        :book-equity="bookEquity"
+        :equity-caveat="equityCaveat"
       />
 
       <SwapModal
@@ -355,8 +358,13 @@ import {
   cycleProgressPct as calculateCycleProgressPct,
   executionVenueLabel,
   foldedTimeline as foldTimeline,
+  planCompletionIncompleteCount,
   portfolioKey,
   portfolioOptionLabel,
+  shouldShowCatchUpPanel,
+  shouldShowOverviewCatchUpGrid,
+  shouldShowPlanCompletionPanel,
+  shouldShowPlanOpsPanel,
   trailingStopDefaultExpanded as shouldExpandTrailingStop,
   trailingStopTriggersOnly as showTrailingStopTriggersOnly,
 } from '../utils/portfolioOverviewFormat'
@@ -582,11 +590,6 @@ const forceRebalanceBlockReason = computed(() => {
   }
   return ''
 })
-const showPlanOpsPanel = computed(() => (
-  Boolean(selectedOperationPlanId.value)
-  && selectedPlanStatus.value === 'approved'
-  && (isPaperPortfolio.value || isLivePortfolio.value)
-))
 const liveAccountOptions = computed(() => securitiesAccounts.value.map((account) => ({
   id: account.id || account._id,
   label: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}`,
@@ -600,6 +603,23 @@ const planTargetRows = computed(() => (
   buildPlanTargetRows(latestPlanItems.value)
 ))
 const planCompletionRows = computed(() => buildPlanCompletionRows(latestPlanItems.value))
+const planCompletionGapCount = computed(() => (
+  planCompletionIncompleteCount(planCompletionRows.value)
+))
+const showCatchUpPanel = computed(() => shouldShowCatchUpPanel({
+  isLivePortfolio: isLivePortfolio.value,
+  operationPlanId: selectedOperationPlanId.value,
+  catchUpRowCount: catchUpRows.value.length,
+}))
+const showPlanCompletionPanel = computed(() => shouldShowPlanCompletionPanel({
+  isLivePortfolio: isLivePortfolio.value,
+  operationPlanId: selectedOperationPlanId.value,
+  incompleteCount: planCompletionGapCount.value,
+}))
+const showOverviewCatchUpGrid = computed(() => shouldShowOverviewCatchUpGrid({
+  showCatchUp: showCatchUpPanel.value,
+  showCompletion: showPlanCompletionPanel.value,
+}))
 const planSignalMaps = computed(() => buildPlanSignalMaps(planTargetRows.value))
 const holdingPlanRiskBySymbol = computed(() => planSignalMaps.value.holdingPlanRiskBySymbol)
 const holdingPlanOpportunityBySymbol = computed(() => planSignalMaps.value.holdingPlanOpportunityBySymbol)
@@ -666,6 +686,17 @@ const {
     messageIsError.value = isError
   },
 })
+
+const showPlanOpsPanel = computed(() => shouldShowPlanOpsPanel({
+  operationPlanId: selectedOperationPlanId.value,
+  planStatus: selectedPlanStatus.value,
+  isPaperPortfolio: isPaperPortfolio.value,
+  isLivePortfolio: isLivePortfolio.value,
+  awaitingPublishOrExecute: hasApprovedPlanAwaitingAction.value,
+  canExecutePaperNow: canExecutePaperNow.value,
+  remainderActionableCount: remainderActionableCount.value,
+  completionIncompleteCount: planCompletionGapCount.value,
+}))
 
 const cycleProgressPct = computed(() => calculateCycleProgressPct(timelineData.value))
 

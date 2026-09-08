@@ -3,7 +3,12 @@ import {
   cycleProgressPct,
   foldedTimeline,
   formatSyncedAt,
+  planCompletionIncompleteCount,
   portfolioKey,
+  shouldShowCatchUpPanel,
+  shouldShowOverviewCatchUpGrid,
+  shouldShowPlanCompletionPanel,
+  shouldShowPlanOpsPanel,
 } from '../portfolioOverviewFormat'
 
 describe('portfolio overview formatting', () => {
@@ -96,5 +101,110 @@ describe('portfolio overview formatting', () => {
     expect(formatSyncedAt(1_700_000_000)).toBe(
       new Date(1_700_000_000 * 1000).toLocaleString(),
     )
+  })
+})
+
+describe('portfolio overview panel visibility', () => {
+  it('counts incomplete plan-completion rows', () => {
+    expect(planCompletionIncompleteCount(null)).toBe(0)
+    expect(planCompletionIncompleteCount([])).toBe(0)
+    expect(planCompletionIncompleteCount([
+      { complete: true },
+      { complete: false },
+      { complete: false },
+    ])).toBe(2)
+  })
+
+  it('shows catch-up only for live plans that have cancelled buys', () => {
+    expect(shouldShowCatchUpPanel({
+      isLivePortfolio: true,
+      operationPlanId: 'plan-1',
+      catchUpRowCount: 0,
+    })).toBe(false)
+    expect(shouldShowCatchUpPanel({
+      isLivePortfolio: true,
+      operationPlanId: 'plan-1',
+      catchUpRowCount: 2,
+    })).toBe(true)
+    expect(shouldShowCatchUpPanel({
+      isLivePortfolio: false,
+      operationPlanId: 'plan-1',
+      catchUpRowCount: 2,
+    })).toBe(false)
+    expect(shouldShowCatchUpPanel({
+      isLivePortfolio: true,
+      operationPlanId: '',
+      catchUpRowCount: 2,
+    })).toBe(false)
+  })
+
+  it('shows completion only for live plans with fill gaps', () => {
+    expect(shouldShowPlanCompletionPanel({
+      isLivePortfolio: true,
+      operationPlanId: 'plan-1',
+      incompleteCount: 0,
+    })).toBe(false)
+    expect(shouldShowPlanCompletionPanel({
+      isLivePortfolio: true,
+      operationPlanId: 'plan-1',
+      incompleteCount: 1,
+    })).toBe(true)
+    expect(shouldShowPlanCompletionPanel({
+      isLivePortfolio: false,
+      operationPlanId: 'plan-1',
+      incompleteCount: 3,
+    })).toBe(false)
+  })
+
+  it('shows the catch-up grid when either child panel is visible', () => {
+    expect(shouldShowOverviewCatchUpGrid({
+      showCatchUp: false,
+      showCompletion: false,
+    })).toBe(false)
+    expect(shouldShowOverviewCatchUpGrid({ showCatchUp: true })).toBe(true)
+    expect(shouldShowOverviewCatchUpGrid({ showCompletion: true })).toBe(true)
+  })
+
+  it('shows plan ops only while a next execution step remains', () => {
+    const base = {
+      operationPlanId: 'plan-1',
+      planStatus: 'approved',
+      isPaperPortfolio: false,
+      isLivePortfolio: true,
+    }
+    expect(shouldShowPlanOpsPanel({
+      ...base,
+      awaitingPublishOrExecute: true,
+    })).toBe(true)
+    expect(shouldShowPlanOpsPanel({
+      ...base,
+      isLivePortfolio: false,
+      isPaperPortfolio: true,
+      canExecutePaperNow: true,
+    })).toBe(true)
+    expect(shouldShowPlanOpsPanel({
+      ...base,
+      remainderActionableCount: 2,
+    })).toBe(true)
+    expect(shouldShowPlanOpsPanel({
+      ...base,
+      completionIncompleteCount: 1,
+    })).toBe(true)
+    expect(shouldShowPlanOpsPanel(base)).toBe(false)
+    expect(shouldShowPlanOpsPanel({
+      ...base,
+      isLivePortfolio: false,
+      isPaperPortfolio: true,
+    })).toBe(false)
+    expect(shouldShowPlanOpsPanel({
+      ...base,
+      planStatus: 'needs_review',
+      awaitingPublishOrExecute: true,
+    })).toBe(false)
+    expect(shouldShowPlanOpsPanel({
+      ...base,
+      operationPlanId: '',
+      awaitingPublishOrExecute: true,
+    })).toBe(false)
   })
 })

@@ -75,3 +75,55 @@ export function trailingStopDefaultExpanded(run) {
   const triggered = Number(run.triggered_count ?? run.summary?.triggered_count ?? 0)
   return triggered > 0
 }
+
+export function planCompletionIncompleteCount(rows) {
+  if (!Array.isArray(rows) || !rows.length) return 0
+  return rows.reduce((count, row) => count + (row?.complete ? 0 : 1), 0)
+}
+
+export function shouldShowCatchUpPanel({
+  isLivePortfolio = false,
+  operationPlanId = '',
+  catchUpRowCount = 0,
+} = {}) {
+  return Boolean(isLivePortfolio && operationPlanId && Number(catchUpRowCount) > 0)
+}
+
+export function shouldShowPlanCompletionPanel({
+  isLivePortfolio = false,
+  operationPlanId = '',
+  incompleteCount = 0,
+} = {}) {
+  return Boolean(isLivePortfolio && operationPlanId && Number(incompleteCount) > 0)
+}
+
+export function shouldShowOverviewCatchUpGrid({
+  showCatchUp = false,
+  showCompletion = false,
+} = {}) {
+  return Boolean(showCatchUp || showCompletion)
+}
+
+/**
+ * Overview PlanOpsPanel: only when the user still has a next execution step.
+ * Cancel stays inside the panel when it is shown; do not show the panel solely
+ * to expose cancel on an already-finished plan.
+ */
+export function shouldShowPlanOpsPanel({
+  operationPlanId = '',
+  planStatus = '',
+  isPaperPortfolio = false,
+  isLivePortfolio = false,
+  awaitingPublishOrExecute = false,
+  canExecutePaperNow = false,
+  remainderActionableCount = 0,
+  completionIncompleteCount = 0,
+} = {}) {
+  if (!operationPlanId || planStatus !== 'approved') return false
+  if (!isPaperPortfolio && !isLivePortfolio) return false
+  if (awaitingPublishOrExecute || canExecutePaperNow) return true
+  if (Number(remainderActionableCount) > 0) return true
+  // Keep 缺口预检 available while live fills are still incomplete.
+  if (isLivePortfolio && Number(completionIncompleteCount) > 0) return true
+  return false
+}
