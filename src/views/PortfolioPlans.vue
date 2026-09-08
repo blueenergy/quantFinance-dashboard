@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">Portfolio Plans</p>
         <h2>组合交易计划</h2>
-        <p class="subtitle">审核与运维工作台：默认聚焦需处理的调仓计划；每日观察计划可在总览页查看周期脉络。</p>
+        <p class="subtitle">跨组合待办：审批调仓计划；发布、Paper 执行和补单请到组合总览。每日观察计划可在总览查看周期脉络。</p>
       </div>
       <button :disabled="loading" @click="refreshAll">刷新</button>
     </header>
@@ -179,74 +179,14 @@
             @select-high-risk="selectHighRiskReselectItems"
           />
 
-          <PlanOpsPanel
-            :visible="showPlanOpsPanel"
-            :plan-id="selectedOperationPlanId"
-            :plan-status="selectedPlanStatus"
-            :execution-mode-label="selectedPlanExecutionModeLabel"
-            :execution-venue="executionVenue"
-            :execution-venue-label="executionVenueLabel"
-            :overlay="liveOverlay"
-            :score-snapshot-stale="scoreSnapshotStale"
-            :is-paper="isPaperPortfolio"
-            :can-execute-paper-now="canExecutePaperNow"
-            :paper-execute-ready-text="paperExecuteReadyText"
-            :paper-execute-loading="paperExecuteLoading"
-            v-model:selected-live-account-id="operationAccountId"
-            :live-account-options="liveAccountOptions"
-            :can-publish-live-signals="canPublishLiveSignals"
-            :has-published-live-signals="selectedPlanHasPublishedLiveSignals"
-            :live-publish-loading="livePublishLoading"
-            :live-publish-blockers="livePublishBlockers"
-            :can-confirm-publish="canConfirmLivePublish"
-            :allow-partial-publish="allowPartialPublish"
-            :can-cancel-current-plan="canCancelCurrentPlan"
-            :cancel-plan-ready-text="cancelPlanReadyText"
-            :cancel-plan-loading="cancelPlanLoading"
-            :llm-risk-summary="llmRiskSummary"
-            :llm-risk-loading="llmRiskRunning"
-            :remainder-preview="remainderPreview"
-            :remainder-rows="remainderRows"
-            :remainder-actionable-count="remainderActionableCount"
-            :remainder-blockers="remainderBlockers"
-            :remainder-skipped="remainderSkipped"
-            :remainder-publishable-count="remainderPublishableCount"
-            :can-confirm-remainder="canConfirmRemainder"
-            :allow-partial-remainder="allowPartialRemainder"
-            :remainder-loading="remainderLoading"
-            v-model:remainder-reason="remainderReason"
-            @execute-paper="executePaperNow"
-            @preview-publish="previewLivePublish"
-            @confirm-publish="publishLiveSignals"
-            @preview-remainder="previewRemainder"
-            @confirm-remainder="confirmRemainder"
-            @update:allow-partial-remainder="setAllowPartialRemainder"
-            @cancel-plan="cancelCurrentPlan"
-            @rerun-llm-risk="runLlmRisk"
-          />
-
-          <PlanPublishPreviewModal
-            :visible="showPublishModal"
-            :preview="livePublishPreview"
-            :loading="livePublishLoading"
-            :blocker-messages="livePublishBlockers"
-            :allow-partial="allowPartialPublish"
-            :confirm-disabled="!canConfirmLivePublish"
-            @close="showPublishModal = false"
-            @update:allow-partial="setAllowPartialPublish"
-            @confirm="publishLiveSignals"
-          />
-
-          <PortfolioPlanLineageSummary :plan="selectedDetail.plan" :plans="plans" @select="selectPlan" />
-
-          <PortfolioPlanCapitalBasis :plan="selectedDetail.plan" />
+          <PlanOverviewExecuteLink :plan="selectedDetail.plan" />
 
           <PlanOperationLogsPanel :logs="operationLogs" :loading="operationLogsLoading" :disabled="!selectedPlanId" @refresh="loadOperationLogs" />
 
           <section v-if="showPaperExecutionStatus" class="execution-status">
             <h4>后台执行状态</h4>
             <p v-if="selectedDetail.plan.status === 'approved'" class="muted">
-              已审核，后台将按模拟成交价自动执行；“立即执行 Paper”使用同一 waterfall：开盘价 → 最近收盘价 → 计划价。
+              已审核，后台将按模拟成交价自动执行。若要立刻执行，请到组合总览；价格 waterfall：开盘价 → 最近收盘价 → 计划价。
             </p>
             <div class="status-grid">
               <div>
@@ -318,16 +258,6 @@
             @reselect="reselectItem"
             @risk-changed="reloadSelectedPlan"
           />
-
-          <PortfolioPlanEquityPanel
-            v-if="selectedPlanHasLiveSignals || showPaperSections"
-            :live="selectedPlanHasLiveSignals"
-            :realtime-equity="realtimeEquity"
-            :rows="equityRows"
-            :chart="equityChart"
-          />
-
-          <PortfolioPlanPaperFillsPanel v-if="showPaperSections" :executions="executions" :realtime-prices="realtimePriceBySymbol" />
         </template>
         <p v-else class="muted">请选择一份计划。</p>
       </main>
@@ -340,8 +270,6 @@ import { computed, defineAsyncComponent, ref } from 'vue'
 import { getPortfolioPlanGenerationTask } from '../api/portfolioPlans'
 import PortfolioPlanList from '../components/portfolio/PortfolioPlanList.vue'
 import {
-  buildEquityChart,
-  buildEquityRows,
   formatSummary,
   formatSignalReviewAt,
   PLAN_STATUS_FILTER_OPTIONS,
@@ -369,11 +297,11 @@ const PlanGenerationWatermarkPanel = defineAsyncComponent(() => import('../compo
 const PlanWorkerStatusPanel = defineAsyncComponent(() => import('../components/portfolio/PlanWorkerStatusPanel.vue'))
 const PlanTaskHistoryPanel = defineAsyncComponent(() => import('../components/portfolio/PlanTaskHistoryPanel.vue'))
 const LiveOpsMonitorPanel = defineAsyncComponent(() => import('../components/portfolio/LiveOpsMonitorPanel.vue'))
-const PlanReviewPanel = defineAsyncComponent(() => import('../components/portfolio/PlanReviewPanel.vue')); const PlanOpsPanel = defineAsyncComponent(() => import('../components/portfolio/PlanOpsPanel.vue'))
-const PlanPublishPreviewModal = defineAsyncComponent(() => import('../components/portfolio/PlanPublishPreviewModal.vue')); const PortfolioPlanDetailHeader = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanDetailHeader.vue'))
-const PortfolioPlanLineageSummary = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanLineageSummary.vue')); const PortfolioPlanCapitalBasis = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanCapitalBasis.vue'))
-const PlanOperationLogsPanel = defineAsyncComponent(() => import('../components/portfolio/PlanOperationLogsPanel.vue')); const PortfolioPlanItemsPanel = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanItemsPanel.vue'))
-const PortfolioPlanEquityPanel = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanEquityPanel.vue')); const PortfolioPlanPaperFillsPanel = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanPaperFillsPanel.vue'))
+const PlanReviewPanel = defineAsyncComponent(() => import('../components/portfolio/PlanReviewPanel.vue'))
+const PlanOverviewExecuteLink = defineAsyncComponent(() => import('../components/portfolio/PlanOverviewExecuteLink.vue'))
+const PortfolioPlanDetailHeader = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanDetailHeader.vue'))
+const PlanOperationLogsPanel = defineAsyncComponent(() => import('../components/portfolio/PlanOperationLogsPanel.vue'))
+const PortfolioPlanItemsPanel = defineAsyncComponent(() => import('../components/portfolio/PortfolioPlanItemsPanel.vue'))
 
 const opsWorkbenchExpanded = ref(false)
 const generateFormExpanded = ref(false)
@@ -413,9 +341,6 @@ const {
   liveExecutions,
   securitiesAccounts,
   planGenerationWatermark,
-  equity,
-  realtimeEquity,
-  executions,
   operationLogs,
   loading,
   generateLoading,
@@ -485,13 +410,9 @@ const {
   paperExecutionCount,
   hasPaperExecution,
   selectedPlanHasLiveSignals,
-  selectedPlanHasPublishedLiveSignals,
   canExecutePaperNow,
   canPublishLiveSignals,
   canCancelCurrentPlan,
-  paperExecuteReadyText,
-  cancelPlanReadyText,
-  selectedPlanExecutionModeLabel,
 } = usePlanExecutionState({
   plan: computed(() => selectedDetail.value?.plan),
   planStatus: selectedPlanStatus,
@@ -564,19 +485,12 @@ const showPaperSections = computed(() => {
 const showPaperExecutionStatus = computed(() => showPaperSections.value && (
   selectedPlanStatus.value === 'approved' || paperExecutionCount.value > 0
 ))
-const executionVenueLabel = computed(() => executionVenue.value === 'paper' ? '纸面' : '实盘')
-const isPaperPortfolio = computed(() => executionVenue.value === 'paper')
-const isLivePortfolio = computed(() => executionVenue.value === 'live')
 const needsReviewPlan = computed(() => (
   ['needs_review', 'generated', 'draft'].includes(selectedPlanStatus.value)
 ))
 const reviewPlanId = computed(() => needsReviewPlan.value ? selectedPlanId.value : '')
 const selectedOperationPlanId = computed(() => (
   selectedPlanStatus.value === 'approved' ? selectedPlanId.value : ''
-))
-const showPlanOpsPanel = computed(() => (
-  Boolean(selectedOperationPlanId.value)
-  && selectedPlanStatus.value === 'approved'
 ))
 
 const planTargetRows = computed(() => (
@@ -590,34 +504,8 @@ const planReviewRiskSummary = computed(() => (
 ))
 
 const {
-  livePublishPreview,
-  livePublishLoading,
-  showPublishModal,
-  allowPartialPublish,
-  livePublishBlockers,
-  canConfirmLivePublish,
-  paperExecuteLoading,
-  cancelPlanLoading,
-  remainderPreview,
-  remainderLoading,
-  remainderReason,
-  allowPartialRemainder,
-  remainderRows,
-  remainderActionableCount,
-  remainderBlockers,
-  remainderSkipped,
-  remainderPublishableCount,
-  canConfirmRemainder,
   approveSubmitting,
   rejectSubmitting,
-  previewLivePublish,
-  publishLiveSignals,
-  setAllowPartialPublish,
-  previewRemainder,
-  confirmRemainder,
-  setAllowPartialRemainder,
-  executePaperNow,
-  cancelCurrentPlan,
   approvePendingPlan,
   rejectPendingPlan,
   resetPlanOpsState,
@@ -652,11 +540,6 @@ const latestExecutionText = computed(() => {
   return `${latest.execute_date || '-'} ${action} ${symbol} ${quantity}${blocker}`
 })
 
-const realtimePriceBySymbol = computed(() => {
-  const rows = realtimeEquity.value?.positions || []
-  return Object.fromEntries(rows.map((row) => [row.symbol, row.realtime_price]))
-})
-
 const latestGenerationTask = computed(() => generationTasks.value[0] || null)
 const latestTraderHeartbeat = computed(() => traderHeartbeats.value[0] || null)
 const liveSignalStatusSummary = computed(() => summarizeByStatus(liveSignals.value))
@@ -682,9 +565,6 @@ const latestAvailableScoreMeta = computed(() => {
   if (scope === 'global') return '全局最新 fallback'
   return '-'
 })
-
-const equityRows = computed(() => buildEquityRows(equity.value))
-const equityChart = computed(() => buildEquityChart(equityRows.value))
 
 const aiRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_summary || null)
 const llmRiskSummary = computed(() => selectedDetail.value?.plan?.summary?.ai_risk_llm_summary || null)

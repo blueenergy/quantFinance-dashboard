@@ -906,6 +906,22 @@
   margin-bottom: 14px;
 }
 
+:where(.portfolio-plans) .overview-execute-card{
+  align-items: center;
+  border: 1px solid #111827;
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+}
+
+:where(.portfolio-plans) .overview-execute-card h4{
+  font-size: 14px;
+}
+
 :where(.portfolio-plans) .status-grid{
   display: grid;
   gap: 8px;

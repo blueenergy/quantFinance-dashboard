@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import HoldingsTable from '../HoldingsTable.vue'
 import PortfolioIdentityCard from '../PortfolioIdentityCard.vue'
 import PortfolioPlanDetailHeader from '../PortfolioPlanDetailHeader.vue'
+import PlanOverviewExecuteLink from '../PlanOverviewExecuteLink.vue'
 import PortfolioReconcileBanner from '../PortfolioReconcileBanner.vue'
 
 const copyTextToClipboard = vi.fn(async () => true)
@@ -198,5 +199,50 @@ describe('PortfolioPlanDetailHeader', () => {
     })
 
     expect(wrapper.find('a.app-link').exists()).toBe(false)
+  })
+})
+
+describe('PlanOverviewExecuteLink', () => {
+  it('links approved plans to the overview workbench', () => {
+    const wrapper = mount(PlanOverviewExecuteLink, {
+      props: {
+        plan: {
+          plan_id: 'plan-1',
+          strategy_template_id: 'alpha',
+          params_hash: 'hash-a',
+          status: 'approved',
+        },
+      },
+    })
+
+    const link = wrapper.get('a.app-link')
+    expect(link.text()).toContain('去总览执行')
+    expect(link.attributes('href')).toBe(
+      '/?tab=portfolio-overview&strategy=alpha&params_hash=hash-a&plan_id=plan-1',
+    )
+  })
+
+  it('hides the execute link until the plan is approved with a lineage key', () => {
+    const pending = mount(PlanOverviewExecuteLink, {
+      props: {
+        plan: {
+          plan_id: 'plan-1',
+          strategy_template_id: 'alpha',
+          params_hash: 'hash-a',
+          status: 'needs_review',
+        },
+      },
+    })
+    expect(pending.find('a.app-link').exists()).toBe(false)
+
+    const missingKey = mount(PlanOverviewExecuteLink, {
+      props: {
+        plan: {
+          plan_id: 'plan-1',
+          status: 'approved',
+        },
+      },
+    })
+    expect(missingKey.find('a.app-link').exists()).toBe(false)
   })
 })
