@@ -198,7 +198,7 @@
                 <span><strong>max positions</strong>{{ candidateConfig.max_positions ?? '-' }}</span>
                 <span><strong>rebalance</strong>{{ candidateConfig.rebalance_days ? `${candidateConfig.rebalance_days}d` : '-' }}</span>
                 <span><strong>mode</strong>{{ candidateConfig.construction_mode || '-' }}</span>
-                <span><strong>industry cap</strong>{{ pct(candidateConfig.max_industry_weight) }}</span>
+                <span><strong>industry cap</strong>{{ formatAxisValue('max_industry_weight', candidateConfig.max_industry_weight, candidateConfig) }}</span>
                 <template v-if="candidateConfig.score_weights">
                   <span v-for="(weight, dimension) in candidateConfig.score_weights" :key="dimension">
                     <strong>{{ SCORE_DIMENSION_LABELS[dimension] || dimension }}</strong>{{ pct(weight) }}
@@ -272,6 +272,7 @@ import { usePortfolioResearchForm } from '../composables/usePortfolioResearchFor
 import { usePortfolioResearchJobs } from '../composables/usePortfolioResearchJobs'
 import { formatResearchApiError } from '../utils/portfolioResearchPayload'
 import { SCORE_DIMENSION_LABELS } from '../utils/scoreUtils'
+import { formatAxisValue } from '../utils/sweepResultView'
 import {
   UNIVERSE_OPTIONS,
   actualDataStartNotice,

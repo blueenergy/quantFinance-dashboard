@@ -94,6 +94,18 @@ describe('sweepResultView', () => {
     expect(formatAxisValue('trailing_stop_pct', 0.1)).toBe('10%')
   })
 
+  it('hides placeholder industry cap for top_n construction', () => {
+    expect(formatAxisValue('max_industry_weight', 0.3)).toBe('30%')
+    expect(formatAxisValue('max_industry_weight', 0.3, {
+      construction_mode: 'top_n',
+      variant: 'growth_cycle_topn',
+    })).toBe('无上限')
+    expect(formatAxisValue('max_industry_weight', 0.2, {
+      construction_mode: 'industry_capped',
+      variant: 'growth_cycle_active_cap20',
+    })).toBe('20%')
+  })
+
   it('normalizes legacy percent-point trailing stop in candidate config', () => {
     const row = { ...sampleRows[2], trailing_stop_pct: 15 }
     const candidate = buildCandidateConfigFromRow(row, { job_id: 'job-1' }, { universe_index: 'csi1000' })

@@ -24,7 +24,7 @@
       <div v-for="axis in sweepView.sweep_axes" :key="axis.key" class="axis-strip-item">
         <span class="axis-strip-label">{{ axis.label }}</span>
         <span class="axis-strip-values">
-          {{ axis.values.map((value) => formatAxisValue(axis.key, value)).join(' · ') }}
+          {{ axis.values.map((value) => displayAxisValue(axis.key, value)).join(' · ') }}
         </span>
       </div>
     </div>
@@ -115,7 +115,7 @@
             :rows="facetDetailRows"
             :sweep-axes="detailAxes"
             :selected-row="selectedRow"
-            :format-axis-value="formatAxisValue"
+            :format-axis-value="displayAxisValue"
             :pct="pct"
             :num="num"
             compact
@@ -147,7 +147,7 @@
               :class="{ active: isFilterActive(axis.key, value) }"
               @click="toggleFilter(axis.key, value)"
             >
-              {{ formatAxisValue(axis.key, value) }}
+              {{ displayAxisValue(axis.key, value) }}
             </button>
           </div>
         </div>
@@ -162,7 +162,7 @@
         :sweep-axes="sweepView.sweep_axes"
         :selected-row="selectedRow"
         :rank-offset="(pageState.page - 1) * pageState.pageSize"
-        :format-axis-value="formatAxisValue"
+        :format-axis-value="displayAxisValue"
         :pct="pct"
         :num="num"
         @select-row="selectRow"
@@ -188,6 +188,7 @@ import {
   formatAxisValue,
   normalizeAxisValue,
   paginateRows,
+  rowMatchesAxis,
 } from '../../utils/sweepResultView'
 import ResultGridTable from './ResultGridTable.vue'
 
@@ -227,7 +228,7 @@ const candidateSummary = computed(() => {
   const axisKeys = new Set()
   for (const axis of sweepView.value.sweep_axes || []) {
     axisKeys.add(axis.key)
-    const label = formatAxisValue(axis.key, row[axis.key])
+    const label = formatAxisValue(axis.key, row[axis.key], row)
     if (label && label !== '-') parts.push(`${axis.label} ${label}`)
   }
   if (row.variant) parts.push(row.variant)
@@ -259,9 +260,19 @@ watch(
 
 const facetEntries = computed(() => sweepView.value.facet_best?.[facetAxisKey.value] || [])
 
+function sampleRowForAxisValue(key, value) {
+  return rows.value.find((row) => rowMatchesAxis(row, key, value))
+}
+
+function displayAxisValue(key, value, row) {
+  return formatAxisValue(key, value, row || sampleRowForAxisValue(key, value))
+}
+
 const selectedFacetLabel = computed(() => {
   if (facetValue.value === undefined) return ''
-  return formatAxisValue(facetAxisKey.value, facetValue.value)
+  const entry = facetEntries.value.find((item) => facetValuesEqual(item.value, facetValue.value))
+  if (entry?.label) return entry.label
+  return displayAxisValue(facetAxisKey.value, facetValue.value)
 })
 
 const facetDetailRows = computed(() => {

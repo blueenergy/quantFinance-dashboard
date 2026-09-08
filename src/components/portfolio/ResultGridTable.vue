@@ -28,7 +28,7 @@
             <span v-if="isSelectedRow(row)" class="selected-badge">发布候选</span>
           </td>
           <td v-for="axis in sweepAxes" :key="`${axis.key}-${idx}`" class="col-text">
-            {{ formatAxisValue(axis.key, row[axis.key]) }}
+            {{ formatAxisValue(axis.key, row[axis.key], row) }}
           </td>
           <td class="col-text">{{ row.variant || '-' }}</td>
           <td v-if="!hasSweptAxis('top_n')">{{ row.top_n }}</td>

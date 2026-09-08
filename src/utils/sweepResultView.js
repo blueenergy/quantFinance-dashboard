@@ -51,13 +51,25 @@ export function resolveComboTrailingStopPct({ meta, row, comboKey } = {}) {
   return null
 }
 
-export function formatAxisValue(key, value) {
+export function industryCapApplies(row) {
+  if (!row) return true
+  const mode = String(row.construction_mode || '').trim().toLowerCase()
+  if (mode === 'industry_capped') return true
+  if (mode === 'top_n' || mode === 'industry_neutral') return false
+  const variant = String(row.variant || '').toLowerCase()
+  if (variant.includes('active_cap')) return true
+  if (variant.includes('topn') || variant.includes('neutral')) return false
+  return true
+}
+
+export function formatAxisValue(key, value, row) {
   const normalized = normalizeAxisValue(key, value)
   if (key === 'trailing_stop_pct') {
     return normalized == null ? '关闭' : `${normalized * 100}%`
   }
-  if (key === 'max_industry_weight' && normalized != null) {
-    return `${normalized * 100}%`
+  if (key === 'max_industry_weight') {
+    if (!industryCapApplies(row)) return '无上限'
+    if (normalized != null) return `${normalized * 100}%`
   }
   if (key === 'rebalance_interval_days' && normalized != null) {
     return `${normalized}d`
@@ -129,7 +141,7 @@ export function computeFacetBest(rows = [], sweepAxes = []) {
       if (match) {
         bucket.push({
           value,
-          label: formatAxisValue(axis.key, value),
+          label: formatAxisValue(axis.key, value, match),
           row: match,
         })
       }

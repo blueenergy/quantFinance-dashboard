@@ -59,6 +59,17 @@ describe('ResearchComboModal', () => {
     expect(strategyCurve.attributes('points')).not.toMatch(/NaN|Infinity/)
   })
 
+  it('does not show a fake 30% industry cap for top_n construction', () => {
+    const wrapper = mountModal({
+      detail: {
+        ...detail,
+        meta: { ...detail.meta, max_industry_weight: 0.3 },
+      },
+    })
+    expect(wrapper.text()).toContain('行业上限 无上限')
+    expect(wrapper.text()).not.toContain('行业上限 30%')
+  })
+
   it('emits close from the close button', async () => {
     const wrapper = mountModal()
 
