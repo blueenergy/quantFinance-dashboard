@@ -100,6 +100,7 @@
     <div class="chart-main-wrapper" ref="chartWrapperRef">
       <div ref="chartRef" class="chart-canvas"></div>
       <div v-if="error" class="chart-overlay error">{{ error }}</div>
+      <div v-else-if="!loading && !dataLoading && isOneDayMinute && !minuteBars.length" class="chart-overlay empty">暂无分时数据</div>
       <div v-if="loading || dataLoading" class="chart-overlay loading"><div class="spinner"></div></div>
     </div>
       </div>
@@ -115,7 +116,6 @@ import { buildDecisionGsChartSeries, collectDecisionGsMarkers, formatKlinePriceL
 import {
   earliestTradeDate,
   fullCacheVisibleRange,
-  latestTradeDate,
   nextVisibleRange,
   formatIntradayAxis,
   normalizeChartDate,
@@ -155,7 +155,6 @@ const startDate = ref('')
 const endDate = ref('')
 const selectedMinuteDate = ref('')
 const minuteBars = ref([])
-const tradeSignals = ref([])
 const theme = ref(localStorage.getItem('chart-theme') || 'dark')
 const decisionGsEnabled = ref(true)
 
@@ -261,14 +260,6 @@ const normalizeDate = normalizeChartDate
 let prevSymbol = null
 let prevRecords = []
 
-function updateMinuteDateFromRecords(records) {
-  const latest = latestTradeDate(records)
-  if (!latest) return
-  selectedMinuteDate.value = (props.signalDates?.length)
-    ? normalizeDate(props.signalDates[0])
-    : latest
-}
-
 function applyVisibleWindow(records) {
   const rows = Array.isArray(records) ? records : []
   const range = nextVisibleRange({
@@ -281,9 +272,6 @@ function applyVisibleWindow(records) {
   })
   startDate.value = range.start
   endDate.value = range.end
-  if (props.symbol !== prevSymbol) {
-    updateMinuteDateFromRecords(rows)
-  }
   prevSymbol = props.symbol
   prevRecords = rows
 }
@@ -329,17 +317,55 @@ const toggleTheme = () => {
 }
 
 // --- Data Fetching ---
+function barsFromMinuteResponse(res) {
+  return Array.isArray(res?.data) ? res.data : []
+}
+
+function compactYmd(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+  return digits.length >= 8 ? digits.slice(0, 8) : ''
+}
+
+function applyMinuteDay(res, bars) {
+  const ymd = compactYmd(res?.day) || compactYmd(bars[0]?.trade_date)
+  if (ymd) selectedMinuteDate.value = normalizeDate(ymd)
+}
+
+function minuteAxisLabel(tradeDate) {
+  const digits = String(tradeDate || '').replace(/\D/g, '')
+  if (digits.length >= 12) {
+    return `${digits.slice(8, 10)}:${digits.slice(10, 12)}`
+  }
+  return String(tradeDate || '')
+}
+
+async function requestMinuteBars({ startDate, endDate } = {}) {
+  const params = { symbol: props.symbol, tf: '1m', limit: 1000 }
+  if (startDate && endDate) {
+    params.start_date = String(startDate).replace(/-/g, '')
+    params.end_date = String(endDate).replace(/-/g, '')
+  }
+  return request({ method: 'get', url: '/minute-bars/', params })
+}
+
 async function fetchMinuteData() {
-  if (!props.symbol || !selectedMinuteDate.value) return
+  if (!props.symbol) return
   loading.value = true
+  error.value = ''
   try {
-    const dStr = selectedMinuteDate.value.replace(/-/g, '')
-    const [bRes, sRes] = await Promise.all([
-      request({ method: 'get', url: '/minute-bars/', params: { symbol: props.symbol, start_date: dStr, end_date: dStr, limit: 1000 } }),
-      request({ method: 'get', url: '/trade-signals/', params: { symbol: props.symbol, start_date: selectedMinuteDate.value, end_date: selectedMinuteDate.value } })
-    ])
-    minuteBars.value = bRes.data || []
-    tradeSignals.value = sRes.data || []
+    const dated = Boolean(selectedMinuteDate.value)
+    let res = await requestMinuteBars(
+      dated
+        ? { startDate: selectedMinuteDate.value, endDate: selectedMinuteDate.value }
+        : {}
+    )
+    let rows = barsFromMinuteResponse(res)
+    if (!rows.length && dated) {
+      res = await requestMinuteBars({})
+      rows = barsFromMinuteResponse(res)
+    }
+    minuteBars.value = rows
+    applyMinuteDay(res, rows)
     drawChart()
   } catch (e) {
     error.value = '加载失败'
@@ -404,7 +430,7 @@ function drawChart() {
 
 function renderMinute() {
   if (!minuteBars.value.length) { chartInstance.clear(); return; }
-  const times = minuteBars.value.map(b => b.trade_date.slice(8, 12).replace(/(\d{2})(\d{2})/, '$1:$2'))
+  const times = minuteBars.value.map(b => minuteAxisLabel(b.trade_date))
   const data = minuteBars.value.map(b => [b.open, b.close, b.low, b.high])
   
   const option = getBaseOption(times)
@@ -673,12 +699,11 @@ function handleDataZoom(params) {
 
 // --- Lifecycle ---
 onMounted(async () => {
-  if (props.records?.length) {
-    if (kType.value === 'minute') {
-      updateMinuteDateFromRecords(props.records)
-    } else {
-      applyVisibleWindow(props.records)
-    }
+  if (props.records?.length && kType.value !== 'minute') {
+    applyVisibleWindow(props.records)
+  }
+  if (kType.value === 'minute') {
+    fetchMinuteData()
   }
 
   resizeObserver = new ResizeObserver(async (entries) => {
@@ -724,7 +749,6 @@ watch(() => props.symbol, (sym, prev) => {
   prevRecords = []
   prevSymbol = sym
   if (kType.value === 'minute') {
-    selectedMinuteDate.value = ''
     fetchMinuteData()
   } else if (isIntradayGs.value) {
     fetchIntradayGsBars()
