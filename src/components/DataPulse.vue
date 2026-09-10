@@ -171,6 +171,10 @@
           </div>
         </div>
       </div>
+
+      <div v-if="panelTab === 'scores'" class="panel-content score-audit-wrap">
+        <ScoreAuditPanel />
+      </div>
     </div>
 
     <v-dialog v-model="gapDialog" max-width="560" scrollable>
@@ -274,6 +278,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { mdiCheckCircle, mdiAlertCircle } from '@mdi/js'
 import { fetchDataPulseOverview, fetchDataPulseNews, fetchCoverageGaps, fetchDataPulseContracts } from '../api/dataPulse.js'
+import ScoreAuditPanel from './ScoreAuditPanel.vue'
 
 const panelTab = ref('news')
 const overview = ref(null)
@@ -297,6 +302,7 @@ const panelTabs = [
   { id: 'news', icon: '📰', label: '新闻快讯' },
   { id: 'sync', icon: '⚡', label: '数据同步' },
   { id: 'contracts', icon: '📑', label: '数据合约' },
+  { id: 'scores', icon: '🧮', label: '评分自查' },
 ]
 
 // ── 计算属性 ──
@@ -725,6 +731,9 @@ onMounted(() => {
   max-height: 380px;
   overflow-y: auto;
   overflow-x: auto;
+}
+.panel-content.score-audit-wrap {
+  max-height: 560px;
 }
 
 .panel-loading, .panel-empty {
