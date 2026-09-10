@@ -3,6 +3,7 @@ import {
   buildScoreAuditPayload,
   defaultScoreAuditRange,
   localYmd,
+  suggestedAuditStep,
   toDateInput,
 } from '../scoreAuditPayload'
 
@@ -24,6 +25,18 @@ describe('buildScoreAuditPayload', () => {
       sample: 12,
       max_dates: 40,
     })
+  })
+
+  it('raises step so a 2021–2023 window stays under the 40-date cap', () => {
+    const payload = buildScoreAuditPayload({
+      start_date: '2021-01-01',
+      end_date: '2023-12-29',
+      step: 2,
+      sample: 12,
+    })
+    expect(payload.step).toBeGreaterThanOrEqual(18)
+    expect(payload.step).toBeLessThanOrEqual(22)
+    expect(suggestedAuditStep('20260901', '20260910', 40, 2)).toBe(2)
   })
 
   it('rejects an inverted window', () => {

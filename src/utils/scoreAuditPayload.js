@@ -34,14 +34,28 @@ export function buildScoreAuditPayload(state = {}) {
   const sample = Number(state.sample)
   if (!Number.isInteger(step) || step < 1) throw new Error('step 必须是 >= 1 的整数')
   if (!Number.isInteger(sample) || sample < 0) throw new Error('sample 必须是 >= 0 的整数')
+  const max_dates = Number(state.max_dates) || 40
   return {
     start_date,
     end_date,
     universe_index: state.universe_index || 'csi1000',
-    step,
+    step: suggestedAuditStep(start_date, end_date, max_dates, step),
     sample,
-    max_dates: Number(state.max_dates) || 40,
+    max_dates,
   }
+}
+
+/** Keep ~maxDates samples across a long window (2021–2023 + step=2 is ~364 days). */
+export function suggestedAuditStep(startDate, endDate, maxDates = 40, step = 1) {
+  const start = toYyyymmdd(startDate)
+  const end = toYyyymmdd(endDate)
+  const startUtc = Date.UTC(Number(start.slice(0, 4)), Number(start.slice(4, 6)) - 1, Number(start.slice(6, 8)))
+  const endUtc = Date.UTC(Number(end.slice(0, 4)), Number(end.slice(4, 6)) - 1, Number(end.slice(6, 8)))
+  const calendarDays = Math.floor((endUtc - startUtc) / 86400000) + 1
+  const approxTrading = Math.max(1, Math.ceil((calendarDays * 243) / 365))
+  const need = Math.max(1, Math.ceil(approxTrading / Math.max(1, Number(maxDates) || 40)))
+  const requested = Number(step)
+  return Math.max(Number.isInteger(requested) && requested >= 1 ? requested : 1, need)
 }
 
 export const SCORE_AUDIT_VERDICT_LABEL = {

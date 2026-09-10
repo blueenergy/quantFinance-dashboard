@@ -46,6 +46,7 @@
         <span class="meta">
           {{ job.start_date }}–{{ job.end_date }} · {{ job.universe_index }} · {{ job.source }}
         </span>
+        <span v-if="job.error_message" class="err">{{ job.error_message }}</span>
       </li>
     </ul>
     <p v-if="!loading && !jobs.length" class="empty">还没有自查记录。周一 08:30 会抽最近 40 天，也可以上面排队。</p>
@@ -111,7 +112,7 @@ const repairHint = computed(() => {
   if (!String(verdict).includes('stale')) return ''
   const start = detail.value?.start_date || form.start_date.replace(/-/g, '')
   const end = detail.value?.end_date || form.end_date.replace(/-/g, '')
-  return `过期不要进 quant-scorer。k8s：python -m tools.ops.audit_stored_scores --repair --start-date ${start} --end-date ${end} --apply`
+  return `检查已完成：落库分过期。不要在常驻 quant-scorer 里刷。WSL 用独立 docker run（growth cycle --force-refresh，见 wiki 评分自查）；k8s 才用 --repair --apply。窗口 ${start}–${end}。`
 })
 
 function verdictLabel(value) {
