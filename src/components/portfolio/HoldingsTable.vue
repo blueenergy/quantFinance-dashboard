@@ -12,14 +12,14 @@
           <th>名称</th>
           <th>买入日</th>
           <th>当前</th>
-          <th>目标</th>
-          <th>变动</th>
+          <th v-if="editMode">目标</th>
+          <th v-if="editMode">变动</th>
           <th>均价</th>
           <th>现价</th>
           <th>市值</th>
           <th>盈亏</th>
           <th>今日盈亏</th>
-          <th>快思考</th>
+          <th v-if="editMode">快思考</th>
           <th>明细</th>
           <th>风控</th>
         </tr>
@@ -41,7 +41,7 @@
             <td>{{ row.name || '-' }}</td>
             <td>{{ row.buy_date || '-' }}</td>
             <td>{{ row.shares }}</td>
-            <td>
+            <td v-if="editMode">
               <input
                 :value="effectiveTarget(row.symbol)"
                 type="number"
@@ -51,7 +51,7 @@
                 @input="$emit('update-target', row.symbol, $event.target.value)"
               >
             </td>
-            <td :class="signClass(manualDelta(row))">{{ formatShareDelta(manualDelta(row)) }}</td>
+            <td v-if="editMode" :class="signClass(manualDelta(row))">{{ formatShareDelta(manualDelta(row)) }}</td>
             <td>{{ num(row.avg_cost) }}</td>
             <td :title="holdingPriceTitle(row)">{{ num(row.last_price) }}</td>
             <td>{{ money(row.market_value) }}</td>
@@ -61,7 +61,7 @@
             <td :class="signClass(row.day_pnl)" :title="holdingDayPnlTitle(row)">
               {{ signedMoney(row.day_pnl) }}
             </td>
-            <td class="fast-actions">
+            <td v-if="editMode" class="fast-actions">
               <button type="button" class="fast-btn fast-btn-swap" @click="$emit('open-swap', row)">换股</button>
               <button type="button" class="fast-btn fast-btn-reduce" @click="$emit('quick-reduce', row, halfTargetShares(row))">减半</button>
               <button type="button" class="fast-btn fast-btn-clear" @click="$emit('quick-reduce', row, 0)">清仓</button>
@@ -129,7 +129,7 @@
             </td>
           </tr>
           <tr v-if="isExpanded(row.symbol)" class="detail-row">
-            <td :colspan="14">
+            <td :colspan="holdingsColumnCount">
               <div class="detail-wrap">
                 <table class="detail-table">
                   <thead>
@@ -175,11 +175,11 @@
       </tbody>
       <tfoot>
         <tr class="holdings-total-row">
-          <td colspan="8">合计</td>
+          <td :colspan="totalsLeadColspan">合计</td>
           <td>{{ money(holdingsTotals.marketValue) }}</td>
           <td :class="signClass(holdingsTotals.totalPnl)">{{ signedMoney(holdingsTotals.totalPnl) }}</td>
           <td :class="signClass(holdingsTotals.dayPnl)">{{ signedMoney(holdingsTotals.hasDayPnl ? holdingsTotals.dayPnl : null) }}</td>
-          <td colspan="3"></td>
+          <td :colspan="totalsTrailColspan"></td>
         </tr>
       </tfoot>
     </table>
@@ -213,6 +213,7 @@ import {
 } from '../../composables/usePortfolioPlanFormat'
 
 const props = defineProps({
+  editMode: { type: Boolean, default: false },
   latestHoldingRows: { type: Array, default: () => [] },
   tradesBySymbol: { type: Object, default: () => ({}) },
   holdingsRisk: { type: Object, default: null },
@@ -321,6 +322,10 @@ function holdingDayPnlTitle(row) {
     `昨收：${num(row?.previous_close)}`,
   ].join('\n')
 }
+
+const holdingsColumnCount = computed(() => (props.editMode ? 14 : 11))
+const totalsLeadColspan = computed(() => (props.editMode ? 8 : 6))
+const totalsTrailColspan = computed(() => (props.editMode ? 3 : 2))
 
 const holdingsTotals = computed(() => (
   props.latestHoldingRows.reduce((acc, row) => {

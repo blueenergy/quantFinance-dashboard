@@ -31,6 +31,30 @@ beforeEach(() => {
     .forEach((el) => el.remove())
 })
 
+describe('HoldingsPanel view vs edit', () => {
+  it('keeps row actions hidden until 手动调仓 is turned on', async () => {
+    const wrapper = mountHoldingsPanel({ selectedLatestPlanId: 'plan-1' })
+    expect(wrapper.find('.fast-btn-swap').exists()).toBe(false)
+    expect(wrapper.find('.target-input').exists()).toBe(false)
+
+    await wrapper.get('.holdings-edit-toggle').trigger('click')
+    expect(wrapper.find('.fast-btn-swap').exists()).toBe(true)
+    expect(wrapper.find('.target-input').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('leaves edit mode when the selected plan changes', async () => {
+    const wrapper = mountHoldingsPanel({ selectedLatestPlanId: 'plan-1' })
+    await wrapper.get('.holdings-edit-toggle').trigger('click')
+    expect(wrapper.find('.fast-btn-swap').exists()).toBe(true)
+
+    await wrapper.setProps({ selectedLatestPlanId: 'plan-2' })
+    expect(wrapper.find('.fast-btn-swap').exists()).toBe(false)
+    expect(wrapper.get('.holdings-edit-toggle').attributes('aria-pressed')).toBe('false')
+    wrapper.unmount()
+  })
+})
+
 describe('HoldingsPanel plan opportunity merge', () => {
   it('shows opportunity tag from holdingPlanOpportunityBySymbol when row lacks ai_opportunity', () => {
     const wrapper = mountHoldingsPanel()

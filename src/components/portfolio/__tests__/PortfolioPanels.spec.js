@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import HoldingsTable from '../HoldingsTable.vue'
+import HoldingsTableToolbar from '../HoldingsTableToolbar.vue'
 import PortfolioIdentityCard from '../PortfolioIdentityCard.vue'
 import PortfolioPlanDetailHeader from '../PortfolioPlanDetailHeader.vue'
 import PlanOverviewExecuteLink from '../PlanOverviewExecuteLink.vue'
@@ -47,6 +48,17 @@ describe('PortfolioReconcileBanner', () => {
 })
 
 describe('HoldingsTable', () => {
+  const row = {
+    symbol: '600000.SH',
+    name: '浦发银行',
+    shares: 100,
+    avg_cost: 10,
+    last_price: 11,
+    market_value: 1100,
+    realized_pnl: 20,
+    unrealized_pnl: 100,
+  }
+
   it('renders empty and one-row states', async () => {
     const wrapper = mount(HoldingsTable, {
       props: {
@@ -61,21 +73,93 @@ describe('HoldingsTable', () => {
     expect(wrapper.text()).toContain('暂无当前持仓')
 
     await wrapper.setProps({
-      latestHoldingRows: [{
-        symbol: '600000.SH',
-        name: '浦发银行',
-        shares: 100,
-        avg_cost: 10,
-        last_price: 11,
-        market_value: 1100,
-        realized_pnl: 20,
-        unrealized_pnl: 100,
-      }],
+      latestHoldingRows: [row],
     })
 
     expect(wrapper.text()).toContain('600000.SH')
     expect(wrapper.text()).toContain('浦发银行')
     expect(wrapper.text()).toContain('1,100')
+  })
+
+  it('hides target shares and fast actions until edit mode', async () => {
+    const wrapper = mount(HoldingsTable, {
+      props: {
+        ...tableFunctions,
+        latestHoldingRows: [row],
+      },
+      global: {
+        stubs: { AppLink: { template: '<a><slot /></a>' } },
+      },
+    })
+
+    expect(wrapper.text()).not.toContain('目标')
+    expect(wrapper.text()).not.toContain('快思考')
+    expect(wrapper.find('.target-input').exists()).toBe(false)
+    expect(wrapper.find('.fast-btn-swap').exists()).toBe(false)
+
+    await wrapper.setProps({ editMode: true })
+    expect(wrapper.text()).toContain('目标')
+    expect(wrapper.text()).toContain('快思考')
+    expect(wrapper.find('.target-input').exists()).toBe(true)
+    expect(wrapper.get('.fast-btn-swap').text()).toBe('换股')
+  })
+})
+
+describe('HoldingsTableToolbar', () => {
+  const baseProps = {
+    selectedLatestPlanId: 'plan-1',
+    hasHoldings: true,
+  }
+
+  it('keeps liquidate and manual-entry in more until edit mode', () => {
+    const wrapper = mount(HoldingsTableToolbar, {
+      props: {
+        ...baseProps,
+        isLivePortfolio: true,
+      },
+    })
+
+    expect(wrapper.text()).toContain('手动调仓')
+    expect(wrapper.text()).not.toContain('提交手动调仓')
+    expect(wrapper.get('.holdings-more').text()).toContain('实盘一键清仓')
+    expect(wrapper.get('.holdings-more').text()).toContain('补录 miniQMT 手工操作')
+    expect(wrapper.find('.holdings-actions > button.danger').exists()).toBe(false)
+  })
+
+  it('shows submit and a pressed toggle in edit mode', async () => {
+    const wrapper = mount(HoldingsTableToolbar, {
+      props: {
+        ...baseProps,
+        editMode: false,
+        hasManualChanges: true,
+      },
+    })
+
+    expect(wrapper.get('.holdings-edit-toggle').text()).toBe('手动调仓 · 未提交')
+    await wrapper.get('.holdings-edit-toggle').trigger('click')
+    expect(wrapper.emitted('update:editMode')[0]).toEqual([true])
+
+    await wrapper.setProps({ editMode: true, hasManualChanges: true })
+    expect(wrapper.get('.holdings-edit-toggle').text()).toBe('退出手动调仓')
+    expect(wrapper.get('.holdings-edit-toggle').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.text()).toContain('提交手动调仓')
+  })
+
+  it('emits liquidate from more and closes the menu', async () => {
+    const wrapper = mount(HoldingsTableToolbar, {
+      props: {
+        ...baseProps,
+        isLivePortfolio: false,
+      },
+    })
+
+    const menu = wrapper.get('.holdings-more')
+    menu.element.open = true
+    await wrapper.get('.holdings-more-menu button.danger').trigger('click')
+    expect(wrapper.emitted('open-liquidate')).toHaveLength(1)
+    expect(menu.element.open).toBe(false)
+    expect(wrapper.text()).toContain('纸面一键清仓')
+    expect(wrapper.text()).not.toContain('补录 miniQMT 手工操作')
   })
 })
 

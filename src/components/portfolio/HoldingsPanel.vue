@@ -1,6 +1,7 @@
 <template>
   <section class="holdings-section">
     <HoldingsTableToolbar
+      v-model:edit-mode="holdingsEditMode"
       :selected-latest-plan-id="selectedLatestPlanId"
       :risk-loading="riskLoading"
       :has-manual-changes="Boolean(manualChangeRows.length)"
@@ -15,6 +16,7 @@
     />
 
     <HoldingsTable
+      :edit-mode="holdingsEditMode"
       :latest-holding-rows="latestHoldingRows"
       :trades-by-symbol="tradesBySymbol"
       :holdings-risk="holdingsRisk"
@@ -73,7 +75,7 @@
 </template>
 
 <script setup>
-import { defineAsyncComponent } from 'vue'
+import { defineAsyncComponent, ref, watch } from 'vue'
 import HoldingsTable from './HoldingsTable.vue'
 import HoldingsTableToolbar from './HoldingsTableToolbar.vue'
 import LlmRiskDetailPanel from './LlmRiskDetailPanel.vue'
@@ -81,7 +83,7 @@ import { useLlmRiskDetail } from '../../composables/useLlmRiskDetail'
 
 const HoldingsBenchPanel = defineAsyncComponent(() => import('./HoldingsBenchPanel.vue'))
 
-defineProps({
+const props = defineProps({
   selectedLatestPlanId: { type: String, default: '' },
   riskLoading: { type: Boolean, default: false },
   manualChangeRows: { type: Array, default: () => [] },
@@ -124,6 +126,15 @@ const emit = defineEmits([
   'load-bench-llm-risk',
   'risk-changed',
 ])
+
+const holdingsEditMode = ref(false)
+
+watch(
+  () => props.selectedLatestPlanId,
+  () => {
+    holdingsEditMode.value = false
+  },
+)
 
 const {
   detail: llmDetail,
