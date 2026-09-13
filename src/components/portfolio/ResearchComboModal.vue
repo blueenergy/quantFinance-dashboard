@@ -177,8 +177,8 @@
             <span><i class="sw" style="background:#0f6bdc"></i>策略（净）</span>
             <span><i class="sw" style="background:#94a3b8"></i>指数基准</span>
             <template v-if="equityChart?.regimeBands?.length">
-              <span><i class="sw sw-band" style="background:rgba(16,185,129,.35)"></i>牛市</span>
-              <span><i class="sw sw-band" style="background:rgba(239,68,68,.35)"></i>熊市</span>
+              <span><i class="sw sw-band" style="background:rgba(239,68,68,.35)"></i>牛市</span>
+              <span><i class="sw sw-band" style="background:rgba(16,185,129,.35)"></i>熊市</span>
               <span><i class="sw sw-band" style="background:rgba(148,163,184,.45)"></i>震荡</span>
             </template>
           </div>
@@ -413,8 +413,9 @@ function handleChartPointerMove(event) {
 }
 
 function regimeBandFill(label) {
-  if (label === 'bull') return 'rgba(16, 185, 129, 0.14)'
-  if (label === 'bear') return 'rgba(239, 68, 68, 0.14)'
+  // A-share convention: red = bull / up, green = bear / down (same as kline 牛线/熊线).
+  if (label === 'bull') return 'rgba(239, 68, 68, 0.14)'
+  if (label === 'bear') return 'rgba(16, 185, 129, 0.14)'
   return 'rgba(148, 163, 184, 0.16)'
 }
 </script>
@@ -685,13 +686,13 @@ th {
 }
 
 .tag-bull {
-  background: #ecfdf5;
-  color: #047857;
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .tag-bear {
-  background: #fef2f2;
-  color: #b91c1c;
+  background: #ecfdf5;
+  color: #047857;
 }
 
 .tag-uncertain {

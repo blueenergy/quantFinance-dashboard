@@ -168,6 +168,12 @@ describe('ResearchComboModal', () => {
     expect(wrapper.text()).toContain('牛市')
     expect(wrapper.text()).toContain('持有期内指数翻熊不会中途卖出')
     expect(wrapper.findAll('rect').length).toBeGreaterThan(0)
+    expect(wrapper.find('.tag-bull').exists()).toBe(true)
+    const bullBand = wrapper.findAll('rect').find((node) => node.attributes('fill')?.includes('239'))
+    expect(bullBand?.attributes('fill')).toBe('rgba(239, 68, 68, 0.14)')
+    expect(wrapper.find('.combo-legend').html()).toMatch(/rgba\(239,\s*68,\s*68/)
+    expect(wrapper.find('.combo-legend').html()).toMatch(/rgba\(16,\s*185,\s*129/)
+    expect(wrapper.html()).not.toContain('rgba(16, 185, 129, 0.14)')
 
     const svg = wrapper.find('svg')
     svg.element.getBoundingClientRect = () => ({
@@ -180,5 +186,28 @@ describe('ResearchComboModal', () => {
     })
     await svg.trigger('mousemove', { clientX: 1080 })
     expect(wrapper.text()).toContain('指数：牛市')
+  })
+
+  it('paints bear bands green under A-share convention', () => {
+    const wrapper = mountModal({
+      detail: {
+        ...detail,
+        periods: [{
+          score_date: '2024-01-02',
+          period_end_date: '2024-01-20',
+          portfolio_return_net: -0.02,
+          index_benchmark_return: -0.01,
+          regime_label: 'bear',
+        }],
+        trades: [
+          { score_date: '2024-01-02', symbol: '600000.SH', name: '浦发银行', regime_label: 'bear' },
+        ],
+      },
+    })
+
+    expect(wrapper.find('.tag-bear').exists()).toBe(true)
+    const bearBand = wrapper.findAll('rect').find((node) => node.attributes('fill')?.includes('16, 185, 129'))
+    expect(bearBand?.attributes('fill')).toBe('rgba(16, 185, 129, 0.14)')
+    expect(wrapper.html()).not.toContain('rgba(239, 68, 68, 0.14)')
   })
 })
