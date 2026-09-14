@@ -11,3 +11,7 @@ export function createScoreAuditJob(data) {
 export function getScoreAuditJob(jobId) {
   return request({ url: `/score-audit/jobs/${jobId}`, method: 'get' })
 }
+
+export function addScoreAuditRepairNote(jobId, data) {
+  return request({ url: `/score-audit/jobs/${jobId}/repair-notes`, method: 'post', data })
+}
