@@ -199,18 +199,6 @@
           </small>
         </div>
       </div>
-      <div v-if="executionPreview" class="alert info">
-        <div>
-          {{ executionPreview.intent?.action }} {{ executionPreview.intent?.quantity }} 股
-          → 目标 {{ executionPreview.intent?.target_shares }} 股
-        </div>
-        <div v-if="executionPreview.intent?.warnings?.length" class="muted">
-          {{ executionPreview.intent.warnings.join('；') }}
-        </div>
-        <div v-if="executionPreviewBlockers.length" class="negative">
-          风控拦截：{{ executionPreviewBlockers.join('；') }}
-        </div>
-      </div>
       <table v-if="executionRows.length">
         <thead>
           <tr>
@@ -281,6 +269,46 @@
                 <button class="btn small primary" :disabled="loading" @click="previewExecution(sig)">预览下单</button>
                 <button class="btn small" :disabled="loading || !executionReady" @click="submitExecution(sig)">提交下单</button>
               </template>
+            </td>
+          </tr>
+          <tr
+            v-if="executionState(sig).loading || executionState(sig).preview || executionState(sig).error || executionState(sig).done"
+            class="sig-exec-row"
+          >
+            <td colspan="8">
+              <div class="sig-exec">
+                <span v-if="executionState(sig).loading" class="muted">预览中…</span>
+                <template v-if="executionState(sig).preview">
+                  <div class="sig-exec-line">
+                    {{ executionState(sig).preview.intent?.action || '' }}
+                    {{ executionState(sig).preview.intent?.quantity ?? '?' }} 股
+                    → 目标 {{ executionState(sig).preview.intent?.target_shares ?? '?' }} 股
+                    <span class="muted">{{ executionState(sig).preview.intent?.pair_style || '' }}</span>
+                  </div>
+                  <div v-if="previewBlockers(executionState(sig).preview).length" class="sig-exec-blockers">
+                    风控拦截：{{ previewBlockers(executionState(sig).preview).join('；') }}
+                  </div>
+                  <div v-else-if="t0PreviewWarnings(executionState(sig).preview).length" class="sig-exec-warning">
+                    {{ t0PreviewWarnings(executionState(sig).preview).join('；') }}
+                  </div>
+                  <div class="sig-exec-actions">
+                    <button class="btn small primary" :disabled="executionState(sig).loading" @click="submitExecution(sig, { skipConfirm: true })">确认提交</button>
+                    <button class="btn small" :disabled="executionState(sig).loading" @click="collapseExecution(sig)">收起</button>
+                  </div>
+                </template>
+                <template v-if="executionState(sig).error">
+                  <div class="sig-exec-line error">{{ executionState(sig).error }}</div>
+                  <div class="sig-exec-actions">
+                    <button class="btn small" @click="collapseExecution(sig)">收起</button>
+                  </div>
+                </template>
+                <template v-if="executionState(sig).done">
+                  <div class="sig-exec-line ok">{{ executionState(sig).done }}</div>
+                  <div class="sig-exec-actions">
+                    <button class="btn small" @click="collapseExecution(sig)">收起</button>
+                  </div>
+                </template>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -472,8 +500,9 @@ const executionSettings = reactive({
   global_auto_execute_enabled: false,
 })
 const executionRows = ref([])
-const executionPreview = ref(null)
-const activeExecutionSignalId = ref('')
+// Per-signal execution feedback: preview/error/done render in an expanded row
+// directly under the clicked signal, instead of a banner at the top of the page.
+const executionStates = reactive({})
 
 const selectedExecutionPortfolio = computed(() => (
   livePortfolios.value.find((row) => row.latest_plan_id === executionSettings.plan_id) || null
@@ -481,11 +510,62 @@ const selectedExecutionPortfolio = computed(() => (
 
 const executionReady = computed(() => Boolean(executionSettings.plan_id))
 
-const executionPreviewBlockers = computed(() => {
-  const items = executionPreview.value?.rebalance_preview?.risk_report?.items || []
+function previewBlockers(preview) {
+  const items = preview?.rebalance_preview?.risk_report?.items || []
   const blockers = items.flatMap((item) => item.blockers || [])
   return [...new Set(blockers)]
-})
+}
+
+const T0_WARNING_TRANSLATIONS = [
+  ['quantity_capped_by_available_qty', '数量已按券商可卖量收缩'],
+  ['quantity_capped_by_buy_first_capacity', '数量已按买先额度收缩'],
+  ['no available_qty to close buy_first pair', '无可卖量回补 buy_first 配对'],
+  ['no available_qty for sell preview', '无可卖量可卖'],
+]
+
+function t0PreviewWarnings(preview) {
+  const raw = preview?.intent?.warnings || []
+  return raw.map((w) => {
+    const hit = T0_WARNING_TRANSLATIONS.find(([key]) => String(w).includes(key))
+    return hit ? hit[1] : w
+  })
+}
+
+const T0_ERROR_TRANSLATIONS = [
+  [/open buy_first pair exists/i, '该股有未平仓的「先买后卖」配对（可能跨夜），需先卖回才能再买'],
+  [/open sell_first pair exists/i, '该股有未平仓的「先卖后买」配对（可能跨夜），需先买回才能再卖'],
+  [/buy_first disabled/i, '未启用「先买再卖」，请先在实盘执行设置中开启'],
+  [/signal already submitted/i, '该信号已提交过执行'],
+  [/signal not found/i, '信号不存在或已过期'],
+  [/no sellable quantity after lot normalization/i, '券商可卖量不足（取整后不足一手）'],
+  [/no buy_first capacity after lot normalization/i, '买先额度不足（取整后不足一手）'],
+  [/no uncovered quantity/i, '该配对无未回补数量'],
+  [/only BUY_WATCH \/ SELL_WATCH signals/i, '仅 WATCH 类信号可执行'],
+]
+
+function t0ErrorMessage(err) {
+  const raw = err?.response?.data?.detail || err?.message || String(err)
+  for (const [re, text] of T0_ERROR_TRANSLATIONS) {
+    if (re.test(raw)) return text
+  }
+  return raw
+}
+
+function executionState(signal) {
+  const id = signal?._id || signal?.id || `${signal?.symbol}-${signal?.snapshot_time}`
+  if (!executionStates[id]) {
+    executionStates[id] = reactive({ loading: false, preview: null, error: '', done: '' })
+  }
+  return executionStates[id]
+}
+
+function collapseExecution(signal) {
+  const st = executionState(signal)
+  st.loading = false
+  st.preview = null
+  st.error = ''
+  st.done = ''
+}
 
 function compactDate() {
   return (tradeDate.value || '').replaceAll('-', '')
@@ -641,42 +721,49 @@ function executionPayload(signal) {
 }
 
 async function previewExecution(signal) {
+  const st = executionState(signal)
   if (!executionReady.value) {
-    error.value = '请先选择实盘组合'
+    st.error = '请先在「实盘执行」区域选择实盘组合'
     return
   }
-  loading.value = true
-  error.value = ''
+  st.loading = true
+  st.error = ''
+  st.done = ''
+  st.preview = null
   try {
-    activeExecutionSignalId.value = signal._id || signal.id
-    executionPreview.value = await previewIntradayT0Execution(executionPayload(signal))
-    message.value = '下单预览已生成'
+    st.preview = await previewIntradayT0Execution(executionPayload(signal))
   } catch (err) {
-    setError(err, '预览下单失败')
+    st.error = t0ErrorMessage(err)
   } finally {
-    loading.value = false
+    st.loading = false
   }
 }
 
-async function submitExecution(signal) {
+async function submitExecution(signal, { skipConfirm = false } = {}) {
+  const st = executionState(signal)
   if (!executionReady.value) {
-    error.value = '请先选择实盘组合'
+    st.error = '请先在「实盘执行」区域选择实盘组合'
     return
   }
-  const signalId = signal._id || signal.id
-  const confirmed = window.confirm(`确认提交 ${signal.signal_type} 实盘下单？`)
-  if (!confirmed) return
-  loading.value = true
-  error.value = ''
+  if (!skipConfirm) {
+    const confirmed = window.confirm(`确认提交 ${signal.signal_type} 实盘下单？`)
+    if (!confirmed) return
+  }
+  st.loading = true
+  st.error = ''
   try {
     const body = await submitIntradayT0Execution(executionPayload(signal))
-    message.value = `已提交 ${body?.intent?.action || ''} ${body?.intent?.quantity || ''} 股`
-    executionPreview.value = null
+    const action = body?.intent?.action || ''
+    const qty = body?.intent?.quantity || ''
+    st.preview = null
+    st.done = `已提交 ${action} ${qty} 股`
+    message.value = `已提交 ${action} ${qty} 股`
     await loadExecutionHistory()
   } catch (err) {
-    setError(err, '提交下单失败')
+    st.preview = null
+    st.error = t0ErrorMessage(err)
   } finally {
-    loading.value = false
+    st.loading = false
   }
 }
 
@@ -973,6 +1060,37 @@ onMounted(loadAll)
   background: #dbeafe;
   border-color: #2563eb;
   color: #1d4ed8;
+}
+.sig-exec-row td {
+  padding: 6px 10px;
+  background: #f8fafc;
+}
+.sig-exec {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.sig-exec-line {
+  font-weight: 600;
+}
+.sig-exec-line.error {
+  color: #dc2626;
+}
+.sig-exec-line.ok {
+  color: #16a34a;
+}
+.sig-exec-blockers {
+  color: #dc2626;
+}
+.sig-exec-warning {
+  color: #b45309;
+}
+.sig-exec-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
 }
 .page-header {
   margin-bottom: 14px;
