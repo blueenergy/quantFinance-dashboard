@@ -14,10 +14,22 @@
         </select>
         <input v-model="tradeDate" type="date" />
         <button class="btn primary" :disabled="loading" @click="loadAll">刷新</button>
-        <button class="btn" :disabled="loading" @click="generateSignals">生成信号</button>
-        <button class="btn" :disabled="loading" @click="evaluateSignals">评估</button>
-        <button class="btn" :disabled="loading" @click="exportSignalsCsv">导出信号</button>
-        <button class="btn" :disabled="loading" @click="exportEvaluationsCsv">导出评估</button>
+        <span class="toolbar-action">
+          <button class="btn" :disabled="loading" @click="generateSignals">生成信号</button>
+          <small class="action-hint">按当前持仓快照打分，写一批观察信号（只记录，不下单）</small>
+        </span>
+        <span class="toolbar-action">
+          <button class="btn" :disabled="loading" @click="evaluateSignals">评估</button>
+          <small class="action-hint">回填 5/15/30/60 分钟、收盘、次日开盘/最高的实际走势，检验信号准头</small>
+        </span>
+        <span class="toolbar-action">
+          <button class="btn" :disabled="loading" @click="exportSignalsCsv">导出信号</button>
+          <small class="action-hint">下载今日信号 CSV</small>
+        </span>
+        <span class="toolbar-action">
+          <button class="btn" :disabled="loading" @click="exportEvaluationsCsv">导出评估</button>
+          <small class="action-hint">下载上述评估明细 CSV</small>
+        </span>
       </div>
     </div>
 
@@ -1044,6 +1056,17 @@ onMounted(loadAll)
   display: flex;
   gap: 10px;
   align-items: center;
+}
+.toolbar-action {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.action-hint {
+  font-size: 11px;
+  line-height: 1.3;
+  color: #94a3b8;
+  max-width: 200px;
 }
 .page-header,
 .panel-title,
