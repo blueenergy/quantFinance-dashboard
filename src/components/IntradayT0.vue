@@ -433,9 +433,11 @@
             <th v-if="perfTab === 'reason'">原因</th>
             <th>信号</th>
             <th>周期</th>
-            <th>样本数</th>
+            <th>行数</th>
+            <th>簇数</th>
             <th>平均收益</th>
             <th>胜率</th>
+            <th>净胜率</th>
           </tr>
         </thead>
         <tbody>
@@ -445,8 +447,13 @@
             <td>{{ row.signal_type }}</td>
             <td>{{ row.horizon }}</td>
             <td>{{ row.count }}</td>
+            <!-- 簇数 = 独立的 (股票, 交易日) 数。count 是行数，同一票同日多条信号 +
+                 多个 horizon 互相重叠，行数远大于样本数，两列必须并排读。 -->
+            <td>{{ row.clusters ?? '-' }}</td>
             <td :class="numClass(row.avg_return_pct)">{{ pctText(row.avg_return_pct) }}</td>
             <td>{{ percent(row.win_rate) }}</td>
+            <!-- 净胜率已含往返成本；HOLD 行后端删键 → percent(undefined) 显示 '-' -->
+            <td>{{ percent(row.net_win_rate) }}</td>
           </tr>
         </tbody>
       </table>
