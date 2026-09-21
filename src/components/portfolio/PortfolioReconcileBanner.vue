@@ -1,8 +1,9 @@
 <template>
-  <section class="reconcile-banner">
+  <section class="reconcile-banner" :class="hasDrift ? 'is-drift' : 'is-manual'">
     <div class="reconcile-head">
-      <strong>⚠ 系统账本与券商实时持仓不一致</strong>
+      <strong>{{ hasDrift ? '⚠ 系统账本与券商实时持仓不一致' : '手工仓' }}</strong>
       <button
+        v-if="hasDrift"
         type="button"
         :disabled="!isLivePortfolio"
         @click="$emit('open-external-manual')"
@@ -11,12 +12,18 @@
       </button>
     </div>
     <p class="muted">
-      可能是 miniQMT 端手工买卖后系统尚未记录。补录后账本即可与券商对齐。
+      <template v-if="hasDrift">
+        可能是 miniQMT 端手工买卖后系统尚未记录。补录后账本即可与券商对齐。
+      </template>
+      <template v-else>
+        券商持有、但策略从未买入的仓位。策略不管理它们，也不计入账实核对告警。
+      </template>
       <span v-if="reconcileData?.account_synced_at">
         · 券商同步于 {{ formatSyncedAt(reconcileData.account_synced_at) }}
       </span>
     </p>
-    <div class="table-wrap">
+    <div v-for="group in groups" :key="group.key" class="table-wrap">
+      <p v-if="groups.length > 1" class="group-label">{{ group.label }}</p>
       <table class="lineup-table">
         <thead>
           <tr>
@@ -28,7 +35,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in reconcileData?.diffs || []" :key="row.symbol">
+          <tr v-for="row in group.rows" :key="row.symbol">
             <td>{{ row.symbol }}</td>
             <td>{{ row.name || '-' }}</td>
             <td>{{ row.ledger_shares }}</td>
@@ -42,24 +49,44 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { formatShareDelta } from '../../composables/usePortfolioPlanFormat'
 import { formatSyncedAt } from '../../utils/portfolioOverviewFormat'
 
-defineProps({
+const props = defineProps({
   reconcileData: { type: Object, default: null },
   isLivePortfolio: { type: Boolean, default: false },
 })
 
 defineEmits(['open-external-manual'])
+
+// Drift is the alarm: the broker moved and we did not record it. Manual positions
+// are informational: shares the strategy never bought, so there is nothing to
+// re-sync. Both can be present at once, so render them as separate tables.
+const hasDrift = computed(() => (props.reconcileData?.diffs || []).length > 0)
+
+const groups = computed(() => {
+  const out = []
+  const diffs = props.reconcileData?.diffs || []
+  const manual = props.reconcileData?.manual_positions || []
+  if (diffs.length) out.push({ key: 'diffs', label: '账实差异', rows: diffs })
+  if (manual.length) out.push({ key: 'manual', label: '手工仓', rows: manual })
+  return out
+})
 </script>
 
 <style scoped>
 .reconcile-banner {
-  background: #fef2f2;
-  border: 1px solid #fca5a5;
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
   border-radius: 10px;
   margin-bottom: 16px;
   padding: 14px 16px;
+}
+
+.reconcile-banner.is-drift {
+  background: #fef2f2;
+  border-color: #fca5a5;
 }
 
 .reconcile-head {
@@ -71,6 +98,10 @@ defineEmits(['open-external-manual'])
 }
 
 .reconcile-head strong {
+  color: #374151;
+}
+
+.reconcile-banner.is-drift .reconcile-head strong {
   color: #b91c1c;
 }
 
@@ -84,7 +115,17 @@ defineEmits(['open-external-manual'])
   background: #fff;
   border: 1px solid #d1d5db;
   border-radius: 8px;
+  margin-top: 10px;
   overflow-x: auto;
+}
+
+.group-label {
+  background: #f3f4f6;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  padding: 8px 12px;
 }
 
 table {

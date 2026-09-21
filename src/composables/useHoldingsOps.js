@@ -132,6 +132,7 @@ export function useHoldingsOps({
     willPauseAfterManual: manualOps.willPauseAfterManual,
     externalManualReady: manualOps.externalManualReady,
     holdingsOutOfSync: riskOps.holdingsOutOfSync,
+    manualPositions: riskOps.manualPositions,
     syncManualTargets: manualOps.syncManualTargets,
     manualDelta: manualOps.manualDelta,
     riskRowClass: riskOps.riskRowClass,

@@ -35,6 +35,11 @@ export function useHoldingsRiskOps({
     Boolean(reconcileData.value?.applicable) && reconcileData.value?.in_sync === false
   ))
 
+  // Broker-side holdings no strategy decision accounts for -- discretionary buys
+  // made directly in miniQMT. They never raise the mismatch banner, but the user
+  // still wants to see them listed.
+  const manualPositions = computed(() => reconcileData.value?.manual_positions || [])
+
   function riskRowClass(symbol) {
     const severity = holdingsRiskBySymbol.value[symbol]?.severity
     return severity === 'high' ? 'risk-row-high' : ''
@@ -104,6 +109,7 @@ export function useHoldingsRiskOps({
     holdingsRiskBySymbol,
     holdingsRiskBySymbolHigh,
     holdingsOutOfSync,
+    manualPositions,
     riskRowClass,
     formatRiskTime,
     loadHoldingsRisk,

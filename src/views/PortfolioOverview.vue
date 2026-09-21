@@ -37,7 +37,7 @@
       />
 
       <PortfolioReconcileBanner
-        v-if="holdingsOutOfSync"
+        v-if="holdingsOutOfSync || manualPositions.length"
         :reconcile-data="reconcileData"
         :is-live-portfolio="isLivePortfolio"
         @open-external-manual="openExternalManualModal"
@@ -549,6 +549,7 @@ const {
   willPauseAfterManual,
   externalManualReady,
   holdingsOutOfSync,
+  manualPositions,
   syncManualTargets,
   manualDelta,
   riskRowClass,

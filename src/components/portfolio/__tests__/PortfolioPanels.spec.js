@@ -45,6 +45,61 @@ describe('PortfolioReconcileBanner', () => {
     await wrapper.get('button').trigger('click')
     expect(wrapper.emitted('open-external-manual')).toHaveLength(1)
   })
+
+  it('lists manual positions without raising the mismatch alarm', async () => {
+    const wrapper = mount(PortfolioReconcileBanner, {
+      props: {
+        isLivePortfolio: true,
+        reconcileData: {
+          in_sync: true,
+          diffs: [],
+          manual_positions: [{
+            symbol: '300655.SZ',
+            name: '晶瑞电材',
+            ledger_shares: 0,
+            account_shares: 13000,
+            diff: 13000,
+          }],
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('手工仓')
+    expect(wrapper.text()).toContain('300655.SZ')
+    // No drift -> no alarm, and nothing to re-record.
+    expect(wrapper.text()).not.toContain('不一致')
+    expect(wrapper.find('button').exists()).toBe(false)
+  })
+
+  it('shows drift and manual positions side by side when both exist', async () => {
+    const wrapper = mount(PortfolioReconcileBanner, {
+      props: {
+        isLivePortfolio: true,
+        reconcileData: {
+          in_sync: false,
+          diffs: [{
+            symbol: '600000.SH',
+            name: '浦发银行',
+            ledger_shares: 1000,
+            account_shares: 0,
+            diff: -1000,
+          }],
+          manual_positions: [{
+            symbol: '300655.SZ',
+            name: '晶瑞电材',
+            ledger_shares: 0,
+            account_shares: 13000,
+            diff: 13000,
+          }],
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('系统账本与券商实时持仓不一致')
+    expect(wrapper.text()).toContain('600000.SH')
+    expect(wrapper.text()).toContain('手工仓')
+    expect(wrapper.text()).toContain('300655.SZ')
+  })
 })
 
 describe('HoldingsTable', () => {

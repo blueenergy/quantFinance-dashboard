@@ -240,7 +240,9 @@ export function forceRebalanceLineage(planId, data = {}) {
 }
 
 // Diff the system ledger holdings against the broker's synced positions
-// (trader_positions). Live-only; returns { applicable, in_sync, diffs, ... }.
+// (trader_positions). Live-only; returns { applicable, in_sync, diffs,
+// manual_positions, ... }. manual_positions are broker holdings no strategy
+// decision accounts for: listed, but excluded from the in_sync verdict.
 export function reconcilePortfolioHoldings(planId) {
   return request({ url: `/portfolio-plans/plans/${planId}/holdings-reconcile`, method: 'get' })
 }
