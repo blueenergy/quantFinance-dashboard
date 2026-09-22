@@ -208,6 +208,26 @@
           </p>
         </div>
         
+        <!-- 事件观察点（日期由服务端渲染：模型只输出事件编号，见 market_events_reader） -->
+        <div v-if="analysis.eventWatch?.length" class="dim-block">
+          <h4>📅 事件观察点</h4>
+          <ul class="event-watch">
+            <li v-for="(item, idx) in analysis.eventWatch" :key="idx">{{ item }}</li>
+          </ul>
+        </div>
+
+        <!-- 仓位与操作节奏 -->
+        <div v-if="analysis.positionLevel || analysis.operationBias" class="dim-grid-2">
+          <div v-if="analysis.positionLevel" class="dim-card">
+            <div class="dim-card-title">🎚️ 仓位档位</div>
+            <p class="position-level" :class="getPositionClass(analysis.positionLevel)">{{ analysis.positionLevel }}</p>
+          </div>
+          <div v-if="analysis.operationBias" class="dim-card">
+            <div class="dim-card-title">🧭 操作倾向</div>
+            <p>{{ analysis.operationBias }}</p>
+          </div>
+        </div>
+
         <div class="risk-alert" v-if="analysis.riskLevel !== 'low'">
           <h4>⚠️ 风险提示</h4>
           <p class="risk-content" :class="getRiskClass(analysis.riskLevel)">
@@ -331,6 +351,10 @@ async function fetchLatestAnalysis() {
         ladderInsight: response.ladderInsight || '',
         mainlineAnalysis: response.mainlineAnalysis || '',
         abnormalStockInsight: response.abnormalStockInsight || '',
+        positionLevel: response.positionLevel || '',
+        operationBias: response.operationBias || '',
+        // 服务端渲染好的字符串列表；模型只给事件编号，见 market_analyzer 的 event_watch
+        eventWatch: Array.isArray(response.event_watch) ? response.event_watch : [],
         industry_signals: response.industry_signals || null,
         notice: response.notice || '',
         ivSnapshot: response.iv_snapshot || null,
@@ -487,6 +511,15 @@ function getRiskText(level) {
     case 'medium': return '中等风险'
     case 'low': return '低风险'
     default: return '中等风险'
+  }
+}
+
+// 获取仓位档位样式类（档位由 LLM 输出，固定三选一）
+function getPositionClass(level) {
+  switch (level) {
+    case '重仓': return 'position-heavy'
+    case '轻仓': return 'position-light'
+    default: return 'position-neutral'
   }
 }
 
@@ -863,6 +896,33 @@ onMounted(() => {
 
 .risk-low {
   color: #38a169;
+}
+
+.position-level {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.position-heavy {
+  color: #c05621;
+}
+
+.position-neutral {
+  color: #4a5568;
+}
+
+.position-light {
+  color: #2b6cb0;
+}
+
+.event-watch {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.event-watch li {
+  margin-bottom: 4px;
 }
 
 /* 缓存信息样式 */
