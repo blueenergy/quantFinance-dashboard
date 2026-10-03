@@ -149,12 +149,27 @@ describe('usePortfolioResearchDetail', () => {
     host.wrapper.unmount()
   })
 
-  it('marks generic score research as not publishable', async () => {
+  it('allows publishing weighted_score recipes', async () => {
     const host = mountDetail()
     host.detailApi.resultDetail.value = {
       candidate_strategy_config: {
         score_type: 'weighted_score',
         score_weights: { fundamental: 0.6, value: 0.4 },
+      },
+    }
+    await flushPromises()
+
+    expect(host.detailApi.publishSupported.value).toBe(true)
+    expect(host.detailApi.publishDisabledReason.value).toBe('')
+    host.wrapper.unmount()
+  })
+
+  it('marks score_column research as not publishable', async () => {
+    const host = mountDetail()
+    host.detailApi.resultDetail.value = {
+      candidate_strategy_config: {
+        score_type: 'score_column',
+        score_column: 'composite_growth_cycle_score',
       },
     }
     await flushPromises()
