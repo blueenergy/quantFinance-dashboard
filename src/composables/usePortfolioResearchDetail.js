@@ -64,7 +64,7 @@ export function usePortfolioResearchDetail({
   const publishSupported = computed(() => {
     if (researchSelectionMode.value === 'dynamic_score_threshold') return false
     const scoreType = candidateConfig.value?.score_type
-    return !scoreType || scoreType === 'growth_cycle_weighted'
+    return !scoreType || ['growth_cycle_weighted', 'weighted_score'].includes(scoreType)
   })
   const publishDisabledReason = computed(() => {
     if (publishSupported.value) return ''
