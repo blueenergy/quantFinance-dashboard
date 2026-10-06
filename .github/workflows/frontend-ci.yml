@@ -145,10 +145,10 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     # Checkout, wait for the relay, bump, one dispatch POST. The wait has its
-    # own 45-minute ceiling (the ghcr->ACR relay sweeps on a timer and a cold
-    # cross-border pull is slow), so the job ceiling sits above it. A healthy
-    # run is about a minute.
-    timeout-minutes: 50
+    # own 90-minute ceiling (the ghcr->ACR relay sweeps on a timer, and a slow
+    # day runs to the relay's 60-minute pull timeout plus a resume retry), so
+    # the job ceiling sits above it. A healthy run is about a minute.
+    timeout-minutes: 120
     needs: [test-build, docker-build]
     steps:
       - name: Compute image tag
