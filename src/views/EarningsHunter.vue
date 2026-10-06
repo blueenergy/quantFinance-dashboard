@@ -148,7 +148,6 @@ const getBadgeClass = (type) => {
   switch(type) {
     case '业绩预告': return 'badge-forecast'
     case '业绩快报': return 'badge-express'
-    case '卖方研报': return 'badge-report'
     default: return ''
   }
 }
@@ -454,7 +453,6 @@ select:hover {
 }
 .badge-forecast { background-color: rgba(25, 118, 210, 0.2); color: #64b5f6; border: 1px solid #1976d2; }
 .badge-express { background-color: rgba(46, 125, 50, 0.2); color: #81c784; border: 1px solid #2e7d32; }
-.badge-report { background-color: rgba(245, 124, 0, 0.2); color: #ffb74d; border: 1px solid #f57c00; }
 
 .card-body {
   flex: 1;
