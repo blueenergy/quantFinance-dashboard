@@ -94,6 +94,8 @@
       :format-param-display="formatParamDisplay"
     />
 
+    <p v-if="batchMessage" class="message">{{ batchMessage }}</p>
+
     <section ref="detailSection" class="layout">
       <StrategyLabBatchList
         :batches="batches"
@@ -158,7 +160,6 @@
           <div><span>平均收益</span><strong>{{ pct(summary.avg_total_return) }}</strong></div>
           <div><span>中位收益</span><strong>{{ pct(summary.median_total_return) }}</strong></div>
         </div>
-        <p v-if="batchMessage" class="message detail-message">{{ batchMessage }}</p>
 
         <div v-if="pendingDeleteBatch" class="inline-confirm danger-confirm">
           <strong>确认删除实验「{{ pendingDeleteBatch.name }}」？</strong>
@@ -293,7 +294,6 @@
               <p v-else class="muted">当前实验未记录策略参数。</p>
             </div>
           </div>
-          <p v-if="batchMessage" class="message">{{ batchMessage }}</p>
         </section>
 
         <StrategyLabTradePanel
@@ -472,6 +472,7 @@ function switchToCompare() {
 }
 
 const batches = ref([])
+const selectedBatch = ref(null)
 const selectedBatchId = ref('')
 const results = ref([])
 const selectedTradeResult = ref(null)

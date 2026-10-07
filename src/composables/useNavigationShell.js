@@ -206,10 +206,10 @@ export function useNavigationShell({ user, isAuthenticated }) {
   }
 
   function toggleTab(tabId) {
-    if (activeTab.value === tabId) {
-      activeTab.value = ''
-      return
-    }
+    // Plain left-click on the already-active tab is a no-op. It used to set
+    // activeTab = '', which emptied the content area and forced an expensive
+    // remount on the next click.
+    if (activeTab.value === tabId) return
     activateTab(tabId)
   }
 
