@@ -208,7 +208,12 @@ jobs:
 
   notify-dingtalk:
     name: Notify DingTalk on failure
-    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    # 'cancelled' counts too: a run killed mid-build means the image was never
+    # published and the deploy never dispatched -- exactly as worth knowing
+    # about as a failure, and precisely how the 2026-09-21 ACR stall stayed
+    # invisible for 3.5 hours. A job-level timeout kill reports 'cancelled' the
+    # same way (2026-10-06: two bump jobs died waiting for the ACR relay).
+    if: ${{ always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     needs: [test-build, e2e-smoke, docker-build, release]
     uses: blueenergy/quant-infrastructure/.github/workflows/notify-dingtalk.yml@main
     secrets:
