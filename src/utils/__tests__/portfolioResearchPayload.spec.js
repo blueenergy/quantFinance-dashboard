@@ -146,12 +146,23 @@ describe('buildPortfolioResearchPayload', () => {
     expect(payload.regime_rule).toBe('k_slow_anchor')
   })
 
+  it('sends multiple regime rules when more than one is selected', () => {
+    const payload = buildPortfolioResearchPayload({
+      ...baseForm,
+      regime_always_invest: false,
+      regime_cash: true,
+      regime_rules: ['k_slow_anchor', 'k_slow_anchor_with_vol_and_atr'],
+    })
+    expect(payload.regime_rules).toEqual(['k_slow_anchor', 'k_slow_anchor_with_vol_and_atr'])
+    expect(payload).not.toHaveProperty('regime_rule')
+  })
+
   it('sends volume-price timing only when non-bull cash is on', () => {
     const withCash = buildPortfolioResearchPayload({
       ...baseForm,
       regime_always_invest: false,
       regime_cash: true,
-      regime_rule: 'k_slow_anchor_with_vol_and_atr',
+      regime_rules: ['k_slow_anchor_with_vol_and_atr'],
     })
     expect(withCash.regime_rule).toBe('k_slow_anchor_with_vol_and_atr')
 

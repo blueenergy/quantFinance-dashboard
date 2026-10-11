@@ -20,6 +20,11 @@
       </div>
     </header>
 
+    <p v-if="regimeRulesRowGap" class="regime-rules-warning">
+      本任务勾选了 {{ expectedRegimeRuleLabels }}，但结果行里没有「择时规则」字段（多为
+      <strong>quant-researcher / quant-scorer 镜像未更新</strong>）。请部署含多规则 sweep 的 worker 后
+      <strong>重跑</strong>本任务，否则无法按规则对照收益。
+    </p>
     <div v-if="sweepView.sweep_axes?.length" class="axis-strip">
       <div v-for="axis in sweepView.sweep_axes" :key="axis.key" class="axis-strip-item">
         <span class="axis-strip-label">{{ axis.label }}</span>
@@ -190,6 +195,11 @@ import {
   paginateRows,
   rowMatchesAxis,
 } from '../../utils/sweepResultView'
+import {
+  formatRegimeRules,
+  regimeRulesFromParams,
+  regimeRulesMissingOnRows,
+} from '../../utils/regimeCash'
 import ResultGridTable from './ResultGridTable.vue'
 
 const props = defineProps({
@@ -213,7 +223,12 @@ const gridFilters = reactive({})
 const rows = computed(() => props.resultDetail?.rows || [])
 const rowCountTotal = computed(() => Number(props.resultDetail?.row_count_total || rows.value.length))
 const sweepView = computed(() => buildSweepResultView(props.resultDetail, props.job?.params || props.resultDetail?.params))
-const researchParams = computed(() => props.job?.params || props.resultDetail?.params || {})
+const researchParams = computed(() => ({
+  ...(props.resultDetail?.params || {}),
+  ...(props.job?.params || {}),
+}))
+const regimeRulesRowGap = computed(() => regimeRulesMissingOnRows(researchParams.value, rows.value))
+const expectedRegimeRuleLabels = computed(() => formatRegimeRules(regimeRulesFromParams(researchParams.value)))
 const dynamicSelectionSummary = computed(() => {
   if (researchParams.value.selection_mode !== 'dynamic_score_threshold') return ''
   return `动态评分阈值 · 阈值回看 ${researchParams.value.threshold_lookback_days ?? 10}d · 最多持仓 ${researchParams.value.max_positions ?? 20} 只`
@@ -228,7 +243,7 @@ const candidateSummary = computed(() => {
   const axisKeys = new Set()
   for (const axis of sweepView.value.sweep_axes || []) {
     axisKeys.add(axis.key)
-    const label = formatAxisValue(axis.key, row[axis.key], row)
+    const label = formatAxisValue(axis.key, row[axis.rowKey || axis.key], row)
     if (label && label !== '-') parts.push(`${axis.label} ${label}`)
   }
   if (row.variant) parts.push(row.variant)
@@ -620,6 +635,17 @@ function toggleFilter(axisKey, value) {
 
 .muted {
   color: #64748b;
+}
+
+.regime-rules-warning {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .card {

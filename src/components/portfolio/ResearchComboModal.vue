@@ -280,7 +280,7 @@ import {
   signClass,
 } from '../../utils/portfolioResearchView'
 import { formatAxisValue, resolveComboTrailingStopPct } from '../../utils/sweepResultView'
-import { formatIndexRegimeLabel, formatRegimeModes, indexRegimeTone } from '../../utils/regimeCash'
+import { formatIndexRegimeLabel, formatRegimeModes, formatRegimeRule, indexRegimeTone } from '../../utils/regimeCash'
 import { buildComboExportPayload, downloadComboExportHtml } from '../../utils/comboExport'
 
 const props = defineProps({
@@ -331,6 +331,7 @@ const comboSubtitle = computed(() => {
   parts.push(`行业上限 ${formatAxisValue('max_industry_weight', meta.max_industry_weight, meta)}`)
   if (meta.horizon) parts.push(`调仓 ${meta.horizon}d`)
   if (meta.regime_mode) parts.push(formatRegimeModes({ regime_modes: [meta.regime_mode] }))
+  if (meta.regime_rule) parts.push(formatRegimeRule(meta.regime_rule))
   if (meta.index_benchmark_symbol) parts.push(`基准 ${meta.index_benchmark_symbol}`)
   return parts.join(' · ')
 })

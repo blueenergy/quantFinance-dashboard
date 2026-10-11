@@ -1,7 +1,6 @@
 import {
   buildRegimeModesFromForm,
-  DEFAULT_REGIME_RULE,
-  regimeRuleFromParams,
+  buildRegimeRulesFromForm,
 } from './regimeCash'
 
 /** Optional numeric fields on create/rerun research job bodies. */
@@ -202,9 +201,12 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
   payload.regime_modes = buildRegimeModesFromForm(form)
   payload.regime_cash = payload.regime_modes.includes('bull_g60_else_cash')
   if (payload.regime_cash) {
-    payload.regime_rule = regimeRuleFromParams({
-      regime_rule: form.regime_rule || DEFAULT_REGIME_RULE,
-    })
+    const regimeRules = buildRegimeRulesFromForm(form)
+    if (regimeRules.length === 1) {
+      payload.regime_rule = regimeRules[0]
+    } else {
+      payload.regime_rules = regimeRules
+    }
   }
 
   return omitEmpty(payload)

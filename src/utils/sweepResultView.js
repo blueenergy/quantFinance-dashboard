@@ -1,8 +1,11 @@
 import { compositeScorePreset } from './scoreUtils'
+import { formatRegimeRule, regimeRulesFromParams } from './regimeCash'
 
 const AXIS_REGISTRY = [
   { key: 'trailing_stop_pct', label: '浮动止盈', rowKey: 'trailing_stop_pct', paramKeys: ['trailing_stop_pcts', 'trailing_stop_pct'] },
   { key: 'path_gate', label: '路径闸门', rowKey: 'path_gate', paramKeys: ['path_gates'] },
+  { key: 'regime_mode', label: '仓位模式', rowKey: 'regime_mode', paramKeys: ['regime_modes', 'regime_cash'] },
+  { key: 'regime_rule', label: '择时规则', rowKey: 'regime_rule', paramKeys: ['regime_rules', 'regime_rule'] },
   { key: 'score_variant', label: 'Score', rowKey: 'score_variant', paramKeys: ['score_specs', 'growth_cycle_weights'] },
   { key: 'top_n', label: 'Top N', rowKey: 'top_n', paramKeys: ['top_n_values'] },
   { key: 'max_industry_weight', label: '行业上限', rowKey: 'max_industry_weight', paramKeys: ['active_caps'] },
@@ -74,8 +77,22 @@ export function formatAxisValue(key, value, row) {
   if (key === 'rebalance_interval_days' && normalized != null) {
     return `${normalized}d`
   }
+  if (key === 'regime_mode') {
+    if (normalized == null || normalized === '' || normalized === 'off') return '始终满仓'
+    if (normalized === 'bull_g60_else_cash') return '非牛空仓'
+    return String(normalized)
+  }
+  if (key === 'regime_rule') {
+    const text = String(normalized || '').trim()
+    return text ? formatRegimeRule(text) : '-'
+  }
   if (normalized == null || normalized === '') return '-'
   return String(normalized)
+}
+
+function axisRowKey(axisKey) {
+  const axis = AXIS_REGISTRY.find((item) => item.key === axisKey)
+  return axis?.rowKey || axisKey
 }
 
 function valuesFromParams(params, axis) {
@@ -89,6 +106,15 @@ function valuesFromParams(params, axis) {
     if (paramKey === 'trailing_stop_pct') {
       return [normalizeAxisValue(axis.key, raw)]
     }
+    if (paramKey === 'regime_rules' && Array.isArray(raw) && raw.length > 1) {
+      return regimeRulesFromParams({ regime_rules: raw })
+    }
+    if (paramKey === 'regime_modes' && Array.isArray(raw) && raw.length > 1) {
+      return raw.map((item) => normalizeAxisValue(axis.key, item))
+    }
+    if (paramKey === 'regime_cash' && raw) {
+      return ['bull_g60_else_cash']
+    }
     if (Array.isArray(raw) && raw.length > 1) {
       return raw.map((item) => normalizeAxisValue(axis.key, item))
     }
@@ -100,11 +126,40 @@ function valuesFromRows(rows, axis) {
   const seen = []
   for (const row of rows || []) {
     const value = normalizeAxisValue(axis.key, row?.[axis.rowKey])
+    if (axis.key === 'regime_rule' && (value == null || value === '')) {
+      continue
+    }
     if (!seen.some((item) => axisValuesEqual(axis.key, item, value))) {
       seen.push(value)
     }
   }
   return seen.length > 1 ? seen : null
+}
+
+function mergeSweepAxes(storedAxes = [], inferredAxes = []) {
+  const byKey = new Map()
+  for (const axis of [...storedAxes, ...inferredAxes]) {
+    const key = axis?.key
+    if (!key) continue
+    const prev = byKey.get(key)
+    const mergedValues = []
+    for (const value of [...(prev?.values || []), ...(axis.values || [])]) {
+      if (!mergedValues.some((item) => axisValuesEqual(key, item, value))) {
+        mergedValues.push(value)
+      }
+    }
+    if (mergedValues.length <= 1) continue
+    const def = AXIS_REGISTRY.find((item) => item.key === key)
+    byKey.set(key, {
+      key,
+      label: axis.label || def?.label || key,
+      rowKey: axis.rowKey || def?.rowKey || key,
+      values: mergedValues,
+    })
+  }
+  return AXIS_REGISTRY
+    .map((def) => byKey.get(def.key))
+    .filter(Boolean)
 }
 
 function axisValuesEqual(key, left, right) {
@@ -117,7 +172,7 @@ export function inferSweepAxes(params = {}, rows = []) {
     let values = valuesFromParams(params, axis)
     if (!values?.length) values = valuesFromRows(rows, axis)
     if (!values || values.length <= 1) continue
-    axes.push({ key: axis.key, label: axis.label, values })
+    axes.push({ key: axis.key, label: axis.label, rowKey: axis.rowKey, values })
   }
   return axes
 }
@@ -136,8 +191,9 @@ export function computeFacetBest(rows = [], sweepAxes = []) {
   const facetBest = {}
   for (const axis of sweepAxes) {
     const bucket = []
+    const rowKey = axis.rowKey || axis.key
     for (const value of axis.values || []) {
-      const match = ordered.find((row) => axisValuesEqual(axis.key, row?.[axis.key], value))
+      const match = ordered.find((row) => axisValuesEqual(axis.key, row?.[rowKey], value))
       if (match) {
         bucket.push({
           value,
@@ -153,11 +209,21 @@ export function computeFacetBest(rows = [], sweepAxes = []) {
 
 export function buildSweepResultView(resultDetail, jobParams = {}) {
   const rows = resultDetail?.rows || []
-  const params = jobParams || resultDetail?.params || {}
+  const params = { ...(resultDetail?.params || {}), ...(jobParams?.params || jobParams || {}) }
   const stored = resultDetail?.sweep_view
-  const sweepAxes = stored?.sweep_axes?.length
-    ? stored.sweep_axes
-    : inferSweepAxes(params, rows)
+  const inferredAxes = inferSweepAxes(params, rows)
+  const mergedAxes = mergeSweepAxes(stored?.sweep_axes || [], inferredAxes)
+  let sweepAxes = mergedAxes.length ? mergedAxes : inferredAxes
+  const cashRowRules = new Set(
+    rows
+      .filter((row) => String(row?.regime_mode || '') === 'bull_g60_else_cash')
+      .map((row) => String(row?.regime_rule || '').trim())
+      .filter(Boolean),
+  )
+  const expectedRules = regimeRulesFromParams(params)
+  if (expectedRules.length > 1 && cashRowRules.size < expectedRules.length) {
+    sweepAxes = sweepAxes.filter((axis) => axis.key !== 'regime_rule')
+  }
   const sortedRows = sortRowsByRiskScore(rows)
   return {
     ...(stored || {}),
@@ -180,7 +246,7 @@ export function buildSweepResultView(resultDetail, jobParams = {}) {
 }
 
 export function rowMatchesAxis(row, axisKey, axisValue) {
-  return axisValuesEqual(axisKey, row?.[axisKey], axisValue)
+  return axisValuesEqual(axisKey, row?.[axisRowKey(axisKey)], axisValue)
 }
 
 export function filterRowsByFacet(rows, axisKey, axisValue) {

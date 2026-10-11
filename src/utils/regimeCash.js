@@ -15,7 +15,7 @@ export const REGIME_RULE_OPTIONS = [
 ]
 
 export const REGIME_RULE_HINT =
-  '仅对非牛空仓生效。量价择时：牛市买入需放量且波动收缩；熊市退出不加过滤。指数日线缺成交量时会退化为价格交叉。'
+  '仅对非牛空仓生效；可多选对照，默认只跑价格K交叉。量价择时：牛市买入需放量且波动收缩；熊市退出不加过滤。指数日线缺成交量时会退化为价格交叉。'
 
 const REGIME_MODE_LABELS = {
   [REGIME_MODE_OFF]: '始终满仓',
@@ -90,6 +90,60 @@ export function regimeCashFromParams(params = {}) {
 export function regimeRuleFromParams(params = {}) {
   const text = String(params?.regime_rule || '').trim()
   return text || DEFAULT_REGIME_RULE
+}
+
+export function regimeRulesFromParams(params = {}) {
+  if (Array.isArray(params.regime_rules) && params.regime_rules.length) {
+    const seen = new Set()
+    const values = []
+    for (const raw of params.regime_rules) {
+      const id = String(raw || '').trim()
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      values.push(id)
+    }
+    if (values.length) return values
+  }
+  return [regimeRuleFromParams(params)]
+}
+
+export function buildRegimeRulesFromForm(form = {}) {
+  const selected = Array.isArray(form.regime_rules) ? form.regime_rules : []
+  const normalized = [...new Set(selected.map((item) => String(item || '').trim()).filter(Boolean))]
+  if (normalized.length) return normalized
+  const legacy = String(form.regime_rule || '').trim()
+  return [legacy || DEFAULT_REGIME_RULE]
+}
+
+export function toggleRegimeRuleSelection(currentRules, ruleId, checked) {
+  const id = String(ruleId || '').trim()
+  if (!id) return [...(currentRules || [])]
+  const rules = Array.isArray(currentRules) ? [...currentRules] : []
+  if (checked) {
+    if (!rules.includes(id)) rules.push(id)
+    return rules
+  }
+  const next = rules.filter((item) => item !== id)
+  return next.length ? next : [DEFAULT_REGIME_RULE]
+}
+
+export function formatRegimeRules(rules) {
+  const list = Array.isArray(rules) ? rules : regimeRulesFromParams({ regime_rule: rules })
+  return list.map((id) => formatRegimeRule(id)).join('、')
+}
+
+/** True when job asked for multiple timing rules but result rows lack per-row regime_rule. */
+export function regimeRulesMissingOnRows(params = {}, rows = []) {
+  const expected = regimeRulesFromParams(params)
+  if (expected.length <= 1) return false
+  const cashRows = (rows || []).filter(
+    (row) => String(row?.regime_mode || '').trim() === 'bull_g60_else_cash',
+  )
+  if (!cashRows.length) return false
+  const onRows = new Set(
+    cashRows.map((row) => String(row?.regime_rule || '').trim()).filter(Boolean),
+  )
+  return onRows.size < expected.length
 }
 
 export function formatRegimeRule(ruleId) {

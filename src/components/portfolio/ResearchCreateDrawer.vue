@@ -260,23 +260,22 @@
             非牛空仓
             <small class="field-hint">独立仓位模式，不必和始终满仓一起跑。{{ REGIME_CASH_REMINDER }}</small>
           </label>
-          <label v-if="Boolean(form.regime_cash)" class="score-spec-field">
-            择时规则
-            <select
-              class="regime-rule-select"
-              :value="form.regime_rule || DEFAULT_REGIME_RULE"
-              @change="patchForm({ regime_rule: $event.target.value })"
+          <div v-if="Boolean(form.regime_cash)" class="score-spec-field regime-rule-group">
+            <span class="field-label">择时规则</span>
+            <label
+              v-for="option in REGIME_RULE_OPTIONS"
+              :key="option.value"
+              class="inline-check regime-rule-check"
             >
-              <option
-                v-for="option in regimeRuleSelectOptions(form.regime_rule)"
-                :key="option.value"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option>
-            </select>
+              <input
+                type="checkbox"
+                :checked="selectedRegimeRules.includes(option.value)"
+                @change="onRegimeRuleToggle(option.value, $event.target.checked)"
+              />
+              {{ option.label }}
+            </label>
             <small class="field-hint">{{ REGIME_RULE_HINT }}</small>
-          </label>
+          </div>
         </div>
       </div>
       <footer class="drawer-footer">
@@ -306,7 +305,13 @@ import {
   FIXED_TOP_N_SELECTION_MODE,
   resolveScoreColumns,
 } from '../../utils/portfolioResearchPayload'
-import { REGIME_CASH_REMINDER, REGIME_RULE_HINT, DEFAULT_REGIME_RULE, regimeRuleSelectOptions } from '../../utils/regimeCash'
+import {
+  REGIME_CASH_REMINDER,
+  REGIME_RULE_HINT,
+  REGIME_RULE_OPTIONS,
+  regimeRulesFromParams,
+  toggleRegimeRuleSelection,
+} from '../../utils/regimeCash'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -326,6 +331,10 @@ const dynamicSelection = computed(() => (
   props.form.selection_mode === DYNAMIC_THRESHOLD_SELECTION_MODE
 ))
 const industryFilterActive = computed(() => Boolean(String(props.form.industry_l1 || '').trim()))
+const selectedRegimeRules = computed(() => regimeRulesFromParams({
+  regime_rules: props.form.regime_rules,
+  regime_rule: props.form.regime_rule,
+}))
 const selectedCompositePresets = computed(() => (
   selectedScoreColumns.value
     .map((column) => compositeScorePreset(column))
@@ -367,6 +376,15 @@ function withScoreColumns(columns) {
     score_columns: unique,
     score_column: unique[0] || props.form.score_column || '',
   }
+}
+
+function onRegimeRuleToggle(ruleId, checked) {
+  const nextRules = toggleRegimeRuleSelection(
+    props.form.regime_rules || selectedRegimeRules.value,
+    ruleId,
+    checked,
+  )
+  patchForm({ regime_rules: nextRules })
 }
 
 function patchForm(patch) {

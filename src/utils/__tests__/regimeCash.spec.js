@@ -9,6 +9,9 @@ import {
   regimeCashFromParams,
   regimeFlagsFromParams,
   regimeRuleFromParams,
+  regimeRulesFromParams,
+  regimeRulesMissingOnRows,
+  toggleRegimeRuleSelection,
   VOLUME_PRICE_REGIME_RULE,
 } from '../regimeCash'
 
@@ -59,5 +62,29 @@ describe('regime rule', () => {
     expect(regimeRuleFromParams({ regime_rule: VOLUME_PRICE_REGIME_RULE })).toBe(VOLUME_PRICE_REGIME_RULE)
     expect(formatRegimeRule(VOLUME_PRICE_REGIME_RULE)).toContain('量价择时')
     expect(formatRegimeRule('k_slow_anchor')).toContain('价格K交叉')
+  })
+
+  it('resolves multi-select regime rules from params and toggles', () => {
+    expect(regimeRulesFromParams({ regime_rules: ['k_slow_anchor', 'k_slow_anchor_with_volume'] })).toEqual([
+      'k_slow_anchor',
+      'k_slow_anchor_with_volume',
+    ])
+    expect(toggleRegimeRuleSelection(['k_slow_anchor'], 'k_slow_anchor_with_volume', true)).toEqual([
+      'k_slow_anchor',
+      'k_slow_anchor_with_volume',
+    ])
+    expect(toggleRegimeRuleSelection(['k_slow_anchor'], 'k_slow_anchor', false)).toEqual(['k_slow_anchor'])
+  })
+
+  it('detects when multi-rule jobs lack regime_rule on cash rows', () => {
+    const params = { regime_rules: ['k_slow_anchor', 'k_slow_anchor_with_volume'] }
+    expect(regimeRulesMissingOnRows(params, [
+      { regime_mode: 'bull_g60_else_cash' },
+      { regime_mode: 'off' },
+    ])).toBe(true)
+    expect(regimeRulesMissingOnRows(params, [
+      { regime_mode: 'bull_g60_else_cash', regime_rule: 'k_slow_anchor' },
+      { regime_mode: 'bull_g60_else_cash', regime_rule: 'k_slow_anchor_with_volume' },
+    ])).toBe(false)
   })
 })

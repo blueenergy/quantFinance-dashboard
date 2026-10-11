@@ -24,6 +24,20 @@ describe('sweepResultView', () => {
     expect(axes[0].values).toHaveLength(3)
   })
 
+  it('infers regime rule axis from job params and row labels', () => {
+    const rows = [
+      { regime_mode: 'bull_g60_else_cash', regime_rule: 'k_slow_anchor', risk_adjusted_score: 0.5 },
+      { regime_mode: 'bull_g60_else_cash', regime_rule: 'k_slow_anchor_with_vol_and_atr', risk_adjusted_score: 0.6 },
+    ]
+    const axes = inferSweepAxes(
+      { regime_rules: ['k_slow_anchor', 'k_slow_anchor_with_vol_and_atr'] },
+      rows,
+    )
+    const ruleAxis = axes.find((axis) => axis.key === 'regime_rule')
+    expect(ruleAxis?.values).toHaveLength(2)
+    expect(formatAxisValue('regime_rule', 'k_slow_anchor')).toContain('价格K交叉')
+  })
+
   it('builds facet best from rows when sweep_view missing', () => {
     const view = buildSweepResultView({ rows: sampleRows }, { trailing_stop_pcts: [0, 0.1, 0.15] })
     expect(view.facet_best.trailing_stop_pct).toHaveLength(3)
