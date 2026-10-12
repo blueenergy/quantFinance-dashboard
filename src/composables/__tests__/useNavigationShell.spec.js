@@ -74,7 +74,7 @@ describe('useNavigationShell loadNavigationTabs', () => {
     })
     expect(shell.serverVisibleTabIds.value).toEqual(['watchlist', 'chart', 'ranking'])
     expect(shell.navPolicyResolved.value).toBe(true)
-    expect(sessionMem.nav_visible_tab_ids_v8).toBe(
+    expect(sessionMem.nav_visible_tab_ids_v9).toBe(
       JSON.stringify(['watchlist', 'chart', 'ranking']),
     )
   })

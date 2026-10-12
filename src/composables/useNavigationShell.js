@@ -2,7 +2,7 @@ import { computed, ref, watch } from 'vue'
 import request from '../utils/request'
 import { prefetchEchartsForTab } from '../utils/echarts/loadEcharts.js'
 
-const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v8'
+const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v9'
 const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v2'
 const ACTIVE_TAB_KEY = 'activeTab_v2'
 const ACTIVE_TAB_USER_KEY = 'activeTab_username_v2'
@@ -15,6 +15,7 @@ const LEGACY_NAV_CACHE_KEYS = [
   'nav_visible_tab_ids_v5',
   'nav_visible_tab_ids_v6',
   'nav_visible_tab_ids_v7',
+  'nav_visible_tab_ids_v8',
 ]
 
 const LEGACY_NAV_CACHE_USER_KEYS = [
@@ -127,6 +128,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'strategy-lab', name: '🧪 策略实验室' },
       { id: 'factor-backtest', name: '🧬 因子回测' },
       { id: 'portfolio-research', name: '组合研究' },
+      { id: 'model-training', name: '模型训练' },
       { id: 'portfolio-plans', name: '📋 组合交易计划' },
       { id: 'portfolio-overview', name: '📊 组合总览' },
       { id: 'strategies', name: '策略配置' },
