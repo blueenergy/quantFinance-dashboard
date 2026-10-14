@@ -3,34 +3,46 @@
     <div class="section-header">
       <div>
         <h4>Walk-forward 折间 IC</h4>
-        <p class="muted">Spearman IC（测试折）；柱长为相对尺度，非收益率。</p>
+        <p class="muted">
+          每折测试窗上的 Spearman IC；柱长为相对尺度，非收益率。
+        </p>
       </div>
     </div>
     <div v-if="!foldRows.length" class="muted">暂无折报告。</div>
     <div v-else class="fold-chart">
+      <p class="legend legend-top" role="note">
+        <span class="legend-item">
+          <span class="swatch model" aria-hidden="true" />
+          <strong>蓝色</strong>：本任务所选模型（Ridge / LGBM 等）
+        </span>
+        <span class="legend-item">
+          <span class="swatch baseline" aria-hidden="true" />
+          <strong>灰色</strong>：规则基线（特征截面 z-score 等权，<em>晋升门禁对比对象</em>）
+        </span>
+      </p>
       <div v-for="row in foldRows" :key="row.foldId" class="fold-row">
         <span class="fold-label">折 {{ row.foldId }}</span>
         <div class="bars">
-          <div class="bar-group" title="模型">
+          <div class="bar-group">
+            <span class="bar-tag bar-tag-model">模型</span>
             <div
               class="bar bar-model"
               :style="{ width: `${barWidthPct(row.modelIc, chartMaxIc)}%` }"
+              :title="`模型 IC ${formatIc(row.modelIc)}`"
             />
             <span class="bar-value">{{ formatIc(row.modelIc) }}</span>
           </div>
-          <div class="bar-group" title="规则基线">
+          <div class="bar-group">
+            <span class="bar-tag bar-tag-baseline">基线</span>
             <div
               class="bar bar-baseline"
               :style="{ width: `${barWidthPct(row.baselineIc, chartMaxIc)}%` }"
+              :title="`规则基线 IC ${formatIc(row.baselineIc)}`"
             />
             <span class="bar-value">{{ formatIc(row.baselineIc) }}</span>
           </div>
         </div>
       </div>
-      <p class="legend">
-        <span class="swatch model" /> 模型
-        <span class="swatch baseline" /> 规则基线
-      </p>
     </div>
     <table v-if="foldRows.length" class="fold-table">
       <thead>
@@ -110,6 +122,22 @@ defineProps({
   min-height: 18px;
 }
 
+.bar-tag {
+  flex: none;
+  width: 36px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.bar-tag-model {
+  color: #0f6bdc;
+}
+
+.bar-tag-baseline {
+  color: #475569;
+}
+
 .bar {
   height: 12px;
   border-radius: 4px;
@@ -136,8 +164,30 @@ defineProps({
   font-size: 12px;
   color: #64748b;
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: flex-start;
+}
+
+.legend-top {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  line-height: 1.45;
+}
+
+.legend-item {
+  display: inline-flex;
   align-items: center;
+  gap: 2px;
+  max-width: 100%;
+}
+
+.legend-item em {
+  font-style: normal;
+  color: #0f172a;
 }
 
 .swatch {
