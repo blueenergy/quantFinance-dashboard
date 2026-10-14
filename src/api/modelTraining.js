@@ -19,3 +19,7 @@ export function getModelTrainingJob(jobId) {
 export function getModelTrainingResults(jobId) {
   return request({ url: `/model-training/jobs/${jobId}/results`, method: 'get' })
 }
+
+export function getModelTrainingPromotionContext(jobId) {
+  return request({ url: `/model-training/jobs/${jobId}/promotion-context`, method: 'get' })
+}

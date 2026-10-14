@@ -40,7 +40,7 @@ const PROMOTION_REASON_LABELS = {
   insufficient_walk_forward_folds: 'walk-forward 折数不足',
   no_ic: '无有效 IC',
   ic_below_baseline: 'IC 未超过规则基线',
-  insufficient_universes: '股票池数量不足',
+  insufficient_universes: '单任务未登记多池（请查看下方双池晋升）',
   permutation_failed: '置换检验未通过',
 }
 
@@ -56,6 +56,26 @@ export function promotionReasonLabel(reason) {
 
 export function promotionPassed(promotion) {
   return Boolean(promotion?.passed)
+}
+
+export function groupPromotionLabel(group) {
+  if (!group) return ''
+  const n = group.passed_pool_count ?? 0
+  const req = group.required_pools ?? 2
+  const codes = (group.passed_index_codes || []).join('、') || '—'
+  if (group.passed) {
+    return `双池晋升：已通过（${n}/${req}，${codes}）`
+  }
+  return `双池晋升：未通过（${n}/${req} 个指数过线，已过：${codes}）`
+}
+
+export function formatGroupMemberLine(member) {
+  if (!member) return ''
+  const idx = member.index_code || '?'
+  const ok = member.single_pool?.passed
+  const ic = member.single_pool?.model_mean_ic
+  const icText = Number.isFinite(Number(ic)) ? Number(ic).toFixed(4) : '—'
+  return `${idx} · ${ok ? '本池通过' : '本池未过'} · IC ${icText}`
 }
 
 export function formatIc(value) {

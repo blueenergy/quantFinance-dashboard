@@ -43,6 +43,32 @@
   color: #9a3412;
 }
 
+:where(.model-training) .promotion-banner-group {
+  margin-top: -8px;
+}
+
+:where(.model-training) .promotion-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+:where(.model-training) .group-member-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+:where(.model-training) .group-member-list .linkish {
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+}
+
 :where(.model-training) .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

@@ -79,16 +79,48 @@
             </div>
 
             <div ref="detailBodyRef" class="detail-body">
-              <div
-                v-if="resultDetail"
-                class="promotion-banner"
-                :class="promotionPassed(resultDetail.promotion) ? 'pass' : 'fail'"
-              >
-                <strong>{{ promotionPassed(resultDetail.promotion) ? '晋升门禁：通过' : '晋升门禁：未通过' }}</strong>
-                <span v-if="!promotionPassed(resultDetail.promotion) && resultDetail.promotion?.reason">
-                  — {{ promotionReasonLabel(resultDetail.promotion.reason) }}
-                </span>
-              </div>
+              <template v-if="resultDetail">
+                <div
+                  class="promotion-banner"
+                  :class="promotionPassed(promotionContext?.single_pool) ? 'pass' : 'fail'"
+                >
+                  <strong>
+                    本指数：
+                    {{ promotionPassed(promotionContext?.single_pool) ? '已过线' : '未过线' }}
+                  </strong>
+                  <span v-if="!promotionPassed(promotionContext?.single_pool) && promotionContext?.single_pool?.reason">
+                    — {{ promotionReasonLabel(promotionContext.single_pool.reason) }}
+                  </span>
+                  <span
+                    v-else-if="!promotionContext && !promotionPassed(resultDetail.promotion) && resultDetail.promotion?.reason"
+                  >
+                    — {{ promotionReasonLabel(resultDetail.promotion.reason) }}
+                  </span>
+                </div>
+                <div
+                  v-if="promotionContext?.group"
+                  class="promotion-banner promotion-banner-group"
+                  :class="promotionPassed(promotionContext.group) ? 'pass' : 'fail'"
+                >
+                  <strong>{{ groupPromotionLabel(promotionContext.group) }}</strong>
+                  <p class="promotion-hint muted">
+                    与同配方（模型与 walk-forward 参数、代码版本一致）的其它指数任务合并统计；每指数单独训、不拼表。
+                  </p>
+                  <ul v-if="promotionContext.group.members?.length" class="group-member-list">
+                    <li v-for="m in promotionContext.group.members" :key="m.job_id">
+                      <button
+                        v-if="m.job_id !== selectedJob.job_id"
+                        type="button"
+                        class="linkish"
+                        @click="selectJob(m.job_id, { scrollDetail: true })"
+                      >
+                        {{ formatGroupMemberLine(m) }}
+                      </button>
+                      <span v-else>{{ formatGroupMemberLine(m) }}（当前）</span>
+                    </li>
+                  </ul>
+                </div>
+              </template>
 
               <div v-if="resultDetail" class="kpi-grid">
                 <div class="kpi">
@@ -199,6 +231,8 @@ import {
   formatPValue,
   jobElapsedLabel as formatJobElapsedFromView,
   mlJobProgressStageLabel,
+  formatGroupMemberLine,
+  groupPromotionLabel,
   promotionPassed,
   promotionReasonLabel,
 } from '../utils/modelTrainingView'
@@ -210,6 +244,7 @@ const {
   selectedJobId,
   selectedJob,
   resultDetail,
+  promotionContext,
   detailMaximized,
   detailBodyRef,
   mobileShowDetail,

@@ -1,5 +1,9 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { getModelTrainingJob, getModelTrainingResults } from '../api/modelTraining'
+import {
+  getModelTrainingJob,
+  getModelTrainingPromotionContext,
+  getModelTrainingResults,
+} from '../api/modelTraining'
 import { formatResearchApiError } from '../utils/portfolioResearchPayload'
 import {
   buildFoldComparisonRows,
@@ -14,6 +18,7 @@ export function useModelTrainingDetail({
   const selectedJobId = ref('')
   const selectedJob = ref(null)
   const resultDetail = ref(null)
+  const promotionContext = ref(null)
   const detailMaximized = ref(false)
   const detailBodyRef = ref(null)
   let selectSeq = 0
@@ -40,6 +45,7 @@ export function useModelTrainingDetail({
     selectedJobId.value = ''
     selectedJob.value = null
     resultDetail.value = null
+    promotionContext.value = null
   }
 
   function onDetailFullscreenKeydown(event) {
@@ -73,16 +79,23 @@ export function useModelTrainingDetail({
     const seq = ++selectSeq
     const isCurrent = () => seq === selectSeq && selectedJobId.value === jobId
     selectedJobId.value = jobId
-    if (scrollDetail) resultDetail.value = null
+    if (scrollDetail) {
+      resultDetail.value = null
+      promotionContext.value = null
+    }
     try {
       const jobRes = await getModelTrainingJob(jobId)
       if (!isCurrent()) return
       selectedJob.value = jobRes.data
       if (selectedJob.value?.result_id || selectedJob.value?.status === 'completed') {
         try {
-          const resultRes = await getModelTrainingResults(jobId)
+          const [resultRes, promoRes] = await Promise.all([
+            getModelTrainingResults(jobId),
+            getModelTrainingPromotionContext(jobId).catch(() => ({ data: null })),
+          ])
           if (!isCurrent()) return
           resultDetail.value = resultRes.data
+          promotionContext.value = promoRes?.data || null
         } catch (err) {
           if (!isCurrent() || isRequestCanceled(err)) return
           if (selectedJob.value?.status === 'completed') {
@@ -91,6 +104,7 @@ export function useModelTrainingDetail({
         }
       } else if (scrollDetail) {
         resultDetail.value = null
+        promotionContext.value = null
       }
       if (scrollDetail) {
         await nextTick()
@@ -106,6 +120,7 @@ export function useModelTrainingDetail({
     selectedJobId,
     selectedJob,
     resultDetail,
+    promotionContext,
     detailMaximized,
     detailBodyRef,
     mobileShowDetail,

@@ -4,6 +4,7 @@ import {
   buildModelTrainingParamRows,
   maxAbsIcForChart,
   formatDatasetSnapshotLabel,
+  groupPromotionLabel,
   promotionReasonLabel,
   promotionPassed,
 } from '../modelTrainingView'
@@ -20,6 +21,17 @@ describe('modelTrainingView', () => {
     expect(label).toContain('hs300')
     expect(label).toContain('c80bd05b')
     expect(label).toContain('211804')
+  })
+
+  it('formats group promotion label', () => {
+    const label = groupPromotionLabel({
+      passed: true,
+      passed_pool_count: 2,
+      required_pools: 2,
+      passed_index_codes: ['a500', 'hs300'],
+    })
+    expect(label).toContain('已通过')
+    expect(label).toContain('hs300')
   })
 
   it('maps promotion reasons to Chinese labels', () => {
