@@ -20,6 +20,17 @@ export const MODEL_KIND_OPTIONS = [
   { value: 'lightgbm', label: 'LightGBM' },
 ]
 
+/** One line for snapshot <select> (dataset_manifests). */
+export function formatDatasetSnapshotLabel(snapshot) {
+  if (!snapshot) return ''
+  const index = snapshot.index_code || '?'
+  const range = [snapshot.start_date, snapshot.end_date].filter(Boolean).join('–') || '—'
+  const id = String(snapshot.snapshot_id || '')
+  const shortId = id.length > 8 ? `${id.slice(0, 8)}…` : id
+  const rows = snapshot.row_count != null ? ` · ${snapshot.row_count} 行` : ''
+  return `${index} · ${range} · ${shortId}${rows}`
+}
+
 const ML_PROGRESS_STAGE_LABELS = {
   training: '训练中',
   shadow: 'Shadow 预测',

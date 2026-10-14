@@ -22,7 +22,7 @@
           </label>
           <label>
             指数池
-            <select :value="form.index_code" @change="patch({ index_code: $event.target.value })">
+            <select :value="form.index_code" @change="onIndexChange($event.target.value)">
               <option v-for="u in universeOptions" :key="u.value" :value="u.value">{{ u.label }}</option>
             </select>
           </label>
@@ -32,6 +32,26 @@
               <option v-for="m in modelKindOptions" :key="m.value" :value="m.value">{{ m.label }}</option>
             </select>
           </label>
+          <label>
+            数据快照
+            <select :value="form.snapshot_id || ''" :disabled="snapshotsLoading" @change="onSnapshotSelect($event.target.value)">
+              <option value="">默认（合成数据，不读 S3）</option>
+              <option
+                v-for="s in snapshotsForIndex"
+                :key="s.snapshot_id"
+                :value="s.snapshot_id"
+              >
+                {{ formatDatasetSnapshotLabel(s) }}
+              </option>
+            </select>
+          </label>
+          <p v-if="snapshotsLoading" class="field-hint">正在加载 quant_ml 快照列表…</p>
+          <p v-else-if="!snapshotsForIndex.length && snapshots.length" class="field-hint">
+            当前指数暂无已注册快照；可切换指数或先运行物化 Job。
+          </p>
+          <p v-else-if="!snapshots.length && !snapshotsLoading" class="field-hint">
+            暂无快照记录（materialize 需带 --register-mongo）。
+          </p>
           <label>
             训练窗口（交易日）
             <input
@@ -68,11 +88,11 @@
               :checked="form.showAdvanced"
               @change="patch({ showAdvanced: $event.target.checked })"
             />
-            高级：指定 Parquet / snapshot
+            高级：手动编辑 Parquet / snapshot
           </label>
           <template v-if="form.showAdvanced">
             <label>
-              parquet_path（可选 s3://）
+              parquet_path（s3://）
               <input :value="form.parquet_path" @input="patch({ parquet_path: $event.target.value })" />
             </label>
             <label>
@@ -90,11 +110,18 @@
 </template>
 
 <script setup>
-import { ML_UNIVERSE_OPTIONS, MODEL_KIND_OPTIONS } from '../../utils/modelTrainingView'
+import { computed } from 'vue'
+import {
+  ML_UNIVERSE_OPTIONS,
+  MODEL_KIND_OPTIONS,
+  formatDatasetSnapshotLabel,
+} from '../../utils/modelTrainingView'
 
-defineProps({
+const props = defineProps({
   open: { type: Boolean, default: false },
   form: { type: Object, required: true },
+  snapshots: { type: Array, default: () => [] },
+  snapshotsLoading: { type: Boolean, default: false },
   submitting: { type: Boolean, default: false },
   title: { type: String, default: '' },
   subtitle: { type: String, default: '' },
@@ -106,8 +133,46 @@ const emit = defineEmits(['close', 'submit', 'update:form'])
 const universeOptions = ML_UNIVERSE_OPTIONS
 const modelKindOptions = MODEL_KIND_OPTIONS
 
+const snapshotsForIndex = computed(() => {
+  const code = props.form.index_code
+  return (props.snapshots || []).filter((s) => !code || s.index_code === code)
+})
+
 function patch(partial) {
   emit('update:form', partial)
+}
+
+function onIndexChange(indexCode) {
+  const snap = (props.snapshots || []).find((s) => s.snapshot_id === props.form.snapshot_id)
+  if (snap && snap.index_code && snap.index_code !== indexCode) {
+    patch({
+      index_code: indexCode,
+      snapshot_id: '',
+      parquet_path: '',
+      showAdvanced: false,
+    })
+    return
+  }
+  patch({ index_code: indexCode })
+}
+
+function onSnapshotSelect(snapshotId) {
+  const id = String(snapshotId || '').trim()
+  if (!id) {
+    patch({ snapshot_id: '', parquet_path: '', showAdvanced: false })
+    return
+  }
+  const row = (props.snapshots || []).find((s) => s.snapshot_id === id)
+  if (!row) {
+    patch({ snapshot_id: id, showAdvanced: true })
+    return
+  }
+  patch({
+    snapshot_id: row.snapshot_id,
+    parquet_path: row.parquet_path || '',
+    index_code: row.index_code || props.form.index_code,
+    showAdvanced: true,
+  })
 }
 </script>
 
@@ -178,6 +243,12 @@ select {
   color: #64748b;
   font-size: 13px;
   margin: 4px 0 0;
+}
+
+.field-hint {
+  color: #64748b;
+  font-size: 12px;
+  margin: -6px 0 0;
 }
 
 .link-btn {

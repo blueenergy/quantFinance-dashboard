@@ -68,6 +68,13 @@
                 <button type="button" @click="toggleDetailFullscreen">
                   {{ detailMaximized ? '退出全屏' : '全屏' }}
                 </button>
+                <button
+                  type="button"
+                  :title="loadParamsHint"
+                  @click="loadParamsFromSelectedJob"
+                >
+                  加载原参数
+                </button>
               </div>
             </div>
 
@@ -162,6 +169,8 @@
       v-if="drawerOpen"
       :open="drawerOpen"
       :form="form"
+      :snapshots="snapshots"
+      :snapshots-loading="snapshotsLoading"
       :submitting="submitting"
       :title="drawerTitle"
       :subtitle="drawerSubtitle"
@@ -245,7 +254,12 @@ const {
   closeDrawer,
   onDrawerFormUpdate,
   submitJobForm,
+  loadParamsFromSelectedJob,
+  loadParamsHint,
+  snapshots,
+  snapshotsLoading,
 } = useModelTrainingForm({
+  selectedJob,
   message,
   errorMessage,
   loadJobs,

@@ -3,11 +3,25 @@ import {
   buildFoldComparisonRows,
   buildModelTrainingParamRows,
   maxAbsIcForChart,
+  formatDatasetSnapshotLabel,
   promotionReasonLabel,
   promotionPassed,
 } from '../modelTrainingView'
 
 describe('modelTrainingView', () => {
+  it('formats dataset snapshot labels for select', () => {
+    const label = formatDatasetSnapshotLabel({
+      index_code: 'hs300',
+      start_date: '20230101',
+      end_date: '20251231',
+      snapshot_id: 'c80bd05b-a4f8-4566-84b4-fbfe4fb87764',
+      row_count: 211804,
+    })
+    expect(label).toContain('hs300')
+    expect(label).toContain('c80bd05b')
+    expect(label).toContain('211804')
+  })
+
   it('maps promotion reasons to Chinese labels', () => {
     expect(promotionReasonLabel('permutation_failed')).toContain('置换')
     expect(promotionPassed({ passed: true })).toBe(true)
