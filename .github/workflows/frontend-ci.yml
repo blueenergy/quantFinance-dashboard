@@ -84,16 +84,16 @@ jobs:
           retention-days: 7
 
   docker-build:
-    name: Build & Push Docker image (ghcr.io)
+    name: Build & Push Docker image (ghcr.io + ACR)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [test-build, e2e-smoke]
     runs-on: ubuntu-latest
     # A registry push has no timeout of its own. On 2026-09-21 a sibling repo
     # lost 3h36m to one that stalled after the build had finished, and a
-    # stalled job here blocks release (needs: below) the same way. The ACR leg
-    # no longer runs in CI (host/mirror_to_acr.sh relays instead), so this
-    # guards the ghcr leg. A healthy cold build is ~10 min and a warm one ~2,
-    # so 20 fails fast without false alarms.
+    # stalled job here blocks release (needs: below) the same way. That stall was
+    # the ACR leg, which is back in this job now as a direct push, so the timeout
+    # guards both legs. A healthy cold build is ~10 min and a warm one ~2, so 20
+    # fails fast without false alarms.
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -109,6 +109,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Push to ACR from here too, not only over the host relay. The runner sits
+      # outside the cross-border link the relay crawls at 50-91 KB/s: it measured
+      # ~6 MB/s (2026-10-16, 150 MB probe), so the 185 MB layer that costs the
+      # relay 45 minutes takes it ~30 s. The relay stays as the fallback and skips
+      # any tag ACR already has.
+      - name: Log in to Aliyun ACR
+        uses: docker/login-action@v4
+        with:
+          registry: crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com
+          username: ${{ secrets.ALIYUN_USER }}
+          password: ${{ secrets.ALIYUN_TOKEN }}
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -121,6 +133,19 @@ jobs:
             type=sha,prefix=sha-,format=short
             type=raw,value=latest
 
+      # ACR gets the sha- tag only — the same tag set the relay produces, so this
+      # adds no new pullable name there. `latest` deliberately stays ghcr-only:
+      # docker-compose falls back to `latest` when a *_IMAGE_TAG key is missing
+      # from versions.env, and that fallback has to keep failing loudly instead of
+      # silently running whatever main built last.
+      - name: Extract ACR metadata
+        id: meta-acr
+        uses: docker/metadata-action@v6
+        with:
+          images: crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com/wukongquant/quant-dashboard
+          tags: |
+            type=sha,prefix=sha-,format=short
+
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
@@ -131,7 +156,9 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: false
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ steps.meta-acr.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # Keeps the amd64 scope so the existing cache still hits; the arm64
           # scope is simply abandoned.
@@ -169,12 +196,13 @@ jobs:
           path: infra
 
       - name: Wait for the tag to reach ACR
-        # CI publishes to ghcr only. host/mirror_to_acr.sh on the host relays
-        # each sha-* tag into ACR, and the deploy targets pull from there, so
-        # the bump below must not happen until the tag is actually readable.
-        # Failing here is deliberate: a relay that has stopped working has to
-        # surface as a red run and a DingTalk alert, not as a deploy that
-        # quietly cannot pull its image.
+        # The docker job publishes the sha- tag to ACR directly, with the host
+        # relay (host/mirror_to_acr.sh) as the fallback for a failed or missing
+        # push, and the deploy targets pull from ACR -- so the bump below must
+        # not happen until the tag is actually readable there. Failing here is
+        # deliberate: a publish that has stopped working has to surface as a
+        # red run and a DingTalk alert, not as a deploy that quietly cannot
+        # pull its image.
         env:
           ACR_REGISTRY: crpi-gv3f6mfcrw75qane.cn-hangzhou.personal.cr.aliyuncs.com
           ACR_REPO: wukongquant/quant-dashboard
