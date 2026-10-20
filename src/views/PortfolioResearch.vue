@@ -239,6 +239,7 @@
       :form="form"
       :universe-options="universeOptions"
       :industry-options="industryOptions"
+      :model-options="modelOptions"
       :submitting="submitting"
       :title="drawerTitle"
       :subtitle="drawerSubtitle"
@@ -264,8 +265,9 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import '../assets/styles/portfolio-research.css'
+import { listPredictionModels } from '../api/modelTraining'
 import { getPortfolioResearchComboDetail, listSwL1Catalog } from '../api/portfolioResearch'
 import { usePortfolioResearchDetail } from '../composables/usePortfolioResearchDetail'
 import { usePortfolioResearchForm } from '../composables/usePortfolioResearchForm'
@@ -392,6 +394,7 @@ const comboContextRow = ref(null)
 
 const universeOptions = UNIVERSE_OPTIONS
 const industryOptions = ref([])
+const modelOptions = ref([])
 
 async function loadIndustryOptions() {
   try {
@@ -402,6 +405,25 @@ async function loadIndustryOptions() {
     industryOptions.value = []
   }
 }
+
+async function loadModelOptions() {
+  try {
+    const response = await listPredictionModels({ limit: 500 })
+    // Research models first so the default pick has a backtestable history;
+    // shadow profiles are useful for live observation but often cover 1-2 days.
+    modelOptions.value = [...(response?.data || [])].sort((a, b) => {
+      if (Boolean(a.research) !== Boolean(b.research)) return a.research ? -1 : 1
+      return String(b.last_trade_date || '').localeCompare(String(a.last_trade_date || ''))
+    })
+  } catch (error) {
+    console.warn('load prediction models failed', error)
+    modelOptions.value = []
+  }
+}
+
+watch(drawerOpen, (open) => {
+  if (open) loadModelOptions()
+})
 
 const inceptionWarning = computed(() => {
   const job = selectedJob.value
@@ -478,7 +500,7 @@ onMounted(async () => {
   isNarrow.value = narrowMql.matches
   narrowMql.addEventListener('change', onNarrowChange)
   window.addEventListener('keydown', onDrawerEscape, true)
-  await loadIndustryOptions()
+  await Promise.all([loadIndustryOptions(), loadModelOptions()])
   await refreshAll()
 })
 

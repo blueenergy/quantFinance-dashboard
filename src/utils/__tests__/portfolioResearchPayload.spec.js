@@ -303,3 +303,35 @@ describe('formatResearchApiError', () => {
     expect(formatResearchApiError(err, '提交失败')).toContain('valid number')
   })
 })
+
+describe('buildPortfolioResearchPayload model mode', () => {
+  const modelForm = {
+    name: 'model research',
+    universe_index: 'hs300',
+    start_date: '2017-04-24',
+    end_date: '2024-12-31',
+    score_mode: 'model',
+    model_id: 'research-rolling500-hs300',
+    score_column: 'model_score',
+    score_columns: ['model_score'],
+    top_n_values: '20',
+    horizon: 20,
+    active_caps: '0.3',
+    trailing_stop_pcts: '0',
+    regime_always_invest: true,
+    regime_cash: false,
+  }
+
+  it('sends model_id and model_score without rule-score inputs', () => {
+    const payload = buildPortfolioResearchPayload(modelForm)
+    expect(payload.model_id).toBe('research-rolling500-hs300')
+    expect(payload.score_column).toBe('model_score')
+    expect(payload).not.toHaveProperty('score_specs')
+    expect(payload).not.toHaveProperty('growth_cycle_weights')
+  })
+
+  it('requires a non-empty model id', () => {
+    expect(() => buildPortfolioResearchPayload({ ...modelForm, model_id: '   ' }))
+      .toThrow('请选择一个模型评分')
+  })
+})

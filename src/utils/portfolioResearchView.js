@@ -117,6 +117,10 @@ export function formatDurationMs(ms) {
 }
 
 export function jobWeightLabel(job) {
+  const modelId = String(job?.params?.model_id || '').trim()
+  if (modelId) {
+    return `模型 · ${modelId}`
+  }
   const scoreSpecs = job?.params?.score_specs
   if (Array.isArray(scoreSpecs) && scoreSpecs.length) {
     return scoreSpecs

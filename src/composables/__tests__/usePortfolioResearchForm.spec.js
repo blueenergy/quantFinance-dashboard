@@ -81,6 +81,13 @@ describe('usePortfolioResearchForm', () => {
       score_columns: ['composite_conservative_score'],
     })
     expect(formApi.form.value.name).toContain('保守多维组合研究')
+
+    formApi.onDrawerFormUpdate({
+      ...formApi.form.value,
+      score_mode: 'model',
+      model_id: 'research-rolling500-hs300',
+    })
+    expect(formApi.form.value.name).toContain('模型 research-rolling500-hs300')
   })
 
   it('does not overwrite a manually edited research name', () => {
@@ -304,6 +311,47 @@ describe('usePortfolioResearchForm', () => {
     formApi.loadParamsFromSelectedJob()
 
     expect(formApi.form.value.horizon).toBe('10,20,30,40')
+  })
+
+  it('builds a model-score payload without rule-score inputs', () => {
+    const formApi = createForm()
+    formApi.form.value = {
+      ...formApi.form.value,
+      score_mode: 'model',
+      model_id: 'research-rolling500-hs300',
+      score_column: 'model_score',
+      score_columns: ['model_score'],
+    }
+
+    const payload = formApi.buildFormPayload()
+
+    expect(payload.model_id).toBe('research-rolling500-hs300')
+    expect(payload.score_column).toBe('model_score')
+    expect(payload).not.toHaveProperty('score_specs')
+    expect(payload).not.toHaveProperty('growth_cycle_weights')
+  })
+
+  it('hydrates model-score jobs for reruns', () => {
+    const selectedJob = ref({
+      job_id: 'job-model',
+      name: 'Model research',
+      params: {
+        model_id: 'research-rolling500-hs300',
+        score_column: 'model_score',
+        universe_index: 'hs300',
+        start_date: '20170424',
+        end_date: '20241231',
+        rebalance_interval_days: [20],
+      },
+    })
+    const formApi = createForm({ selectedJob })
+
+    formApi.loadParamsFromSelectedJob()
+
+    expect(formApi.form.value.score_mode).toBe('model')
+    expect(formApi.form.value.model_id).toBe('research-rolling500-hs300')
+    expect(formApi.form.value.score_column).toBe('model_score')
+    expect(formApi.form.value.score_columns).toEqual(['model_score'])
   })
 
   it('focuses the drawer and restores focus when Escape closes it', async () => {

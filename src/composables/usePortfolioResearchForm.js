@@ -37,6 +37,10 @@ export function usePortfolioResearchForm({
   }
 
   function scoreResearchName(state = {}) {
+    if (state.score_mode === 'model') {
+      const modelId = String(state.model_id || '').trim()
+      return modelId ? `模型 ${modelId}` : '模型评分'
+    }
     const columns = resolveScoreColumns(state)
     if (state.score_mode === 'column') {
       const labels = columns
@@ -67,7 +71,11 @@ export function usePortfolioResearchForm({
   }
 
   function defaultResearchName(universeValue, state = {}) {
-    return `${universeName(universeValue)} ${scoreResearchName(state)}研究`
+    const scoreLabel = scoreResearchName(state)
+    if (state.score_mode === 'model') {
+      return `${universeName(universeValue)} ${scoreLabel} 研究`
+    }
+    return `${universeName(universeValue)} ${scoreLabel}研究`
   }
 
   function defaultFormState() {
@@ -79,6 +87,7 @@ export function usePortfolioResearchForm({
       score_mode: 'weighted',
       score_column: 'composite_growth_cycle_score',
       score_columns: ['composite_growth_cycle_score'],
+      model_id: '',
       growth_cycle_weights: '30:70',
       score_specs: 'growth:30,cycle:70',
       selection_mode: 'fixed_top_n',
@@ -261,11 +270,14 @@ export function usePortfolioResearchForm({
         score_column: params.score_column || defaults.score_column,
         score_columns: params.score_columns,
       })
-    const scoreMode = columnOnly
-      ? (scoreColumns.every(isCompositeScoreColumn) ? 'preset' : 'column')
-      : (!hasWeightedSpecs && !hasLegacyWeights
-          ? (isCompositeScoreColumn(scoreColumns[0] || params.score_column) ? 'preset' : 'column')
-          : 'weighted')
+    const modelId = String(params.model_id || '').trim()
+    const scoreMode = modelId
+      ? 'model'
+      : columnOnly
+        ? (scoreColumns.every(isCompositeScoreColumn) ? 'preset' : 'column')
+        : (!hasWeightedSpecs && !hasLegacyWeights
+            ? (isCompositeScoreColumn(scoreColumns[0] || params.score_column) ? 'preset' : 'column')
+            : 'weighted')
 
     form.value = {
       ...defaults,
@@ -274,8 +286,9 @@ export function usePortfolioResearchForm({
       start_date: toDateInputValue(params.start_date || job.start_date) || defaults.start_date,
       end_date: toDateInputValue(params.end_date || job.end_date) || defaults.end_date,
       score_mode: scoreMode,
-      score_column: scoreColumns[0] || params.score_column || defaults.score_column,
-      score_columns: scoreColumns.length ? scoreColumns : defaults.score_columns,
+      model_id: modelId,
+      score_column: modelId ? 'model_score' : (scoreColumns[0] || params.score_column || defaults.score_column),
+      score_columns: modelId ? ['model_score'] : (scoreColumns.length ? scoreColumns : defaults.score_columns),
       growth_cycle_weights: formatListForInput(params.growth_cycle_weights) || defaults.growth_cycle_weights,
       score_specs: hasWeightedSpecs
         ? formatScoreSpecsForInput(scoreSpecs)

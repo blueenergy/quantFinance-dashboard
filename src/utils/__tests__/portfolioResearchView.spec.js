@@ -54,6 +54,15 @@ describe('jobWeightLabel', () => {
     })).toContain('基本面 30%')
     expect(jobWeightLabel({ params: {} })).toBe('')
   })
+
+  it('labels model-score jobs by model id', () => {
+    expect(jobWeightLabel({
+      params: {
+        model_id: 'research-rolling500-hs300',
+        score_column: 'model_score',
+      },
+    })).toBe('模型 · research-rolling500-hs300')
+  })
 })
 
 describe('jobElapsedLabel', () => {

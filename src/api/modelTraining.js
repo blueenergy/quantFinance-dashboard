@@ -8,6 +8,10 @@ export function listModelTrainingSnapshots(params = {}) {
   return request({ url: '/model-training/snapshots', method: 'get', params })
 }
 
+export function listPredictionModels(params = {}) {
+  return request({ url: '/model-training/prediction-models', method: 'get', params })
+}
+
 export function createModelTrainingJob(data) {
   return request({ url: '/model-training/jobs', method: 'post', data })
 }

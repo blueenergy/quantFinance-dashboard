@@ -154,7 +154,16 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
     }
   }
 
-  if (scoreMode === 'column' || scoreMode === 'preset') {
+  if (scoreMode === 'model') {
+    const modelId = String(form.model_id || '').trim()
+    if (!modelId) {
+      throw new Error('请选择一个模型评分')
+    }
+    // model_id is the source of truth; the backend rejects any rule-score
+    // inputs alongside it and forces this column too.
+    payload.model_id = modelId
+    payload.score_column = 'model_score'
+  } else if (scoreMode === 'column' || scoreMode === 'preset') {
     if (!scoreColumns.length) {
       throw new Error(scoreMode === 'preset' ? '请至少选择一个预定义组合' : '请至少选择一个评分维度')
     }

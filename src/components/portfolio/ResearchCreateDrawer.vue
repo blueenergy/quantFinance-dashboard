@@ -56,6 +56,7 @@
               <option value="column">单维评分</option>
               <option value="preset">预定义多维组合</option>
               <option value="weighted">自定义多维加权</option>
+              <option value="model">模型评分</option>
             </select>
           </label>
           <div v-if="(form.score_mode || 'weighted') === 'column'" class="score-spec-field">
@@ -103,6 +104,24 @@
               <strong>{{ preset.label }}</strong>
               <span>{{ preset.description }}</span>
               <span>{{ scoreWeightSummary(preset.weights) }}</span>
+            </div>
+          </div>
+          <div v-else-if="form.score_mode === 'model'" class="score-spec-field">
+            <label>
+              模型评分
+              <select :value="form.model_id || ''" @change="onModelChange">
+                <option value="">请选择模型</option>
+                <option v-for="model in modelOptions" :key="model.model_id" :value="model.model_id">
+                  {{ modelOptionLabel(model) }}
+                </option>
+              </select>
+            </label>
+            <small class="field-hint">模型评分优先于规则分；研究窗口需与模型预测覆盖区间有交集，否则后端会拒绝。</small>
+            <div v-if="selectedModel" class="weight-breakdown">
+              <strong>{{ selectedModel.model_id }}</strong>
+              <span>{{ selectedModel.index_code || '-' }} · {{ selectedModel.first_trade_date }} → {{ selectedModel.last_trade_date }}</span>
+              <span>{{ selectedModel.date_count }} 个预测日 · {{ selectedModel.prediction_count }} 条预测</span>
+              <span v-if="!modelCoversWindow" class="model-warning">该模型覆盖区间与当前研究窗口无交集</span>
             </div>
           </div>
           <label v-else class="score-spec-field">
@@ -318,6 +337,7 @@ const props = defineProps({
   form: { type: Object, required: true },
   universeOptions: { type: Array, default: () => [] },
   industryOptions: { type: Array, default: () => [] },
+  modelOptions: { type: Array, default: () => [] },
   submitting: { type: Boolean, default: false },
   title: { type: String, default: '新建研究任务' },
   subtitle: { type: String, default: '' },
@@ -340,12 +360,36 @@ const selectedCompositePresets = computed(() => (
     .map((column) => compositeScorePreset(column))
     .filter(Boolean)
 ))
+const selectedModel = computed(() => (
+  props.modelOptions.find((item) => item.model_id === props.form.model_id) || null
+))
+
+function compactDate(value) {
+  return String(value || '').replace(/-/g, '').slice(0, 8)
+}
+
+function modelOverlapsWindow(model) {
+  const start = compactDate(props.form.start_date)
+  const end = compactDate(props.form.end_date)
+  const first = String(model?.first_trade_date || '')
+  const last = String(model?.last_trade_date || '')
+  if (!start || !end || !first || !last) return true
+  return !(last < start || first > end)
+}
+
+const modelCoversWindow = computed(() => (
+  selectedModel.value ? modelOverlapsWindow(selectedModel.value) : true
+))
 
 const canSubmit = computed(() => {
   if (!props.form.start_date || !props.form.end_date) return false
   const scoreMode = props.form.score_mode || 'weighted'
   if (scoreMode === 'column' || scoreMode === 'preset') {
     if (!selectedScoreColumns.value.length) return false
+  }
+  if (scoreMode === 'model') {
+    if (!String(props.form.model_id || '').trim()) return false
+    if (!modelCoversWindow.value) return false
   }
   const rebalanceDays = String(props.form.horizon ?? '')
     .split(/[,，]/)
@@ -420,7 +464,31 @@ function onScoreModeChange(event) {
     const presets = current.filter((column) => compositeScorePreset(column))
     Object.assign(patch, withScoreColumns(presets.length ? presets : ['composite_balanced_score']))
   }
+  if (scoreMode === 'model') {
+    const currentModel = String(props.form.model_id || '').trim()
+    const covering = props.modelOptions.find((model) => model.research && modelOverlapsWindow(model))
+      || props.modelOptions.find((model) => modelOverlapsWindow(model))
+      || props.modelOptions[0]
+    Object.assign(patch, {
+      model_id: currentModel || covering?.model_id || '',
+      score_column: 'model_score',
+      score_columns: ['model_score'],
+    })
+  }
   patchForm(patch)
+}
+
+function onModelChange(event) {
+  patchForm({ model_id: event.target.value })
+}
+
+function modelOptionLabel(model) {
+  const kind = model.shadow ? 'shadow' : model.research ? 'research' : 'model'
+  const index = model.index_code ? ` · ${model.index_code}` : ''
+  const coverage = model.first_trade_date && model.last_trade_date
+    ? ` · ${model.first_trade_date}→${model.last_trade_date}`
+    : ''
+  return `${model.model_id} · ${kind}${index}${coverage}`
 }
 
 function onNameInput(event) {
@@ -592,6 +660,11 @@ textarea {
   background: #eff6ff;
   color: #334155;
   font-weight: 400;
+}
+
+.model-warning {
+  color: #b91c1c;
+  font-weight: 600;
 }
 
 button {
