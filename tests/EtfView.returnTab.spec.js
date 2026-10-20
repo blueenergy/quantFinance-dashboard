@@ -12,6 +12,27 @@ vi.mock('../src/utils/request', () => ({
   default: requestMock,
 }))
 
+// happy-dom has no canvas; mock the shared loader so EtfChart does not try to
+// initialize a real ECharts instance in a detached test DOM.
+const chartApi = vi.hoisted(() => ({
+  setOption: vi.fn(),
+  resize: vi.fn(),
+  clear: vi.fn(),
+  dispose: vi.fn(),
+}))
+
+const echartsApi = vi.hoisted(() => ({
+  init: vi.fn(() => chartApi),
+  graphic: { LinearGradient: vi.fn(() => ({})) },
+}))
+
+vi.mock('../src/utils/echarts/loadEcharts.js', () => ({
+  loadEcharts: vi.fn(async () => echartsApi),
+  prefetchEcharts: vi.fn(),
+  prefetchEchartsForTab: vi.fn(),
+  resetEchartsLoader: vi.fn(),
+}))
+
 import EtfView from '../src/views/EtfView.vue'
 
 function mockRequest() {

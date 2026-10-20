@@ -1,5 +1,26 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+
+// happy-dom has no canvas, so real ECharts init throws inside zrender. Mock the
+// shared loader instead of the package; chart rendering itself is not under test.
+const chartApi = vi.hoisted(() => ({
+  setOption: vi.fn(),
+  resize: vi.fn(),
+  clear: vi.fn(),
+  dispose: vi.fn(),
+}))
+
+const echartsApi = vi.hoisted(() => ({
+  init: vi.fn(() => chartApi),
+}))
+
+vi.mock('../src/utils/echarts/loadEcharts.js', () => ({
+  loadEcharts: vi.fn(async () => echartsApi),
+  prefetchEcharts: vi.fn(),
+  prefetchEchartsForTab: vi.fn(),
+  resetEchartsLoader: vi.fn(),
+}))
+
 import RankingScoreDetailModal from '../src/components/ranking/RankingScoreDetailModal.vue'
 import ScoreDetailView from '../src/components/ranking/ScoreDetailView.vue'
 
@@ -29,6 +50,10 @@ function buttonByText(wrapper, text) {
 }
 
 describe('RankingScoreDetailModal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('renders the fullscreen shell and embeds ScoreDetailView', async () => {
     const wrapper = mountModal()
     await flushPromises()

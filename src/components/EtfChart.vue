@@ -19,6 +19,7 @@
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, computed, nextTick } from 'vue'
 import { formatAssetPrice } from '../utils/assetPriceFormat.js'
+import { loadEcharts } from '../utils/echarts/loadEcharts.js'
 
 const props = defineProps({
   symbol: String,
@@ -55,8 +56,7 @@ let resizeOb = null
 async function ensureEchartsAndInit() {
   if (!chartRef.value) return null
   if (!echarts) {
-    const mod = await import('echarts')
-    echarts = mod.default || mod
+    echarts = await loadEcharts()
   }
   if (!chartInstance) {
     chartInstance = echarts.init(chartRef.value)

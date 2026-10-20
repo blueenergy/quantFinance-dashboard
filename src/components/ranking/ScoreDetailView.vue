@@ -257,6 +257,7 @@ import {
   scoreColor,
   translateScoreCategory,
 } from '../../utils/scoreDetail.js'
+import { loadEcharts } from '../../utils/echarts/loadEcharts.js'
 
 const props = defineProps({
   category: { type: String, default: '' },
@@ -275,7 +276,6 @@ const gaugeRef = ref(null)
 const radarRef = ref(null)
 const barRef = ref(null)
 
-let echarts = null
 let gaugeChart = null
 let radarChart = null
 let barChart = null
@@ -326,14 +326,6 @@ const errorMessage = computed(() => {
   }
   return categoryParsed.value.error
 })
-
-async function ensureEcharts() {
-  if (!echarts) {
-    const mod = await import('echarts')
-    echarts = mod.default || mod
-  }
-  return echarts
-}
 
 function disposeCharts() {
   gaugeChart?.dispose()
@@ -435,7 +427,7 @@ function buildBarOption(subModules) {
 async function renderCharts() {
   if (props.loading || isIndustryRs.value) return
   await nextTick()
-  const lib = await ensureEcharts()
+  const lib = await loadEcharts()
 
   if (gaugeRef.value) {
     if (!gaugeChart) gaugeChart = lib.init(gaugeRef.value)
