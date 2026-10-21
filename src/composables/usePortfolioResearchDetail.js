@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, unref, watch } from 'vue'
 import {
   deletePortfolioResearchJob,
   getPortfolioResearchJob,
@@ -20,6 +20,7 @@ export function usePortfolioResearchDetail({
   setMessage = () => {},
   setErrorMessage = () => {},
   apiBase = DEFAULT_API_BASE,
+  l1Names = null,
 } = {}) {
   const selectedJobId = ref('')
   const selectedJob = ref(null)
@@ -44,7 +45,9 @@ export function usePortfolioResearchDetail({
     }
     return resultDetail.value?.candidate_strategy_config || selectedJob.value?.candidate_strategy_config
   })
-  const researchParamRows = computed(() => buildResearchParamRows(selectedJob.value))
+  const researchParamRows = computed(() => (
+    buildResearchParamRows(selectedJob.value, undefined, unref(l1Names) || {})
+  ))
   const publishedPresetId = computed(() => (
     resultDetail.value?.published_preset_id || selectedJob.value?.published_preset_id || ''
   ))

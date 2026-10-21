@@ -16,6 +16,7 @@ import {
   pct,
   pctTrailingStop,
   signClass,
+  swL1Label,
   universeName,
 } from '../portfolioResearchView.js'
 
@@ -100,6 +101,7 @@ describe('buildResearchParamRows', () => {
       end_date: '2024-06-01',
       universe_index: 'csi1000',
       params: {
+        industry_l1: '801730.SI',
         score_column: 'composite_growth_cycle_score',
         growth_cycle_weights: ['30:70'],
         selection_mode: 'dynamic_score_threshold',
@@ -111,10 +113,11 @@ describe('buildResearchParamRows', () => {
         trailing_stop_pcts: [0, 0.15],
         force: false,
       },
-    })
+    }, undefined, { '801730.SI': '电力设备' })
     const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]))
     expect(byKey.start_date).toBe('2023-01-01')
     expect(byKey.universe_index).toContain('中证1000')
+    expect(byKey.industry_l1).toBe('电力设备 (801730.SI)')
     expect(byKey.selection_mode).toBe('动态评分阈值')
     expect(byKey.threshold_lookback_days).toBe(15)
     expect(byKey.max_positions).toBe(25)
@@ -129,6 +132,14 @@ describe('buildResearchParamRows', () => {
     const rows = buildResearchParamRows({ params: {} })
     const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]))
     expect(byKey.selection_mode).toBe('固定 Top N')
+  })
+})
+
+describe('swL1Label', () => {
+  it('appends the catalog name and falls back to the raw code', () => {
+    expect(swL1Label('801730.SI', { '801730.SI': '电力设备' })).toBe('电力设备 (801730.SI)')
+    expect(swL1Label('801730.SI')).toBe('801730.SI')
+    expect(swL1Label('')).toBe('-')
   })
 })
 

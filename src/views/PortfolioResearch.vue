@@ -299,6 +299,15 @@ const ResearchCreateDrawer = defineAsyncComponent(
 
 const NARROW_MQ = '(max-width: 900px)'
 
+const industryOptions = ref([])
+const l1NameMap = computed(() => (
+  Object.fromEntries(
+    industryOptions.value
+      .map((item) => [String(item.code || '').trim(), String(item.name || '').trim()])
+      .filter(([code]) => Boolean(code)),
+  )
+))
+
 let jobsApi
 const {
   selectedJobId,
@@ -338,6 +347,7 @@ const {
   setErrorMessage: (value) => {
     jobsApi.errorMessage.value = value
   },
+  l1Names: l1NameMap,
 })
 const {
   jobs,
@@ -393,7 +403,6 @@ const comboDetail = ref(null)
 const comboContextRow = ref(null)
 
 const universeOptions = UNIVERSE_OPTIONS
-const industryOptions = ref([])
 const modelOptions = ref([])
 
 async function loadIndustryOptions() {
