@@ -121,6 +121,10 @@
                 执行场所 {{ activation.activation?.execution_venue }} ·
                 对账 {{ activation.parity?.status }}
               </p>
+              <p v-if="activation.advisory_plan_id" class="muted">
+                advisory plan {{ activation.advisory_plan_id }} ·
+                {{ activation.advisory_item_count }} 条 · 已随激活保存，供复核
+              </p>
               <p v-if="activation.activation?.status === 'scheduled'" class="muted">
                 在生效日之前不会切换。
               </p>
