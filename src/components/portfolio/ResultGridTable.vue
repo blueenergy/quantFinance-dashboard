@@ -48,6 +48,14 @@
           <td class="col-actions detail-cell">
             <button type="button" class="link-btn" @click="$emit('select-row', row)">选为候选</button>
             <button
+              v-if="row.combo_key"
+              type="button"
+              class="link-btn"
+              @click="$emit('live-preview', row)"
+            >
+              实盘
+            </button>
+            <button
               v-if="row.combo_key && row.has_detail !== false"
               type="button"
               class="link-btn"
@@ -55,7 +63,7 @@
             >
               成交
             </button>
-            <span v-else class="muted">—</span>
+            <span v-if="!row.combo_key" class="muted">—</span>
           </td>
         </tr>
       </tbody>
@@ -78,7 +86,7 @@ const props = defineProps({
   compact: { type: Boolean, default: false },
 })
 
-defineEmits(['select-row', 'open-combo'])
+defineEmits(['select-row', 'open-combo', 'live-preview'])
 
 const sweptAxisKeys = computed(() => new Set(props.sweepAxes.map((axis) => axis.key)))
 

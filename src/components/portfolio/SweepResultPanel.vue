@@ -132,6 +132,7 @@
             compact
             @select-row="selectRow"
             @open-combo="openCombo"
+            @live-preview="emit('live-preview', $event)"
           />
         </div>
       </template>
@@ -178,6 +179,7 @@
         :num="num"
         @select-row="selectRow"
         @open-combo="openCombo"
+        @live-preview="emit('live-preview', $event)"
       />
 
       <div v-if="pageState.totalPages > 1" class="pager">
@@ -217,7 +219,7 @@ const props = defineProps({
   num: { type: Function, required: true },
 })
 
-const emit = defineEmits(['select-row', 'open-combo'])
+const emit = defineEmits(['select-row', 'open-combo', 'live-preview'])
 
 const activeTab = ref('facet')
 const facetAxisKey = ref('')

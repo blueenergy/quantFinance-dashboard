@@ -225,6 +225,7 @@
               :num="num"
               @select-row="onSelectResultRow"
               @open-combo="openComboDetail"
+              @live-preview="openLivePreview"
             />
             <p v-else class="muted">暂无结果。任务完成后会显示。</p>
           </div>
@@ -261,6 +262,15 @@
       :identity="comboExportIdentity"
       @close="closeComboDetail"
     />
+
+    <ResearchLivePreviewDrawer
+      v-if="livePreviewOpen"
+      :open="livePreviewOpen"
+      :result-id="resultDetail?.result_id || ''"
+      :row="livePreviewRow"
+      :num="num"
+      @close="livePreviewOpen = false"
+    />
   </section>
 </template>
 
@@ -295,6 +305,9 @@ const ResearchComboModal = defineAsyncComponent(
 )
 const ResearchCreateDrawer = defineAsyncComponent(
   () => import('../components/portfolio/ResearchCreateDrawer.vue'),
+)
+const ResearchLivePreviewDrawer = defineAsyncComponent(
+  () => import('../components/portfolio/ResearchLivePreviewDrawer.vue'),
 )
 
 const NARROW_MQ = '(max-width: 900px)'
@@ -401,6 +414,8 @@ const comboLoading = ref(false)
 const comboError = ref('')
 const comboDetail = ref(null)
 const comboContextRow = ref(null)
+const livePreviewOpen = ref(false)
+const livePreviewRow = ref(null)
 
 const universeOptions = UNIVERSE_OPTIONS
 const modelOptions = ref([])
@@ -502,6 +517,12 @@ function closeComboDetail() {
   comboError.value = ''
   comboDetail.value = null
   comboContextRow.value = null
+}
+
+function openLivePreview(row) {
+  if (!row?.combo_key) return
+  livePreviewRow.value = row
+  livePreviewOpen.value = true
 }
 
 onMounted(async () => {

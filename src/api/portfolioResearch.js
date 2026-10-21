@@ -28,6 +28,18 @@ export function getPortfolioResearchResults(jobId) {
   return request({ url: `/portfolio-research/jobs/${jobId}/results`, method: 'get' })
 }
 
+export function createPortfolioResearchLivePreview(resultId, data = {}) {
+  return request({
+    url: `/portfolio-research/results/${resultId}/live-preview`,
+    method: 'post',
+    data,
+  })
+}
+
+export function getPortfolioResearchLivePreview(taskId) {
+  return request({ url: `/portfolio-research/live-preview/${taskId}`, method: 'get' })
+}
+
 export function getPortfolioResearchResultRows(jobId, params = {}) {
   return request({ url: `/portfolio-research/jobs/${jobId}/results/rows`, method: 'get', params })
 }
