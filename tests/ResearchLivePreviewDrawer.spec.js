@@ -118,6 +118,24 @@ describe('ResearchLivePreviewDrawer activation', () => {
     expect(wrapper.get('.activate-btn').attributes('disabled')).toBeDefined()
   })
 
+  it('hydrates an existing scheduled activation when the drawer reopens', async () => {
+    const response = previewResult('clean')
+    response.data.activation = {
+      activation_id: 'act-existing',
+      status: 'scheduled',
+      effective_date: '20261118',
+      preset_id: 'preset-x',
+      parity: { status: 'clean' },
+      advisory_plan_id: 'preview-plan',
+    }
+    apiMocks.getPortfolioResearchLivePreview.mockResolvedValue(response)
+    const wrapper = await mountDrawer()
+
+    expect(wrapper.text()).toContain('act-existing')
+    expect(wrapper.text()).toContain('取消激活')
+    expect(wrapper.find('.activate-btn').exists()).toBe(false)
+  })
+
   it('cancels a scheduled activation from the drawer', async () => {
     apiMocks.getPortfolioResearchLivePreview.mockResolvedValue(previewResult('clean'))
     apiMocks.activatePortfolioResearchLivePreview.mockResolvedValue({

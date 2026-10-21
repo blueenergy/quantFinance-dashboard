@@ -399,6 +399,20 @@ function poll(current) {
         suggestedEffectiveDate.value =
           data.result?.suggested_effective_date || plan.value?.next_rebalance_date || ''
         effectiveDateInput.value = toDateInput(suggestedEffectiveDate.value)
+        if (data.activation) {
+          activation.value = {
+            activation: data.activation,
+            preset: data.activation.preset_id
+              ? { preset_id: data.activation.preset_id }
+              : null,
+            parity: data.activation.parity || data.result?.parity || null,
+            applied_now: data.activation.status === 'active',
+            advisory_plan_id: data.activation.advisory_plan_id,
+            advisory_item_count: (
+              data.activation.advisory_plan_snapshot?.items || []
+            ).length,
+          }
+        }
         return
       }
       if (data.status === 'failed') {
