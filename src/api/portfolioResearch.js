@@ -40,6 +40,14 @@ export function getPortfolioResearchLivePreview(taskId) {
   return request({ url: `/portfolio-research/live-preview/${taskId}`, method: 'get' })
 }
 
+export function activatePortfolioResearchLivePreview(taskId, data = {}) {
+  return request({ url: `/portfolio-research/live-preview/${taskId}/activate`, method: 'post', data })
+}
+
+export function cancelPortfolioResearchActivation(activationId) {
+  return request({ url: `/portfolio-research/activations/${activationId}/cancel`, method: 'post' })
+}
+
 export function getPortfolioResearchResultRows(jobId, params = {}) {
   return request({ url: `/portfolio-research/jobs/${jobId}/results/rows`, method: 'get', params })
 }
