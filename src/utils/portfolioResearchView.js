@@ -254,6 +254,13 @@ export function buildComboSummaryCards(summary = {}) {
     { k: '累计收益(净)', v: pct(values.cumulative_return), cls: signClass(values.cumulative_return) },
     { k: '年化收益', v: pct(values.annualized_return), cls: signClass(values.annualized_return) },
     { k: 'Sharpe', v: num(values.sharpe), cls: '' },
+    { k: 'Sortino', v: num(values.sortino), cls: '' },
+    { k: 'Calmar', v: num(values.calmar), cls: '' },
+    {
+      k: 'IR(指数)',
+      v: num(values.index_information_ratio ?? values.information_ratio),
+      cls: '',
+    },
     { k: '最大回撤', v: pct(values.max_drawdown), cls: 'neg' },
     {
       k: '超额(对指数)',

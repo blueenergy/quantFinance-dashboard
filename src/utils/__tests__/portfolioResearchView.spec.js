@@ -184,6 +184,9 @@ describe('buildComboSummaryCards', () => {
       cumulative_return: 0.5,
       annualized_return: 0.2,
       sharpe: 1.1,
+      sortino: 0.9,
+      calmar: 0.8,
+      index_information_ratio: 0.7,
       max_drawdown: -0.1,
       index_excess_cumulative_return: 0.08,
       average_turnover: 0.3,
@@ -193,6 +196,9 @@ describe('buildComboSummaryCards', () => {
     expect(cards.map((card) => card.k)).toContain('年化收益')
     expect(cards.find((card) => card.k === '年化收益')?.v).toBe('20.00%')
     expect(cards.find((card) => card.k === '平均暴露')?.v).toBe('54.00%')
+    expect(cards.find((card) => card.k === 'Sortino')?.v).toBe('0.90')
+    expect(cards.find((card) => card.k === 'Calmar')?.v).toBe('0.80')
+    expect(cards.find((card) => card.k === 'IR(指数)')?.v).toBe('0.70')
   })
 })
 

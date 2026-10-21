@@ -34,6 +34,12 @@
       </div>
     </div>
 
+    <SignalQualityPanel
+      :signal-quality="resultDetail?.signal_quality || {}"
+      :params="researchParams"
+      :num="num"
+    />
+
     <div class="sweep-tabs" role="tablist">
       <button
         type="button"
@@ -201,6 +207,7 @@ import {
   regimeRulesMissingOnRows,
 } from '../../utils/regimeCash'
 import ResultGridTable from './ResultGridTable.vue'
+import SignalQualityPanel from './SignalQualityPanel.vue'
 
 const props = defineProps({
   resultDetail: { type: Object, default: null },

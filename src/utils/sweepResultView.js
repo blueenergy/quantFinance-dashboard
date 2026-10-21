@@ -1,5 +1,57 @@
-import { compositeScorePreset } from './scoreUtils'
+import {
+  SCORE_DIMENSION_FIELDS,
+  SCORE_DIMENSION_LABELS,
+  compositeScorePreset,
+} from './scoreUtils'
 import { formatRegimeRule, regimeRulesFromParams } from './regimeCash'
+
+const SCORE_COLUMN_LABELS = Object.fromEntries(
+  Object.entries(SCORE_DIMENSION_FIELDS).map(([dimension, column]) => [
+    column,
+    SCORE_DIMENSION_LABELS[dimension],
+  ]),
+)
+
+export function scoreColumnLabel(column, params = {}) {
+  const value = String(column || '').trim()
+  if (!value) return '-'
+  if (value === 'model_score') {
+    return params.model_id ? `模型 ${params.model_id}` : '模型评分'
+  }
+  const growthCycle = value.match(/^growth_cycle_g(\d+)_c(\d+)_score$/)
+  if (growthCycle) return `成长${growthCycle[1]}-动量${growthCycle[2]}`
+  const preset = compositeScorePreset(value)
+  if (preset) return preset.label
+  if (SCORE_COLUMN_LABELS[value]) return `${SCORE_COLUMN_LABELS[value]}单维`
+  return value
+}
+
+export function buildSignalQualityRows(signalQuality = {}, params = {}) {
+  const rows = []
+  for (const [column, horizons] of Object.entries(signalQuality || {})) {
+    if (!horizons || typeof horizons !== 'object' || Array.isArray(horizons)) continue
+    for (const [key, block] of Object.entries(horizons)) {
+      if (!block || typeof block !== 'object' || Array.isArray(block)) continue
+      const horizon = Number(String(key).replace(/^h/, ''))
+      if (!Number.isFinite(horizon)) continue
+      rows.push({
+        scoreColumn: column,
+        scoreLabel: scoreColumnLabel(column, params),
+        horizon,
+        icMean: block.ic_mean,
+        icIr: block.ic_ir,
+        positiveRatio: block.positive_ratio,
+        tNonoverlap: block.t_nonoverlap,
+        mde80: block.mde80,
+        nNonoverlap: block.nonoverlap_observations,
+        observations: block.observations,
+      })
+    }
+  }
+  return rows.sort(
+    (a, b) => a.scoreLabel.localeCompare(b.scoreLabel) || a.horizon - b.horizon,
+  )
+}
 
 const AXIS_REGISTRY = [
   { key: 'trailing_stop_pct', label: '浮动止盈', rowKey: 'trailing_stop_pct', paramKeys: ['trailing_stop_pcts', 'trailing_stop_pct'] },

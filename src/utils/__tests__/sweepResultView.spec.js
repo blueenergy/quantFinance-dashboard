@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCandidateConfigFromRow,
+  buildSignalQualityRows,
   buildSweepResultView,
   experimentSummary,
   filterRowsByFacet,
@@ -9,6 +10,7 @@ import {
   paginateRows,
   parseTrailingStopFromComboKey,
   resolveComboTrailingStopPct,
+  scoreColumnLabel,
 } from '../sweepResultView'
 
 const sampleRows = [
@@ -177,5 +179,39 @@ describe('sweepResultView', () => {
       { top_n_values: [10, 20] },
     )
     expect(view.facet_best.top_n[0].row.risk_adjusted_score).toBe(0.536)
+  })
+})
+
+describe('signal quality rows', () => {
+  it('flattens horizons and labels model / growth-cycle / atomic scores', () => {
+    const rows = buildSignalQualityRows(
+      {
+        model_score: {
+          h20: {
+            ic_mean: 0.02,
+            ic_ir: 0.1,
+            positive_ratio: 0.6,
+            t_nonoverlap: 1.2,
+            mde80: 0.01,
+            nonoverlap_observations: 6,
+            observations: 115,
+          },
+        },
+        growth_cycle_g60_c40_score: { h20: { ic_mean: 0.01 } },
+      },
+      { model_id: 'research-rolling500-csi500' },
+    )
+
+    expect(rows.map((row) => row.scoreLabel)).toEqual([
+      '成长60-动量40',
+      '模型 research-rolling500-csi500',
+    ])
+    expect(rows[1]).toMatchObject({
+      horizon: 20,
+      icMean: 0.02,
+      nNonoverlap: 6,
+      observations: 115,
+    })
+    expect(scoreColumnLabel('value_score')).toBe('价值单维')
   })
 })

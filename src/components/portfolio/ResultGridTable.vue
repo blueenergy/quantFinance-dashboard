@@ -11,6 +11,9 @@
           <th>年化</th>
           <th>超额</th>
           <th>Sharpe</th>
+          <th>Sortino</th>
+          <th>Calmar</th>
+          <th>IR</th>
           <th>回撤</th>
           <th>暴露</th>
           <th>综合分</th>
@@ -36,6 +39,9 @@
           <td :class="signClass(row.annualized_return)">{{ pct(row.annualized_return) }}</td>
           <td :class="signClass(row.index_excess_cumulative_return)">{{ pct(row.index_excess_cumulative_return) }}</td>
           <td>{{ num(row.sharpe) }}</td>
+          <td>{{ num(row.sortino) }}</td>
+          <td>{{ num(row.calmar) }}</td>
+          <td>{{ num(row.index_information_ratio ?? row.information_ratio) }}</td>
           <td class="neg">{{ pct(row.max_drawdown) }}</td>
           <td>{{ pct(row.average_exposure) }}</td>
           <td>{{ num(row.risk_adjusted_score, 3) }}</td>
