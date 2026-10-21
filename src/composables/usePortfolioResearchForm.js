@@ -308,6 +308,7 @@ export function usePortfolioResearchForm({
       initial_capital: params.initial_capital ?? defaults.initial_capital,
       trailing_stop_pcts: formatTrailingStopPctsForInput(params),
       index_benchmark_symbol: params.index_benchmark_symbol,
+      industry_l1: params.industry_l1 || job.industry_l1 || defaults.industry_l1,
       cash_buffer: params.cash_buffer,
       ...regimeFlagsFromParams(params),
       regime_rules: regimeRulesFromParams(params),

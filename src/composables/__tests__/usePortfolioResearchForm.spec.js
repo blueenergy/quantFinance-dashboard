@@ -218,6 +218,24 @@ describe('usePortfolioResearchForm', () => {
     expect(formApi.drawerOpen.value).toBe(true)
   })
 
+  it('loads the Shenwan L1 industry filter from the selected job', () => {
+    const selectedJob = ref({
+      job_id: 'job-industry',
+      name: 'Industry research',
+      params: {
+        universe_index: 'csi1000',
+        industry_l1: '801730.SI',
+        index_benchmark_symbol: '801730.SI',
+      },
+    })
+    const formApi = createForm({ selectedJob })
+
+    formApi.loadParamsFromSelectedJob()
+
+    expect(formApi.form.value.industry_l1).toBe('801730.SI')
+    expect(formApi.form.value.index_benchmark_symbol).toBe('801730.SI')
+  })
+
   it('loads legacy trailing stop and string weights from the selected job', () => {
     const selectedJob = ref({
       job_id: 'job-legacy',
