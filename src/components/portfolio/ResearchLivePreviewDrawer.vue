@@ -122,8 +122,17 @@
                 对账 {{ activation.parity?.status }}
               </p>
               <p v-if="activation.activation?.status === 'scheduled'" class="muted">
-                在生效日之前不会切换；可在计划列表或再次打开本预览前取消。
+                在生效日之前不会切换。
               </p>
+              <button
+                v-if="activation.activation?.status === 'scheduled'"
+                type="button"
+                class="cancel-btn"
+                :disabled="cancelling"
+                @click="cancelActivation"
+              >
+                {{ cancelling ? '取消中…' : '取消激活' }}
+              </button>
             </div>
 
             <template v-else>
@@ -213,6 +222,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import {
   activatePortfolioResearchLivePreview,
+  cancelPortfolioResearchActivation,
   createPortfolioResearchLivePreview,
   getPortfolioResearchLivePreview,
 } from '../../api/portfolioResearch'
@@ -236,6 +246,7 @@ const unsupportedFeatures = ref([])
 const suggestedEffectiveDate = ref('')
 const activation = ref(null)
 const activating = ref(false)
+const cancelling = ref(false)
 const activationError = ref('')
 const venue = ref('paper')
 const effectiveDateInput = ref('')
@@ -319,6 +330,24 @@ async function activate() {
     activationError.value = formatResearchApiError(err, '激活失败')
   } finally {
     activating.value = false
+  }
+}
+
+async function cancelActivation() {
+  const activationId = activation.value?.activation?.activation_id
+  if (!activationId || cancelling.value) return
+  cancelling.value = true
+  activationError.value = ''
+  try {
+    await cancelPortfolioResearchActivation(activationId)
+    activation.value = {
+      ...activation.value,
+      activation: { ...activation.value.activation, status: 'cancelled' },
+    }
+  } catch (err) {
+    activationError.value = formatResearchApiError(err, '取消激活失败')
+  } finally {
+    cancelling.value = false
   }
 }
 
@@ -668,6 +697,22 @@ th {
 
 .activation-result p {
   margin: 0 0 4px;
+}
+
+.cancel-btn {
+  align-self: flex-start;
+  padding: 6px 14px;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  background: #fff;
+  color: #b91c1c;
+  cursor: pointer;
+}
+
+.cancel-btn:disabled {
+  color: #94a3b8;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
 }
 
 @media (max-width: 640px) {

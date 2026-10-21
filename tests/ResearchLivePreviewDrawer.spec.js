@@ -5,6 +5,7 @@ const apiMocks = vi.hoisted(() => ({
   createPortfolioResearchLivePreview: vi.fn(),
   getPortfolioResearchLivePreview: vi.fn(),
   activatePortfolioResearchLivePreview: vi.fn(),
+  cancelPortfolioResearchActivation: vi.fn(),
 }))
 
 vi.mock('../src/api/portfolioResearch', () => apiMocks)
@@ -115,5 +116,27 @@ describe('ResearchLivePreviewDrawer activation', () => {
     expect(wrapper.text()).toContain('实盘未实现的功能')
     expect(wrapper.text()).toContain('intra_period_cash')
     expect(wrapper.get('.activate-btn').attributes('disabled')).toBeDefined()
+  })
+
+  it('cancels a scheduled activation from the drawer', async () => {
+    apiMocks.getPortfolioResearchLivePreview.mockResolvedValue(previewResult('clean'))
+    apiMocks.activatePortfolioResearchLivePreview.mockResolvedValue({
+      data: {
+        activation: { activation_id: 'act-2', status: 'scheduled', effective_date: '20261118' },
+        preset: { preset_id: 'preset-1' },
+        parity: { status: 'clean' },
+        applied_now: false,
+      },
+    })
+    apiMocks.cancelPortfolioResearchActivation.mockResolvedValue({ data: { status: 'cancelled' } })
+    const wrapper = await mountDrawer()
+
+    await wrapper.get('.activate-btn').trigger('click')
+    await flushPromises()
+    await wrapper.get('.cancel-btn').trigger('click')
+    await flushPromises()
+
+    expect(apiMocks.cancelPortfolioResearchActivation).toHaveBeenCalledWith('act-2')
+    expect(wrapper.text()).toContain('cancelled')
   })
 })
