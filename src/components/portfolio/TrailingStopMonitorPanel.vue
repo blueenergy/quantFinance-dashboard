@@ -64,9 +64,9 @@
         <thead>
           <tr>
             <th>标的</th>
-            <th>峰值</th>
-            <th>收盘</th>
-            <th>止损线</th>
+            <th title="按最新复权因子折算为裸价">峰值</th>
+            <th title="按最新复权因子折算为裸价">收盘</th>
+            <th title="按最新复权因子折算为裸价">止损线</th>
             <th>距止损</th>
             <th>状态</th>
           </tr>
@@ -78,15 +78,18 @@
             :class="{ triggered: row.triggered }"
           >
             <td>{{ row.symbol }}</td>
-            <td>{{ fmtPrice(row.peak_high) }}</td>
-            <td>{{ fmtPrice(row.close) }}</td>
-            <td>{{ fmtPrice(row.stop_floor) }}</td>
+            <td>{{ fmtPrice(row.raw_peak_high ?? row.peak_high) }}</td>
+            <td>{{ fmtPrice(row.raw_close ?? row.close) }}</td>
+            <td>{{ fmtPrice(row.raw_stop_floor ?? row.stop_floor) }}</td>
             <td>{{ fmtDistance(row.distance_to_stop_pct) }}</td>
             <td>{{ row.triggered ? '已触发' : '安全' }}</td>
           </tr>
         </tbody>
       </table>
     </div>
+    <p v-if="expanded && detailItems.length" class="muted price-basis-note">
+      表格价格按最新复权因子折算为裸价；触发判定使用后复权序列。
+    </p>
 
     <p v-else-if="expanded && loadingDetail" class="muted">加载明细中…</p>
     <p v-else-if="expanded && !detailItems.length" class="muted">暂无明细</p>
@@ -276,6 +279,11 @@ watch(
 .card-header h3 {
   margin: 0 0 4px;
   font-size: 1rem;
+}
+
+.price-basis-note {
+  font-size: 12px;
+  margin: 6px 0 0;
 }
 
 .summary-text {
