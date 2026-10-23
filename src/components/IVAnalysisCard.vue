@@ -4,12 +4,24 @@
     <div class="iv-card__header">
       <div class="iv-card__title">
         📈 A股波动率分析
-        <span v-if="snapshotDate" class="iv-card__date">{{ snapshotDate }}</span>
+        <span v-if="snapshotDate" class="iv-card__date">{{ formatHistoryDate(snapshotDate) }}</span>
         <span v-if="snapshotSource" class="iv-src-badge" :class="'iv-src--' + snapshotSource">
           {{ {'live':'实时','mem_cache':'缓存','db_cache':'DB缓存','market_daily_fallback':'日报副产品'}[snapshotSource] || snapshotSource }}
         </span>
       </div>
       <div class="iv-card__actions">
+        <select
+          v-if="history.length"
+          v-model="selectedHistoryDate"
+          class="iv-btn iv-btn--ghost iv-history-select"
+          title="查看历史分析"
+          @change="loadSelectedSnapshot"
+        >
+          <option value="">最新</option>
+          <option v-for="h in history" :key="h.analysis_date" :value="h.analysis_date">
+            {{ formatHistoryLabel(h) }}
+          </option>
+        </select>
         <button class="iv-btn iv-btn--ghost" :disabled="loading" @click="reload" title="刷新页面数据（只读缓存，不重新计算）">↻ 刷新</button>
         <button
           class="iv-btn iv-btn--primary"
@@ -119,7 +131,7 @@
       </div>
 
       <!-- LLM 解读区域 -->
-      <div v-if="interpretation || interpreting" class="iv-interp-section">
+      <div v-if="interpretation || interpreting || selectedHistoryDate" class="iv-interp-section">
         <div class="iv-interp__header">
           <span class="iv-interp__title">🧠 LLM 专业解读</span>
           <span v-if="interpretedAt" class="iv-interp__time">{{ interpretedAt }}</span>
@@ -129,6 +141,7 @@
           <span v-if="interpreting === 'submitted'">分析任务已提交，quantAnalyzer 正在处理（约30-60秒）…</span>
           <span v-else>刷新中…</span>
         </div>
+        <div v-else-if="!interpretation" class="iv-interp__text iv-interp__empty">该日期未生成 LLM 解读。</div>
         <div v-else class="iv-interp__text">{{ interpretation }}</div>
       </div>
     </div>
@@ -140,7 +153,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { getIVSnapshot, interpretIVSnapshot } from '../api/riskReport.js'
+import { getIVSnapshot, getIVSnapshotHistory, interpretIVSnapshot } from '../api/riskReport.js'
 
 const loading      = ref(false)
 const interpreting = ref(null)  // null | 'submitted' | 'polling'
@@ -155,9 +168,79 @@ const interpretedAt  = ref(null)
 const alert          = ref(null)   // {level, level_zh, score, max_score, signals}
 const alertExpanded  = ref(false)
 
+const history             = ref([])   // [{analysis_date, iv_30, level_zh, ...}]
+const selectedHistoryDate = ref('')   // '' = 最新
+
 const hasMultiIndex = computed(() =>
   ivSnap.value && Object.keys(ivSnap.value.indices || {}).length > 1
 )
+
+function formatHistoryDate(raw) {
+  const s = String(raw || '')
+  if (s.length !== 8) return s || '--'
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+}
+
+function formatHistoryLabel(item) {
+  const iv = item.iv_30 === null || item.iv_30 === undefined ? '--' : `${item.iv_30}%`
+  return `${formatHistoryDate(item.analysis_date)} · ${item.level_zh || '--'} ${iv}`
+}
+
+function applySnapshot(data) {
+  ivSnap.value         = data?.iv_snapshot   || null
+  snapshotDate.value   = data?.snapshot_date || null
+  snapshotSource.value = data?.snapshot_source || null
+  interpretation.value = data?.interpretation || null
+  alert.value          = data?.alert || null
+  interpretedAt.value  = data?.interpreted_at
+    ? data.interpreted_at.slice(0, 16).replace('T', ' ')
+    : null
+  if (data?.alert && data.alert.score > 0) alertExpanded.value = true
+}
+
+async function loadHistory() {
+  try {
+    const data = await getIVSnapshotHistory(30)
+    history.value = data?.items || []
+  } catch (_) {
+    history.value = []
+  }
+}
+
+async function reload() {
+  loading.value = true
+  error.value = ''
+  selectedHistoryDate.value = ''
+  try {
+    const data = await getIVSnapshot()
+    applySnapshot(data)
+    await loadHistory()
+  } catch (e) {
+    error.value = `加载失败：${e.message}`
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadSelectedSnapshot() {
+  if (!selectedHistoryDate.value) {
+    await reload()
+    return
+  }
+  loading.value = true
+  error.value = ''
+  try {
+    const data = await getIVSnapshot(selectedHistoryDate.value)
+    applySnapshot(data)
+    if (!data?.iv_snapshot) {
+      error.value = `${formatHistoryDate(selectedHistoryDate.value)} 暂无波动率快照`
+    }
+  } catch (e) {
+    error.value = `加载历史失败：${e.message}`
+  } finally {
+    loading.value = false
+  }
+}
 
 const LEVEL_LEGEND = [
   { level: 'calm',     range: '< 15%',   label: '低波动 — 市场平静/乐观' },
@@ -165,27 +248,6 @@ const LEVEL_LEGEND = [
   { level: 'elevated', range: '25–35%',  label: '偏高 — 市场偏谨慎' },
   { level: 'panic',    range: '≥ 35%',   label: '高位预警 — 恐慌/危机' },
 ]
-
-async function reload() {
-  loading.value = true
-  error.value = ''
-  try {
-    const data = await getIVSnapshot()
-    ivSnap.value         = data.iv_snapshot   || null
-    snapshotDate.value   = data.snapshot_date || null
-    snapshotSource.value = data.snapshot_source || null
-    interpretation.value = data.interpretation || null
-    alert.value          = data.alert || null
-    if (data.alert && data.alert.score > 0) alertExpanded.value = true
-    interpretedAt.value  = data.interpreted_at
-      ? data.interpreted_at.slice(0, 16).replace('T', ' ')
-      : null
-  } catch (e) {
-    error.value = `加载失败：${e.message}`
-  } finally {
-    loading.value = false
-  }
-}
 
 async function triggerInterpret() {
   interpreting.value = 'submitted'
@@ -209,16 +271,11 @@ async function triggerInterpret() {
       try {
         const snap = await getIVSnapshot()
         const newInterp = snap.interpretation || null
-        if (newInterp && newInterp !== interpretation.value) {
+        if (newInterp && (newInterp !== interpretation.value || selectedHistoryDate.value)) {
           // 拿到新解读，更新并停止轮询
-          ivSnap.value         = snap.iv_snapshot   || ivSnap.value
-          snapshotDate.value   = snap.snapshot_date || snapshotDate.value
-          snapshotSource.value = snap.snapshot_source || snapshotSource.value
-          interpretation.value = newInterp
-          alert.value          = snap.alert || alert.value
-          interpretedAt.value  = snap.interpreted_at
-            ? snap.interpreted_at.slice(0, 16).replace('T', ' ')
-            : null
+          applySnapshot(snap)
+          selectedHistoryDate.value = ''
+          await loadHistory()
           interpreting.value = null
           return
         }
@@ -275,7 +332,8 @@ onMounted(reload)
 .iv-src--live      { background: #f0fff4; border-color: #9ae6b4; color: #276749; }
 .iv-src--mem_cache { background: #ebf4ff; border-color: #bee3f8; color: #2b6cb0; }
 .iv-src--db_cache  { background: #fffaf0; border-color: #fbd38d; color: #c05621; }
-.iv-card__actions { display: flex; gap: 8px; align-items: center; }
+.iv-card__actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.iv-history-select { max-width: 240px; padding: 6px 8px; font-size: 12px; }
 .iv-card__divider { height: 1px; background: #edf2f7; margin: 12px 0; }
 .iv-card__loading, .iv-card__empty { color: #a0aec0; font-size: 14px; padding: 12px 0; }
 .iv-card__error { color: #c53030; font-size: 13px; margin-top: 8px; }
@@ -388,6 +446,7 @@ onMounted(reload)
   line-height: 1.75;
   white-space: pre-wrap;
 }
+.iv-interp__empty { color: #a0aec0; }
 
 /* ── 大跌预警 banner ── */
 .iv-alert {

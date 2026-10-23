@@ -109,11 +109,25 @@ export async function triggerUsMarketDailyAnalysis(date = null) {
 
 /**
  * 获取A股波动率快照（含缓存的 LLM 解读文本）
+ * @param {string|null} date - YYYYMMDD；不传取最新
  */
-export async function getIVSnapshot() {
+export async function getIVSnapshot(date = null) {
     return request({
         url: '/risk-reports/iv-snapshot',
         method: 'get',
+        params: date ? { date } : undefined,
+    })
+}
+
+/**
+ * 获取A股波动率历史分析列表（按日期倒序）
+ * @param {number} limit - 最多返回条数，默认 30
+ */
+export async function getIVSnapshotHistory(limit = 30) {
+    return request({
+        url: '/risk-reports/iv-snapshot/history',
+        method: 'get',
+        params: { limit },
     })
 }
 
