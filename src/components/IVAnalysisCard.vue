@@ -161,9 +161,9 @@ const hasMultiIndex = computed(() =>
 
 const LEVEL_LEGEND = [
   { level: 'calm',     range: '< 15%',   label: '低波动 — 市场平静/乐观' },
-  { level: 'normal',   range: '15–20%',  label: '正常区间' },
-  { level: 'elevated', range: '20–35%',  label: '偏高 — 市场偏谨慎' },
-  { level: 'panic',    range: '> 35%',   label: '高位预警 — 恐慌/危机' },
+  { level: 'normal',   range: '15–25%',  label: '正常区间' },
+  { level: 'elevated', range: '25–35%',  label: '偏高 — 市场偏谨慎' },
+  { level: 'panic',    range: '≥ 35%',   label: '高位预警 — 恐慌/危机' },
 ]
 
 async function reload() {
