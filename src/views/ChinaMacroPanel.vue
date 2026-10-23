@@ -356,9 +356,15 @@ const rawCards = computed(() => [
   {
     key: 'pmi',
     label: 'PMI',
-    value: fmtNumber(rawSnapshot.value.pmi?.pmi),
+    value: fmtNumber(
+      rawSnapshot.value.pmi?.pmi010000
+      ?? rawSnapshot.value.pmi?.pmi
+      ?? rawSnapshot.value.pmi?.manufacturing_pmi
+    ),
     date: fmtDateLike(rawSnapshot.value.pmi?.month),
-    sub: rawSnapshot.value.pmi?.manufacturing_pmi ? `制造业 ${fmtNumber(rawSnapshot.value.pmi.manufacturing_pmi)}` : '',
+    sub: (rawSnapshot.value.pmi?.pmi020100 ?? rawSnapshot.value.pmi?.non_manufacturing_pmi)
+      ? `非制造业 ${fmtNumber(rawSnapshot.value.pmi.pmi020100 ?? rawSnapshot.value.pmi.non_manufacturing_pmi)}`
+      : '',
   },
   {
     key: 'cpi',
