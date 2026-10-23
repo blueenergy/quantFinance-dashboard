@@ -74,9 +74,9 @@
           <button
             v-if="marketTab !== 'iv'"
             class="mrp-btn-sm mrp-btn-dark"
-            :disabled="triggeringMarket"
+            :disabled="triggeringMarket || !canTriggerMarketDaily"
             @click="triggerMarketDaily"
-            :title="marketTab === 'us' ? '触发美股市场 LLM 日报解读' : '触发A股市场 LLM 日报解读'"
+            :title="marketDailyButtonTitle"
           >🤖 {{ marketTab === 'us' ? '美股日报' : 'A股日报' }}</button>
         </div>
       </v-col>
@@ -120,6 +120,31 @@
           <div v-if="s.warnings?.length" class="sc-warn">
             ⚠️ {{ s.warnings.length }} 个预警
           </div>
+        </div>
+      </v-col>
+    </v-row>
+
+    <!-- 当前 Tab 无数据：解释原因，并给出最近可看的 A 股日期 -->
+    <v-row v-if="!overviewLoading && sectors.length > 0 && visibleSectors.length === 0">
+      <v-col cols="12">
+        <div class="no-data-hint">
+          <v-icon size="48" color="grey" :icon="mdiChartTimelineVariant" />
+          <p class="mrp-muted mt-2">
+            {{ marketTab === 'a' ? '今日 A 股风险扫描尚未生成' : '今日美股风险扫描尚未生成' }}
+          </p>
+          <p v-if="marketTab === 'a'" class="mrp-caption">
+            A 股扫描每日 19:30 收盘后运行；可先切到最近一个有数据的交易日查看。
+          </p>
+          <button
+            v-if="canShowLatestAShare"
+            class="mrp-btn-sm mrp-btn-dark mt-2"
+            @click="showLatestAShare"
+          >
+            查看最近 A 股扫描（{{ formatDisplayDate(latestAShareDateISO) }}）
+          </button>
+          <p v-else-if="marketTab === 'a' && latestAShareDateISO" class="mrp-caption mt-2">
+            最近 A 股扫描日期：{{ formatDisplayDate(latestAShareDateISO) }}
+          </p>
         </div>
       </v-col>
     </v-row>
@@ -402,6 +427,7 @@ const today = new Date().toISOString().slice(0, 10)
 const selectedDate = ref(today)
 
 const sectors = ref([])
+const latestAShareDate = ref(null)
 const overviewLoading = ref(false)
 
 const activeSector = ref(null)
@@ -431,6 +457,37 @@ const visibleSectors = computed(() => {
   if (marketTab.value === 'us') return usSectors.value
   if (marketTab.value === 'a')  return aShareSectors.value
   return []
+})
+
+const latestAShareDateISO = computed(() => {
+  const raw = latestAShareDate.value
+  if (!raw || String(raw).length !== 8) return null
+  const s = String(raw)
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+})
+
+const canShowLatestAShare = computed(() => (
+  marketTab.value === 'a'
+  && aShareSectors.value.length === 0
+  && latestAShareDateISO.value
+  && latestAShareDateISO.value !== selectedDate.value
+))
+
+const canTriggerMarketDaily = computed(() => {
+  if (marketTab.value === 'us') return usSectors.value.length > 0
+  if (marketTab.value === 'a') return aShareSectors.value.length > 0
+  return false
+})
+
+const marketDailyButtonTitle = computed(() => {
+  if (marketTab.value === 'us') {
+    return canTriggerMarketDaily.value
+      ? '触发美股市场 LLM 日报解读'
+      : '今日美股风险扫描尚未生成'
+  }
+  return canTriggerMarketDaily.value
+    ? '触发A股市场 LLM 日报解读'
+    : '今日 A 股风险扫描尚未生成（每日 19:30 收盘后更新）'
 })
 
 // Filter market daily analysis to match the active tab
@@ -546,6 +603,7 @@ async function loadOverview() {
   trendData.value = []
   marketAnalysis.value = null
   usMarketAnalysis.value = null
+  latestAShareDate.value = null
   try {
     const apiDate = toApiDate(selectedDate.value)
     const [overviewData, analysisData, usAnalysisData] = await Promise.all([
@@ -554,6 +612,7 @@ async function loadOverview() {
       getUsMarketDailyAnalysis(apiDate).catch(() => null),
     ])
     sectors.value = overviewData.sectors || []
+    latestAShareDate.value = overviewData.latest_a_share_date || null
     const doc = analysisData?.analysis || null
     marketAnalysis.value = doc
       ? { ...doc.analysis, model: doc.model, generated_at: doc.generated_at }
@@ -727,6 +786,16 @@ function switchMarketTab(tab) {
   activeSector.value = null
 }
 
+function showLatestAShare() {
+  if (!latestAShareDateISO.value) return
+  selectedDate.value = latestAShareDateISO.value
+  loadOverview()
+}
+
+function apiErrorMessage(error, fallback = '未知错误') {
+  return error?.response?.data?.detail || error?.message || fallback
+}
+
 // ---------------------------------------------------------------------------
 // LLM triggers
 // ---------------------------------------------------------------------------
@@ -738,7 +807,7 @@ async function triggerSectorAnalysis() {
     await triggerRiskAnalysis(activeSector.value, apiDate)
     showSnack('LLM 分析任务已提交，结果将在几分钟后更新', 'success')
   } catch (e) {
-    showSnack(`提交失败: ${e.message}`, 'error')
+    showSnack(`提交失败: ${apiErrorMessage(e)}`, 'error')
   } finally {
     triggeringSector.value = false
   }
@@ -756,7 +825,7 @@ async function triggerMarketDaily() {
       showSnack(`A股日报任务已提交（${res.sector_count} 个行业）`, 'success')
     }
   } catch (e) {
-    showSnack(`提交失败: ${e.message}`, 'error')
+    showSnack(`提交失败: ${apiErrorMessage(e)}`, 'error')
   } finally {
     triggeringMarket.value = false
   }
