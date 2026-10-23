@@ -5,7 +5,7 @@
       <div class="iv-card__title">
         📈 A股波动率分析
         <span v-if="snapshotDate" class="iv-card__date">{{ formatHistoryDate(snapshotDate) }}</span>
-        <span v-if="snapshotSource" class="iv-src-badge" :class="'iv-src--' + snapshotSource">
+        <span v-if="snapshotSource && snapshotSource !== 'none'" class="iv-src-badge" :class="'iv-src--' + snapshotSource">
           {{ {'live':'实时','mem_cache':'缓存','db_cache':'DB缓存','market_daily_fallback':'日报副产品'}[snapshotSource] || snapshotSource }}
         </span>
       </div>
@@ -14,10 +14,10 @@
           v-if="history.length"
           v-model="selectedHistoryDate"
           class="iv-btn iv-btn--ghost iv-history-select"
-          title="查看历史分析"
+          title="查看历史分析（只列出实际有记录的日期）"
           @change="loadSelectedSnapshot"
         >
-          <option value="">最新</option>
+          <option value="" disabled>选择历史日期</option>
           <option v-for="h in history" :key="h.analysis_date" :value="h.analysis_date">
             {{ formatHistoryLabel(h) }}
           </option>
@@ -27,22 +27,50 @@
           class="iv-btn iv-btn--primary"
           :disabled="interpreting"
           @click="triggerInterpret"
-          title="从 Tushare 重新拉取期权数据，计算大跌预警 + LLM 解读（约30-60秒）"
+          title="从 Tushare 重新拉取今日期权数据，计算大跌预警 + LLM 解读（约30-60秒）"
         >
           <span v-if="interpreting === 'submitted'">⏳ 已提交</span>
           <span v-else-if="interpreting === 'polling'">↻ 刷新中</span>
-          <span v-else>⚡ 触发分析</span>
+          <span v-else>⚡ 触发今日分析</span>
         </button>
       </div>
     </div>
     <div class="iv-card__divider" />
+    <p v-if="history.length" class="iv-history-note">
+      IV 分析不是每日生成（共 {{ history.length }} 条记录），下拉里只列出实际有记录的日期；页面日期没有记录时会显示空态，不会用最新结果冒充。
+    </p>
 
     <!-- 加载中 -->
     <div v-if="loading" class="iv-card__loading">加载波动率数据中…</div>
 
     <!-- 无数据 -->
     <div v-else-if="!ivSnap" class="iv-card__empty">
+      <template v-if="noRecord">
+        <p class="iv-empty-title">
+          <strong>{{ formatHistoryDate(snapshotDate) }} 暂无 IV 分析记录</strong>
+        </p>
+        <p>IV 分析只在手动触发时生成，不是每个交易日都有记录。当前实际有记录的日期：</p>
+        <div v-if="history.length" class="iv-history-chips">
+          <button
+            v-for="h in history"
+            :key="h.analysis_date"
+            class="iv-btn iv-btn--ghost"
+            @click="selectHistoryDate(h.analysis_date)"
+          >
+            {{ formatHistoryLabel(h) }}
+          </button>
+        </div>
+        <p v-if="latestHistoryItem" class="iv-empty-hint">
+          最近一次：{{ formatHistoryDate(latestHistoryItem.analysis_date) }}
+          <button class="iv-btn iv-btn--primary" @click="selectHistoryDate(latestHistoryItem.analysis_date)">
+            查看最近一次
+          </button>
+        </p>
+        <p v-else class="iv-empty-hint">还没有任何 IV 分析记录，点击「触发分析」生成今天的第一条。</p>
+      </template>
+      <template v-else>
         暂无波动率数据，点击「触发分析」按钮触发分析任务（quantAnalyzer 将从 Tushare 拉取数据并生成解读）
+      </template>
     </div>
 
     <!-- 主体 -->
@@ -152,8 +180,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { getIVSnapshot, getIVSnapshotHistory, interpretIVSnapshot } from '../api/riskReport.js'
+
+const props = defineProps({
+  selectedDate: { type: String, default: '' },
+})
 
 const loading      = ref(false)
 const interpreting = ref(null)  // null | 'submitted' | 'polling'
@@ -169,7 +201,11 @@ const alert          = ref(null)   // {level, level_zh, score, max_score, signal
 const alertExpanded  = ref(false)
 
 const history             = ref([])   // [{analysis_date, iv_30, level_zh, ...}]
-const selectedHistoryDate = ref('')   // '' = 最新
+const selectedHistoryDate = ref('')   // '' = 未选择/页面日期无记录
+const noRecord            = ref(false)
+
+const pageDateApi = computed(() => String(props.selectedDate || '').replace(/-/g, ''))
+const latestHistoryItem = computed(() => history.value[0] || null)
 
 const hasMultiIndex = computed(() =>
   ivSnap.value && Object.keys(ivSnap.value.indices || {}).length > 1
@@ -187,6 +223,7 @@ function formatHistoryLabel(item) {
 }
 
 function applySnapshot(data) {
+  noRecord.value       = false
   ivSnap.value         = data?.iv_snapshot   || null
   snapshotDate.value   = data?.snapshot_date || null
   snapshotSource.value = data?.snapshot_source || null
@@ -207,14 +244,21 @@ async function loadHistory() {
   }
 }
 
-async function reload() {
+async function loadDate(apiDate) {
   loading.value = true
   error.value = ''
-  selectedHistoryDate.value = ''
+  noRecord.value = false
   try {
-    const data = await getIVSnapshot()
+    const data = await getIVSnapshot(apiDate || null)
     applySnapshot(data)
-    await loadHistory()
+    if (apiDate && !data?.iv_snapshot) {
+      noRecord.value = true
+      snapshotDate.value = apiDate
+      snapshotSource.value = 'none'
+      ivSnap.value = null
+      interpretation.value = null
+      alert.value = null
+    }
   } catch (e) {
     error.value = `加载失败：${e.message}`
   } finally {
@@ -222,24 +266,48 @@ async function reload() {
   }
 }
 
+async function reload() {
+  loading.value = true
+  error.value = ''
+  await loadHistory()
+  const pageApi = pageDateApi.value
+
+  if (pageApi && history.value.some((h) => h.analysis_date === pageApi)) {
+    selectedHistoryDate.value = pageApi
+    await loadDate(pageApi)
+    return
+  }
+
+  if (pageApi) {
+    // 页面日期没有记录：明确显示空态，不回退到最新。
+    selectedHistoryDate.value = ''
+    noRecord.value = true
+    snapshotDate.value = pageApi
+    snapshotSource.value = 'none'
+    ivSnap.value = null
+    interpretation.value = null
+    alert.value = null
+    interpretedAt.value = null
+    loading.value = false
+    return
+  }
+
+  // 没有页面日期时才退回最新（兼容单独使用卡片的情况）。
+  selectedHistoryDate.value = ''
+  await loadDate(null)
+}
+
 async function loadSelectedSnapshot() {
   if (!selectedHistoryDate.value) {
     await reload()
     return
   }
-  loading.value = true
-  error.value = ''
-  try {
-    const data = await getIVSnapshot(selectedHistoryDate.value)
-    applySnapshot(data)
-    if (!data?.iv_snapshot) {
-      error.value = `${formatHistoryDate(selectedHistoryDate.value)} 暂无波动率快照`
-    }
-  } catch (e) {
-    error.value = `加载历史失败：${e.message}`
-  } finally {
-    loading.value = false
-  }
+  await loadDate(selectedHistoryDate.value)
+}
+
+function selectHistoryDate(date) {
+  selectedHistoryDate.value = date
+  loadDate(date)
 }
 
 const LEVEL_LEGEND = [
@@ -274,7 +342,7 @@ async function triggerInterpret() {
         if (newInterp && (newInterp !== interpretation.value || selectedHistoryDate.value)) {
           // 拿到新解读，更新并停止轮询
           applySnapshot(snap)
-          selectedHistoryDate.value = ''
+          selectedHistoryDate.value = snap.snapshot_date || ''
           await loadHistory()
           interpreting.value = null
           return
@@ -288,6 +356,8 @@ async function triggerInterpret() {
     interpreting.value = null
   }
 }
+
+watch(pageDateApi, () => { reload() })
 
 onMounted(reload)
 </script>
@@ -334,6 +404,15 @@ onMounted(reload)
 .iv-src--db_cache  { background: #fffaf0; border-color: #fbd38d; color: #c05621; }
 .iv-card__actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .iv-history-select { max-width: 240px; padding: 6px 8px; font-size: 12px; }
+.iv-history-note {
+  margin: -2px 0 10px;
+  font-size: 11px;
+  color: #718096;
+  line-height: 1.5;
+}
+.iv-empty-title { margin: 0 0 6px; color: #2d3748; }
+.iv-history-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.iv-empty-hint { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .iv-card__divider { height: 1px; background: #edf2f7; margin: 12px 0; }
 .iv-card__loading, .iv-card__empty { color: #a0aec0; font-size: 14px; padding: 12px 0; }
 .iv-card__error { color: #c53030; font-size: 13px; margin-top: 8px; }

@@ -85,7 +85,7 @@
     <!-- 波动率分析 Tab -->
     <v-row v-if="marketTab === 'iv'" class="mb-2">
       <v-col cols="12">
-        <IVAnalysisCard />
+        <IVAnalysisCard :selected-date="selectedDate" />
       </v-col>
     </v-row>
 
