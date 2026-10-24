@@ -76,6 +76,32 @@ describe('stockRankingPrefs', () => {
     }
   })
 
+  it('round-trips SW industry filter prefs and drops invalid codes', () => {
+    saveStockRankingPrefs({
+      viewMode: 'ranking',
+      displayLimit: 30,
+      rankingStrategy: 'balanced',
+      sortBy: 'composite',
+      industryL1: '801080.SI',
+      industryL2: '801081.SI',
+    })
+    let p = loadStockRankingPrefs()
+    expect(p.industryL1).toBe('801080.SI')
+    expect(p.industryL2).toBe('801081.SI')
+
+    saveStockRankingPrefs({
+      viewMode: 'ranking',
+      displayLimit: 30,
+      rankingStrategy: 'balanced',
+      sortBy: 'composite',
+      industryL1: 'not-a-code',
+      industryL2: '801081.SI',
+    })
+    p = loadStockRankingPrefs()
+    expect(p.industryL1).toBe('')
+    expect(p.industryL2).toBe('801081.SI')
+  })
+
   it('returns null when stored payload has no usable fields', () => {
     mem.user_info = JSON.stringify({ username: 'u' })
     mem[getStockRankingPrefsStorageKey()] = JSON.stringify({

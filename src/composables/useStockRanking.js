@@ -67,6 +67,8 @@ export function buildRankingRequestContext(state) {
     watchlistSymbols: [...(state.watchlistSymbols || [])],
     indexSymbols: [...(state.indexSymbols || [])],
     perStockStrategies: { ...(state.perStockStrategies || {}) },
+    industryLevel: state.industryLevel || 'l1',
+    industryCode: state.industryCode || '',
     pageOffset: state.pageOffset,
     usePagedRankingsFetch: Boolean(state.usePagedRankingsFetch),
   }
@@ -155,6 +157,11 @@ export function useStockRanking(options = {}) {
   const rankingStrategy = ref(prefs?.rankingStrategy ?? 'balanced')
   const sortBy = ref(prefs?.sortBy ?? 'composite')
   const rankingWeights = ref(normalizeRankingWeights(prefs?.rankingWeights || DEFAULT_RANKING_WEIGHTS))
+  // 申万行业筛选：L2 有值时按 L2 过滤/排名，否则按 L1；都为空则不过滤。
+  const industryL1 = ref(prefs?.industryL1 ?? '')
+  const industryL2 = ref(prefs?.industryL2 ?? '')
+  const industryCatalogL1 = ref([])
+  const industryCatalogL2 = ref([])
   const perStockStrategies = ref(
     prefs?.perStockStrategies && typeof prefs.perStockStrategies === 'object'
       ? { ...prefs.perStockStrategies }
@@ -180,6 +187,17 @@ export function useStockRanking(options = {}) {
     () => rankings.value.length > 0 && rankingDataViewMode.value === viewMode.value
   )
   const maxDate = computed(() => new Date().toISOString().slice(0, 10))
+  const industryLevel = computed(() => (industryL2.value ? 'l2' : 'l1'))
+  const industryCode = computed(() => industryL2.value || industryL1.value || '')
+  // L1 selects the cascading parent; L2 options are the children of the
+  // selected L1 (sw_index_classify links them via L2.parent_code ==
+  // L1.industry_code).
+  const industryL2Options = computed(() => {
+    if (!industryL1.value) return []
+    const l1 = industryCatalogL1.value.find((item) => item.code === industryL1.value)
+    if (!l1) return []
+    return industryCatalogL2.value.filter((item) => item.parent_code === l1.industry_code)
+  })
   const usePagedRankingsFetch = computed(() => {
     const mode = viewMode.value
     if (isIndexRankingViewMode(mode)) return true
@@ -223,6 +241,8 @@ export function useStockRanking(options = {}) {
         selectedDates: [...selectedDates.value],
         selectedStocks: [...selectedStocks.value],
         perStockStrategies: { ...perStockStrategies.value },
+        industryL1: industryL1.value,
+        industryL2: industryL2.value,
       })
     }, 320)
   }
@@ -239,6 +259,8 @@ export function useStockRanking(options = {}) {
       selectedDates,
       selectedStocks,
       perStockStrategies,
+      industryL1,
+      industryL2,
     ],
     schedulePersistStockRankingPrefs,
     { deep: true }
@@ -252,6 +274,37 @@ export function useStockRanking(options = {}) {
 
   function getEffectiveStrategyFor(symbol) {
     return perStockStrategies.value?.[symbol] || rankingStrategy.value || 'balanced'
+  }
+
+  async function fetchIndustryCatalog() {
+    try {
+      const response = await requestClient({
+        method: 'get',
+        url: '/stock-rankings/industries',
+      })
+      const payload = response?.l1 || response?.l2 ? response : (response?.data || {})
+      industryCatalogL1.value = Array.isArray(payload?.l1) ? payload.l1 : []
+      industryCatalogL2.value = Array.isArray(payload?.l2) ? payload.l2 : []
+      // 恢复偏好时校验代码仍存在；只有 L2 没有 L1 时从 parent_code 反推 L1。
+      if (industryL1.value && !industryCatalogL1.value.some((item) => item.code === industryL1.value)) {
+        industryL1.value = ''
+        industryL2.value = ''
+      }
+      if (industryL2.value && !industryCatalogL2.value.some((item) => item.code === industryL2.value)) {
+        industryL2.value = ''
+      }
+      if (industryL2.value && !industryL1.value) {
+        const l2 = industryCatalogL2.value.find((item) => item.code === industryL2.value)
+        const parent = l2
+          ? industryCatalogL1.value.find((item) => item.industry_code === l2.parent_code)
+          : null
+        if (parent) industryL1.value = parent.code
+      }
+    } catch (error) {
+      dlog('industry catalog load failed', error)
+      industryCatalogL1.value = []
+      industryCatalogL2.value = []
+    }
   }
 
   async function fetchRankings() {
@@ -270,6 +323,8 @@ export function useStockRanking(options = {}) {
       watchlistSymbols: watchlist.value,
       indexSymbols: getIndexSymbols(mode),
       perStockStrategies: perStockStrategies.value,
+      industryLevel: industryLevel.value,
+      industryCode: industryCode.value,
       pageOffset: rankingPageOffset.value,
       usePagedRankingsFetch: usePagedRankingsFetch.value,
     })
@@ -291,6 +346,8 @@ export function useStockRanking(options = {}) {
         selectedStocks: requestContext.selectedStocks,
         watchlistSymbols: requestContext.watchlistSymbols,
         indexSymbols: requestContext.indexSymbols,
+        industryLevel: requestContext.industryLevel,
+        industryCode: requestContext.industryCode,
         pageOffset: requestContext.usePagedRankingsFetch ? requestContext.pageOffset : 0,
         pageSize: requestContext.usePagedRankingsFetch ? STOCK_RANKINGS_PAGE_SIZE : null,
       }
@@ -328,6 +385,14 @@ export function useStockRanking(options = {}) {
       const appendReturnAsOfQuery = (parts) => {
         if (returnAsOfParam) parts.push(`return_as_of=${encodeURIComponent(returnAsOfParam)}`)
       }
+      // 行业筛选只作用于排行榜/指数榜；指定股票与自选股是显式列表，不按行业裁剪。
+      const industryQueryParts = () => {
+        const parts = [`industry_level=${encodeURIComponent(requestContext.industryLevel || 'l1')}`]
+        if (requestContext.industryCode) {
+          parts.push(`industry=${encodeURIComponent(requestContext.industryCode)}`)
+        }
+        return parts
+      }
       const appendRequestPageQuery = (url) => {
         if (!requestContext.usePagedRankingsFetch) return url
         const joiner = url.includes('?') ? '&' : '?'
@@ -345,6 +410,7 @@ export function useStockRanking(options = {}) {
           if (weightsParam) url += `&weights=${encodeURIComponent(weightsParam)}`
           if (dateParam) url += `&date=${dateParam}`
           if (returnAsOfParam) url += `&return_as_of=${returnAsOfParam}`
+          url += `&${industryQueryParts().join('&')}`
           response = await requestClient({ method: 'get', url, signal })
           break
         }
@@ -372,6 +438,7 @@ export function useStockRanking(options = {}) {
           appendWeightedQuery(query)
           if (dateParam) query.push(`date=${encodeURIComponent(dateParam)}`)
           appendReturnAsOfQuery(query)
+          query.push(...industryQueryParts())
           if (query.length) url += `?${query.join('&')}`
           url = appendRequestPageQuery(url)
           dlog('index rankings GET', url)
@@ -559,6 +626,14 @@ export function useStockRanking(options = {}) {
     sortBy,
     rankingWeights,
     perStockStrategies,
+    industryL1,
+    industryL2,
+    industryLevel,
+    industryCode,
+    industryCatalogL1,
+    industryCatalogL2,
+    industryL2Options,
+    fetchIndustryCatalog,
     refreshKey,
     loadingMessage,
     lastUpdateTime,

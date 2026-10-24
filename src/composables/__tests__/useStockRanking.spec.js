@@ -70,6 +70,25 @@ describe('useStockRanking', () => {
     wrapper.unmount()
   })
 
+  it('appends SW industry params to ranking requests', async () => {
+    const requestClient = vi.fn().mockResolvedValue({ success: true, data: [] })
+    const wrapper = mountComposable(requestClient)
+
+    wrapper.vm.industryL1 = '801080.SI'
+    await wrapper.vm.fetchRankings()
+    const l1Url = requestClient.mock.calls[0][0].url
+    expect(l1Url).toContain('industry_level=l1')
+    expect(l1Url).toContain('industry=801080.SI')
+
+    wrapper.vm.industryL2 = '801081.SI'
+    await wrapper.vm.fetchRankings()
+    const l2Url = requestClient.mock.calls[1][0].url
+    expect(l2Url).toContain('industry_level=l2')
+    expect(l2Url).toContain('industry=801081.SI')
+
+    wrapper.unmount()
+  })
+
   it('builds an immutable request context snapshot', () => {
     const source = {
       viewMode: 'selected',

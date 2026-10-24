@@ -6,7 +6,9 @@ export const RANKING_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 export const STOCK_RANKINGS_PAGE_SIZE = 30
 
 function cacheBlobKey() {
-  return `stockRanking_cache_blob_v4__${getStockRankingPrefsUsername()}`
+  // v5: rows now carry SW industry labels + industry_rank. Old v4 entries
+  // would render empty industry columns until their 24h TTL expired.
+  return `stockRanking_cache_blob_v5__${getStockRankingPrefsUsername()}`
 }
 
 /** @param {string} s */
@@ -33,6 +35,8 @@ function cloneRankings(arr) {
  *   selectedStocks: string[],
  *   watchlistSymbols: string[],
  *   indexSymbols: string[],
+ *   industryLevel?: string,
+ *   industryCode?: string,
  *   pageOffset?: number,
  *   pageSize?: number | null,
  * }} state
@@ -51,6 +55,8 @@ export function buildStockRankingCacheKey(state) {
     selectedStocks = [],
     watchlistSymbols = [],
     indexSymbols = [],
+    industryLevel = 'l1',
+    industryCode = '',
     pageOffset = 0,
     pageSize = null,
   } = state
@@ -68,10 +74,19 @@ export function buildStockRankingCacheKey(state) {
   const pageSeg =
     pageSize != null && pageSize > 0 ? `|o:${pageOffset}|ps:${pageSize}` : ''
   const asOfSeg = ra ? `|asof:${ra}` : ''
+  // Keep the default (L1, no filter) segment empty so existing keys/tests stay
+  // stable. Level still matters when no industry is selected because the
+  // 行业内 column ranks at L1 or L2.
+  const level = industryLevel === 'l2' ? 'l2' : 'l1'
+  const industrySeg = industryCode
+    ? `|ind:${level}:${industryCode}`
+    : level === 'l2'
+      ? '|ind:l2'
+      : ''
 
   switch (viewMode) {
     case 'ranking':
-      return `ranking|${displayLimit}|${rankingStrategy}|${sortBy}${weightsSeg}|${dp || 'latest'}${asOfSeg}`
+      return `ranking|${displayLimit}|${rankingStrategy}|${sortBy}${weightsSeg}|${dp || 'latest'}${asOfSeg}${industrySeg}`
     case 'selected': {
       if (!selectedStocks.length) return null
       const d = selectedDates.length ? [...selectedDates].sort().join(',') : ''
@@ -92,7 +107,7 @@ export function buildStockRankingCacheKey(state) {
     case 'a500':
     case 'star50': {
       const dseg = dp || 'latest'
-      return `${viewMode}|${rankingStrategy}|${sortBy}${weightsSeg}|${dseg}${pageSeg}${asOfSeg}`
+      return `${viewMode}|${rankingStrategy}|${sortBy}${weightsSeg}|${dseg}${pageSeg}${asOfSeg}${industrySeg}`
     }
     default:
       return null

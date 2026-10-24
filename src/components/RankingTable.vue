@@ -3,7 +3,9 @@
     <thead>
       <tr class="table-header">
         <th class="th-rank">{{ viewMode === 'ranking' ? '排名' : '序号' }}</th>
+        <th class="th-industry-rank" title="同一申万行业内的排名/该行业在当前榜单范围内的股票数；按当前排序维度降序，并列同名次">行业内</th>
         <th class="th-name">股票名称</th>
+        <th class="th-sw-industry" title="申万行业归属（L2；无 L2 时显示 L1）。历史日期按评分日的 PIT 归属">申万行业</th>
         <th class="th-date">日期</th>
         <th class="th-prior-3m" title="评分日前约 3 个月至评分日；后复权收盘">前3月</th>
         <th class="th-future-return" title="评分日至评分日后第 10 个交易日；后复权收盘">后10日涨跌</th>
@@ -33,8 +35,14 @@
             {{ displayRank(index) }}
           </span>
         </td>
+        <td class="td-industry-rank" :title="industryRankTooltip(row)">
+          <span class="industry-rank">{{ fmtIndustryRank(row) }}</span>
+        </td>
         <td class="td-name">
           <span class="name-text" :title="stockNameTitle(row)">{{ row.name || '-' }}</span>
+        </td>
+        <td class="td-sw-industry" :title="swIndustryTitle(row)">
+          <span class="sw-industry-text">{{ swIndustryLabel(row) || '—' }}</span>
         </td>
         <td class="td-date">
           <span>{{ formatDateDisplay(row.display_date || row.score_date) }}</span>
@@ -174,11 +182,41 @@ const INDEX_CODE_LABELS = {
   star50: '科创50',
 }
 
+function fmtIndustryRank(row) {
+  if (row?.industry_rank == null || row?.industry_total == null) return '—'
+  return `${row.industry_rank}/${row.industry_total}`
+}
+
+function swIndustryLabel(row) {
+  return row?.sw_l2 || row?.sw_l1 || ''
+}
+
+function swIndustryTitle(row) {
+  const lines = []
+  if (row?.sw_l1) lines.push(`申万L1：${row.sw_l1}`)
+  if (row?.sw_l2) lines.push(`申万L2：${row.sw_l2}`)
+  return lines.length ? lines.join('\n') : '无申万行业归属'
+}
+
+function industryRankTooltip(row) {
+  if (row?.industry_rank == null || row?.industry_total == null) {
+    return '无可用的申万行业归属，无法计算行业内排名'
+  }
+  return `同申万行业排名：${row.industry_rank}/${row.industry_total}（当前榜单范围，按所选行业层级与当前排序维度）`
+}
+
 function stockNameTitle(row) {
   const name = row?.name || '-'
   const symbol = row?.symbol || '-'
   const lines = [`${name} ${symbol}`]
-  if (row?.industry) lines.push(`行业：${row.industry}`)
+  if (row?.sw_l1 || row?.sw_l2) {
+    const parts = []
+    if (row.sw_l1) parts.push(`L1 ${row.sw_l1}`)
+    if (row.sw_l2) parts.push(`L2 ${row.sw_l2}`)
+    lines.push(`申万行业：${parts.join(' / ')}`)
+  } else if (row?.industry) {
+    lines.push(`行业：${row.industry}`)
+  }
   const codes = Array.isArray(row?.index_codes) ? row.index_codes : []
   if (codes.length) {
     const labels = codes.map(c => INDEX_CODE_LABELS[c] || c)
@@ -380,6 +418,8 @@ function futureReturnTooltip(row, days) {
   max-width: 40px;
 }
 .th-name { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+.th-industry-rank { background: linear-gradient(135deg, #607d8b, #455a64); min-width: 62px; max-width: 76px; }
+.th-sw-industry { background: linear-gradient(135deg, #5c6bc0, #3949ab); min-width: 90px; max-width: 120px; }
 .th-prior-3m { background: linear-gradient(135deg, #6d4c41, #4e342e); min-width: 74px; max-width: 90px; }
 .th-future-return { background: linear-gradient(135deg, #7e57c2, #5e35b1); min-width: 74px; max-width: 90px; }
 .th-return-since {
@@ -444,6 +484,28 @@ function futureReturnTooltip(row, days) {
 .rank-badge.rank-top-ten { background: linear-gradient(135deg, #ffa726, #ff9800); color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.3); }
 .rank-badge.rank-top-thirty { background: linear-gradient(135deg, #66bb6a, #4caf50); color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.3); }
 .rank-badge.rank-default { background: linear-gradient(135deg, #90a4ae, #78909c); color:#fff; }
+
+.industry-rank {
+  display: inline-block;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: #eceff1;
+  color: #37474f;
+  font-weight: 700;
+  font-size: 13px;
+  min-width: 44px;
+  text-align: center;
+}
+.sw-industry-text {
+  display: inline-block;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: #283593;
+  font-weight: 600;
+}
 
 .name-text {
   display: inline-block;

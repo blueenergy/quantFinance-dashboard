@@ -60,6 +60,60 @@ describe('buildStockRankingCacheKey', () => {
     ).toBe('ranking|30|balanced|composite|latest|asof:20250920')
   })
 
+  it('includes the SW industry filter in ranking cache key', () => {
+    expect(
+      buildStockRankingCacheKey({
+        viewMode: 'ranking',
+        displayLimit: 30,
+        rankingStrategy: 'balanced',
+        sortBy: 'composite',
+        dateParam: '',
+        selectedDates: [],
+        selectedStocks: [],
+        watchlistSymbols: [],
+        indexSymbols: [],
+        industryLevel: 'l1',
+        industryCode: '801080.SI',
+      })
+    ).toBe('ranking|30|balanced|composite|latest|ind:l1:801080.SI')
+  })
+
+  it('keeps L2 rank level distinct even without an industry filter', () => {
+    expect(
+      buildStockRankingCacheKey({
+        viewMode: 'ranking',
+        displayLimit: 30,
+        rankingStrategy: 'balanced',
+        sortBy: 'composite',
+        dateParam: '',
+        selectedDates: [],
+        selectedStocks: [],
+        watchlistSymbols: [],
+        indexSymbols: [],
+        industryLevel: 'l2',
+        industryCode: '',
+      })
+    ).toBe('ranking|30|balanced|composite|latest|ind:l2')
+  })
+
+  it('includes the SW industry filter in index cache key', () => {
+    expect(
+      buildStockRankingCacheKey({
+        viewMode: 'hs300',
+        displayLimit: 30,
+        rankingStrategy: 'balanced',
+        sortBy: 'composite',
+        dateParam: '',
+        selectedDates: [],
+        selectedStocks: [],
+        watchlistSymbols: [],
+        indexSymbols: [],
+        industryLevel: 'l2',
+        industryCode: '801081.SI',
+      })
+    ).toBe('hs300|balanced|composite|latest|ind:l2:801081.SI')
+  })
+
   it('returns null when required symbols missing', () => {
     expect(
       buildStockRankingCacheKey({

@@ -149,7 +149,12 @@ export function loadStockRankingPrefs() {
     const perStockStrategies = sanitizePerStockStrategies(data.perStockStrategies)
     const rankingWeights = sanitizeRankingWeights(data.rankingWeights)
 
-    if (!viewMode && !displayLimit && !rankingStrategy && !sortBy && !selectedDate && !returnAsOf && selectedDates.length === 0 && selectedStocks.length === 0) {
+    const industryL1 =
+      typeof data.industryL1 === 'string' && /^\d{6}\.SI$/.test(data.industryL1) ? data.industryL1 : ''
+    const industryL2 =
+      typeof data.industryL2 === 'string' && /^\d{6}\.SI$/.test(data.industryL2) ? data.industryL2 : ''
+
+    if (!viewMode && !displayLimit && !rankingStrategy && !sortBy && !selectedDate && !returnAsOf && selectedDates.length === 0 && selectedStocks.length === 0 && !industryL1 && !industryL2) {
       return null
     }
 
@@ -164,6 +169,8 @@ export function loadStockRankingPrefs() {
       selectedStocks,
       perStockStrategies,
       rankingWeights,
+      industryL1,
+      industryL2,
     }
   } catch {
     return null
@@ -187,6 +194,8 @@ export function saveStockRankingPrefs(prefs) {
         : [],
       perStockStrategies: prefs.perStockStrategies && typeof prefs.perStockStrategies === 'object' ? prefs.perStockStrategies : {},
       rankingWeights: sanitizeRankingWeights(prefs.rankingWeights),
+      industryL1: typeof prefs.industryL1 === 'string' ? prefs.industryL1 : '',
+      industryL2: typeof prefs.industryL2 === 'string' ? prefs.industryL2 : '',
     }
     if (!VIEW_MODES.has(payload.viewMode)) payload.viewMode = 'ranking'
     if (!DISPLAY_LIMITS.has(payload.displayLimit)) payload.displayLimit = 30

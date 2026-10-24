@@ -18,6 +18,10 @@
     :selectedDates="selectedDates"
     :watchlistLength="watchlist.length"
     :lastUpdateTime="lastUpdateTime"
+    :industryL1="industryL1"
+    :industryL2="industryL2"
+    :industryL1Options="industryCatalogL1"
+    :industryL2Options="industryL2Options"
     :selectSuggestionCb="selectSuggestion"
     :addStockCb="addStockToQuery"
     @change-view-mode="handleChangeViewMode"
@@ -27,6 +31,8 @@
     @change-ranking-strategy="handleChildRankingStrategyChange"
     @change-sort-by="handleChildSortByChange"
     @change-ranking-weights="handleChildRankingWeightsChange"
+    @change-industry-l1="handleChangeIndustryL1"
+    @change-industry-l2="handleChangeIndustryL2"
     @stock-input="handleChildStockInput"
     @add-stock="addStockToQuery"
     @clear-selected-stocks="clearSelectedStocks"
@@ -227,6 +233,11 @@ const {
   sortBy,
   rankingWeights,
   perStockStrategies,
+  industryL1,
+  industryL2,
+  industryCatalogL1,
+  industryL2Options,
+  fetchIndustryCatalog,
   watchlist,
   refreshKey,
   loadingMessage,
@@ -704,6 +715,23 @@ function handleChildRankingWeightsChange(v) {
   }
 }
 
+function handleChangeIndustryL1(v) {
+  const code = typeof v === 'string' ? v : ''
+  industryL1.value = code
+  // 换 L1 后原 L2 可能不属于新父级，清掉以免筛出空榜。
+  if (industryL2.value && !industryL2Options.value.some(item => item.code === industryL2.value)) {
+    industryL2.value = ''
+  }
+  rankingPageOffset.value = 0
+  fetchRankings()
+}
+
+function handleChangeIndustryL2(v) {
+  industryL2.value = typeof v === 'string' ? v : ''
+  rankingPageOffset.value = 0
+  fetchRankings()
+}
+
 function handleChildStockInput(v) {
   const newVal = (v && typeof v === 'object' && v.target && 'value' in v.target) ? v.target.value : v
   stockInput.value = newVal
@@ -997,6 +1025,7 @@ watch(selectedCategory, async (val) => {
 onMounted(() => {
   fetchRankings()
   fetchWatchlist()
+  fetchIndustryCatalog()
 })
 
 onUnmounted(() => {

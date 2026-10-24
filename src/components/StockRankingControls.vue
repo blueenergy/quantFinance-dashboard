@@ -142,6 +142,47 @@
       </v-col>
     </v-row>
 
+    <v-row
+      v-if="viewMode === 'ranking' || isIndexViewMode()"
+      class="control-group"
+      align="center"
+    >
+      <v-col cols="12" sm="4">
+        <label>申万一级：</label>
+        <v-select
+          v-model="internalIndustryL1"
+          :items="industryL1Options"
+          item-title="name"
+          item-value="code"
+          density="compact"
+          variant="outlined"
+          clearable
+          placeholder="全部"
+          :menu-props="{ maxHeight: 320 }"
+        />
+      </v-col>
+      <v-col cols="12" sm="4">
+        <label>申万二级：</label>
+        <v-select
+          v-model="internalIndustryL2"
+          :items="industryL2Options"
+          item-title="name"
+          item-value="code"
+          density="compact"
+          variant="outlined"
+          clearable
+          :disabled="!industryL1"
+          placeholder="全部"
+          :menu-props="{ maxHeight: 320 }"
+        />
+      </v-col>
+      <v-col cols="12" sm="4">
+        <div class="helper-text">
+          选行业后榜单只含该行业；「行业内」列按{{ industryL2 ? 'L2' : 'L1' }}排名
+        </div>
+      </v-col>
+    </v-row>
+
     <v-row v-show="viewMode === 'selected'" class="control-group">
       <v-col cols="12">
         <div class="stock-input-area">
@@ -210,6 +251,7 @@ import { toRefs, computed, ref } from 'vue'
 // define emits explicitly so we can call them from safe handlers
 const emit = defineEmits([
   'change-view-mode', 'change-date', 'change-return-as-of', 'change-display-limit', 'change-ranking-strategy', 'change-sort-by', 'change-ranking-weights',
+  'change-industry-l1', 'change-industry-l2',
   'stock-input', 'add-stock', 'clear-selected-stocks', 'select-suggestion', 'remove-stock',
   // distinct events: top date input requests a maybe-open hook, while the selected-mode button
   // explicitly requests opening available-dates for the currently selected symbol.
@@ -226,6 +268,10 @@ const props = defineProps({
   rankingStrategy: { type: String, default: 'balanced' },
   sortBy: { type: String, default: 'composite' },
   rankingWeights: { type: Object, default: () => ({ growth: 60, cycle: 40 }) },
+  industryL1: { type: String, default: '' },
+  industryL2: { type: String, default: '' },
+  industryL1Options: { type: Array, default: () => [] },
+  industryL2Options: { type: Array, default: () => [] },
   stockInput: { type: String, default: '' },
   stockSuggestions: { type: Array, default: () => [] },
   selectedStocks: { type: Array, default: () => [] },
@@ -261,6 +307,10 @@ const displayLimit = refs.displayLimit
 const rankingStrategy = refs.rankingStrategy
 const sortBy = refs.sortBy
 const rankingWeights = refs.rankingWeights
+const industryL1 = refs.industryL1
+const industryL2 = refs.industryL2
+const industryL1Options = refs.industryL1Options
+const industryL2Options = refs.industryL2Options
 const stockInput = refs.stockInput
 const stockSuggestions = refs.stockSuggestions
 const selectedStocks = refs.selectedStocks
@@ -363,6 +413,14 @@ const internalRankingStrategy = computed({
 const internalSortBy = computed({
   get: () => sortBy.value,
   set: v => { emit('change-sort-by', v) }
+})
+const internalIndustryL1 = computed({
+  get: () => industryL1.value,
+  set: v => { emit('change-industry-l1', v || '') }
+})
+const internalIndustryL2 = computed({
+  get: () => industryL2.value,
+  set: v => { emit('change-industry-l2', v || '') }
 })
 const primaryWeightDimensions = ['growth', 'cycle']
 const advancedWeightDimensions = ['fundamental', 'value', 'technical', 'money_flow']
