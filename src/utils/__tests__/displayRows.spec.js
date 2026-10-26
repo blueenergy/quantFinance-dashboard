@@ -74,6 +74,56 @@ describe('computeDisplayRows', () => {
     expect(rows[0].display_future_return_20d_trade_date).toBe('20251024')
   })
 
+  it('exposes the selected dimension as display_sort_score, not the composite', () => {
+    const rankings = [
+      { symbol: 'AAA', composite_score: { balanced: 90 }, value_score: 10 },
+      { symbol: 'BBB', composite_score: { balanced: 20 }, value_score: 80 },
+    ]
+    const rows = computeDisplayRows({
+      rankings,
+      viewMode: 'ranking',
+      selectedDates: [],
+      sortBy: 'value',
+      rankingStrategy: 'balanced',
+      perStockStrategies: {},
+      getCompositeScore,
+    })
+    expect(rows[0].display_sort_score).toBe(10)
+    expect(rows[1].display_sort_score).toBe(80)
+    // Legacy field is still populated for other consumers, but not displayed.
+    expect(rows[0].display_composite_score).toBe(90)
+  })
+
+  it('sorts selected-mode rows by the selected dimension, not the composite', () => {
+    const rankings = [
+      {
+        symbol: 'AAA',
+        composite_score: { balanced: 90 },
+        per_date_scores: { '20250918': { balanced: 90 } },
+        per_date_fields: { '20250918': { value_score: 10 } },
+        value_score: 10,
+      },
+      {
+        symbol: 'BBB',
+        composite_score: { balanced: 20 },
+        per_date_scores: { '20250918': { balanced: 20 } },
+        per_date_fields: { '20250918': { value_score: 80 } },
+        value_score: 80,
+      },
+    ]
+    const rows = computeDisplayRows({
+      rankings,
+      viewMode: 'selected',
+      selectedDates: ['20250918'],
+      sortBy: 'value',
+      rankingStrategy: 'balanced',
+      perStockStrategies: {},
+      getCompositeScore,
+    })
+    expect(rows.map(r => r.symbol)).toEqual(['BBB', 'AAA'])
+    expect(rows[0].display_sort_score).toBe(80)
+  })
+
   it('flattens per_date_return_since price dates in selected mode', () => {
     const rankings = [
       {

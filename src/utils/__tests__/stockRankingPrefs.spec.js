@@ -102,6 +102,19 @@ describe('stockRankingPrefs', () => {
     expect(p.industryL2).toBe('801081.SI')
   })
 
+  it('migrates the retired composite sort to value', () => {
+    mem.user_info = JSON.stringify({ username: 'u' })
+    mem[getStockRankingPrefsStorageKey()] = JSON.stringify({
+      version: 1,
+      viewMode: 'ranking',
+      rankingStrategy: 'balanced',
+      sortBy: 'composite',
+    })
+    const p = loadStockRankingPrefs()
+    expect(p).not.toBeNull()
+    expect(p.sortBy).toBe('value')
+  })
+
   it('returns null when stored payload has no usable fields', () => {
     mem.user_info = JSON.stringify({ username: 'u' })
     mem[getStockRankingPrefsStorageKey()] = JSON.stringify({

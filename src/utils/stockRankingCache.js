@@ -47,7 +47,7 @@ export function buildStockRankingCacheKey(state) {
     viewMode,
     displayLimit,
     rankingStrategy,
-    sortBy = 'composite',
+    sortBy = 'value',
     rankingWeights = {},
     dateParam,
     returnAsOfParam = '',

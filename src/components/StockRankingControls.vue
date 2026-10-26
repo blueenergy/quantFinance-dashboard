@@ -88,26 +88,7 @@
           density="compact"
           variant="outlined"
         />
-        <div class="mt-xs text-muted">选“总分”时排名策略参与排序；选“自定义加权”时按下方权重即时计算。</div>
-      </v-col>
-      <v-col v-if="internalSortBy === 'composite'" cols="12" sm="6">
-        <label style="margin-left: 0">排名策略：</label>
-        <div v-if="!showStrategyPicker" class="flex-row-center gap-sm">
-          <span class="strategy-current">{{ currentStrategyLabel }}</span>
-          <v-btn size="x-small" variant="text" @click="showStrategyPicker = true">切换策略（高级）</v-btn>
-        </div>
-        <v-select
-          v-else
-          v-model="internalRankingStrategy"
-          :items="rankingStrategyOptions"
-          item-title="label"
-          item-value="value"
-          density="compact"
-          variant="outlined"
-        />
-        <div class="mt-xs text-muted composite-note">
-          综合分仅作概览；选股以「组合研究」中已验证的因子组合为准。
-        </div>
+        <div class="mt-xs text-muted">按单个维度排序；选“自定义加权”时按下方权重即时计算。评分为描述性指标，不构成收益预测。</div>
       </v-col>
       <v-col v-if="internalSortBy === 'weighted'" cols="12">
         <div class="weighted-sort-panel">
@@ -336,18 +317,7 @@ const viewModeOptions = [
   { label: '中证A500模式', value: 'a500' },
   { label: '科创50模式', value: 'star50' },
 ]
-const rankingStrategyOptions = [
-  {label:'均衡',value:'balanced'},
-  {label:'激进',value:'aggressive'},
-  {label:'保守',value:'conservative'},
-  {label:'防御',value:'defensive'},
-  {label:'价值型',value:'value_oriented'},
-  {label:'交易型',value:'trading_oriented'},
-  {label:'成长型',value:'growth_oriented'},
-  {label:'动量型',value:'cycle_oriented'},
-]
 const sortByOptions = [
-  { label: '总分', value: 'composite' },
   { label: '自定义加权', value: 'weighted' },
   { label: '动量', value: 'cycle' },
   { label: '成长', value: 'growth' },
@@ -397,19 +367,6 @@ function incrementDisplayLimit() {
   const next = Math.min(Number(internalDisplayLimit.value) + 20, 200)
   emit('change-display-limit', next)
 }
-// C1: collapse the 8 hand-weighted composite presets by default. Most users
-// should treat the composite as a coarse overview (balanced), and rely on the
-// validated factor combos in "组合研究" for actual selection. Power users can
-// still expand the full picker.
-const showStrategyPicker = ref(false)
-const currentStrategyLabel = computed(() => {
-  const found = rankingStrategyOptions.find(o => o.value === rankingStrategy.value)
-  return found ? found.label : '均衡'
-})
-const internalRankingStrategy = computed({
-  get: () => rankingStrategy.value,
-  set: v => { emit('change-ranking-strategy', v) }
-})
 const internalSortBy = computed({
   get: () => sortBy.value,
   set: v => { emit('change-sort-by', v) }

@@ -94,7 +94,7 @@ function effectiveStrategyFor(symbol, context) {
 }
 
 function sortScoreForRow(row, date, context) {
-  const key = context.sortBy || 'composite'
+  const key = context.sortBy || 'value'
   if (key === 'composite') {
     const strategy = effectiveStrategyFor(row.symbol, context)
     if (date && row.per_date_scores?.[date]) {
@@ -155,7 +155,7 @@ export function useStockRanking(options = {}) {
   const returnAsOf = ref(prefs?.returnAsOf ?? '')
   const selectedDates = ref(prefs?.selectedDates?.length ? [...prefs.selectedDates] : [])
   const rankingStrategy = ref(prefs?.rankingStrategy ?? 'balanced')
-  const sortBy = ref(prefs?.sortBy ?? 'composite')
+  const sortBy = ref(prefs?.sortBy ?? 'value')
   const rankingWeights = ref(normalizeRankingWeights(prefs?.rankingWeights || DEFAULT_RANKING_WEIGHTS))
   // 申万行业筛选：L2 有值时按 L2 过滤/排名，否则按 L1；都为空则不过滤。
   const industryL1 = ref(prefs?.industryL1 ?? '')

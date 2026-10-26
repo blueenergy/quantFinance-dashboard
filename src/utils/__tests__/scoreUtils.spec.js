@@ -75,7 +75,6 @@ describe('scoreUtils', () => {
         {
           symbol: 'AAA',
           name: 'A Corp',
-          per_date_scores: { '20250918': { balanced: 80 } },
           per_date_future_return: {
             '20250918': { future_return_10d_pct: 2.25, future_return_20d_pct: -1.5 },
           },
@@ -83,11 +82,10 @@ describe('scoreUtils', () => {
         },
       ]
       const csv = generateCSV(data, ['20250918'], (sym) => 'balanced', getCompositeScore)
-      expect(csv).toContain('总分(2025-09-18)')
+      expect(csv).not.toContain('总分')
       expect(csv).toContain('评分日后10日涨跌(2025-09-18)')
       expect(csv).toContain('评分日后20日涨跌(2025-09-18)')
       expect(csv).toContain('至选中日涨跌(最新|评分日2025-09-18)')
-      expect(csv).toContain('80')
       expect(csv).toContain('+2.25%')
       expect(csv).toContain('-1.50%')
       expect(csv).toContain('+5.50%')

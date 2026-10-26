@@ -3,6 +3,15 @@ import { weightedDimensionScore } from './scoreUtils.js'
 // Pure helper to compute display rows from rankings and selectedDates
 // Exports a single function: computeDisplayRows({rankings, viewMode, selectedDates, rankingStrategy, perStockStrategies, getCompositeScore})
 
+const SORT_FIELD_BY_KEY = {
+  cycle: 'cycle_score',
+  growth: 'growth_score',
+  fundamental: 'fundamental_score',
+  value: 'value_score',
+  technical: 'technical_score',
+  money_flow: 'money_flow_score',
+}
+
 function displayWeightedScore(row, rankingWeights) {
   const v = row?.weighted_score
   if (v != null && !Number.isNaN(Number(v))) return Number(v).toFixed(2)
@@ -14,7 +23,7 @@ export function computeDisplayRows({
   viewMode = 'ranking',
   selectedDates = [],
   rankingStrategy = 'balanced',
-  sortBy = 'composite',
+  sortBy = 'value',
   rankingWeights = {},
   perStockStrategies = {},
   getCompositeScore,
@@ -24,25 +33,34 @@ export function computeDisplayRows({
 
   if (viewMode !== 'selected' || sDates.length === 0) {
     const strategyKey = rankingStrategy
-    return rv.map(r => ({
-      ...r,
+    return rv.map(r => {
       // 精简评分模式下 composite 为 NA(null)，保持 null 让表格渲染「—」，
       // 而非退化成 0 造成误导（getCompositeScore 对 NA 返回 0）。
-      display_composite_score: sortBy === 'weighted'
-        ? displayWeightedScore(r, rankingWeights)
-        : (r.composite_score == null ? null : getCompositeScore(r, strategyKey)),
-      display_return_since_score_pct: r.return_since_score_pct ?? null,
-      display_price_base_trade_date: r.price_base_trade_date ?? null,
-      display_price_latest_trade_date: r.price_latest_trade_date ?? null,
-      display_prior_3m_return_pct: r.prior_3m_return_pct ?? null,
-      display_prior_3m_base_trade_date: r.prior_3m_base_trade_date ?? null,
-      display_prior_3m_end_trade_date: r.prior_3m_end_trade_date ?? null,
-      display_future_return_base_trade_date: r.future_return_base_trade_date ?? null,
-      display_future_return_10d_pct: r.future_return_10d_pct ?? null,
-      display_future_return_10d_trade_date: r.future_return_10d_trade_date ?? null,
-      display_future_return_20d_pct: r.future_return_20d_pct ?? null,
-      display_future_return_20d_trade_date: r.future_return_20d_trade_date ?? null,
-    }))
+      const compositeScore = r.composite_score == null ? null : getCompositeScore(r, strategyKey)
+      let sortScore = null
+      if (sortBy === 'weighted') sortScore = displayWeightedScore(r, rankingWeights)
+      else if (sortBy === 'composite') sortScore = compositeScore
+      else {
+        const field = SORT_FIELD_BY_KEY[sortBy]
+        if (field) sortScore = r[field] ?? null
+      }
+      return {
+        ...r,
+        display_sort_score: sortScore,
+        display_composite_score: sortBy === 'weighted' ? sortScore : compositeScore,
+        display_return_since_score_pct: r.return_since_score_pct ?? null,
+        display_price_base_trade_date: r.price_base_trade_date ?? null,
+        display_price_latest_trade_date: r.price_latest_trade_date ?? null,
+        display_prior_3m_return_pct: r.prior_3m_return_pct ?? null,
+        display_prior_3m_base_trade_date: r.prior_3m_base_trade_date ?? null,
+        display_prior_3m_end_trade_date: r.prior_3m_end_trade_date ?? null,
+        display_future_return_base_trade_date: r.future_return_base_trade_date ?? null,
+        display_future_return_10d_pct: r.future_return_10d_pct ?? null,
+        display_future_return_10d_trade_date: r.future_return_10d_trade_date ?? null,
+        display_future_return_20d_pct: r.future_return_20d_pct ?? null,
+        display_future_return_20d_trade_date: r.future_return_20d_trade_date ?? null,
+      }
+    })
   }
 
   const rows = []
@@ -65,6 +83,18 @@ export function computeDisplayRows({
       const copy = { ...r }
       copy.display_date = d
       copy.display_composite_score = score
+      // The visible ranking column follows the selected dimension (or the
+      // custom weighted score). The composite is no longer selectable, but the
+      // legacy branch stays so old cached payloads still sort sensibly.
+      if (sortBy === 'weighted') {
+        copy.display_sort_score = score
+      } else if (sortBy === 'composite') {
+        copy.display_sort_score = score === '' ? null : score
+      } else {
+        const field = SORT_FIELD_BY_KEY[sortBy]
+        const perDateFields = r.per_date_fields?.[d] || r
+        copy.display_sort_score = field ? (perDateFields[field] ?? null) : null
+      }
       const pr = r.per_date_return_since && r.per_date_return_since[d]
       copy.display_return_since_score_pct =
         pr != null && pr.return_since_score_pct != null ? pr.return_since_score_pct : null
@@ -101,8 +131,8 @@ export function computeDisplayRows({
     const dx = (x.display_date || x.score_date || '')
     const dy = (y.display_date || y.score_date || '')
     if (dx !== dy) return dy.localeCompare(dx)
-    const sx = Number(x.display_composite_score || 0)
-    const sy = Number(y.display_composite_score || 0)
+    const sx = Number(x.display_sort_score ?? x.display_composite_score ?? 0)
+    const sy = Number(y.display_sort_score ?? y.display_composite_score ?? 0)
     return sy - sx
   })
 

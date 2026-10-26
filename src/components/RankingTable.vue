@@ -17,7 +17,7 @@
           <span class="th-return-since-main">至选中日</span>
           <span class="th-return-since-date">{{ returnSinceHeaderDate }}</span>
         </th>
-  <th class="th-score" :title="scoreHeaderTitle">{{ scoreHeaderLabel }}</th>
+        <th v-if="sortBy === 'weighted'" class="th-score" :title="scoreHeaderTitle">{{ scoreHeaderLabel }}</th>
         <th class="th-cycle">动量</th>
         <th class="th-growth">成长</th>
         <th class="th-value">基本面</th>
@@ -79,10 +79,10 @@
             >{{ formatReturnSince(row.display_return_since_score_pct) }}</span>
           </div>
         </td>
-        <td class="td-score" @click="onShowScore(row._origin || row)">
+        <td v-if="sortBy === 'weighted'" class="td-score" :title="scoreHeaderTitle">
           <div class="score-badge-wrapper">
-            <span :class="['score-badge', getScoreClass(row.display_composite_score), 'clickable']">
-              {{ fmtScore(row.display_composite_score) }}
+            <span :class="['score-badge', getScoreClass(row.display_sort_score)]">
+              {{ fmtScore(row.display_sort_score) }}
             </span>
           </div>
         </td>
@@ -158,7 +158,7 @@ const props = defineProps({
   isInWatchlist: { type: Function, required: false }
 })
 
-const emit = defineEmits(['toggle-watchlist', 'remove-stock', 'show-score', 'show-score-detail'])
+const emit = defineEmits(['toggle-watchlist', 'remove-stock', 'show-score-detail'])
 
 function displayRank(index) {
   return Math.max(0, Number(props.rankOffset) || 0) + index + 1
@@ -166,7 +166,6 @@ function displayRank(index) {
 
 function onToggleWatchlist(symbol) { emit('toggle-watchlist', symbol) }
 function onRemoveStock(symbol) { emit('remove-stock', symbol) }
-function onShowScore(stock) { emit('show-score', stock) }
 function emitCategory(row, category) { emit('show-score-detail', { stock: row, category }) }
 function onIndustryRsClick(row) {
   if (row.industry_rs_score == null) return
@@ -244,12 +243,10 @@ const getScoreClass = props.getScoreClass
 const getRankClass = props.getRankClass
 const getRowClass = props.getRowClass
 const isInWatchlist = props.isInWatchlist
-const scoreHeaderLabel = computed(() => props.sortBy === 'weighted' ? '加权分' : '总分')
-const scoreHeaderTitle = computed(() => (
-  props.sortBy === 'weighted'
-    ? '按用户输入的维度权重即时计算；仅用于当前金榜排序展示'
-    : '综合分仅作概览，由各维度按预设权重粗略加权；选股以「组合研究」中已验证的因子组合为准'
-))
+// The composite column is gone: the hand-weighted total has no measurable IC.
+// Only the user-defined weighted score keeps a score column.
+const scoreHeaderLabel = computed(() => '加权分')
+const scoreHeaderTitle = computed(() => '按用户输入的维度权重即时计算；仅用于当前金榜排序展示，未经验证')
 
 const selectedReturnAsOfDate = computed(() => {
   const selected = String(props.returnAsOf || '').trim()

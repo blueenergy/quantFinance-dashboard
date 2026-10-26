@@ -24,7 +24,11 @@ const STRATEGIES = new Set([
 ])
 
 const DISPLAY_LIMITS = new Set([10, 30, 50, 100, 200])
-const SORT_BY_VALUES = new Set(['composite', 'weighted', 'cycle', 'growth', 'fundamental', 'value', 'technical', 'money_flow'])
+// 'composite' is intentionally gone: the hand-weighted total has no measurable
+// cross-sectional IC, so it must not remain an invisible default ranking.
+// Old saved prefs with sortBy='composite' migrate to 'value' below.
+const SORT_BY_VALUES = new Set(['weighted', 'cycle', 'growth', 'fundamental', 'value', 'technical', 'money_flow'])
+const DEFAULT_SORT_BY = 'value'
 const WEIGHT_DIMENSIONS = new Set(['cycle', 'growth', 'fundamental', 'value', 'technical', 'money_flow'])
 const DEFAULT_RANKING_WEIGHTS = { growth: 60, cycle: 40 }
 
@@ -162,7 +166,7 @@ export function loadStockRankingPrefs() {
       viewMode: viewMode || 'ranking',
       displayLimit: displayLimit ?? 30,
       rankingStrategy: rankingStrategy || 'balanced',
-      sortBy: sortBy || 'composite',
+      sortBy: sortBy || DEFAULT_SORT_BY,
       selectedDate,
       returnAsOf,
       selectedDates,
@@ -200,7 +204,7 @@ export function saveStockRankingPrefs(prefs) {
     if (!VIEW_MODES.has(payload.viewMode)) payload.viewMode = 'ranking'
     if (!DISPLAY_LIMITS.has(payload.displayLimit)) payload.displayLimit = 30
     if (!STRATEGIES.has(payload.rankingStrategy)) payload.rankingStrategy = 'balanced'
-    if (!SORT_BY_VALUES.has(payload.sortBy)) payload.sortBy = 'composite'
+    if (!SORT_BY_VALUES.has(payload.sortBy)) payload.sortBy = DEFAULT_SORT_BY
     localStorage.setItem(getStockRankingPrefsStorageKey(), JSON.stringify(payload))
   } catch {
     /* quota / private mode */

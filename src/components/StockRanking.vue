@@ -120,7 +120,6 @@
           :isInWatchlist="isInWatchlist"
           @toggle-watchlist="toggleWatchlist"
           @remove-stock="removeStockFromQuery"
-          @show-score="stock => fetchScoreDetails(stock, 'composite')"
           @show-score-detail="({ stock, category }) => fetchScoreDetails(stock, category)"
         />
       </div>
@@ -934,9 +933,13 @@ function getRankClass(stock, rank) {
     if (rank <= 30) return 'rank-top-thirty'
     return 'rank-default'
   }
-  // Colour by the score actually shown (follows sortBy: composite / weighted / dimension),
-  // so switching to 自定义加权 recolours the badge instead of staying on 总分.
-  const score = Number(stock?.display_composite_score ?? getCompositeScore(stock, rankingStrategy.value))
+  // Colour by the score actually used for the current ordering (weighted /
+  // dimension). The composite remains only as a legacy fallback.
+  const score = Number(
+    stock?.display_sort_score ??
+    stock?.display_composite_score ??
+    getCompositeScore(stock, rankingStrategy.value)
+  )
   if (score >= 80) return 'rank-top-three'
   if (score >= 70) return 'rank-top-ten'
   if (score >= 60) return 'rank-top-thirty'
@@ -956,7 +959,11 @@ function getRowClass(stock, rank) {
     if (rank <= 10) return 'top-ten'
     if (rank <= 30) return 'top-thirty'
   } else {
-    const score = Number(stock?.display_composite_score ?? getCompositeScore(stock, rankingStrategy.value))
+    const score = Number(
+      stock?.display_sort_score ??
+      stock?.display_composite_score ??
+      getCompositeScore(stock, rankingStrategy.value)
+    )
     if (score >= 80) return 'top-three'
     if (score >= 70) return 'top-ten'
     if (score >= 60) return 'top-thirty'
