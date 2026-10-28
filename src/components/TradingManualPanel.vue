@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <p class="eyebrow">Live Trading Monitor</p>
-        <h2>实盘交易监控</h2>
+        <h2>交易执行</h2>
         <p class="subtitle">集中查看实盘信号状态、成交回报、撤单中间态和需要人工处理的执行建议。</p>
       </div>
       <v-btn :loading="loading.active || loading.summary" color="primary" @click="refreshAll">刷新全部</v-btn>

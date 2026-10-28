@@ -1,7 +1,7 @@
 <template>
   <div class="strategy-workers-page">
     <div class="page-header">
-      <h1>🤖 策略 Workers 监控</h1>
+      <h1>🚀 策略运行</h1>
       <button @click="refreshWorkers" :disabled="loading" class="refresh-btn">
         {{ loading ? '⏳ 刷新中...' : '🔄 刷新' }}
       </button>

@@ -201,7 +201,7 @@ export const tabViewDefinitions = [
     id: 'trading-manual',
     component: TradingManualPanel,
     fallbackClass: 'skeleton-table',
-    fallbackText: '实盘交易监控加载中...',
+    fallbackText: '交易执行加载中...',
   },
   {
     id: 'strategy-workers',
