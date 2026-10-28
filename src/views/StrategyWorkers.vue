@@ -67,6 +67,13 @@
             <div class="worker-status" :class="{ 'online': worker.alive }">
               {{ worker.alive ? '🟢 在线' : '🔴 离线' }}
             </div>
+            <span
+              v-if="worker.stats.account_bound === false"
+              class="account-hint"
+              title="未绑定证券账户：只生成观察信号，不会下单"
+            >
+              ⚠️ 未绑定账户（仅生成信号）
+            </span>
             <div class="worker-engine">{{ worker.stats.engine || 'vnpy' }}</div>
           </div>
           
@@ -454,6 +461,15 @@ export default {
 .worker-status.online {
   background: #e8f5e9;
   color: #2e7d32;
+}
+
+.account-hint {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: #fff3e0;
+  color: #e65100;
+  white-space: nowrap;
 }
 
 .worker-engine {
