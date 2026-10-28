@@ -113,6 +113,9 @@
           <div>
             <h3>{{ selectedBatch.name }}</h3>
             <p>{{ selectedBatch.strategy_key }} / {{ selectedBatch.preset || 'default' }} · {{ selectedBatch.start_date }} - {{ selectedBatch.end_date }}</p>
+            <p v-if="selectedBatch.regime_cash" class="regime-line">
+              牛熊择时：{{ formatRegimeIndex(selectedBatch.regime_index) }} · 非牛市空仓
+            </p>
           </div>
           <div class="detail-actions">
             <button :disabled="batchActionSubmitting" @click="() => loadSelected()">刷新详情</button>
@@ -462,6 +465,7 @@ import {
   isPlainParamsObject,
   resolveParamLabel,
 } from '../utils/strategyLabParams'
+import { formatRegimeIndex } from '../utils/regimeCash'
 
 const workspaceTab = ref('scan')
 const compareVisited = ref(false)
@@ -664,6 +668,8 @@ const form = reactive({
   initial_cash: 1000000,
   etf_position_pct: 0.95,
   limit_symbols: 2,
+  regime_cash: false,
+  regime_index: '',
 })
 
 const summary = computed(() => selectedBatch.value?.summary || {})
@@ -1174,6 +1180,8 @@ function buildCreateBatchPayload() {
     limit_symbols: targetConfig.limit_symbols !== undefined
       ? targetConfig.limit_symbols
       : (Number.isFinite(limitSymbols) ? Math.max(0, Math.floor(limitSymbols)) : 0),
+    regime_cash: Boolean(form.regime_cash),
+    regime_index: form.regime_cash ? (form.regime_index || null) : null,
   }
 }
 
@@ -1475,6 +1483,8 @@ function buildLoopBatchConfig(nameSuffix = '') {
     limit_symbols: targetConfig.limit_symbols !== undefined
       ? targetConfig.limit_symbols
       : (Number.isFinite(limitSymbols) ? Math.max(0, Math.floor(limitSymbols)) : 0),
+    regime_cash: Boolean(form.regime_cash),
+    regime_index: form.regime_cash ? (form.regime_index || null) : null,
   }
 }
 
@@ -1854,6 +1864,12 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.regime-line {
+  color: #b45309;
+  font-size: 12px;
+  margin-top: 4px;
 }
 
 .eyebrow {

@@ -14,6 +14,31 @@ export const REGIME_RULE_OPTIONS = [
   { value: 'k_slow_anchor_with_volatility', label: '仅低波动过滤' },
 ]
 
+// Reference indices with rows in quant_data.index_prices. Keep the codes in
+// sync with services/backtest_batch_schemas.py::REGIME_INDEX_CHOICES.
+export const REGIME_INDEX_OPTIONS = [
+  { value: '', label: '跟随股票池（推荐）' },
+  { value: '000300.SH', label: '沪深300' },
+  { value: '000905.SH', label: '中证500' },
+  { value: '000852.SH', label: '中证1000' },
+  { value: '932000.CSI', label: '中证2000' },
+  { value: '000016.SH', label: '上证50' },
+  { value: '000001.SH', label: '上证指数' },
+  { value: '399006.SZ', label: '创业板指' },
+  { value: '000688.SH', label: '科创50' },
+]
+
+const REGIME_INDEX_LABELS = Object.fromEntries(
+  REGIME_INDEX_OPTIONS.filter((item) => item.value).map((item) => [item.value, item.label]),
+)
+
+export function formatRegimeIndex(code) {
+  const key = String(code || '').trim().toUpperCase()
+  if (!key || key === 'AUTO') return '跟随股票池'
+  const label = REGIME_INDEX_LABELS[key]
+  return label ? `${label}（${key}）` : key
+}
+
 export const REGIME_RULE_HINT =
   '仅对非牛空仓生效；可多选对照，默认只跑价格K交叉。量价择时：牛市买入需放量且波动收缩；熊市退出不加过滤。指数日线缺成交量时会退化为价格交叉。'
 

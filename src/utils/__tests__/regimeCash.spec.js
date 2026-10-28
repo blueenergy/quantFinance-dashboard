@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   buildRegimeModesFromForm,
   formatIndexRegimeLabel,
+  formatRegimeIndex,
   formatRegimeModes,
   formatRegimeRule,
   indexRegimeTone,
   isRegimeCashEnabled,
+  REGIME_INDEX_OPTIONS,
   regimeCashFromParams,
   regimeFlagsFromParams,
   regimeRuleFromParams,
@@ -42,6 +44,23 @@ describe('regime modes', () => {
       regime_always_invest: true,
       regime_cash: true,
     })).toEqual(['off', 'bull_g60_else_cash'])
+  })
+})
+
+describe('regime reference index', () => {
+  it('offers follow-universe plus the covered index codes', () => {
+    expect(REGIME_INDEX_OPTIONS[0]).toEqual({ value: '', label: '跟随股票池（推荐）' })
+    expect(REGIME_INDEX_OPTIONS.map((item) => item.value)).toEqual(
+      expect.arrayContaining(['000300.SH', '000905.SH', '000852.SH', '932000.CSI']),
+    )
+    expect(REGIME_INDEX_OPTIONS.map((item) => item.value)).not.toContain('000510.SH')
+  })
+
+  it('formats auto and explicit codes', () => {
+    expect(formatRegimeIndex('')).toBe('跟随股票池')
+    expect(formatRegimeIndex('auto')).toBe('跟随股票池')
+    expect(formatRegimeIndex('000300.SH')).toBe('沪深300（000300.SH）')
+    expect(formatRegimeIndex('999999.SH')).toBe('999999.SH')
   })
 })
 

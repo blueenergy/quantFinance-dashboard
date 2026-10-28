@@ -14,6 +14,7 @@
       <span>{{ form.strategy_key }} / {{ form.preset || 'default' }}</span>
       <span>{{ form.start_date }} - {{ form.end_date }}</span>
       <span>初始资金 {{ money(form.initial_cash) }}</span>
+      <span v-if="form.regime_cash">牛熊择时 {{ formatRegimeIndex(form.regime_index) }}</span>
       <span v-if="form.target_mode === 'single_etf'">资金使用率 {{ pct(normalizedEtfPositionPct()) }}</span>
     </div>
     <div v-show="expanded" class="panel-body">
@@ -96,6 +97,20 @@
           <input v-model.number="form.limit_symbols" type="number" min="0" />
           <small>0 表示跑完整股票池</small>
         </label>
+        <label class="inline-check regime-toggle">
+          <input v-model="form.regime_cash" type="checkbox" />
+          牛熊择时（非牛空仓）
+          <small>{{ REGIME_CASH_REMINDER }}</small>
+        </label>
+        <label v-if="form.regime_cash">
+          参照指数
+          <select v-model="form.regime_index">
+            <option v-for="option in REGIME_INDEX_OPTIONS" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+          <small>跟随股票池时，csi1000→中证1000、csi500→中证500、hs300→沪深300；手动/ETF 默认沪深300。</small>
+        </label>
         <label>
           开始日期
           <input v-model="form.start_date" placeholder="20240101" />
@@ -158,6 +173,11 @@
 
 <script setup>
 import { computed } from 'vue'
+import {
+  REGIME_CASH_REMINDER,
+  REGIME_INDEX_OPTIONS,
+  formatRegimeIndex,
+} from '../../utils/regimeCash'
 
 const props = defineProps({
   expanded: { type: Boolean, required: true },
@@ -275,6 +295,13 @@ textarea {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 8px 10px;
+}
+
+.regime-toggle input[type="checkbox"] {
+  align-self: flex-start;
+  height: 16px;
+  padding: 0;
+  width: 16px;
 }
 
 button {
