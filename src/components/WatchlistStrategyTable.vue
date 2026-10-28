@@ -232,6 +232,40 @@
           </div>
         </v-card-title>
         <v-card-text>
+          <!-- 资金与仓位：所有策略共用，决定每笔名义金额 -->
+          <div class="sizing-row">
+            <v-text-field
+              v-model.number="accountCapital"
+              type="number"
+              density="compact"
+              variant="outlined"
+              label="账户资金 account_capital"
+              prefix="¥"
+              :min="0"
+              :step="100000"
+              hide-details
+              style="max-width: 260px;"
+            />
+            <v-text-field
+              v-model.number="positionPct"
+              type="number"
+              density="compact"
+              variant="outlined"
+              label="单笔仓位 position_pct"
+              :min="0"
+              :max="1"
+              :step="0.05"
+              hide-details
+              style="max-width: 200px;"
+            />
+            <div class="sizing-hint">
+              每笔约 <b>¥{{ perTradeNotionalText }}</b> 名义资金
+              <div v-if="!positionPctValid" class="sizing-warn">
+                仓位应在 0–1 之间（0.3 = 30%）
+              </div>
+            </div>
+          </div>
+
           <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
             <!-- 左侧：当前参数表格 (扩大到2份) -->
             <div>
@@ -400,6 +434,19 @@ const editingRow = ref(null)
 const editingStrategy = ref(null)
 const paramsJson = ref('{}')
 const editingParams = ref({})  // For table editing
+// Sizing fields shared by every strategy: notional = capital × pct.
+const accountCapital = ref(1000000)
+const positionPct = ref(0.3)
+const perTradeNotional = computed(() => Number(accountCapital.value) * Number(positionPct.value))
+const perTradeNotionalText = computed(() => {
+  const v = perTradeNotional.value
+  if (!Number.isFinite(v) || v <= 0) return '—'
+  return v >= 10000 ? `${(v / 10000).toFixed(0)} 万` : `${v.toFixed(0)} 元`
+})
+const positionPctValid = computed(() => {
+  const p = Number(positionPct.value)
+  return Number.isFinite(p) && p > 0 && p <= 1
+})
 const selectedPreset = ref(null)
 const availablePresets = ref([])
 
@@ -692,6 +739,8 @@ function openParams(item, strategyKey) {
   const params = item.strategies[strategyKey].params || {}
   paramsJson.value = JSON.stringify(params, null, 2)
   editingParams.value = { ...params }  // Initialize table editing
+  accountCapital.value = Number(params.account_capital ?? 1000000)
+  positionPct.value = Number(params.position_pct ?? 0.3)
   loadPresetsForStrategy(strategyKey)
   paramsDialog.value = true
 }
@@ -702,6 +751,8 @@ function openParamsDetailed(item) {
   const params = item.params || {}
   paramsJson.value = JSON.stringify(params, null, 2)
   editingParams.value = { ...params }  // Initialize table editing
+  accountCapital.value = Number(params.account_capital ?? 1000000)
+  positionPct.value = Number(params.position_pct ?? 0.3)
   loadPresetsForStrategy(item.strategy_key)
   paramsDialog.value = true
 }
@@ -745,7 +796,16 @@ async function saveParams() {
   try {
     // Use editingParams (from table) as the source of truth
     const params = { ...editingParams.value }
-    
+
+    // Sizing fields are edited outside the table; fold them back in.
+    const capital = Number(accountCapital.value)
+    if (Number.isFinite(capital) && capital > 0) {
+      params.account_capital = capital
+    }
+    if (positionPctValid.value) {
+      params.position_pct = Number(positionPct.value)
+    }
+
     if (!editingRow.value || !editingStrategy.value) return
     
     // Update local data
@@ -788,3 +848,25 @@ onUnmounted(() => {
   window.removeEventListener('watchlist-strategy-updated', reloadAfterExternalDeploy)
 })
 </script>
+
+<style scoped>
+.sizing-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+.sizing-hint {
+  font-size: 13px;
+  color: #555;
+}
+.sizing-warn {
+  color: #c62828;
+  font-size: 12px;
+  margin-top: 2px;
+}
+</style>
