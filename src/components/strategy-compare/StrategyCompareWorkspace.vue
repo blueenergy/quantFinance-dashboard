@@ -47,7 +47,7 @@
                 <button type="button" @click="toggleDetailFullscreen">
                   {{ detailMaximized ? '退出全屏' : '全屏' }}
                 </button>
-                <button type="button" @click="refreshAll()">刷新</button>
+                <button type="button" @click="refreshAllAndResults()">刷新</button>
                 <button type="button" :disabled="!canCancel" @click="cancelSelected()">取消</button>
                 <button type="button" class="danger" @click="deleteSelected()">删除</button>
               </div>
@@ -179,6 +179,27 @@ const isBatchRunning = computed(() => {
 })
 
 const canCancel = computed(() => isBatchRunning.value)
+
+// 10s 轮询只刷新批次状态，不会重载结果行；若创建时加载到 pending 行，
+// 批次完成后表格会一直停在「排队中」。进入终态时补拉一次结果。
+const ACTIVE_BATCH_STATUSES = new Set(['pending', 'running', 'claimed'])
+const TERMINAL_BATCH_STATUSES = new Set(['completed', 'failed', 'cancelled', 'partial_failed'])
+
+watch(
+  () => selectedBatch.value?.status,
+  (status, prevStatus) => {
+    const next = String(status || '').toLowerCase()
+    const prev = String(prevStatus || '').toLowerCase()
+    if (!selectedBatchId.value || next === prev) return
+    if (!ACTIVE_BATCH_STATUSES.has(prev) || !TERMINAL_BATCH_STATUSES.has(next)) return
+    void loadResults(selectedBatchId.value)
+  },
+)
+
+async function refreshAllAndResults() {
+  await refreshAll()
+  if (selectedBatchId.value) await loadResults(selectedBatchId.value)
+}
 
 const detailTitle = computed(() => {
   const symbol = detailMeta.value.symbol || detailResult.value?.symbol || '回测结果'
