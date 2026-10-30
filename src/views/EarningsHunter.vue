@@ -14,7 +14,7 @@
         </div>
         <div class="control-item">
           <label>查询天数：</label>
-          <select v-model="days" @change="fetchSignals">
+          <select v-model="days" @change="onDaysChange">
             <option :value="3">最近 3 天</option>
             <option :value="7">最近 7 天</option>
             <option :value="14">最近 14 天</option>
@@ -27,8 +27,25 @@
       </div>
     </div>
 
+    <div class="mode-toggle">
+      <button
+        class="mode-btn"
+        :class="{ active: viewMode === 'signals' }"
+        @click="viewMode = 'signals'"
+      >
+        预告 / 快报
+      </button>
+      <button
+        class="mode-btn"
+        :class="{ active: viewMode === 'reports' }"
+        @click="switchToReports"
+      >
+        定期报告解读
+      </button>
+    </div>
+
     <!-- 行业筛选（多选）区 -->
-    <div class="filters-section" v-if="availableIndustries.length > 0">
+    <div class="filters-section" v-if="viewMode === 'signals' && availableIndustries.length > 0">
       <div class="filter-label">行业筛选：</div>
       <div class="filter-pills">
         <button 
@@ -48,13 +65,13 @@
       </div>
     </div>
 
-    <div v-if="loading" class="skeleton skeleton-table">数据加载中...</div>
-    
-    <div v-else-if="signals.length === 0" class="no-data">
+    <div v-if="viewMode === 'signals' && loading" class="skeleton skeleton-table">数据加载中...</div>
+
+    <div v-else-if="viewMode === 'signals' && signals.length === 0" class="no-data">
         近期未发现符合条件的财报信号
     </div>
 
-    <div v-else class="groups-container">
+    <div v-else-if="viewMode === 'signals'" class="groups-container">
       <div v-for="group in groupedSignals" :key="group.title" class="signal-group">
         <div v-if="group.title" class="group-header">
           <h3 class="group-title">{{ group.title }}</h3>
@@ -116,17 +133,82 @@
         </div>
       </div>
     </div>
+
+    <div v-else class="reports-container">
+      <div v-if="reportsLoading" class="skeleton skeleton-table">解读加载中...</div>
+      <div v-else-if="reports.length === 0" class="no-data">
+        近期自选股 / 持仓没有定期报告披露
+      </div>
+      <div v-else class="signals-grid">
+        <div v-for="report in reports" :key="report._id" class="signal-card report-card">
+          <div class="card-header">
+            <div class="stock-info">
+              <span class="stock-name">{{ report.name || report.ts_code }}</span>
+              <span class="stock-code">{{ report.ts_code }}</span>
+            </div>
+            <span class="signal-badge badge-report">{{ report.report_kind || '定期报告' }}</span>
+          </div>
+          <div class="card-body">
+            <div class="data-row">
+              <span class="label">披露日：</span>
+              <span class="value">{{ formatDisplayDate(report.ann_date) }}</span>
+            </div>
+            <div class="data-row highlight">
+              <span class="label">结论：</span>
+              <span class="value">{{ report.beat_miss || '—' }} ｜ 评分 {{ report.score ?? '—' }}/10</span>
+            </div>
+            <div class="data-row">
+              <span class="label">营收：</span>
+              <span class="value">{{ fmtAmount(report.key_numbers?.revenue) }}（{{ fmtPct(report.key_numbers?.revenue_yoy) }}）</span>
+            </div>
+            <div class="data-row">
+              <span class="label">归母：</span>
+              <span class="value">{{ fmtAmount(report.key_numbers?.net_profit) }}（{{ fmtPct(report.key_numbers?.net_profit_yoy) }}）</span>
+            </div>
+            <div class="data-row" v-if="progressText(report)">
+              <span class="label">年度进度：</span>
+              <span class="value">{{ progressText(report) }}</span>
+            </div>
+            <div v-if="report.verdict" class="ai-verdict">{{ report.verdict }}</div>
+            <div v-if="report.risk_flags?.length" class="data-row">
+              <span class="label">风险：</span>
+              <span class="value ext-text">{{ report.risk_flags[0] }}</span>
+            </div>
+            <button class="analyze-btn report-expand" @click="toggleExpanded(report._id)">
+              {{ expanded[report._id] ? '收起完整解读' : '查看完整解读' }}
+            </button>
+            <div v-if="expanded[report._id]" class="report-narrative">
+              <p>{{ report.narrative }}</p>
+              <div v-if="report.highlights?.length" class="report-list">
+                <strong>亮点</strong>
+                <ul><li v-for="h in report.highlights" :key="h">{{ h }}</li></ul>
+              </div>
+              <div v-if="report.follow_ups?.length" class="report-list">
+                <strong>跟踪</strong>
+                <ul><li v-for="f in report.follow_ups" :key="f">{{ f }}</li></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { earningsHunterApi } from '../api/earningsHunter'
+import { earningsWatchApi } from '../api/earningsWatch'
 
 const days = ref(30)
 const groupMode = ref('none')
 const signals = ref([])
 const loading = ref(false)
+
+const viewMode = ref('signals')
+const reports = ref([])
+const reportsLoading = ref(false)
+const expanded = ref({})
 
 const selectedIndustries = ref([])
 
@@ -183,6 +265,54 @@ const getScoreClass = (score) => {
   if (num >= 8) return 'score-high'
   if (num >= 5) return 'score-medium'
   return 'score-low'
+}
+
+const switchToReports = () => {
+  viewMode.value = 'reports'
+  if (!reports.value.length) fetchReports()
+}
+
+const onDaysChange = () => {
+  if (viewMode.value === 'reports') fetchReports()
+  else fetchSignals()
+}
+
+const fetchReports = async () => {
+  reportsLoading.value = true
+  try {
+    const res = await earningsWatchApi.listReports({ days: days.value, limit: 50 })
+    if (res?.success) reports.value = res.data || []
+  } catch (e) {
+    console.error('Error fetching earnings reports:', e)
+  } finally {
+    reportsLoading.value = false
+  }
+}
+
+const fmtAmount = (v) => {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '—'
+  if (Math.abs(n) >= 1e8) return `${(n / 1e8).toFixed(2)}亿`
+  if (Math.abs(n) >= 1e4) return `${(n / 1e4).toFixed(1)}万`
+  return `${n.toFixed(0)}`
+}
+
+const fmtPct = (v) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? `${n > 0 ? '+' : ''}${n.toFixed(1)}%` : '—'
+}
+
+const progressText = (report) => {
+  const c = report?.consensus || {}
+  if (c.ytd_vs_annual_consensus_pct == null) return ''
+  const delta = c.progress_delta_pp
+  if (delta == null) return `${c.ytd_vs_annual_consensus_pct.toFixed(1)}%`
+  const ly = c.ytd_vs_annual_consensus_pct - delta
+  return `${c.ytd_vs_annual_consensus_pct.toFixed(1)}%（去年同期 ${ly.toFixed(2)}%，${delta > 0 ? '+' : ''}${delta.toFixed(2)}pp）`
+}
+
+const toggleExpanded = (id) => {
+  expanded.value = { ...expanded.value, [id]: !expanded.value[id] }
 }
 
 const fetchSignals = async () => {
@@ -540,5 +670,60 @@ select:hover {
   text-align: center;
   padding: 40px;
   color: var(--text-muted, #888);
+}
+
+/* 定期报告解读 */
+.mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.mode-btn {
+  background: var(--surface-card, #2b2b2b);
+  border: 1px solid var(--border-color, #444);
+  color: var(--text-muted, #aaa);
+  padding: 8px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.mode-btn.active {
+  background: rgba(25, 118, 210, 0.15);
+  border-color: #1976d2;
+  color: #64b5f6;
+  font-weight: 500;
+}
+.badge-report {
+  background-color: rgba(129, 199, 132, 0.18);
+  color: #81c784;
+  border: 1px solid #388e3c;
+}
+.report-card .ai-verdict {
+  margin-top: 12px;
+}
+.report-expand {
+  margin-top: 14px;
+}
+.report-narrative {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 6px;
+  background: var(--surface-ground, #1e1e1e);
+  color: var(--text-color, #ddd);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+.report-narrative p {
+  margin: 0 0 10px;
+}
+.report-list {
+  margin-top: 10px;
+}
+.report-list ul {
+  margin: 6px 0 0 18px;
+  padding: 0;
+}
+.report-list li {
+  margin-bottom: 4px;
 }
 </style>

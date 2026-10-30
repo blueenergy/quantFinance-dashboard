@@ -121,6 +121,7 @@
         </v-window-item>
 
         <v-window-item value="financial">
+          <WorkbenchEarningsReportPanel :symbol="stockSymbol" />
           <WorkbenchFinancialPanel
             v-model:financial-mode="financialMode"
             :financial-mode-label="financialModeLabel"
@@ -273,6 +274,7 @@ import {
 const StockWorkbenchSwotPanel = defineAsyncComponent(() => import('../components/stock/StockWorkbenchSwotPanel.vue'))
 const WorkbenchAnalysisPanel = defineAsyncComponent(() => import('../components/stock/WorkbenchAnalysisPanel.vue'))
 const WorkbenchFinancialPanel = defineAsyncComponent(() => import('../components/stock/WorkbenchFinancialPanel.vue'))
+const WorkbenchEarningsReportPanel = defineAsyncComponent(() => import('../components/stock/WorkbenchEarningsReportPanel.vue'))
 const WorkbenchNineTurnPanel = defineAsyncComponent(() => import('../components/stock/WorkbenchNineTurnPanel.vue'))
 const WorkbenchOverviewPanel = defineAsyncComponent(() => import('../components/stock/WorkbenchOverviewPanel.vue'))
 const WorkbenchQuotePanel = defineAsyncComponent(() => import('../components/stock/WorkbenchQuotePanel.vue'))
