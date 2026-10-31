@@ -125,16 +125,20 @@
               >
                 <template #item="{ item: option, props }">
                   <v-list-item v-bind="props" :disabled="!option.raw.can_use">
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                      <span>{{ option.raw.name }}</span>
-                      <v-icon v-if="option.raw.vip_only && !option.raw.can_use" size="small" color="warning" :icon="mdiLock" />
-                      <span
-                        v-if="strategyMeta[option.raw.key]?.vip_only && !option.raw.can_use"
-                        style="color: #e65100; font-size: 11px; font-weight: 600;"
-                      >
-                        (需升级)
-                      </span>
-                    </div>
+                    <!-- Use #title so the title from props is replaced, not
+                         rendered a second time alongside the default slot. -->
+                    <template #title>
+                      <div style="display: flex; align-items: center; gap: 6px;">
+                        <span>{{ option.raw.name }}</span>
+                        <v-icon v-if="option.raw.vip_only && !option.raw.can_use" size="small" color="warning" :icon="mdiLock" />
+                        <span
+                          v-if="strategyMeta[option.raw.key]?.vip_only && !option.raw.can_use"
+                          style="color: #e65100; font-size: 11px; font-weight: 600;"
+                        >
+                          (需升级)
+                        </span>
+                      </div>
+                    </template>
                     <template #subtitle>
                       <div style="font-size: 11px; color: #666;">
                         {{ strategyMeta[option.raw.key]?.summary || '' }}
