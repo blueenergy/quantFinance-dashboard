@@ -622,7 +622,12 @@ async function loadData() {
   console.log('Live strategies after filter:', liveStrategies.length)
   console.log('Strategy options:', liveStrategies.map(s => s.key))
   
-  // Initialize strategy metadata: one dropdown option per family.
+  strategyMeta.value = Object.fromEntries(liveStrategies.map(s => [s.key, s]))
+  availableStrategyKeys.value = liveStrategies.map(s => s.key)
+  strategyTemplates.value = templatesResp?.ok ? templatesResp.templates || {} : {}
+
+  // One dropdown option per family. Must run after strategyMeta and
+  // availableStrategyKeys are set: strategyFamilies is derived from them.
   strategyOptions.value = strategyFamilies.value.map(fam => {
     const primaryKey = fam.cadences.minute || Object.values(fam.cadences)[0]
     const meta = strategyMeta.value[primaryKey] || {}
@@ -634,9 +639,6 @@ async function loadData() {
       can_use: Object.values(fam.cadences).some(k => strategyMeta.value[k]?.can_use !== false),
     }
   })
-  strategyMeta.value = Object.fromEntries(liveStrategies.map(s => [s.key, s]))
-  availableStrategyKeys.value = liveStrategies.map(s => s.key)
-  strategyTemplates.value = templatesResp?.ok ? templatesResp.templates || {} : {}
   
   // Build data maps
   const watchlistSymbols = wl?.data?.symbols || []
