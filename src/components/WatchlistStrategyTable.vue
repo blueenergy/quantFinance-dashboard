@@ -42,6 +42,17 @@
                 :disabled="!strategyMeta[item.strategies[fam.key].activeKey]?.can_use"
                 @change="toggleStrategy(item, fam.key)"
               />
+              <v-tooltip v-if="Object.keys(fam.cadences).length > 1" location="top">
+                <template #activator="{ props }">
+                  <v-icon
+                    v-bind="props"
+                    size="small"
+                    color="grey"
+                    :icon="cadenceIcon(item.strategies[fam.key].cadence)"
+                  />
+                </template>
+                <span>{{ cadenceLabel(item.strategies[fam.key].cadence) }}</span>
+              </v-tooltip>
               <v-btn
                 v-if="item.strategies[fam.key].enabled"
                 size="x-small"
@@ -68,6 +79,14 @@
             <div style="display: flex; align-items: center; gap: 8px;">
               <v-chip v-if="item.strategy_key" color="primary" variant="outlined" size="small">
                 {{ strategyMeta[item.strategy_key]?.family_name || strategyMeta[item.strategy_key]?.name || item.strategy_key }}
+              </v-chip>
+              <v-chip
+                v-if="item.strategy_key && familyForKey(item.strategy_key) && Object.keys(familyForKey(item.strategy_key).cadences).length > 1"
+                size="x-small"
+                variant="tonal"
+                color="grey"
+              >
+                {{ cadenceLabel(strategyMeta[item.strategy_key]?.cadence) }}
               </v-chip>
               <!-- Strategy info icon -->
               <v-tooltip v-if="item.strategy_key" location="top">
@@ -422,7 +441,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { VExpansionPanels, VExpansionPanel, VExpansionPanelTitle, VExpansionPanelText } from 'vuetify/components'
 import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies } from '../api/user'
 import request from '../utils/request'
-import { mdiViewColumn, mdiViewList, mdiCog, mdiInformation, mdiLock } from '@mdi/js'
+import { mdiViewColumn, mdiViewList, mdiCog, mdiInformation, mdiLock, mdiClockOutline, mdiCalendarMonth } from '@mdi/js'
 
 // ============================================================================
 // State Management
@@ -457,6 +476,20 @@ const cadenceOptions = [
   { title: '分钟', value: 'minute' },
   { title: '日线', value: 'daily' },
 ]
+
+function cadenceLabel(cadence) {
+  return cadence === 'daily' ? '日线' : '分钟'
+}
+
+function cadenceIcon(cadence) {
+  return cadence === 'daily' ? mdiCalendarMonth : mdiClockOutline
+}
+
+function familyForKey(key) {
+  if (!key) return null
+  const meta = strategyMeta.value[key] || {}
+  return strategyFamilies.value.find(f => f.key === (meta.family || key)) || null
+}
 
 
 // User metadata
