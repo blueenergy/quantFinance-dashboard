@@ -30,29 +30,39 @@
       <v-card-text>
         <!-- Compact View: Horizontal multi-strategy layout -->
         <v-data-table v-if="viewMode === 'compact'" :items="rows" :headers="headers" class="elevation-1">
-          <!-- Dynamic strategy columns -->
-          <template v-for="stratKey in availableStrategyKeys" :key="stratKey" v-slot:[`item.strategy_${stratKey}`]="{ item }">
-            <div style="display: flex; align-items: center; gap: 8px;">
+          <!-- Dynamic strategy columns: one per family, cadence is a parameter -->
+          <template v-for="fam in strategyFamilies" :key="fam.key" v-slot:[`item.strategy_${fam.key}`]="{ item }">
+            <div style="display: flex; align-items: center; gap: 4px;">
               <v-switch
-                v-model="item.strategies[stratKey].enabled"
-                :label="item.strategies[stratKey].enabled ? '✅' : ''"
+                v-model="item.strategies[fam.key].enabled"
+                :label="item.strategies[fam.key].enabled ? '✅' : ''"
                 color="primary"
                 density="compact"
                 hide-details
-                :disabled="!strategyMeta[stratKey]?.can_use"
-                @change="toggleStrategy(item, stratKey)"
+                :disabled="!strategyMeta[item.strategies[fam.key].activeKey]?.can_use"
+                @change="toggleStrategy(item, fam.key)"
               />
-              <v-btn 
-                v-if="item.strategies[stratKey].enabled"
-                size="x-small" 
-                variant="text" 
+              <v-select
+                v-if="Object.keys(fam.cadences).length > 1"
+                :items="cadenceOptions"
+                v-model="item.strategies[fam.key].cadence"
+                density="compact"
+                variant="outlined"
+                hide-details
+                style="max-width: 78px;"
+                @update:modelValue="(val) => switchCadence(item, fam, val)"
+              />
+              <v-btn
+                v-if="item.strategies[fam.key].enabled"
+                size="x-small"
+                variant="text"
                 icon
-                @click="openParams(item, stratKey)"
+                @click="openParams(item, fam.key)"
               >
                 <v-icon :icon="mdiCog"></v-icon>
               </v-btn>
               <!-- 显示VIP标记和升级提示 -->
-              <v-tooltip v-if="strategyMeta[stratKey]?.vip_only && !strategyMeta[stratKey]?.can_use" location="top">
+              <v-tooltip v-if="strategyMeta[item.strategies[fam.key].activeKey]?.vip_only && !strategyMeta[item.strategies[fam.key].activeKey]?.can_use" location="top">
                 <template #activator="{ props }">
                   <v-icon v-bind="props" size="small" color="warning" :icon="mdiLock" />
                 </template>
@@ -67,8 +77,18 @@
           <template #item.strategy="{ item }">
             <div style="display: flex; align-items: center; gap: 8px;">
               <v-chip v-if="item.strategy_key" color="primary" variant="outlined" size="small">
-                {{ strategyMeta[item.strategy_key]?.name || item.strategy_key }}
+                {{ strategyMeta[item.strategy_key]?.family_name || strategyMeta[item.strategy_key]?.name || item.strategy_key }}
               </v-chip>
+              <v-select
+                v-if="item.strategy_key && familyFor(item.strategy_key) && Object.keys(familyFor(item.strategy_key).cadences).length > 1"
+                :items="cadenceOptions"
+                :model-value="strategyMeta[item.strategy_key]?.cadence"
+                density="compact"
+                variant="outlined"
+                hide-details
+                style="max-width: 80px;"
+                @update:modelValue="(val) => switchDetailedCadence(item, val)"
+              />
               <!-- Strategy info icon -->
               <v-tooltip v-if="item.strategy_key" location="top">
                 <template #activator="{ props }">
@@ -420,6 +440,34 @@ const strategyMeta = ref({})
 const strategyTemplates = ref({})
 const availableStrategyKeys = ref([])
 
+// One user-facing strategy per family; cadence is a parameter, not a column.
+// `strategy_metadata.family` groups minute/daily variants (turtle + turtle_daily).
+const strategyFamilies = computed(() => {
+  const map = new Map()
+  for (const key of availableStrategyKeys.value) {
+    const meta = strategyMeta.value[key] || {}
+    const family = meta.family || key
+    if (!map.has(family)) {
+      map.set(family, {
+        key: family,
+        name: meta.family_name || meta.name || key,
+        cadences: {},
+      })
+    }
+    map.get(family).cadences[meta.cadence || 'minute'] = key
+  }
+  return Array.from(map.values())
+})
+
+const cadenceOptions = [
+  { title: '分钟', value: 'minute' },
+  { title: '日线', value: 'daily' },
+]
+
+function familyFor(key) {
+  return strategyFamilies.value.find(f => Object.values(f.cadences).includes(key))
+}
+
 // User metadata
 const userServiceLevel = ref('free')
 
@@ -458,11 +506,11 @@ const availablePresets = ref([])
 const headers = computed(() => [
   { title: '代码', key: 'symbol', width: '100px' },
   { title: '名称', key: 'name', width: '120px' },
-  ...availableStrategyKeys.value.map(key => ({
-    title: strategyMeta.value[key]?.name || key,
-    key: `strategy_${key}`,
+  ...strategyFamilies.value.map(fam => ({
+    title: fam.name,
+    key: `strategy_${fam.key}`,
     sortable: false,
-    width: '120px'
+    width: '150px'
   }))
 ])
 
@@ -574,14 +622,18 @@ async function loadData() {
   console.log('Live strategies after filter:', liveStrategies.length)
   console.log('Strategy options:', liveStrategies.map(s => s.key))
   
-  // Initialize strategy metadata
-  strategyOptions.value = liveStrategies.map(s => ({
-    key: s.key,
-    name: s.vip_only ? `${s.name} (VIP)` : s.name,
-    vip_only: !!s.vip_only,
-    min_service_level: s.min_service_level || null,
-    can_use: s.can_use !== false,  // 使用后端返回的 can_use 字段
-  }))
+  // Initialize strategy metadata: one dropdown option per family.
+  strategyOptions.value = strategyFamilies.value.map(fam => {
+    const primaryKey = fam.cadences.minute || Object.values(fam.cadences)[0]
+    const meta = strategyMeta.value[primaryKey] || {}
+    return {
+      key: fam.key,
+      name: meta.vip_only ? `${fam.name} (VIP)` : fam.name,
+      vip_only: !!meta.vip_only,
+      min_service_level: meta.min_service_level || null,
+      can_use: Object.values(fam.cadences).some(k => strategyMeta.value[k]?.can_use !== false),
+    }
+  })
   strategyMeta.value = Object.fromEntries(liveStrategies.map(s => [s.key, s]))
   availableStrategyKeys.value = liveStrategies.map(s => s.key)
   strategyTemplates.value = templatesResp?.ok ? templatesResp.templates || {} : {}
@@ -620,11 +672,23 @@ function buildCompactViewData(symbols, strategyMap, nameMap) {
   const data = symbols.map(symbol => {
     const symbolStr = normalizeSymbol(symbol)
     const strategies = {}
-    
-    availableStrategyKeys.value.forEach(key => {
-      strategies[key] = strategyMap[symbolStr]?.[key] || { enabled: false, params: {} }
+
+    strategyFamilies.value.forEach(fam => {
+      const keys = Object.values(fam.cadences)
+      // Show whichever cadence is actually configured; fall back to minute.
+      const activeKey =
+        keys.find(k => strategyMap[symbolStr]?.[k]?.enabled) ||
+        fam.cadences.minute ||
+        keys[0]
+      const record = strategyMap[symbolStr]?.[activeKey]
+      strategies[fam.key] = {
+        activeKey,
+        cadence: strategyMeta.value[activeKey]?.cadence || 'minute',
+        params: record?.params || {},
+        enabled: record?.enabled || false,
+      }
     })
-    
+
     return {
       symbol: symbolStr,
       name: nameMap[symbolStr] || symbolStr,
@@ -688,13 +752,35 @@ function buildDetailedViewData(symbols, strategyMap, nameMap) {
 // Strategy Actions
 // ============================================================================
 
-async function toggleStrategy(item, strategyKey) {
-  await setWatchlistStrategy({ 
-    symbol: normalizeSymbol(item.symbol), 
-    strategy: strategyKey, 
-    params: item.strategies[strategyKey].params || {}, 
-    enabled: item.strategies[strategyKey].enabled
+async function toggleStrategy(item, familyKey) {
+  const entry = item.strategies[familyKey]
+  await setWatchlistStrategy({
+    symbol: normalizeSymbol(item.symbol),
+    strategy: entry.activeKey,
+    params: entry.params || {},
+    enabled: entry.enabled
   })
+}
+
+async function switchCadence(item, fam, cadence) {
+  const entry = item.strategies[fam.key]
+  const newKey = fam.cadences[cadence]
+  if (!newKey || newKey === entry.activeKey) return
+
+  const symbol = normalizeSymbol(item.symbol)
+  const params = { ...(entry.params || {}) }
+  const wasEnabled = entry.enabled
+  try {
+    if (wasEnabled) {
+      await setWatchlistStrategy({ symbol, strategy: entry.activeKey, params, enabled: false })
+    }
+    await setWatchlistStrategy({ symbol, strategy: newKey, params, enabled: wasEnabled })
+    await loadData()
+  } catch (err) {
+    console.error('Failed to switch cadence:', err)
+    alert('切换周期失败，请重试')
+    await loadData()
+  }
 }
 
 async function toggleStrategyDetailed(item) {
@@ -712,13 +798,16 @@ async function toggleStrategyDetailed(item) {
   }
 }
 
-async function onAddStrategy(item, strategyKey) {
+async function onAddStrategy(item, familyKey) {
+  if (!familyKey) return
+  const fam = strategyFamilies.value.find(f => f.key === familyKey)
+  const strategyKey = fam?.cadences.minute || Object.values(fam?.cadences || {})[0]
   if (!strategyKey) return
-  
+
   try {
-    await setWatchlistStrategy({ 
-      symbol: normalizeSymbol(item.symbol), 
-      strategy: strategyKey, 
+    await setWatchlistStrategy({
+      symbol: normalizeSymbol(item.symbol),
+      strategy: strategyKey,
       params: {},
       enabled: false
     })
@@ -729,19 +818,40 @@ async function onAddStrategy(item, strategyKey) {
   }
 }
 
+async function switchDetailedCadence(item, cadence) {
+  const meta = strategyMeta.value[item.strategy_key] || {}
+  const fam = strategyFamilies.value.find(f => f.key === (meta.family || item.strategy_key))
+  const newKey = fam?.cadences[cadence]
+  if (!newKey || newKey === item.strategy_key) return
+
+  const symbol = normalizeSymbol(item.symbol)
+  try {
+    if (item.enabled) {
+      await setWatchlistStrategy({ symbol, strategy: item.strategy_key, params: item.params || {}, enabled: false })
+    }
+    await setWatchlistStrategy({ symbol, strategy: newKey, params: item.params || {}, enabled: item.enabled })
+    await loadData()
+  } catch (err) {
+    console.error('Failed to switch cadence:', err)
+    alert('切换周期失败，请重试')
+    await loadData()
+  }
+}
+
 // ============================================================================
 // Parameter Dialog Management
 // ============================================================================
 
-function openParams(item, strategyKey) {
+function openParams(item, familyKey) {
   editingRow.value = item
-  editingStrategy.value = strategyKey
-  const params = item.strategies[strategyKey].params || {}
+  const entry = item.strategies[familyKey]
+  editingStrategy.value = entry.activeKey
+  const params = entry.params || {}
   paramsJson.value = JSON.stringify(params, null, 2)
   editingParams.value = { ...params }  // Initialize table editing
   accountCapital.value = Number(params.account_capital ?? 1000000)
   positionPct.value = Number(params.position_pct ?? 0.3)
-  loadPresetsForStrategy(strategyKey)
+  loadPresetsForStrategy(entry.activeKey)
   paramsDialog.value = true
 }
 
@@ -808,9 +918,11 @@ async function saveParams() {
 
     if (!editingRow.value || !editingStrategy.value) return
     
-    // Update local data
+    // Update local data (compact rows store one entry per family)
     if (editingRow.value.strategies) {
-      editingRow.value.strategies[editingStrategy.value].params = params
+      const famEntry = Object.values(editingRow.value.strategies)
+        .find(entry => entry.activeKey === editingStrategy.value)
+      if (famEntry) famEntry.params = params
     }
     if (editingRow.value.strategy_key) {
       editingRow.value.params = params
