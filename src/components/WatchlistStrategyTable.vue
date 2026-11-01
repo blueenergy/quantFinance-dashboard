@@ -1022,13 +1022,31 @@ function loadPresetsForStrategy(strategyKey) {
   selectedPreset.value = null
 }
 
+// Parameters that describe sizing / account binding rather than the strategy
+// itself. Applying a preset must not wipe them out.
+const UNIVERSAL_PARAM_KEYS = [
+  'account_capital',
+  'position_pct',
+  'managed_shares',
+  'state_prefix',
+  'securities_account_id',
+  'broker',
+  'account_id',
+  'order_type',
+]
+
 function applyPreset() {
   if (!selectedPresetObj.value) return
-  
-  const presetParams = selectedPresetObj.value.params
+
+  const presetParams = { ...selectedPresetObj.value.params }
+  for (const key of UNIVERSAL_PARAM_KEYS) {
+    if (editingParams.value[key] !== undefined) {
+      presetParams[key] = editingParams.value[key]
+    }
+  }
   paramsJson.value = JSON.stringify(presetParams, null, 2)
-  editingParams.value = { ...presetParams }  // Sync to table
-  
+  editingParams.value = presetParams  // Sync to table
+
   if (editingRow.value) {
     editingRow.value.params = { ...presetParams }
   }
