@@ -19,7 +19,17 @@
             </span>
           </div>
           <div>
-            <v-btn 
+            <v-btn
+              color="primary"
+              variant="flat"
+              size="small"
+              style="margin-right: 12px;"
+              @click="openAddStock"
+            >
+              <v-icon start :icon="mdiPlus"></v-icon>
+              添加股票
+            </v-btn>
+            <v-btn
               :variant="viewMode === 'compact' ? 'flat' : 'outlined'"
               :color="viewMode === 'compact' ? 'primary' : ''"
               size="small"
@@ -194,6 +204,46 @@
         </v-data-table>
       </v-card-text>
     </v-card>
+
+    <v-dialog v-model="addStockDialog" max-width="440">
+      <v-card>
+        <v-card-title>添加股票</v-card-title>
+        <v-card-text>
+          <v-text-field
+            v-model="newStockSymbol"
+            label="股票代码（如 600114 或 600114.SH）"
+            density="compact"
+            variant="outlined"
+            autofocus
+            @keyup.enter="addStockWithStrategy"
+          />
+          <v-select
+            v-model="newStockStrategy"
+            :items="strategyOptions"
+            item-title="name"
+            item-value="key"
+            label="策略"
+            density="compact"
+            variant="outlined"
+            class="mt-3"
+          />
+          <div style="font-size: 12px; color: #666;">
+            添加后会自动加入自选股，默认不启用；在表格里打开开关并配置参数后生效。
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="addStockDialog = false">取消</v-btn>
+          <v-btn
+            color="primary"
+            :disabled="!newStockSymbol || !newStockStrategy"
+            @click="addStockWithStrategy"
+          >
+            添加
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <v-dialog v-model="paramsDialog" max-width="1200">
       <v-card>
@@ -467,7 +517,7 @@ import { VExpansionPanels, VExpansionPanel, VExpansionPanelTitle, VExpansionPane
 import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies } from '../api/user'
 import { getTraderPositions } from '../api/trader'
 import request from '../utils/request'
-import { mdiViewColumn, mdiViewList, mdiCog, mdiInformation, mdiLock, mdiClockOutline, mdiCalendarMonth } from '@mdi/js'
+import { mdiViewColumn, mdiViewList, mdiCog, mdiInformation, mdiLock, mdiClockOutline, mdiCalendarMonth, mdiPlus } from '@mdi/js'
 
 // ============================================================================
 // State Management
@@ -546,6 +596,11 @@ const editingParams = ref({})  // For table editing
 // Sizing fields shared by every strategy: notional = capital × pct.
 const accountCapital = ref(1000000)
 const positionPct = ref(0.3)
+// Add a stock straight from the strategy page; the backend adds it to the
+// watchlist automatically when the first strategy is written.
+const addStockDialog = ref(false)
+const newStockSymbol = ref('')
+const newStockStrategy = ref('')
 // Cap the shares this strategy manages. 0 = the whole broker position.
 // Mainly used by exit_monitor to watch a sleeve of a personal holding.
 const managedShares = ref(0)
@@ -848,6 +903,35 @@ async function toggleStrategyDetailed(item) {
   const compactRow = rows.value.find(r => r.symbol === item.symbol)
   if (compactRow?.strategies[item.strategy_key]) {
     compactRow.strategies[item.strategy_key].enabled = item.enabled
+  }
+}
+
+function openAddStock() {
+  newStockSymbol.value = ''
+  newStockStrategy.value = strategyOptions.value[0]?.key || ''
+  addStockDialog.value = true
+}
+
+async function addStockWithStrategy() {
+  const symbol = normalizeSymbol(newStockSymbol.value)
+  const fam = strategyFamilies.value.find(f => f.key === newStockStrategy.value)
+  const strategyKey = fam?.cadences.minute || Object.values(fam?.cadences || {})[0]
+  if (!symbol || !strategyKey) return
+
+  try {
+    // The backend auto-adds the symbol to the watchlist when a strategy is set.
+    await setWatchlistStrategy({
+      symbol,
+      strategy: strategyKey,
+      params: {},
+      enabled: false,
+    })
+    addStockDialog.value = false
+    dataSource.value = 'watchlist'
+    await loadData()
+  } catch (err) {
+    console.error('Failed to add stock:', err)
+    alert('添加股票失败，请检查代码或重试')
   }
 }
 
