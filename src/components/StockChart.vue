@@ -490,15 +490,21 @@ function renderMinute() {
   if (!minuteBars.value.length) { chartInstance.clear(); return; }
   tooltipRows = minuteBars.value
   const times = tooltipRows.map(b => minuteAxisLabel(b.trade_date))
-  const option = getBaseOption(times)
+  const hasVol = tooltipRows.some((row) => volumeInHands(row) != null)
+  const hasAmt = tooltipRows.some((row) => amountInYuan(row) != null)
+  const option = getBaseOption(times, { hasVol, hasAmt })
   option.series = [{
     name: 'K线',
     type: 'candlestick',
+    xAxisIndex: 0,
+    yAxisIndex: 0,
     data: toCandleItems(tooltipRows),
     legendHoverLink: false,
     label: { show: true, position: 'top', fontSize: 10, hideOverlap: true },
     itemStyle: candlestickItemStyle(),
   }]
+  if (hasVol) option.series.push(volumeBarSeries(tooltipRows, 1))
+  if (hasAmt) option.series.push(amountBarSeries(tooltipRows, hasVol ? 2 : 1))
   chartInstance.setOption(option, true)
 }
 
@@ -529,15 +535,21 @@ function renderDaily() {
   const closes = data.map(r => Number.isFinite(Number(r.close)) ? Number(r.close) : null)
   const showGs = decisionGsEnabled.value && data.some((r) => r.mj20 != null)
   const gsSeries = showGs ? buildDecisionGsChartSeries(data, axisFmt) : []
+  const hasVol = data.some((row) => volumeInHands(row) != null)
+  const hasAmt = data.some((row) => amountInYuan(row) != null)
   const option = getBaseOption(times, {
     legendData: showGs ? ['决策线', '牛线', '熊线'] : ['MA55', 'MA233'],
+    hasVol,
+    hasAmt,
   })
   tooltipRows = data
-  
+
   option.series = [
     {
       name: 'K线',
       type: 'candlestick',
+      xAxisIndex: 0,
+      yAxisIndex: 0,
       data: toCandleItems(data),
       legendHoverLink: false,
       label: { show: true, position: 'top', fontSize: 10, hideOverlap: true },
@@ -577,6 +589,8 @@ function renderDaily() {
       }
     )
   }
+  if (hasVol) option.series.push(volumeBarSeries(data, 1))
+  if (hasAmt) option.series.push(amountBarSeries(data, hasVol ? 2 : 1))
 
   // 3. Restore or calculate new dataZoom state
   const newDataLength = data.length;
@@ -650,6 +664,7 @@ function formatStockChartTooltip(params) {
     lines.push(
       `开 ${formatChartNum2(row.open)}　收 ${formatChartNum2(row.close)}${pctHtml}<br/>低 ${formatChartNum2(row.low)}　高 ${formatChartNum2(row.high)}`
     )
+    lines.push(`量 ${formatVolumeHands(volumeInHands(row))}　额 ${formatTurnoverYuan(amountInYuan(row))}`)
   }
   for (const p of params) {
     if (p.seriesName === 'K线') continue
@@ -669,9 +684,180 @@ function formatStockChartTooltip(params) {
   return `<div class="k-tip"><strong>${date}</strong><br/>${lines.join('<br/>')}</div>`
 }
 
-function getBaseOption(xData, { legendData } = {}) {
+function finiteOrNull(raw) {
+  if (raw === null || raw === undefined || raw === '') return null
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : null
+}
+
+function volumeInHands(row) {
+  const n = finiteOrNull(row?.vol ?? row?.volume)
+  if (n == null) return null
+  const unit = String(row?.volume_unit || 'hands').toLowerCase()
+  return (unit === 'shares' || unit === 'share') ? n / 100 : n
+}
+
+function amountInYuan(row) {
+  const n = finiteOrNull(row?.amount)
+  if (n == null) return null
+  const fallback = (isOneDayMinute.value || isIntradayGs.value) ? 'yuan' : 'qian_yuan'
+  const unit = String(row?.amount_unit || fallback).toLowerCase()
+  if (unit === 'qian_yuan') return n * 1000
+  if (unit === 'wan_yuan') return n * 10000
+  return n
+}
+
+function compactVolumeLabel(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return ''
+  if (Math.abs(n) >= 100000000) return `${(n / 100000000).toFixed(1)}亿`
+  if (Math.abs(n) >= 10000) return `${(n / 10000).toFixed(1)}万`
+  return `${n.toFixed(0)}`
+}
+
+function compactAmountYiLabel(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return ''
+  if (Math.abs(n) > 0 && Math.abs(n) < 0.01) return n.toFixed(4)
+  if (Math.abs(n) < 0.1) return n.toFixed(3)
+  return n.toFixed(2)
+}
+
+function formatVolumeHands(value) {
+  if (!Number.isFinite(value)) return '-'
+  if (Math.abs(value) >= 100000000) return `${(value / 100000000).toFixed(2)}亿手`
+  if (Math.abs(value) >= 10000) return `${(value / 10000).toFixed(2)}万手`
+  return `${value.toFixed(0)}手`
+}
+
+function formatTurnoverYuan(value) {
+  if (!Number.isFinite(value)) return '-'
+  if (Math.abs(value) >= 100000000) return `${(value / 100000000).toFixed(2)}亿`
+  if (Math.abs(value) >= 10000) return `${(value / 10000).toFixed(2)}万`
+  return `${value.toFixed(0)}元`
+}
+
+function barColor(row) {
+  const colors = candleLabelColors()
+  return Number(row?.close) >= Number(row?.open) ? colors.up : colors.down
+}
+
+function volumeBarSeries(rows, axisIndex) {
+  return {
+    name: '成交量',
+    type: 'bar',
+    xAxisIndex: axisIndex,
+    yAxisIndex: axisIndex,
+    data: rows.map((row) => ({
+      value: volumeInHands(row),
+      itemStyle: { color: barColor(row) },
+    })),
+    barMaxWidth: 8,
+    barMinHeight: 2,
+  }
+}
+
+function amountBarSeries(rows, axisIndex) {
+  return {
+    name: '成交额',
+    type: 'bar',
+    xAxisIndex: axisIndex,
+    yAxisIndex: axisIndex,
+    data: rows.map((row) => {
+      const yuan = amountInYuan(row)
+      return { value: yuan == null ? null : yuan / 100000000 }
+    }),
+    itemStyle: { color: 'rgba(100, 181, 246, 0.65)' },
+    barMaxWidth: 8,
+    barMinHeight: 2,
+  }
+}
+
+function getBaseOption(xData, { legendData, hasVol = false, hasAmt = false } = {}) {
   const isDark = theme.value === 'dark'
   const names = Array.isArray(legendData) ? legendData.filter(Boolean) : []
+  const axisColor = isDark ? '#444c56' : '#d1d5da'
+  const labelColor = isDark ? '#768390' : '#586069'
+  const splitColor = isDark ? '#2d333b' : '#eaecef'
+  const top = names.length ? 40 : 28
+  const grid = []
+  const xAxis = []
+  const yAxis = []
+  const priceAxis = {
+    type: 'value',
+    gridIndex: 0,
+    scale: true,
+    splitLine: { lineStyle: { color: splitColor } },
+    axisLabel: { color: labelColor, fontSize: 11, formatter: formatKlinePriceLabel },
+    axisPointer: { label: { formatter: (p) => formatKlinePriceLabel(p?.value) } },
+  }
+  const mainXAxis = {
+    type: 'category',
+    data: xData,
+    gridIndex: 0,
+    axisLine: { lineStyle: { color: axisColor } },
+    axisTick: { show: false },
+    axisLabel: { color: labelColor, fontSize: 11 },
+  }
+
+  if (!hasVol && !hasAmt) {
+    grid.push({ left: '50', right: '20', top, bottom: '20' })
+    xAxis.push(mainXAxis)
+    yAxis.push(priceAxis)
+  } else {
+    const volIndex = hasVol ? 1 : -1
+    const amtIndex = hasAmt ? (hasVol ? 2 : 1) : -1
+    if (hasVol && hasAmt) {
+      grid.push({ left: '50', right: '20', top, height: '52%' })
+      grid.push({ left: '50', right: '20', top: '60%', height: '15%' })
+      grid.push({ left: '50', right: '20', top: '78%', height: '14%' })
+    } else {
+      grid.push({ left: '50', right: '20', top, height: '60%' })
+      grid.push({ left: '50', right: '20', top: '68%', height: '20%' })
+    }
+    xAxis.push(mainXAxis)
+    yAxis.push(priceAxis)
+    for (let i = 1; i < grid.length; i += 1) {
+      const isBottom = i === grid.length - 1
+      xAxis.push({
+        type: 'category',
+        data: xData,
+        gridIndex: i,
+        axisLine: { lineStyle: { color: axisColor } },
+        axisTick: { show: false },
+        axisLabel: isBottom ? { color: labelColor, fontSize: 11 } : { show: false },
+      })
+    }
+    if (hasVol) {
+      yAxis.push({
+        type: 'value',
+        gridIndex: volIndex,
+        scale: true,
+        name: '量(手)',
+        nameLocation: 'end',
+        nameGap: 0,
+        nameTextStyle: { color: labelColor, fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
+        axisLabel: { color: labelColor, fontSize: 10, formatter: compactVolumeLabel },
+        axisPointer: { label: { formatter: (p) => compactVolumeLabel(p?.value) } },
+        splitLine: { lineStyle: { color: splitColor } },
+      })
+    }
+    if (hasAmt) {
+      yAxis.push({
+        type: 'value',
+        gridIndex: amtIndex,
+        scale: true,
+        name: '额(亿)',
+        nameLocation: 'end',
+        nameGap: 0,
+        nameTextStyle: { color: labelColor, fontSize: 10, align: 'left', padding: [2, 0, 0, 4] },
+        axisLabel: { color: labelColor, fontSize: 10, formatter: compactAmountYiLabel },
+        axisPointer: { label: { formatter: (p) => compactAmountYiLabel(p?.value) } },
+        splitLine: { lineStyle: { color: splitColor } },
+      })
+    }
+  }
+
   return {
     backgroundColor: 'transparent',
     title: { show: false },
@@ -700,20 +886,11 @@ function getBaseOption(xData, { legendData } = {}) {
       },
       formatter: formatStockChartTooltip
     },
-    grid: { left: '50', right: '20', top: names.length ? 40 : 28, bottom: '20' },
-    xAxis: { 
-      type: 'category', 
-      data: xData, 
-      axisLine: { lineStyle: { color: isDark ? '#444c56' : '#d1d5da' } }, 
-      axisLabel: { color: isDark ? '#768390' : '#586069', fontSize: 11 } 
-    },
-    yAxis: { 
-      scale: true, 
-      splitLine: { lineStyle: { color: isDark ? '#2d333b' : '#eaecef' } }, 
-      axisLabel: { color: isDark ? '#768390' : '#586069', fontSize: 11, formatter: formatKlinePriceLabel },
-      axisPointer: { label: { formatter: (p) => formatKlinePriceLabel(p?.value) } }
-    },
-    dataZoom: [{ type: 'inside' }],
+    axisPointer: { link: [{ xAxisIndex: 'all' }] },
+    grid,
+    xAxis,
+    yAxis,
+    dataZoom: [{ type: 'inside', xAxisIndex: xAxis.map((_, index) => index) }],
     animation: false
   }
 }
