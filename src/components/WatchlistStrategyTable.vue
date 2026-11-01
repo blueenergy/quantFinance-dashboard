@@ -1011,14 +1011,27 @@ function syncJsonToTable() {
 
 function loadPresetsForStrategy(strategyKey) {
   const templates = strategyTemplates.value[strategyKey] || []
-  availablePresets.value = templates.map(t => ({
-    preset: t.preset,
-    label: t.is_default ? `${t.preset} - 默认 (${t.description || ''})` : `${t.preset} - ${t.description}`,
-    description: t.description,
-    params: t.params,
-    params_with_desc: t.params_with_desc,  // Include descriptions
-    is_default: !!t.is_default,
-  }))
+  availablePresets.value = templates.map(t => {
+    // strategy_template stores params_with_desc ({value, description}).
+    // Older rows may have a flat params object; prefer it when non-empty.
+    const descParams = t.params_with_desc || {}
+    const extracted = Object.fromEntries(
+      Object.entries(descParams).map(([key, info]) => [
+        key,
+        info && typeof info === 'object' && 'value' in info ? info.value : info,
+      ])
+    )
+    const params =
+      t.params && Object.keys(t.params).length > 0 ? t.params : extracted
+    return {
+      preset: t.preset,
+      label: t.is_default ? `${t.preset} - 默认 (${t.description || ''})` : `${t.preset} - ${t.description}`,
+      description: t.description,
+      params,
+      params_with_desc: t.params_with_desc,  // Include descriptions
+      is_default: !!t.is_default,
+    }
+  })
   selectedPreset.value = null
 }
 
