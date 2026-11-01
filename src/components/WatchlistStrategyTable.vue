@@ -644,9 +644,11 @@ const detailedHeaders = [
 ]
 
 const selectedPresetObj = computed(() => {
-  if (!selectedPreset.value || !editingStrategy.value) return null
-  const templates = strategyTemplates.value[editingStrategy.value] || []
-  return templates.find(t => t.preset === selectedPreset.value)
+  // Look in availablePresets (already normalized by loadPresetsForStrategy),
+  // not strategyTemplates: template docs store params in params_with_desc and
+  // have no flat params field, so the raw doc's .params is undefined.
+  if (!selectedPreset.value) return null
+  return availablePresets.value.find(t => t.preset === selectedPreset.value) || null
 })
 
 const selectedPresetParams = computed(() => 
