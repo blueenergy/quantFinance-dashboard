@@ -291,6 +291,17 @@
               hide-details
               style="max-width: 200px;"
             />
+            <v-text-field
+              v-model.number="managedShares"
+              type="number"
+              density="compact"
+              variant="outlined"
+              label="管理数量 managed_shares（0=全部）"
+              :min="0"
+              :step="100"
+              hide-details
+              style="max-width: 260px;"
+            />
             <div class="sizing-hint">
               每笔约 <b>¥{{ perTradeNotionalText }}</b> 名义资金
               <div v-if="!positionPctValid" class="sizing-warn">
@@ -515,6 +526,9 @@ const editingParams = ref({})  // For table editing
 // Sizing fields shared by every strategy: notional = capital × pct.
 const accountCapital = ref(1000000)
 const positionPct = ref(0.3)
+// Cap the shares this strategy manages. 0 = the whole broker position.
+// Mainly used by exit_monitor to watch a sleeve of a personal holding.
+const managedShares = ref(0)
 const perTradeNotional = computed(() => Number(accountCapital.value) * Number(positionPct.value))
 const perTradeNotionalText = computed(() => {
   const v = perTradeNotional.value
@@ -845,6 +859,7 @@ function openParams(item, familyKey) {
   editingParams.value = { ...params }  // Initialize table editing
   accountCapital.value = Number(params.account_capital ?? 1000000)
   positionPct.value = Number(params.position_pct ?? 0.3)
+  managedShares.value = Number(params.managed_shares ?? 0)
   loadPresetsForStrategy(entry.activeKey)
   paramsDialog.value = true
 }
@@ -858,6 +873,7 @@ function openParamsDetailed(item) {
   editingParams.value = { ...params }  // Initialize table editing
   accountCapital.value = Number(params.account_capital ?? 1000000)
   positionPct.value = Number(params.position_pct ?? 0.3)
+  managedShares.value = Number(params.managed_shares ?? 0)
   loadPresetsForStrategy(item.strategy_key)
   paramsDialog.value = true
 }
@@ -909,6 +925,12 @@ async function saveParams() {
     }
     if (positionPctValid.value) {
       params.position_pct = Number(positionPct.value)
+    }
+    const managed = Number(managedShares.value)
+    if (Number.isFinite(managed) && managed > 0) {
+      params.managed_shares = Math.round(managed)
+    } else {
+      delete params.managed_shares
     }
 
     if (!editingRow.value || !editingStrategy.value) return
