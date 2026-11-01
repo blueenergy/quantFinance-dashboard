@@ -722,11 +722,11 @@ function hasStrategyConfig(strategies) {
 // ============================================================================
 
 async function loadData() {
-  const [wl, stratResp, avail, stocksResp, templatesResp, profileResp] = await Promise.all([
+  const [wl, stratResp, avail, positions, templatesResp, profileResp] = await Promise.all([
     getWatchlist(),
     getWatchlistStrategies(),
     getAvailableStrategies(),
-    request({ url: '/user/watchlist-stocks', method: 'get' }),
+    dataSource.value === 'positions' ? getTraderPositions() : Promise.resolve([]),
     request({ url: '/strategy/templates', method: 'get' }),
     request({ url: '/user/profile', method: 'get' }).catch(() => null),
   ])
@@ -763,11 +763,21 @@ async function loadData() {
   // holdings (deduped); strategy configs still match by symbol.
   let activeSymbols = wl?.data?.symbols || []
   if (dataSource.value === 'positions') {
-    const positions = await getTraderPositions()
     activeSymbols = [...new Set(
-      positions.map(p => normalizeSymbol(p.symbol)).filter(Boolean)
+      (positions || []).map(p => normalizeSymbol(p.symbol)).filter(Boolean)
     )]
   }
+
+  // Names come from /watchlist-stocks, which normally only walks the
+  // watchlist; pass the holdings explicitly so they get names too.
+  const stocksResp = await request({
+    url: '/user/watchlist-stocks',
+    method: 'get',
+    params: dataSource.value === 'positions' && activeSymbols.length
+      ? { symbols: activeSymbols.join(',') }
+      : undefined,
+  })
+
   const symbolStrategyMap = buildStrategyMap(stratResp?.data || [])
   const symbolNameMap = buildNameMap(stocksResp?.data || [])
 
