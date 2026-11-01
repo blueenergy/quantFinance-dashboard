@@ -3,7 +3,21 @@
     <v-card>
       <v-card-title>
         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-          <span>自选股策略配置 ({{ viewMode === 'compact' ? '横向视图' : '详细视图' }})</span>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <v-btn-toggle
+              v-model="dataSource"
+              mandatory
+              density="compact"
+              @update:model-value="loadData"
+            >
+              <v-btn value="watchlist" size="small">自选股</v-btn>
+              <v-btn value="positions" size="small">持仓</v-btn>
+            </v-btn-toggle>
+            <span>
+              {{ dataSource === 'positions' ? '持仓股策略配置' : '自选股策略配置' }}
+              ({{ viewMode === 'compact' ? '横向视图' : '详细视图' }})
+            </span>
+          </div>
           <div>
             <v-btn 
               :variant="viewMode === 'compact' ? 'flat' : 'outlined'"
@@ -451,12 +465,18 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { VExpansionPanels, VExpansionPanel, VExpansionPanelTitle, VExpansionPanelText } from 'vuetify/components'
 import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies } from '../api/user'
+import { getTraderPositions } from '../api/trader'
 import request from '../utils/request'
 import { mdiViewColumn, mdiViewList, mdiCog, mdiInformation, mdiLock, mdiClockOutline, mdiCalendarMonth } from '@mdi/js'
 
 // ============================================================================
 // State Management
 // ============================================================================
+
+// Row source: the user's watchlist or the broker's current holdings.
+// Strategy configs are keyed by symbol, so switching source keeps existing
+// configs visible for any symbol present in both.
+const dataSource = ref('watchlist')
 
 // Strategy metadata
 const strategyOptions = ref([])
@@ -684,14 +704,21 @@ async function loadData() {
     }
   })
   
-  // Build data maps
-  const watchlistSymbols = wl?.data?.symbols || []
+  // Build data maps. In positions mode the rows come from the broker's
+  // holdings (deduped); strategy configs still match by symbol.
+  let activeSymbols = wl?.data?.symbols || []
+  if (dataSource.value === 'positions') {
+    const positions = await getTraderPositions()
+    activeSymbols = [...new Set(
+      positions.map(p => normalizeSymbol(p.symbol)).filter(Boolean)
+    )]
+  }
   const symbolStrategyMap = buildStrategyMap(stratResp?.data || [])
   const symbolNameMap = buildNameMap(stocksResp?.data || [])
-  
+
   // Build view data
-  rows.value = buildCompactViewData(watchlistSymbols, symbolStrategyMap, symbolNameMap)
-  detailedRows.value = buildDetailedViewData(watchlistSymbols, symbolStrategyMap, symbolNameMap)
+  rows.value = buildCompactViewData(activeSymbols, symbolStrategyMap, symbolNameMap)
+  detailedRows.value = buildDetailedViewData(activeSymbols, symbolStrategyMap, symbolNameMap)
 }
 
 function buildStrategyMap(strategies) {
