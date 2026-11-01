@@ -134,6 +134,7 @@ import {
   formatChartNum2,
   formatPctChange,
   pctChangeColor,
+  prevCloseForCompactDay,
 } from '../utils/klineTooltip.js'
 
 const props = defineProps({
@@ -202,7 +203,10 @@ const latestDayPct = computed(() => {
     : (Array.isArray(props.records) ? props.records : [])
   if (!rows.length) return null
   const last = rows[rows.length - 1]
-  return dayChangePctForBar(last, rows.length - 1, rows, props.records)
+  if (isOneDayMinute.value || isIntradayGs.value) {
+    return dayChangeFromDaily(last)
+  }
+  return dayChangePctForBar(last, rows.length - 1, rows, dailyRowsForSymbol())
 })
 const dataCountLabel = computed(() => {
   if (isOneDayMinute.value) return `${minuteBars.value.length} 条分时`
@@ -454,11 +458,37 @@ function candleLabelColors() {
   }
 }
 
+function symbolCode(value) {
+  return String(value || '').split('.')[0].trim()
+}
+
+/** Keep daily rows only for the selected symbol; stale snapshot rows would
+ *  otherwise provide a "previous close" from a different stock. */
+function dailyRowsForSymbol() {
+  const rows = Array.isArray(props.records) ? props.records : []
+  const target = symbolCode(props.symbol)
+  if (!target) return rows
+  return rows.filter((row) => {
+    const code = symbolCode(row?.symbol || row?.ts_code)
+    return !code || code === target
+  })
+}
+
+/** Intraday label = 当天涨跌幅 vs 昨收. No fallback to the previous minute:
+ *  when daily rows are not loaded yet, no label is better than the wrong sign. */
+function dayChangeFromDaily(row) {
+  const prev = prevCloseForCompactDay(row?.trade_date, dailyRowsForSymbol())
+  return changePct(row?.close, prev)
+}
+
 function barChangePct(row, index, rows) {
   if (kType.value === 'week' || kType.value === 'month') {
     return changePct(row?.close, rows[index - 1]?.close)
   }
-  return dayChangePctForBar(row, index, rows, props.records)
+  if (isOneDayMinute.value || isIntradayGs.value) {
+    return dayChangeFromDaily(row)
+  }
+  return dayChangePctForBar(row, index, rows, dailyRowsForSymbol())
 }
 
 function toCandleItems(rows) {
@@ -981,6 +1011,12 @@ watch(() => props.symbol, (sym, prev) => {
   endDate.value = ''
   prevRecords = []
   prevSymbol = sym
+  if (kType.value === 'minute' || isIntradayGs.value) {
+    // Never keep the previous stock's intraday bars while the new fetch runs.
+    minuteBars.value = []
+    tooltipRows = []
+    chartInstance?.clear()
+  }
   if (kType.value === 'minute') {
     fetchMinuteData()
   } else if (isIntradayGs.value) {
@@ -989,7 +1025,12 @@ watch(() => props.symbol, (sym, prev) => {
 })
 
 watch(() => props.records, (newRecs) => {
-  if (isOneDayMinute.value || isIntradayGs.value) return
+  if (isOneDayMinute.value || isIntradayGs.value) {
+    // Daily 昨收 can land after the minute bars; redraw so labels/tooltip
+    // switch from "no prev close" to the correct day change.
+    if (minuteBars.value.length) drawChart()
+    return
+  }
   if (newRecs?.length) {
     applyVisibleWindow(newRecs)
   }
