@@ -6,6 +6,67 @@ vi.mock('../src/api/fundInventory', () => ({
     success: true,
     data: { periods: ['20260630'] },
   })),
+  getFundInventoryPairs: vi.fn(async () => ({
+    success: true,
+    data: {
+      pairs: [
+        {
+          period_curr: '20260630',
+          period_prev: '20251231',
+          comparison_scope: 'top10',
+          quality_status: 'official',
+        },
+      ],
+    },
+  })),
+  getFundInventoryComparison: vi.fn(async () => ({
+    success: true,
+    data: {
+      period_curr: '20260630',
+      period_prev: '20251231',
+      comparison_scope: 'top10',
+      quality_status: 'official',
+      totals: {
+        net_ex_price_yi: 50,
+        new_inflow_yi: 20,
+        incumbent_delta_yi: 30,
+        mv_price_effect_yi: 10,
+        stocks: 2,
+      },
+      state_counts: {
+        incumbent_strengthen: 1,
+        new_inventory: 1,
+        inventory_turnover: 0,
+        inventory_exit: 0,
+      },
+      industries: [
+        {
+          industry: '电子',
+          net_ex_price_yi: 50,
+          new_inflow_yi: 20,
+          incumbent_delta_yi: 30,
+          stocks: 2,
+        },
+      ],
+      top: {
+        new_inventory: [
+          {
+            ts_code: '688256.SH',
+            name: '寒武纪',
+            net_ex_price_yi: 20,
+            new_inflow_yi: 20,
+            incumbent_delta_yi: 0,
+          },
+        ],
+        inventory_exit: [],
+        incumbent_strengthen: [],
+        inventory_turnover: [],
+      },
+      caveats: ['季报口径：两期均按前十大持仓对齐'],
+    },
+  })),
+  triggerFundInventoryReview: vi.fn(),
+  getAnalysisTask: vi.fn(),
   getFundInventorySnapshots: vi.fn(async () => ({
     success: true,
     data: {
@@ -97,6 +158,11 @@ describe('FundInventoryBoard', () => {
     expect(wrapper.text()).toContain('+789.00 亿')
     expect(wrapper.text()).toContain('前十大强化 1')
     expect(wrapper.find('.symbol-link').exists()).toBe(true)
+    expect(wrapper.text()).toContain('季度对比')
+    expect(wrapper.text()).toContain('20260630 vs 20251231')
+    expect(wrapper.text()).toContain('+50.00 亿')
+    expect(wrapper.text()).toContain('季报口径')
+    expect(wrapper.text()).toContain('寒武纪')
 
     await wrapper.get('.metric-help-button').trigger('click')
     expect(wrapper.get('[role="dialog"]').text()).toContain('净增减 = 表面市值变化 − 股价贡献')
