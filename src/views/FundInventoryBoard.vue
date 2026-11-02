@@ -768,6 +768,28 @@ onBeforeUnmount(() => {
   font-size: 12px;
   gap: 6px;
 }
+.filters select,
+.pair-select select {
+  background-color: #0f172a;
+  border: 1px solid rgba(148, 163, 184, .4);
+  border-radius: 8px;
+  color: #e2e8f0;
+  color-scheme: dark;
+  cursor: pointer;
+  font: inherit;
+  padding: 6px 10px;
+}
+.filters select option,
+.pair-select select option {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+.filters select:focus,
+.pair-select select:focus {
+  border-color: #60a5fa;
+  outline: 2px solid rgba(96, 165, 250, .35);
+  outline-offset: 1px;
+}
 .quality-card {
   border-color: rgba(52, 211, 153, .35);
   margin-bottom: 12px;
