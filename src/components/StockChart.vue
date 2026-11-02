@@ -17,6 +17,7 @@
         <span
           v-if="latestDayPct != null"
           class="day-pct"
+          title="当日涨跌幅（相对昨收）"
           :style="{ color: pctChangeColor(latestDayPct) }"
         >{{ formatPctChange(latestDayPct) }}</span>
         <span v-if="showGsToolbar && decisionGsEnabled && decisionGsSummary" class="gs-summary">{{ decisionGsSummary }}</span>
@@ -128,6 +129,7 @@ import {
 } from '../utils/chartVisibleWindow.js'
 import { loadEcharts } from '../utils/echarts/loadEcharts.js'
 import {
+  barChangePctForSeries,
   changePct,
   compactYmd,
   dayChangePctForBar,
@@ -474,19 +476,16 @@ function dailyRowsForSymbol() {
   })
 }
 
-/** Intraday label = 当天涨跌幅 vs 昨收. No fallback to the previous minute:
- *  when daily rows are not loaded yet, no label is better than the wrong sign. */
+/** Header only: the stock's day change vs 昨收, not a K-line period change. */
 function dayChangeFromDaily(row) {
   const prev = prevCloseForCompactDay(row?.trade_date, dailyRowsForSymbol())
   return changePct(row?.close, prev)
 }
 
 function barChangePct(row, index, rows) {
-  if (kType.value === 'week' || kType.value === 'month') {
-    return changePct(row?.close, rows[index - 1]?.close)
-  }
-  if (isOneDayMinute.value || isIntradayGs.value) {
-    return dayChangeFromDaily(row)
+  if (isOneDayMinute.value || isIntradayGs.value
+    || kType.value === 'week' || kType.value === 'month') {
+    return barChangePctForSeries(row, index, rows)
   }
   return dayChangePctForBar(row, index, rows, dailyRowsForSymbol())
 }

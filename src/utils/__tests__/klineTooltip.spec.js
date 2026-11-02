@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  barChangePctForSeries,
   changePct,
   compactYmd,
   dayChangePctForBar,
@@ -33,6 +34,17 @@ describe('klineTooltip', () => {
     expect(formatPctChange(3.875)).toBe('+3.88%')
     expect(formatPctChange(-1.2)).toBe('-1.20%')
     expect(formatPctChange(0)).toBe('0.00%')
+  })
+
+  it('computes intraday bar change from the previous bar close', () => {
+    const series = [
+      { trade_date: '202609081400', close: 66.00 },
+      { trade_date: '202609081430', close: 66.48 },
+    ]
+    // (66.48 - 66.00) / 66.00 = +0.727%
+    expect(barChangePctForSeries(series[1], 1, series)).toBeCloseTo(0.727, 3)
+    // first bar of the series has no previous bar -> no label
+    expect(barChangePctForSeries(series[0], 0, series)).toBeNull()
   })
 
   it('computes 当天涨跌幅 from daily 昨收 for a 60m bar', () => {

@@ -62,6 +62,16 @@ export function dayChangePctForBar(row, index, seriesRows, dailyRows) {
   return changePct(close, prev)
 }
 
+/** K-line period change: close vs the immediately previous bar's close.
+ *  This is what a 1m/30m/60m candle label means — not the daily 昨收 change.
+ *  The first bar of a series has no previous bar, so it returns null.
+ */
+export function barChangePctForSeries(row, index, seriesRows) {
+  if (!Number.isInteger(index) || index <= 0) return null
+  const rows = Array.isArray(seriesRows) ? seriesRows : []
+  return changePct(row?.close, rows[index - 1]?.close)
+}
+
 export function formatPctChange(pct) {
   const n = finitePrice(pct)
   if (n == null) return ''
