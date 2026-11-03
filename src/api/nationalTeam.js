@@ -15,3 +15,11 @@ export function getNationalTeamCurve(params = {}) {
     params,
   })
 }
+
+export function getNationalTeamDates(params = {}) {
+  return request({
+    url: '/etf/national-team/dates',
+    method: 'get',
+    params,
+  })
+}

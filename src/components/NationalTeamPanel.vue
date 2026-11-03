@@ -10,6 +10,16 @@
         </span>
       </div>
       <div class="toolbar-right">
+        <span class="toolbar-label">日期</span>
+        <select
+          v-model="selectedDate"
+          class="date-select"
+          title="选择历史交易日"
+          @change="onDateChange"
+        >
+          <option value="">最新</option>
+          <option v-for="d in dates" :key="d" :value="d">{{ fmtDate(d) }}</option>
+        </select>
         <span class="toolbar-label">时点</span>
         <button
           v-for="opt in asOfOptions"
@@ -152,7 +162,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { getNationalTeamCurve, getNationalTeamSnapshot } from '../api/nationalTeam'
+import { getNationalTeamCurve, getNationalTeamDates, getNationalTeamSnapshot } from '../api/nationalTeam'
 import { loadEcharts } from '../utils/echarts/loadEcharts.js'
 
 const asOfOptions = [
@@ -168,6 +178,8 @@ const loading = ref(false)
 const error = ref('')
 const snapshot = ref(null)
 const curve = ref(null)
+const dates = ref([])
+const selectedDate = ref('')
 const selectedCode = ref('510300.SH')
 const asOf = ref('')
 const chartRef = ref(null)
@@ -374,6 +386,7 @@ async function loadCurve() {
   if (!selectedCode.value) return
   const params = { code: selectedCode.value }
   if (asOf.value) params.as_of = asOf.value
+  if (selectedDate.value) params.trade_date = selectedDate.value
   curve.value = await getNationalTeamCurve(params)
   await nextTick()
   await ensureChart()
@@ -386,6 +399,7 @@ async function loadSnapshot() {
   try {
     const params = {}
     if (asOf.value) params.as_of = asOf.value
+    if (selectedDate.value) params.trade_date = selectedDate.value
     const data = await getNationalTeamSnapshot(params)
     snapshot.value = data
     const rows = data?.etfs || []
@@ -409,6 +423,20 @@ function setAsOf(value) {
   loadSnapshot()
 }
 
+function onDateChange() {
+  loadSnapshot()
+}
+
+async function loadDates() {
+  try {
+    const body = await getNationalTeamDates({ limit: 60 })
+    dates.value = Array.isArray(body?.dates) ? body.dates : []
+  } catch (exc) {
+    // Keep the "最新" option usable even if the date list endpoint is down.
+    dates.value = []
+  }
+}
+
 async function selectEtf(code) {
   if (!code || code === selectedCode.value) return
   selectedCode.value = code
@@ -422,13 +450,14 @@ async function selectEtf(code) {
 function setupTimer() {
   if (refreshTimer) clearInterval(refreshTimer)
   refreshTimer = setInterval(() => {
-    if (!asOf.value) loadSnapshot()
+    if (!asOf.value && !selectedDate.value) loadSnapshot()
   }, 30000)
 }
 
 onMounted(async () => {
   await nextTick()
   await ensureChart()
+  await loadDates()
   await loadSnapshot()
   setupTimer()
 })
@@ -487,6 +516,16 @@ onBeforeUnmount(() => {
 .toolbar-label {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.date-select {
+  max-width: 142px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-color);
+  font-size: 12px;
 }
 
 .asof-btn,
