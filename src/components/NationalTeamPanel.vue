@@ -45,6 +45,9 @@
           <span class="card-sub">
             {{ fmtYi(snapshot.pool?.amount_yuan) }} / {{ fmtYi(snapshot.pool?.baseline_yuan) }}
           </span>
+          <span class="card-sub">
+            较昨 {{ fmtRatio(snapshot.pool?.prev_day_ratio) }} · 较5日 {{ fmtRatio(snapshot.pool?.avg5_ratio) }}
+          </span>
         </div>
         <div class="summary-card">
           <span class="card-label">放量广度</span>
@@ -87,7 +90,7 @@
               <th class="num">现价</th>
               <th class="num">涨跌</th>
               <th class="num">今日成交额</th>
-              <th class="num">同一时刻量比</th>
+              <th class="num">量比（20日 / 昨 / 5日）</th>
               <th class="num">尾盘占比</th>
               <th class="num">份额日变</th>
               <th class="num">份额 5 日</th>
@@ -109,7 +112,10 @@
               <td class="num">{{ fmtPrice(etf.price) }}</td>
               <td class="num" :class="valueClass(etf.pct_chg)">{{ fmtPct(etf.pct_chg) }}</td>
               <td class="num">{{ fmtYi(etf.amount_yuan) }}</td>
-              <td class="num ratio" :class="ratioClass(etf.ratio)">{{ fmtRatio(etf.ratio) }}</td>
+              <td class="num ratio-cell">
+                <div class="ratio-main ratio" :class="ratioClass(etf.ratio)">{{ fmtRatio(etf.ratio) }}</div>
+                <div class="ratio-sub">昨 {{ fmtRatio(etf.prev_day_ratio) }} · 5日 {{ fmtRatio(etf.avg5_ratio) }}</div>
+              </td>
               <td class="num">{{ fmtPct(etf.tail_share) }}</td>
               <td class="num" :class="valueClass(etf.share_chg_1d)">{{ fmtPct(etf.share_chg_1d) }}</td>
               <td class="num" :class="valueClass(etf.share_chg_5d)">{{ fmtPct(etf.share_chg_5d) }}</td>
@@ -134,8 +140,9 @@
       </div>
 
       <div class="footnote">
-        量比 = 今日同一时刻累计成交额 / 过去 20 个交易日同一时刻中位数；尾盘只统计 14:30 之后。
-        份额为 T+1 的基金份额变化；持有人为 2025 年报前十名，不是实时持仓。
+        量比主值 = 今日同一时刻累计成交额 / 过去 20 个交易日同一时刻中位数；下方为较昨日、较 5 日均。
+        20 日中位数会被低量日拉低，和同花顺的「今天 / 昨天」不是同一个口径。
+        尾盘只统计 14:30 之后；份额为 T+1 的基金份额变化；持有人为 2025 年报前十名，不是实时持仓。
         数据源：QMT 1m bars + Tushare fund_share。
       </div>
     </template>
@@ -656,6 +663,21 @@ onBeforeUnmount(() => {
 
 .down {
   color: #2e7d32;
+}
+
+.ratio-cell {
+  min-width: 104px;
+}
+
+.ratio-main {
+  font-weight: 600;
+}
+
+.ratio-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .ratio.hot {
