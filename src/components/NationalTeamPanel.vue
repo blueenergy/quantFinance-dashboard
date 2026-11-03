@@ -142,6 +142,7 @@
       <div class="footnote">
         量比主值 = 今日同一时刻累计成交额 / 过去 20 个交易日同一时刻中位数；下方为较昨日、较 5 日均。
         20 日中位数会被低量日拉低，和同花顺的「今天 / 昨天」不是同一个口径。
+        图上浅灰点线为基线 p25 / p75，只作参考，不在图例里。
         尾盘只统计 14:30 之后；份额为 T+1 的基金份额变化；持有人为 2025 年报前十名，不是实时持仓。
         数据源：QMT 1m bars + Tushare fund_share。
       </div>
@@ -277,7 +278,7 @@ function drawChart() {
       },
       legend: {
         top: 0,
-        data: ['今日累计', '20 日基线', '基线 p25', '基线 p75', '价格'],
+        data: ['今日累计', '20 日基线', '价格'],
         textStyle: { color: '#64748b', fontSize: 11 },
       },
       grid: { left: 56, right: 58, top: 36, bottom: 30 },
@@ -311,6 +312,7 @@ function drawChart() {
           type: 'line',
           showSymbol: false,
           data: today,
+          itemStyle: { color: '#e53935' },
           lineStyle: { width: 2, color: '#e53935' },
           areaStyle: { color: 'rgba(229, 57, 53, 0.08)' },
           markLine: asOfIdx >= 0
@@ -328,20 +330,29 @@ function drawChart() {
           type: 'line',
           showSymbol: false,
           data: base,
+          itemStyle: { color: '#78909c' },
           lineStyle: { width: 1.5, color: '#78909c', type: 'dashed' },
         },
         {
           name: '基线 p25',
           type: 'line',
           showSymbol: false,
+          silent: true,
+          legendHoverLink: false,
+          tooltip: { show: false },
           data: p25,
+          itemStyle: { color: '#cbd5e1' },
           lineStyle: { width: 1, color: '#cbd5e1', type: 'dotted' },
         },
         {
           name: '基线 p75',
           type: 'line',
           showSymbol: false,
+          silent: true,
+          legendHoverLink: false,
+          tooltip: { show: false },
           data: p75,
+          itemStyle: { color: '#cbd5e1' },
           lineStyle: { width: 1, color: '#cbd5e1', type: 'dotted' },
         },
         {
@@ -350,6 +361,7 @@ function drawChart() {
           yAxisIndex: 1,
           showSymbol: false,
           data: price,
+          itemStyle: { color: '#1e88e5' },
           lineStyle: { width: 1.5, color: '#1e88e5' },
         },
       ],
