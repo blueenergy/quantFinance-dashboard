@@ -894,21 +894,21 @@ function buildDetailedViewData(symbols, strategyMap, nameMap) {
 
 async function toggleStrategy(item, familyKey) {
   const entry = item.strategies[familyKey]
+  // Omit params: the API merges params, and echoing a stale snapshot here could
+  // overwrite newer values. Only the enabled flag is meant to change.
   await setWatchlistStrategy({
     symbol: normalizeSymbol(item.symbol),
     strategy: entry.activeKey,
-    params: entry.params || {},
     enabled: entry.enabled
   })
 }
 
 
 async function toggleStrategyDetailed(item) {
-  await setWatchlistStrategy({ 
-    symbol: normalizeSymbol(item.symbol), 
-    strategy: item.strategy_key, 
-    params: item.params || {}, 
-    enabled: item.enabled 
+  await setWatchlistStrategy({
+    symbol: normalizeSymbol(item.symbol),
+    strategy: item.strategy_key,
+    enabled: item.enabled
   })
   
   // Sync with compact view
@@ -1071,6 +1071,9 @@ async function saveParams() {
   try {
     // Use editingParams (from table) as the source of truth
     const params = { ...editingParams.value }
+    // The API merges params; a key absent from `params` is kept unless it is
+    // listed here. Only the managed-shares field has an explicit "clear" action.
+    const deletedKeys = []
 
     // Sizing fields are edited outside the table; fold them back in.
     const capital = Number(accountCapital.value)
@@ -1085,6 +1088,7 @@ async function saveParams() {
       params.managed_shares = Math.round(managed)
     } else {
       delete params.managed_shares
+      deletedKeys.push('managed_shares')
     }
 
     if (!editingRow.value || !editingStrategy.value) return
@@ -1104,12 +1108,25 @@ async function saveParams() {
 
     if (targetKey !== editingStrategy.value) {
       // Cadence changed: stop the old key, start the new one with the same params.
+      // Omit params on the stop call so the old key's config is left untouched.
       if (wasEnabled) {
-        await setWatchlistStrategy({ symbol, strategy: editingStrategy.value, params, enabled: false })
+        await setWatchlistStrategy({ symbol, strategy: editingStrategy.value, enabled: false })
       }
-      await setWatchlistStrategy({ symbol, strategy: targetKey, params, enabled: wasEnabled })
+      await setWatchlistStrategy({
+        symbol,
+        strategy: targetKey,
+        params,
+        deleted_keys: deletedKeys,
+        enabled: wasEnabled
+      })
     } else {
-      await setWatchlistStrategy({ symbol, strategy: editingStrategy.value, params, enabled: wasEnabled })
+      await setWatchlistStrategy({
+        symbol,
+        strategy: editingStrategy.value,
+        params,
+        deleted_keys: deletedKeys,
+        enabled: wasEnabled
+      })
     }
 
     paramsDialog.value = false
