@@ -80,12 +80,12 @@
         <div v-for="group in groupedEvents" :key="group.date" class="day-group">
           <div class="day-title">
             <span class="day-date">{{ group.date }} <small>北京时间</small></span>
-            <span class="day-count">{{ group.items.length }} 条</span>
+            <span class="day-count">{{ group.total }} 条</span>
           </div>
 
           <div
-            v-for="ev in group.items"
-            :key="ev.id || ev.identity_key"
+            v-for="ev in group.units"
+            :key="ev._key || ev.id || ev.identity_key"
             class="event-item"
             :class="importanceClass(ev.importance)"
           >
@@ -149,6 +149,31 @@
 
             <div v-if="metricLine(ev)" class="metrics-line">
               {{ metricLine(ev) }}
+            </div>
+
+            <div v-if="ev._extras?.length" class="cluster-box">
+              <button
+                type="button"
+                class="cluster-toggle"
+                :aria-expanded="isClusterOpen(ev._key) ? 'true' : 'false'"
+                @click="toggleCluster(ev._key)"
+              >
+                <span class="cluster-badge">同批发布 {{ ev._extras.length + 1 }} 项</span>
+                <span class="cluster-hint">
+                  {{ isClusterOpen(ev._key) ? '收起' : `展开其余 ${ev._extras.length} 项` }}
+                </span>
+                <span class="cluster-chevron" :class="{ open: isClusterOpen(ev._key) }">▾</span>
+              </button>
+              <div v-if="isClusterOpen(ev._key)" class="cluster-members">
+                <div
+                  v-for="m in ev._extras"
+                  :key="m.id || m.identity_key"
+                  class="cluster-member"
+                >
+                  <span class="cluster-member-title">{{ m.title }}</span>
+                  <span v-if="metricLine(m)" class="cluster-member-metrics">{{ metricLine(m) }}</span>
+                </div>
+              </div>
             </div>
 
             <div v-if="sourceLine(ev)" class="source-line">
@@ -267,6 +292,7 @@ const briefLoading = ref(false)
 const error = ref('')
 const events = ref([])
 const status = ref(null)
+const expandedClusters = ref({})
 const rangeMode = ref('upcoming14')
 const customFrom = ref('')
 const customTo = ref('')
@@ -389,6 +415,55 @@ function toShanghaiParts(iso) {
   }
 }
 
+/**
+ * 同批发布折叠键：同一地区、同一分钟、同一数据期间的非公司事件视为一次发布。
+ * 要求 ref_period 非空，避免「同一占位时刻」的无关事件被误合（如 00:00 的时政+解禁）。
+ */
+function clusterKey(ev) {
+  if (ev.symbol) return ''
+  const ref = String(ev.ref_period || '').trim()
+  if (!ref) return ''
+  const parts = toShanghaiParts(ev.event_time)
+  if (!parts) return ''
+  return `${String(ev.region || '').toUpperCase()}|${parts.date} ${parts.time}|${ref}`
+}
+
+/** 把一天的事件按 clusterKey 合并成渲染单元；组内以重要性最高者为主事件。 */
+function buildUnits(items) {
+  const units = []
+  const clusters = new Map()
+  for (const ev of items) {
+    const key = clusterKey(ev)
+    if (!key) {
+      units.push({ ...ev, _key: ev.id || ev.identity_key, _extras: [] })
+      continue
+    }
+    let unit = clusters.get(key)
+    if (!unit) {
+      unit = { ...ev, _key: `cluster:${key}`, _members: [ev] }
+      clusters.set(key, unit)
+      units.push(unit)
+    } else {
+      unit._members.push(ev)
+    }
+  }
+  for (const unit of units) {
+    const members = unit._members
+    if (!members || members.length < 2) {
+      delete unit._members
+      unit._extras = []
+      continue
+    }
+    const primary = members.reduce(
+      (best, cur) => ((cur.importance || 0) > (best.importance || 0) ? cur : best),
+      members[0],
+    )
+    Object.assign(unit, primary)
+    unit._extras = members.filter((m) => m !== primary)
+  }
+  return units
+}
+
 const groupedEvents = computed(() => {
   const map = new Map()
   for (const ev of events.value) {
@@ -399,8 +474,21 @@ const groupedEvents = computed(() => {
   }
   return Array.from(map.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([date, items]) => ({ date, items }))
+    .map(([date, items]) => ({
+      date,
+      total: items.length,
+      units: buildUnits(items),
+    }))
 })
+
+function isClusterOpen(key) {
+  return !!expandedClusters.value[key]
+}
+
+function toggleCluster(key) {
+  if (!key) return
+  expandedClusters.value[key] = !expandedClusters.value[key]
+}
 
 function formatTime(iso) {
   return toShanghaiParts(iso)?.time || ''
@@ -860,6 +948,78 @@ onMounted(() => {
   margin-top: 6px;
   font-size: 12px;
   color: #4a5568;
+}
+
+.cluster-box {
+  margin-top: 8px;
+}
+
+.cluster-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px dashed #cbd5e0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #4a5568;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cluster-toggle:hover {
+  border-color: #90cdf4;
+  background: #ebf8ff;
+}
+
+.cluster-badge {
+  font-weight: 600;
+  color: #2b6cb0;
+}
+
+.cluster-hint {
+  color: #718096;
+}
+
+.cluster-chevron {
+  margin-left: auto;
+  font-size: 11px;
+  color: #a0aec0;
+  transition: transform 0.15s ease;
+}
+
+.cluster-chevron.open {
+  transform: rotate(180deg);
+}
+
+.cluster-members {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-left: 2px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cluster-member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cluster-member-title {
+  color: #2d3748;
+}
+
+.cluster-member-metrics {
+  color: #718096;
+  font-variant-numeric: tabular-nums;
 }
 
 .source-line a {
