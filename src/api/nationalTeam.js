@@ -23,3 +23,11 @@ export function getNationalTeamDates(params = {}) {
     params,
   })
 }
+
+export function getNationalTeamHistory(params = {}) {
+  return request({
+    url: '/etf/national-team/history',
+    method: 'get',
+    params,
+  })
+}

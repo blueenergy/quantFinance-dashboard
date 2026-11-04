@@ -11,15 +11,43 @@
       </div>
       <div class="toolbar-right">
         <span class="toolbar-label">日期</span>
-        <select
-          v-model="selectedDate"
-          class="date-select"
-          title="选择历史交易日"
-          @change="onDateChange"
-        >
-          <option value="">最新</option>
-          <option v-for="d in dates" :key="d" :value="d">{{ fmtDate(d) }}</option>
-        </select>
+        <v-menu v-model="dateMenu" :close-on-content-click="false" offset="6">
+          <template #activator="{ props }">
+            <button
+              v-bind="props"
+              type="button"
+              class="date-trigger"
+              :class="{ on: selectedDate }"
+              title="选择交易日，只有有数据的日期可选"
+            >
+              <span>{{ selectedDate ? fmtDate(selectedDate) : '最新' }}</span>
+              <span class="date-caret">▾</span>
+            </button>
+          </template>
+          <div class="date-popover">
+            <v-date-picker
+              :model-value="pickerValue"
+              :allowed-dates="isAllowedDate"
+              :first-day-of-week="1"
+              show-adjacent-months
+              hide-header
+              @update:model-value="onPickDate"
+            />
+            <div class="date-popover-footer">
+              <button
+                type="button"
+                class="date-latest-btn"
+                :class="{ on: !selectedDate }"
+                @click="pickLatest"
+              >
+                回到最新
+              </button>
+              <span class="date-popover-hint">
+                {{ dates.length ? `共 ${dates.length} 个有数据的交易日` : '交易日列表加载失败' }}
+              </span>
+            </div>
+          </div>
+        </v-menu>
         <span class="toolbar-label">时点</span>
         <button
           v-for="opt in asOfOptions"
@@ -75,6 +103,37 @@
           <span class="card-label">份额确认（T+1）</span>
           <strong class="card-value">{{ fmtPct(snapshot.share?.avg_chg_1d) }}</strong>
           <span class="card-sub">5 日 {{ fmtPct(snapshot.share?.avg_chg_5d) }}</span>
+        </div>
+      </div>
+
+      <div class="history-card">
+        <div class="history-header">
+          <div class="history-title">
+            <strong>信号历史</strong>
+            <span class="muted">15:00 收盘口径 · 点击色块或柱子回看当日截面</span>
+          </div>
+          <div class="history-legend">
+            <span v-for="opt in historyLevels" :key="opt.value">
+              <i :class="'dot-' + opt.value"></i>{{ opt.label }}
+            </span>
+            <span v-if="historyLoading" class="muted">加载中…</span>
+          </div>
+        </div>
+        <div v-if="historyRows.length" class="history-strip">
+          <button
+            v-for="row in historyRows"
+            :key="row.trade_date"
+            type="button"
+            class="history-day"
+            :class="['level-' + row.level, { on: row.trade_date === activeHistoryDate, partial: row.partial }]"
+            :title="historyTitle(row)"
+            :aria-label="historyTitle(row)"
+            @click="openHistoryDay(row)"
+          ></button>
+        </div>
+        <div v-if="historyRows.length" ref="historyChartRef" class="history-canvas"></div>
+        <div v-else-if="!historyLoading" class="muted history-empty">
+          {{ historyError || '暂无历史信号' }}
         </div>
       </div>
 
@@ -161,8 +220,13 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { getNationalTeamCurve, getNationalTeamDates, getNationalTeamSnapshot } from '../api/nationalTeam'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  getNationalTeamCurve,
+  getNationalTeamDates,
+  getNationalTeamHistory,
+  getNationalTeamSnapshot,
+} from '../api/nationalTeam'
 import { loadEcharts } from '../utils/echarts/loadEcharts.js'
 
 const asOfOptions = [
@@ -174,6 +238,13 @@ const asOfOptions = [
   { value: '1500', label: '15:00' },
 ]
 
+const historyLevels = [
+  { value: 'calm', label: '平静' },
+  { value: 'watch', label: '观察' },
+  { value: 'suspect', label: '疑似' },
+  { value: 'high', label: '高置信' },
+]
+
 const loading = ref(false)
 const error = ref('')
 const snapshot = ref(null)
@@ -182,10 +253,17 @@ const dates = ref([])
 const selectedDate = ref('')
 const selectedCode = ref('510300.SH')
 const asOf = ref('')
+const dateMenu = ref(false)
+const historyRows = ref([])
+const historyLoading = ref(false)
+const historyError = ref('')
 const chartRef = ref(null)
+const historyChartRef = ref(null)
 let chartInstance = null
+let historyChartInstance = null
 let echartsLib = null
 let resizeOb = null
+let historyResizeOb = null
 let refreshTimer = null
 
 const asOfLabel = computed(() => {
@@ -200,6 +278,25 @@ const sortedEtfs = computed(() => {
 
 const selectedEtf = computed(() => {
   return (snapshot.value?.etfs || []).find((row) => row.ts_code === selectedCode.value) || null
+})
+
+const allowedDateSet = computed(() => new Set(dates.value))
+
+const latestDate = computed(() => {
+  let latest = ''
+  for (const d of dates.value) {
+    if (d > latest) latest = d
+  }
+  return latest
+})
+
+const pickerValue = computed(() => {
+  const compact = selectedDate.value || latestDate.value
+  return compact ? compactToIso(compact) : null
+})
+
+const activeHistoryDate = computed(() => {
+  return selectedDate.value || snapshot.value?.trade_date || ''
 })
 
 function fmtYi(value) {
@@ -382,6 +479,222 @@ function drawChart() {
   )
 }
 
+function fmtShortDate(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 8)
+  return digits.length === 8 ? `${digits.slice(4, 6)}-${digits.slice(6, 8)}` : value
+}
+
+function historyTitle(row) {
+  const parts = [fmtDate(row.trade_date), row.level_label]
+  if (row.pool_ratio != null) parts.push(`量比 ${Number(row.pool_ratio).toFixed(2)}x`)
+  parts.push(`广度 ≥2.5x ${row.breadth_25x} 只`)
+  if (row.tail_ratio != null) parts.push(`尾盘 ${Number(row.tail_ratio).toFixed(2)}x`)
+  if (row.share_chg_1d != null) parts.push(`份额日变 ${Number(row.share_chg_1d).toFixed(2)}%`)
+  if (row.baseline_days < 20) parts.push(`基线 ${row.baseline_days}/20 日`)
+  if (row.partial) parts.push('盘中未收盘')
+  return parts.join(' · ')
+}
+
+async function ensureHistoryChart() {
+  if (!historyChartRef.value) return null
+  if (!echartsLib) echartsLib = await loadEcharts()
+  if (!historyChartInstance) {
+    historyChartInstance = echartsLib.init(historyChartRef.value)
+    historyChartInstance.on('click', (params) => {
+      const row = historyRows.value[params?.dataIndex]
+      if (row) openHistoryDay(row)
+    })
+    historyResizeOb = new ResizeObserver(() => {
+      if (historyChartInstance) historyChartInstance.resize()
+    })
+    historyResizeOb.observe(historyChartRef.value)
+  }
+  return historyChartInstance
+}
+
+function drawHistoryChart() {
+  if (!historyChartInstance || !historyRows.value.length) return
+  const rows = historyRows.value
+  const labels = rows.map((row) => fmtShortDate(row.trade_date))
+  const ratios = rows.map((row) => (row.pool_ratio == null ? null : Number(row.pool_ratio.toFixed(2))))
+  const breadth = rows.map((row) => row.breadth_25x)
+  const shares = rows.map((row) => (row.share_chg_1d == null ? null : Number(row.share_chg_1d.toFixed(2))))
+  const activeIdx = rows.findIndex((row) => row.trade_date === activeHistoryDate.value)
+  const bands = []
+  const firstFull = rows.findIndex((row) => row.baseline_days >= 20)
+  const partialEnd = firstFull === -1 ? rows.length - 0.5 : firstFull - 0.5
+  if (partialEnd > 0.5) {
+    bands.push([
+      {
+        xAxis: 0,
+        itemStyle: { color: 'rgba(148, 163, 184, 0.06)' },
+        label: {
+          show: true,
+          position: 'insideTop',
+          formatter: '基线不足',
+          color: '#94a3b8',
+          fontSize: 10,
+        },
+      },
+      { xAxis: partialEnd },
+    ])
+  }
+  rows.forEach((row, idx) => {
+    if (row.level === 'high' || row.level === 'suspect') {
+      bands.push([
+        {
+          xAxis: idx - 0.5,
+          itemStyle: {
+            color: row.level === 'high' ? 'rgba(211, 47, 47, 0.08)' : 'rgba(245, 124, 0, 0.07)',
+          },
+        },
+        { xAxis: idx + 0.5 },
+      ])
+    }
+  })
+
+  historyChartInstance.setOption(
+    {
+      animation: false,
+      legend: {
+        top: 0,
+        data: ['池子量比', '广度≥2.5x', '份额日变'],
+        textStyle: { color: '#64748b', fontSize: 11 },
+      },
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params) => {
+          const idx = params?.[0]?.dataIndex ?? 0
+          const row = rows[idx]
+          if (!row) return ''
+          const lines = [`<b>${fmtDate(row.trade_date)}</b> ${row.level_label}`]
+          if (row.pool_ratio != null) lines.push(`池子量比：${Number(row.pool_ratio).toFixed(2)}x`)
+          lines.push(`放量广度：≥2.5x ${row.breadth_25x} 只 · ≥2.0x ${row.breadth_2x} 只`)
+          if (row.tail_ratio != null) lines.push(`尾盘占比：${Number(row.tail_ratio).toFixed(2)}x`)
+          if (row.share_chg_1d != null) {
+            const sign = row.share_chg_1d >= 0 ? '+' : ''
+            lines.push(`份额日变：${sign}${Number(row.share_chg_1d).toFixed(2)}%`)
+          }
+          if (row.baseline_days < 20) lines.push(`基线：${row.baseline_days}/20 日`)
+          if (row.partial) lines.push('盘中未收盘')
+          return lines.join('<br/>')
+        },
+      },
+      grid: { left: 48, right: 84, top: 36, bottom: 28 },
+      xAxis: {
+        type: 'category',
+        data: labels,
+        axisLabel: {
+          color: '#64748b',
+          fontSize: 10,
+          interval: Math.max(0, Math.floor(labels.length / 8)),
+        },
+        axisLine: { lineStyle: { color: '#e2e8f0' } },
+      },
+      yAxis: [
+        {
+          type: 'value',
+          name: '量比',
+          scale: true,
+          nameTextStyle: { color: '#64748b', fontSize: 10 },
+          axisLabel: { color: '#64748b', fontSize: 10, formatter: '{value}x' },
+          splitLine: { lineStyle: { color: '#f1f5f9' } },
+        },
+        {
+          type: 'value',
+          name: '只数',
+          min: 0,
+          nameTextStyle: { color: '#64748b', fontSize: 10 },
+          axisLabel: { color: '#64748b', fontSize: 10 },
+          splitLine: { show: false },
+        },
+        {
+          type: 'value',
+          name: '份额%',
+          position: 'right',
+          offset: 38,
+          nameTextStyle: { color: '#64748b', fontSize: 10 },
+          axisLabel: { color: '#64748b', fontSize: 10, formatter: '{value}%' },
+          splitLine: { show: false },
+        },
+      ],
+      series: [
+        {
+          name: '广度≥2.5x',
+          type: 'bar',
+          yAxisIndex: 1,
+          data: breadth,
+          barMaxWidth: 12,
+          itemStyle: { color: 'rgba(245, 124, 0, 0.45)', borderRadius: [2, 2, 0, 0] },
+        },
+        {
+          name: '池子量比',
+          type: 'line',
+          yAxisIndex: 0,
+          data: ratios,
+          showSymbol: true,
+          symbolSize: 4,
+          connectNulls: false,
+          itemStyle: { color: '#e53935' },
+          lineStyle: { width: 2, color: '#e53935' },
+          markArea: { silent: true, data: bands },
+          markLine: activeIdx >= 0
+            ? {
+                symbol: 'none',
+                silent: true,
+                lineStyle: { color: '#94a3b8', type: 'dashed' },
+                label: { show: false },
+                data: [{ xAxis: activeIdx }],
+              }
+            : undefined,
+        },
+        {
+          name: '份额日变',
+          type: 'line',
+          yAxisIndex: 2,
+          data: shares,
+          showSymbol: false,
+          connectNulls: false,
+          itemStyle: { color: '#1e88e5' },
+          lineStyle: { width: 1.2, color: '#1e88e5', type: 'dashed' },
+        },
+      ],
+    },
+    true,
+  )
+}
+
+async function loadHistory() {
+  historyLoading.value = true
+  historyError.value = ''
+  try {
+    const body = await getNationalTeamHistory({ as_of: '1500', limit: 240 })
+    historyRows.value = (Array.isArray(body?.rows) ? [...body.rows] : []).sort(
+      (a, b) => String(a.trade_date).localeCompare(String(b.trade_date)),
+    )
+  } catch (exc) {
+    historyRows.value = []
+    historyError.value =
+      exc?.response?.data?.detail || exc?.message || '信号历史加载失败'
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function refreshHistory() {
+  await loadHistory()
+  await nextTick()
+  await ensureHistoryChart()
+  drawHistoryChart()
+}
+
+function openHistoryDay(row) {
+  if (!row?.trade_date) return
+  selectedDate.value = row.trade_date
+  asOf.value = '1500'
+  loadSnapshot()
+}
+
 async function loadCurve() {
   if (!selectedCode.value) return
   const params = { code: selectedCode.value }
@@ -416,6 +729,7 @@ async function loadSnapshot() {
 
 function refresh() {
   loadSnapshot()
+  refreshHistory()
 }
 
 function setAsOf(value) {
@@ -423,13 +737,45 @@ function setAsOf(value) {
   loadSnapshot()
 }
 
-function onDateChange() {
+function compactToIso(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 8)
+  if (digits.length !== 8) return null
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`
+}
+
+function isoFromDate(value) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function isAllowedDate(value) {
+  // Vuetify's default adapter hands us a Date; other adapters may pass ISO.
+  const iso = value instanceof Date ? isoFromDate(value) : String(value)
+  return allowedDateSet.value.has(iso.replace(/-/g, ''))
+}
+
+function onPickDate(value) {
+  dateMenu.value = false
+  const picked = Array.isArray(value) ? value[0] : value
+  if (!picked) return
+  const compact = (typeof picked === 'string' ? picked : isoFromDate(picked)).replace(/-/g, '')
+  if (compact.length !== 8 || compact === selectedDate.value) return
+  selectedDate.value = compact
+  loadSnapshot()
+}
+
+function pickLatest() {
+  dateMenu.value = false
+  if (!selectedDate.value) return
+  selectedDate.value = ''
   loadSnapshot()
 }
 
 async function loadDates() {
   try {
-    const body = await getNationalTeamDates({ limit: 60 })
+    const body = await getNationalTeamDates({ limit: 240 })
     dates.value = Array.isArray(body?.dates) ? body.dates : []
   } catch (exc) {
     // Keep the "最新" option usable even if the date list endpoint is down.
@@ -454,19 +800,26 @@ function setupTimer() {
   }, 30000)
 }
 
+watch(activeHistoryDate, () => drawHistoryChart())
+
 onMounted(async () => {
   await nextTick()
   await ensureChart()
-  await loadDates()
-  await loadSnapshot()
+  await Promise.all([loadDates(), loadSnapshot(), loadHistory()])
+  await nextTick()
+  await ensureHistoryChart()
+  drawHistoryChart()
   setupTimer()
 })
 
 onBeforeUnmount(() => {
   if (refreshTimer) clearInterval(refreshTimer)
   if (resizeOb) resizeOb.disconnect()
+  if (historyResizeOb) historyResizeOb.disconnect()
   if (chartInstance) chartInstance.dispose()
+  if (historyChartInstance) historyChartInstance.dispose()
   chartInstance = null
+  historyChartInstance = null
 })
 </script>
 
@@ -518,14 +871,63 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 
-.date-select {
-  max-width: 142px;
-  padding: 5px 8px;
+.date-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 108px;
+  padding: 5px 10px;
   border-radius: 6px;
   border: 1px solid var(--border-color);
   background: var(--card-bg);
   color: var(--text-color);
   font-size: 12px;
+  cursor: pointer;
+}
+
+.date-trigger:hover,
+.date-trigger.on {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.date-caret {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.date-popover {
+  background: var(--card-bg);
+}
+
+.date-popover-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.date-latest-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-color);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.date-latest-btn.on {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+.date-popover-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .asof-btn,
@@ -641,6 +1043,125 @@ onBeforeUnmount(() => {
 .index-note {
   font-size: 11px;
   color: var(--text-secondary);
+}
+
+.history-card {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg);
+}
+
+.history-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.history-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.history-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.history-legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+.dot-calm {
+  background: #cbd5e1;
+}
+
+.dot-watch {
+  background: #60a5fa;
+}
+
+.dot-suspect {
+  background: #fb923c;
+}
+
+.dot-high {
+  background: #ef4444;
+}
+
+.history-strip {
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  padding: 2px 0 6px;
+}
+
+.history-day {
+  flex: 0 0 18px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.history-day:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.history-day.on {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 1px;
+}
+
+.history-day.level-calm {
+  background: #cbd5e1;
+}
+
+.history-day.level-watch {
+  background: #60a5fa;
+}
+
+.history-day.level-suspect {
+  background: #fb923c;
+}
+
+.history-day.level-high {
+  background: #ef4444;
+}
+
+.history-day.partial {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.5) 0 2px,
+    transparent 2px 4px
+  );
+}
+
+.history-canvas {
+  width: 100%;
+  height: 260px;
+}
+
+.history-empty {
+  padding: 10px 0;
 }
 
 .table-wrap {
@@ -814,6 +1335,10 @@ onBeforeUnmount(() => {
 
   .chart-canvas {
     height: 280px;
+  }
+
+  .history-canvas {
+    height: 220px;
   }
 }
 </style>
