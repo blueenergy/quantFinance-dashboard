@@ -115,8 +115,8 @@
             >
               <span class="comparison-label">{{ row.label }}</span>
               <span class="comparison-value">
-                <span class="comparison-current">{{ row.current }}</span>
-                <span class="comparison-prev">前: {{ row.previous }}</span>
+                <span class="comparison-current">{{ row.current }}<em v-if="row.note" class="comparison-note">{{ row.note }}</em></span>
+                <span class="comparison-prev">前: {{ row.previous }}<em v-if="row.prevNote" class="comparison-note">{{ row.prevNote }}</em></span>
                 <span class="comparison-delta" :class="row.deltaClass">{{ row.deltaText }}</span>
               </span>
             </div>
@@ -561,6 +561,12 @@ function _buildRow(label, cur, prev, unit = '亿') {
   }
 }
 
+function _fmtTradeDate(d) {
+  if (!d) return ''
+  const s = String(d)
+  return s.length === 8 ? `截至${s.slice(4, 6)}-${s.slice(6, 8)}` : `截至${s}`
+}
+
 const comparisonRows = computed(() => {
   if (comparisonBlockedReason.value) return []
   const cur = analysis.value?.snapshot
@@ -568,8 +574,20 @@ const comparisonRows = computed(() => {
   if (!cur || !prev) return []
   const rows = []
   // 主指标（默认可见）
-  rows.push(_buildRow('两市总成交额', cur.total_market_amount_yi, prev.total_market_amount_yi, '亿'))
-  rows.push(_buildRow('北向净流入', cur.capital_flow?.northbound_net_yi, prev.capital_flow?.northbound_net_yi, '亿'))
+  const nb = cur.capital_flow || {}
+  const nbPrev = prev.capital_flow || {}
+  // 兼容 v1 快照的 northbound_net_yi（旧数据实际也是成交额口径）
+  const nbNow = nb.northbound_amount_yi ?? nb.northbound_net_yi
+  const nbBefore = nbPrev.northbound_amount_yi ?? nbPrev.northbound_net_yi
+  rows.push({
+    ..._buildRow('两市总成交额', cur.total_market_amount_yi, prev.total_market_amount_yi, '亿'),
+    note: cur.amount_source === 'db_fallback' ? '日线汇总' : '',
+  })
+  rows.push({
+    ..._buildRow('北向成交额', nbNow, nbBefore, '亿'),
+    note: _fmtTradeDate(nb.northbound_trade_date),
+    prevNote: _fmtTradeDate(nbPrev.northbound_trade_date),
+  })
   rows.push(_buildRow('涨停家数', cur.ladder?.total_limit_up, prev.ladder?.total_limit_up, '只'))
   rows.push(_buildRow('情绪得分', cur.ladder?.sentiment_score, prev.ladder?.sentiment_score, ''))
   // 详细行（折叠后可见）
@@ -1174,6 +1192,13 @@ onMounted(() => {
 .comparison-delta {
   font-weight: 600;
   font-size: 12px;
+}
+.comparison-note {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 11px;
+  color: #94a3b8;
+  margin-left: 4px;
 }
 .delta-up { color: #dc2626; }
 .delta-down { color: #16a34a; }
