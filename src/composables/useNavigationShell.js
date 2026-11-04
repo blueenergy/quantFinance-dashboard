@@ -107,6 +107,7 @@ export function useNavigationShell({ user, isAuthenticated }) {
       { id: 'market-regime', name: '📡 广度估值' },
       { id: 'market-stats', name: '📉 市场统计' },
       { id: 'market-trend', name: '🧭 趋势全景' },
+      { id: 'market-intraday', name: '⚡ 盘中强弱' },
       { id: 'china-macro', name: '🇨🇳 中国宏观' },
       { id: 'us-rates', name: '🇺🇸 美国利率' },
       { id: 'x-influencer-voices', name: '🐦 X大V情报' },
