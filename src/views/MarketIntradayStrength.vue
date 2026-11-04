@@ -102,6 +102,47 @@
         <div ref="chartRef" class="ip-chart"></div>
       </section>
 
+      <section v-if="hasIndices" class="ip-panel">
+        <div class="ip-panel-head">
+          <div>
+            <h3>宽基盘中</h3>
+            <p>{{ visibleIndices.length }} 个指数内部相对强弱 · 最新 {{ formatAsOf(asOf) }}</p>
+          </div>
+          <span class="ip-panel-hint">与行业分不可直接比较</span>
+        </div>
+        <div class="ip-scroll is-short">
+          <table class="ip-table" aria-label="宽基盘中强弱矩阵">
+            <thead>
+              <tr class="ip-group-row">
+                <th class="ip-time-col" rowspan="2" scope="col">时间</th>
+                <th :colspan="visibleIndices.length" class="ip-group-head" scope="colgroup">宽基（{{ visibleIndices.length }}）</th>
+              </tr>
+              <tr class="ip-name-row">
+                <th
+                  v-for="index in visibleIndices"
+                  :key="index.code"
+                  class="ip-name-cell"
+                  scope="col"
+                  :title="`${index.name}（${index.code}）`"
+                >{{ index.name }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in rows" :key="row.time">
+                <th class="ip-time-col" scope="row">{{ formatHHMM(row.time) }}</th>
+                <td
+                  v-for="index in visibleIndices"
+                  :key="index.code"
+                  class="ip-cell"
+                  :style="trendCellStyle(index.scores[row.idx])"
+                  :title="indexCellTitle(index, row)"
+                >{{ formatTrendScore(index.scores[row.idx]) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section class="ip-panel">
         <div class="ip-panel-head">
           <div>
@@ -150,7 +191,8 @@
       <footer class="ip-notes">
         <p><strong>短线分（intraday-v1）：</strong>每个 2 分钟快照上，对 31 个申万 L1 做横截面百分位排名，5 个指标取均值 ×100：上涨家数占比、站上均线占比、相对全市场强弱、平均涨幅、中位涨幅。</p>
         <p><strong>怎么读：</strong>100 = 当前时点最强，0 = 最弱；分数是同一时刻行业之间的相对强弱，不是涨跌幅。红色区域走强、蓝色区域走弱，颜色切换就是盘中轮动。</p>
-        <p><strong>边界：</strong>数据源 <code>realtime_sector_strength</code>（QMT 全市场日 K 快照），2 分钟一条，不是逐笔；历史从 2026-08-25 起。仅用于盘中观察，不构成买卖信号。</p>
+        <p><strong>宽基盘中：</strong>9 个指数（上证指数、上证50、沪深300、中证500、中证1000、创业板指、科创50、创业板50、国证2000）之间的横截面相对强弱；中证2000 在 QMT 无实时行情，用国证2000 代理。</p>
+        <p><strong>边界：</strong>行业数据源 <code>realtime_sector_strength</code>（QMT 全市场日 K 快照），2 分钟一条，不是逐笔；历史从 2026-08-25 起。宽基数据源 <code>index_realtime_snapshots</code>（QMT 指数 tick，2 分钟）；历史从 poller 部署后开始。仅用于盘中观察，不构成买卖信号。</p>
         <p><strong>刷新：</strong>交易日 09:30–15:00 每 60 秒自动拉取；数据本身约 2 分钟更新一次。</p>
       </footer>
     </template>
@@ -200,6 +242,12 @@ const visibleSectors = computed(() => {
 })
 
 const groupLabel = computed(() => `申万一级（${visibleSectors.value.length}）`)
+
+const visibleIndices = computed(() => {
+  const list = data.value?.indices || []
+  return [...list].sort((a, b) => (b.latest ?? -1) - (a.latest ?? -1))
+})
+const hasIndices = computed(() => visibleIndices.value.length > 0)
 
 const latestYang5 = computed(() => lastNonNull(breadth.value.yang5))
 const latestYang30 = computed(() => lastNonNull(breadth.value.yang30))
@@ -266,6 +314,12 @@ function formatCount(value) {
   return n.toLocaleString('zh-CN')
 }
 
+function formatRangePos(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '—'
+  return `${(n * 100).toFixed(0)}%`
+}
+
 function cellTitle(sector, row) {
   const i = row.idx
   const score = sector.scores?.[i]
@@ -278,6 +332,20 @@ function cellTitle(sector, row) {
     `上涨占比 ${formatPctFraction(sector.positive_ratio?.[i])}`,
     `站上MA5 ${formatPctFraction(sector.above_ma_ratio?.[i])}`,
     `平均涨幅 ${formatPctValue(sector.avg_pct_chg?.[i])}`,
+  ].join('\n')
+}
+
+function indexCellTitle(index, row) {
+  const i = row.idx
+  const score = index.scores?.[i]
+  const head = `${index.name} ${formatHHMM(row.time)}`
+  if (score == null) return `${head}\n暂无评分`
+  return [
+    head,
+    `宽基强弱 ${Math.round(score)}`,
+    `今日涨幅 ${formatPctValue(index.pct_chg?.[i])}`,
+    `日内涨幅 ${formatPctValue(index.intraday_move?.[i])}`,
+    `日内位置 ${formatRangePos(index.range_pos?.[i])}`,
   ].join('\n')
 }
 
@@ -723,6 +791,11 @@ onBeforeUnmount(() => {
   min-height: 220px;
   border: 1px solid var(--surface-border, #dbe3ef);
   border-radius: 8px;
+}
+
+.ip-scroll.is-short {
+  max-height: 280px;
+  min-height: 120px;
 }
 
 .ip-table {
