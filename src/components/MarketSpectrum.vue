@@ -241,7 +241,7 @@
   <div v-else-if="records.length === 0" class="empty text-subtle">暂无数据, 请调整日期范围</div>
   <details v-else class="spectrum-fold">
     <summary class="spectrum-fold-summary">
-      <template v-if="isRealtimeSpectrumTab">全市场实时快照明细 · 共 {{ displayRecords.length }} 条</template>
+      <template v-if="isRealtimeSpectrumTab">全市场实时快照明细 · 共 {{ displayRecords.length }} 条（最新在前）</template>
       <template v-else>全市场阴阳谱明细 · 共 {{ displayRecords.length }} 条</template>
       <span class="spectrum-fold-hint">（默认折叠，点击展开）</span>
     </summary>
@@ -420,11 +420,13 @@ const {
 } = useLimitUpReasoningDialog()
 const pageTitle = computed(() => props.title)
 const displayRecords = computed(() => {
-  return records.value.map(r => ({
+  const rows = records.value.map(r => ({
     ...r,
     aboveCount: r.above_ma5_count ?? r.above_ma_count,
     belowCount: r.below_ma5_count ?? r.below_ma_count,
   }))
+  // 实时快照明细：最新快照排最前面（records 本身保持升序供图表使用）
+  return isRealtimeSpectrumTab.value ? rows.reverse() : rows
 })
 const loading = ref(false)
 const chartRef = ref(null)
