@@ -286,6 +286,7 @@ const chartRef = ref(null)
 const historyChartRef = ref(null)
 let chartInstance = null
 let historyChartInstance = null
+let historyChartRows = []
 let echartsLib = null
 let resizeOb = null
 let historyResizeOb = null
@@ -532,7 +533,7 @@ async function ensureHistoryChart() {
   if (!historyChartInstance) {
     historyChartInstance = echartsLib.init(historyChartRef.value)
     historyChartInstance.on('click', (params) => {
-      const row = historyRows.value[params?.dataIndex]
+      const row = historyChartRows[params?.dataIndex]
       if (row) openHistoryDay(row)
     })
     historyResizeOb = new ResizeObserver(() => {
@@ -543,20 +544,49 @@ async function ensureHistoryChart() {
   return historyChartInstance
 }
 
+function daysBetween(a, b) {
+  const parse = (value) => {
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 8)
+    if (digits.length !== 8) return null
+    return Date.UTC(
+      Number(digits.slice(0, 4)),
+      Number(digits.slice(4, 6)) - 1,
+      Number(digits.slice(6, 8)),
+    )
+  }
+  const left = parse(a)
+  const right = parse(b)
+  if (left == null || right == null) return 0
+  return Math.abs(right - left) / 86400000
+}
+
 function drawHistoryChart() {
   if (!historyChartInstance || !historyRows.value.length) return
   const rows = historyRows.value
-  const labels = rows.map((row) => fmtShortDate(row.trade_date))
-  const ratios = rows.map((row) => (row.pool_ratio == null ? null : Number(row.pool_ratio.toFixed(2))))
-  const breadth = rows.map((row) => row.breadth_25x)
-  const shares = rows.map((row) => {
+  const chartRows = []
+  rows.forEach((row, idx) => {
+    if (idx > 0 && daysBetween(rows[idx - 1].trade_date, row.trade_date) > 20) {
+      chartRows.push(null)
+    }
+    chartRows.push(row)
+  })
+  historyChartRows = chartRows
+  const labels = chartRows.map((row) => (row ? fmtShortDate(row.trade_date) : ''))
+  const ratios = chartRows.map((row) =>
+    row && row.pool_ratio != null ? Number(row.pool_ratio.toFixed(2)) : null,
+  )
+  const breadth = chartRows.map((row) => (row ? row.breadth_25x : null))
+  const shares = chartRows.map((row) => {
+    if (!row) return null
     const value = row.pool_share_flow ?? row.share_chg_1d
     return value == null ? null : Number(value.toFixed(2))
   })
-  const activeIdx = rows.findIndex((row) => row.trade_date === activeHistoryDate.value)
+  const activeIdx = chartRows.findIndex(
+    (row) => row && row.trade_date === activeHistoryDate.value,
+  )
   const bands = []
-  const firstFull = rows.findIndex((row) => row.baseline_days >= 20)
-  const partialEnd = firstFull === -1 ? rows.length - 0.5 : firstFull - 0.5
+  const firstFull = chartRows.findIndex((row) => row && row.baseline_days >= 20)
+  const partialEnd = firstFull === -1 ? chartRows.length - 0.5 : firstFull - 0.5
   if (partialEnd > 0.5) {
     bands.push([
       {
@@ -573,8 +603,8 @@ function drawHistoryChart() {
       { xAxis: partialEnd },
     ])
   }
-  rows.forEach((row, idx) => {
-    if (row.level === 'high' || row.level === 'suspect') {
+  chartRows.forEach((row, idx) => {
+    if (row && (row.level === 'high' || row.level === 'suspect')) {
       bands.push([
         {
           xAxis: idx - 0.5,
@@ -599,7 +629,7 @@ function drawHistoryChart() {
         trigger: 'axis',
         formatter: (params) => {
           const idx = params?.[0]?.dataIndex ?? 0
-          const row = rows[idx]
+          const row = chartRows[idx]
           if (!row) return ''
           const lines = [`<b>${fmtDate(row.trade_date)}</b> ${row.level_label}`]
           if (row.pool_ratio != null) lines.push(`池子量比：${Number(row.pool_ratio).toFixed(2)}x`)
