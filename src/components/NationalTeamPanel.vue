@@ -71,7 +71,16 @@
       <div class="summary-grid">
         <div class="summary-card level-card" :class="'level-' + snapshot.level">
           <span class="card-label">今日态势</span>
-          <strong class="card-value">{{ snapshot.level_label }}</strong>
+          <span class="level-line">
+            <strong class="card-value">{{ snapshot.level_label }}</strong>
+            <span
+              v-if="snapshot.share?.direction"
+              class="direction-chip"
+              :class="'dir-' + snapshot.share.direction"
+            >
+              {{ snapshot.share.direction_label }}
+            </span>
+          </span>
           <span class="card-sub">
             首次观察 {{ fmtTime(snapshot.first_signal?.watch) }}
             · 首次疑似 {{ fmtTime(snapshot.first_signal?.suspect) }}
@@ -103,6 +112,12 @@
           <span class="card-label">份额确认（T+1）</span>
           <strong class="card-value">{{ fmtPct(snapshot.share?.avg_chg_1d) }}</strong>
           <span class="card-sub">5 日 {{ fmtPct(snapshot.share?.avg_chg_5d) }}</span>
+          <span class="card-sub">
+            净申赎 {{ fmtPct(snapshot.share?.pool_flow) }}
+            <template v-if="snapshot.share?.rotation != null">
+              · 相消 {{ fmtRatio(snapshot.share.rotation) }}
+            </template>
+          </span>
         </div>
       </div>
 
@@ -116,6 +131,7 @@
             <span v-for="opt in historyLevels" :key="opt.value">
               <i :class="'dot-' + opt.value"></i>{{ opt.label }}
             </span>
+            <span class="flow-hint">细条 红=净申购 / 绿=净赎回</span>
             <span v-if="historyLoading" class="muted">加载中…</span>
           </div>
         </div>
@@ -130,6 +146,15 @@
             :aria-label="historyTitle(row)"
             @click="openHistoryDay(row)"
           ></button>
+        </div>
+        <div v-if="historyRows.length" class="history-flow-strip">
+          <span
+            v-for="row in historyRows"
+            :key="row.trade_date"
+            class="history-flow"
+            :class="'flow-' + (row.direction || 'unknown')"
+            :title="historyTitle(row)"
+          ></span>
         </div>
         <div v-if="historyRows.length" ref="historyChartRef" class="history-canvas"></div>
         <div v-else-if="!historyLoading" class="muted history-empty">
@@ -485,11 +510,17 @@ function fmtShortDate(value) {
 }
 
 function historyTitle(row) {
-  const parts = [fmtDate(row.trade_date), row.level_label]
+  const direction = row.direction_label ? ` · ${row.direction_label}` : ''
+  const parts = [fmtDate(row.trade_date), `${row.level_label}${direction}`]
   if (row.pool_ratio != null) parts.push(`量比 ${Number(row.pool_ratio).toFixed(2)}x`)
   parts.push(`广度 ≥2.5x ${row.breadth_25x} 只`)
   if (row.tail_ratio != null) parts.push(`尾盘 ${Number(row.tail_ratio).toFixed(2)}x`)
   if (row.share_chg_1d != null) parts.push(`份额日变 ${Number(row.share_chg_1d).toFixed(2)}%`)
+  if (row.pool_share_flow != null) {
+    const sign = row.pool_share_flow >= 0 ? '+' : ''
+    parts.push(`净申赎 ${sign}${Number(row.pool_share_flow).toFixed(2)}%`)
+  }
+  if (row.share_rotation != null) parts.push(`相消 ${Number(row.share_rotation).toFixed(2)}`)
   if (row.baseline_days < 20) parts.push(`基线 ${row.baseline_days}/20 日`)
   if (row.partial) parts.push('盘中未收盘')
   return parts.join(' · ')
@@ -518,7 +549,10 @@ function drawHistoryChart() {
   const labels = rows.map((row) => fmtShortDate(row.trade_date))
   const ratios = rows.map((row) => (row.pool_ratio == null ? null : Number(row.pool_ratio.toFixed(2))))
   const breadth = rows.map((row) => row.breadth_25x)
-  const shares = rows.map((row) => (row.share_chg_1d == null ? null : Number(row.share_chg_1d.toFixed(2))))
+  const shares = rows.map((row) => {
+    const value = row.pool_share_flow ?? row.share_chg_1d
+    return value == null ? null : Number(value.toFixed(2))
+  })
   const activeIdx = rows.findIndex((row) => row.trade_date === activeHistoryDate.value)
   const bands = []
   const firstFull = rows.findIndex((row) => row.baseline_days >= 20)
@@ -558,7 +592,7 @@ function drawHistoryChart() {
       animation: false,
       legend: {
         top: 0,
-        data: ['池子量比', '广度≥2.5x', '份额日变'],
+        data: ['池子量比', '广度≥2.5x', '净申赎'],
         textStyle: { color: '#64748b', fontSize: 11 },
       },
       tooltip: {
@@ -574,6 +608,13 @@ function drawHistoryChart() {
           if (row.share_chg_1d != null) {
             const sign = row.share_chg_1d >= 0 ? '+' : ''
             lines.push(`份额日变：${sign}${Number(row.share_chg_1d).toFixed(2)}%`)
+          }
+          if (row.pool_share_flow != null) {
+            const sign = row.pool_share_flow >= 0 ? '+' : ''
+            lines.push(`净申赎(AUM加权)：${sign}${Number(row.pool_share_flow).toFixed(2)}%`)
+          }
+          if (row.share_rotation != null) {
+            lines.push(`相消比：${Number(row.share_rotation).toFixed(2)}`)
           }
           if (row.baseline_days < 20) lines.push(`基线：${row.baseline_days}/20 日`)
           if (row.partial) lines.push('盘中未收盘')
@@ -610,7 +651,7 @@ function drawHistoryChart() {
         },
         {
           type: 'value',
-          name: '份额%',
+          name: '净申赎%',
           position: 'right',
           offset: 38,
           nameTextStyle: { color: '#64748b', fontSize: 10 },
@@ -649,7 +690,7 @@ function drawHistoryChart() {
             : undefined,
         },
         {
-          name: '份额日变',
+          name: '净申赎',
           type: 'line',
           yAxisIndex: 2,
           data: shares,
@@ -657,6 +698,13 @@ function drawHistoryChart() {
           connectNulls: false,
           itemStyle: { color: '#1e88e5' },
           lineStyle: { width: 1.2, color: '#1e88e5', type: 'dashed' },
+          markLine: {
+            silent: true,
+            symbol: 'none',
+            lineStyle: { color: '#cbd5e1', type: 'dotted' },
+            label: { show: false },
+            data: [{ yAxis: 0 }],
+          },
         },
       ],
     },
@@ -1020,6 +1068,36 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
 }
 
+.level-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.direction-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dir-inflow {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.dir-outflow {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.dir-neutral,
+.dir-unknown {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
 .card-sub {
   font-size: 11px;
   color: var(--text-secondary);
@@ -1153,6 +1231,38 @@ onBeforeUnmount(() => {
     rgba(255, 255, 255, 0.5) 0 2px,
     transparent 2px 4px
   );
+}
+
+.history-flow-strip {
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  padding: 0 0 4px;
+}
+
+.history-flow {
+  flex: 0 0 18px;
+  height: 5px;
+  border-radius: 2px;
+  background: #e2e8f0;
+}
+
+.flow-inflow {
+  background: #ef4444;
+}
+
+.flow-outflow {
+  background: #16a34a;
+}
+
+.flow-neutral,
+.flow-unknown {
+  background: #e2e8f0;
+}
+
+.flow-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .history-canvas {

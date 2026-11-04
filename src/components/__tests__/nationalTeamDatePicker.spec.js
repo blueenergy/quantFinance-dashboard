@@ -18,7 +18,12 @@ vi.mock('../../api/nationalTeam', () => ({
     pool: {},
     breadth: { ratio2: 0, ratio25: 0, pool_size: 16 },
     tail: {},
-    share: {},
+    share: {
+      direction: 'inflow',
+      direction_label: '净申购',
+      pool_flow: 1.5,
+      rotation: 1.1,
+    },
     index_moves: [],
     etfs: [],
   })),
@@ -38,6 +43,10 @@ vi.mock('../../api/nationalTeam', () => ({
         tail_ratio: 1.51,
         share_chg_1d: 5.59,
         share_chg_5d: 10.1,
+        pool_share_flow: 9.62,
+        share_rotation: 1.01,
+        direction: 'inflow',
+        direction_label: '净申购',
         baseline_days: 20,
         partial: false,
       },
@@ -51,6 +60,10 @@ vi.mock('../../api/nationalTeam', () => ({
         tail_ratio: 0.67,
         share_chg_1d: 5.59,
         share_chg_5d: 10.1,
+        pool_share_flow: -2.27,
+        share_rotation: 1.02,
+        direction: 'outflow',
+        direction_label: '净赎回',
         baseline_days: 20,
         partial: false,
       },
@@ -110,6 +123,7 @@ describe('NationalTeamPanel date picker', () => {
     const trigger = wrapper.find('.date-trigger')
     expect(trigger.exists()).toBe(true)
     expect(trigger.text()).toContain('最新')
+    expect(wrapper.find('.direction-chip').text()).toBe('净申购')
 
     await trigger.trigger('click')
     await flushPromises()
@@ -151,6 +165,11 @@ describe('NationalTeamPanel date picker', () => {
     expect(days).toHaveLength(2)
     expect(days[0].classes()).toContain('level-high')
     expect(days[1].classes()).toContain('level-suspect')
+
+    const flows = wrapper.findAll('.history-flow')
+    expect(flows).toHaveLength(2)
+    expect(flows[0].classes()).toContain('flow-inflow')
+    expect(flows[1].classes()).toContain('flow-outflow')
 
     getNationalTeamSnapshot.mockClear()
     await days[0].trigger('click')
