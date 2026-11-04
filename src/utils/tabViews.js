@@ -53,6 +53,7 @@ const StrategyStockPool = defineAsyncComponent(() => import('../components/Strat
 const LimitUpLadder = defineAsyncComponent(() => import('../views/LimitUpLadder.vue'))
 const MarketRiskPanel = defineAsyncComponent(() => import('../views/MarketRiskPanel.vue'))
 const MarketRegimePanel = defineAsyncComponent(() => import('../views/MarketRegimePanel.vue'))
+const MarketTrendPanorama = defineAsyncComponent(() => import('../views/MarketTrendPanorama.vue'))
 const MarketStatsPanel = defineAsyncComponent(() => import('../views/MarketStatsPanel.vue'))
 const ChinaMacroPanel = defineAsyncComponent(() => import('../views/ChinaMacroPanel.vue'))
 const UsRatesPanel = defineAsyncComponent(() => import('../views/UsRatesPanel.vue'))
@@ -304,6 +305,12 @@ export const tabViewDefinitions = [
     component: MarketStatsPanel,
     fallbackClass: 'skeleton-chart',
     fallbackText: '市场统计加载中...',
+  },
+  {
+    id: 'market-trend',
+    component: MarketTrendPanorama,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '趋势全景加载中...',
   },
   {
     id: 'china-macro',
