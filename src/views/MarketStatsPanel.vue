@@ -216,7 +216,14 @@ function lineOption({ dates, values, color, area, yFormatter, markZero }) {
       data: dates,
       boundaryGap: false,
       axisLine: { lineStyle: { color: '#c8d2e2' } },
-      axisLabel: { color: '#667085', fontSize: 11, interval: Math.max(Math.floor(dates.length / 6), 0) },
+      axisLabel: {
+        color: '#667085',
+        fontSize: 11,
+        interval: Math.max(Math.floor(dates.length / 6), 0),
+        // 间隔采样会省掉最右端的日期，导致最新点看起来停在上一交易日
+        showMaxLabel: true,
+        showMinLabel: true,
+      },
     },
     yAxis: {
       type: 'value',
