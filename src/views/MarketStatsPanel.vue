@@ -34,7 +34,7 @@
             <header class="stat-card-head">
               <div>
                 <h2>两融余额总量</h2>
-                <p class="mrp-caption">沪深合计融资融券余额（亿元）</p>
+                <p class="mrp-caption">沪深北合计融资融券余额（亿元）</p>
               </div>
               <div class="stat-latest">
                 <strong>{{ fmtYi(marginLatest?.rzrqye) }}</strong>
