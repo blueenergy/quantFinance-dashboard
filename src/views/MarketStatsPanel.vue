@@ -202,9 +202,10 @@ function bindChart(el) {
 }
 
 function lineOption({ dates, values, color, area, yFormatter, markZero }) {
+  const lastValue = values.length ? values[values.length - 1] : null
   return {
     animation: false,
-    grid: { top: 24, left: 52, right: 16, bottom: 28 },
+    grid: { top: 24, left: 52, right: 36, bottom: 28 },
     tooltip: {
       trigger: 'axis',
       backgroundColor: '#ffffff',
@@ -261,6 +262,23 @@ function lineOption({ dates, values, color, area, yFormatter, markZero }) {
               data: [{ yAxis: 0, label: { formatter: '0', color: '#667085', fontSize: 11 } }],
             }
           : undefined,
+        // 750 个点 + showSymbol:false 时最后一个点几乎看不出来；显式标出最新点
+        markPoint: lastValue == null
+          ? undefined
+          : {
+              symbol: 'circle',
+              symbolSize: 7,
+              itemStyle: { color },
+              label: {
+                show: true,
+                position: 'left',
+                formatter: yFormatter(lastValue),
+                color,
+                fontSize: 11,
+                fontWeight: 600,
+              },
+              data: [{ xAxis: dates[dates.length - 1], yAxis: lastValue }],
+            },
       },
     ],
   }
