@@ -127,12 +127,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getMarketStatsOverview } from '../api/marketStats.js'
 
 const rangeOptions = [
+  { label: '3月', days: 60 },
+  { label: '6月', days: 120 },
   { label: '1年', days: 250 },
   { label: '3年', days: 750 },
   { label: '5年', days: 1250 },
 ]
 
-const days = ref(750)
+const days = ref(60)
 const peIndex = ref('')
 const loading = ref(false)
 const errorMsg = ref('')
