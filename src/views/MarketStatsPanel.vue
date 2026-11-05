@@ -71,6 +71,25 @@
           <article class="stat-card">
             <header class="stat-card-head">
               <div>
+                <h2>两融每日增量</h2>
+                <p class="mrp-caption">当日相对前一交易日（亿元，最近 {{ marginDailySeries.length }} 个交易日）</p>
+              </div>
+              <div class="stat-latest" :class="deltaClass(latestDailyDelta)">
+                <strong>{{ fmtYiDelta(latestDailyDelta) }}</strong>
+                <span>{{ fmtDate(marginLatest?.trade_date) }}</span>
+              </div>
+            </header>
+            <div v-if="loading && !overview" class="stat-empty">加载中…</div>
+            <template v-else>
+              <div v-if="!marginDailySeries.length" class="stat-empty">至少需要 2 个交易日样本</div>
+              <div v-show="marginDailySeries.length" ref="marginDailyRef" class="stat-chart"></div>
+            </template>
+          </article>
+        </v-col>
+        <v-col cols="12">
+          <article class="stat-card">
+            <header class="stat-card-head">
+              <div>
                 <h2>{{ peTitle }}</h2>
                 <p class="mrp-caption">{{ peCaption }}</p>
                 <div v-if="availableIndices.length > 1" class="index-toggle">
@@ -121,17 +140,40 @@ const overview = ref(null)
 
 const marginTotalRef = ref(null)
 const marginDeltaRef = ref(null)
+const marginDailyRef = ref(null)
 const peChartRef = ref(null)
 
 let echartsMod = null
 let marginTotalChart = null
 let marginDeltaChart = null
+let marginDailyChart = null
 let peChart = null
 const resizeObservers = []
+
+const MARGIN_DAILY_DAYS = 60
 
 const marginSeries = computed(() => overview.value?.margin?.series || [])
 const marginLatest = computed(() => overview.value?.margin?.latest || null)
 const marginDeltaSeries = computed(() => marginSeries.value.filter((row) => row.delta_30d != null))
+const marginDailySeries = computed(() => {
+  const rows = marginSeries.value
+  if (rows.length < 2) return []
+  const start = Math.max(1, rows.length - MARGIN_DAILY_DAYS)
+  const out = []
+  for (let i = start; i < rows.length; i += 1) {
+    const cur = rows[i]
+    const prev = rows[i - 1]
+    const delta = cur?.rzrqye != null && prev?.rzrqye != null
+      ? Number(cur.rzrqye) - Number(prev.rzrqye)
+      : null
+    out.push({ trade_date: cur.trade_date, delta_1d: delta })
+  }
+  return out
+})
+const latestDailyDelta = computed(() => {
+  const rows = marginDailySeries.value
+  return rows.length ? rows[rows.length - 1].delta_1d : null
+})
 const peSeries = computed(() => overview.value?.pe?.series || [])
 const peLatest = computed(() => overview.value?.pe?.latest || null)
 const availableIndices = computed(() => overview.value?.pe?.available_indices || [])
@@ -284,6 +326,49 @@ function lineOption({ dates, values, color, area, yFormatter, markZero }) {
   }
 }
 
+function barOption({ dates, values, yFormatter }) {
+  return {
+    animation: false,
+    grid: { top: 24, left: 52, right: 20, bottom: 28 },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#ffffff',
+      borderColor: '#d9e1ee',
+      textStyle: { color: '#172033', fontSize: 12 },
+      valueFormatter: yFormatter,
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: { lineStyle: { color: '#c8d2e2' } },
+      axisLabel: {
+        color: '#667085',
+        fontSize: 11,
+        interval: Math.max(Math.floor(dates.length / 6), 0),
+        showMaxLabel: true,
+        showMinLabel: true,
+      },
+    },
+    yAxis: {
+      type: 'value',
+      scale: true,
+      axisLine: { show: false },
+      axisLabel: { color: '#667085', fontSize: 11, formatter: yFormatter },
+      splitLine: { lineStyle: { color: '#edf1f7' } },
+    },
+    series: [
+      {
+        type: 'bar',
+        barMaxWidth: 10,
+        data: values.map((value) => ({
+          value,
+          itemStyle: { color: value == null ? '#cbd5e1' : value >= 0 ? '#dc2626' : '#16a34a' },
+        })),
+      },
+    ],
+  }
+}
+
 async function renderCharts() {
   await ensureEcharts()
   await nextTick()
@@ -317,6 +402,19 @@ async function renderCharts() {
       true,
     )
     marginDeltaChart?.resize()
+  }
+
+  if (marginDailySeries.value.length && marginDailyRef.value) {
+    if (!marginDailyChart) marginDailyChart = bindChart(marginDailyRef.value)
+    marginDailyChart?.setOption(
+      barOption({
+        dates: chartDates(marginDailySeries.value),
+        values: marginDailySeries.value.map((row) => (row.delta_1d == null ? null : Number(row.delta_1d) / 1e8)),
+        yFormatter: (v) => `${Number(v).toFixed(0)}`,
+      }),
+      true,
+    )
+    marginDailyChart?.resize()
   }
 
   if (peSeries.value.length && peChartRef.value) {
@@ -379,6 +477,7 @@ onBeforeUnmount(() => {
   resizeObservers.forEach((obs) => obs.disconnect())
   marginTotalChart?.dispose()
   marginDeltaChart?.dispose()
+  marginDailyChart?.dispose()
   peChart?.dispose()
 })
 </script>
