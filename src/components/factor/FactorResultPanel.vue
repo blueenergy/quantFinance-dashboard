@@ -32,6 +32,10 @@
       </div>
     </div>
 
+    <p v-if="icRows.length" class="muted overlap-note">
+      t(重叠) 用于筛选排序；t(非重叠) 与 MDE80 用于判决（每 horizon 个交易日采样一个截面）。
+      MDE80 是该口径下 80% 功效能分辨的最小 |IC|。
+    </p>
     <p v-if="!icRows.length" class="muted">该 horizon 没有可用的因子诊断。</p>
     <div v-else class="table-scroll">
       <table>
@@ -40,11 +44,14 @@
             <th>因子</th>
             <th>IC 均值</th>
             <th>IC IR</th>
-            <th>t 值</th>
+            <th>t(重叠)</th>
+            <th>t(非重叠)</th>
+            <th>MDE80</th>
             <th>IC 正比例</th>
             <th>首尾分位差</th>
             <th>单调</th>
-            <th>截面数</th>
+            <th>日截面数</th>
+            <th>独立截面数</th>
           </tr>
         </thead>
         <tbody>
@@ -59,10 +66,13 @@
             <td :class="signClass(row.ic_mean)">{{ num(row.ic_mean, 4) }}</td>
             <td :class="signClass(row.ic_ir)">{{ num(row.ic_ir, 3) }}</td>
             <td>{{ num(row.t_stat, 2) }}</td>
+            <td>{{ num(row.t_nonoverlap, 2) }}</td>
+            <td>{{ num(row.mde80, 3) }}</td>
             <td>{{ pct(row.positive_ratio) }}</td>
             <td :class="signClass(row.spread)">{{ pct(row.spread) }}</td>
             <td>{{ row.monotonic ? '是' : '否' }}</td>
             <td>{{ num(row.observations, 0) }}</td>
+            <td>{{ num(row.nonoverlap_observations, 0) }}</td>
           </tr>
         </tbody>
       </table>
@@ -156,7 +166,7 @@
     </template>
 
     <details v-if="screenRows.length" class="screen-details">
-      <summary>IC 初筛全量排行（{{ screenHorizon }}d，{{ screenRows.length }} 个因子）</summary>
+      <summary>IC 初筛全量排行（{{ screenHorizon }}d，{{ screenRows.length }} 个因子，按 t(非重叠) 排序）</summary>
       <div class="table-scroll">
         <table>
           <thead>
@@ -164,9 +174,12 @@
               <th>因子</th>
               <th>IC 均值</th>
               <th>IC IR</th>
-              <th>t 值</th>
+              <th>t(重叠)</th>
+              <th>t(非重叠)</th>
+              <th>MDE80</th>
               <th>IC 正比例</th>
-              <th>截面数</th>
+              <th>日截面数</th>
+              <th>独立截面数</th>
             </tr>
           </thead>
           <tbody>
@@ -175,8 +188,11 @@
               <td :class="signClass(row.ic_mean)">{{ num(row.ic_mean, 4) }}</td>
               <td :class="signClass(row.ic_ir)">{{ num(row.ic_ir, 3) }}</td>
               <td>{{ num(row.t_stat, 2) }}</td>
+              <td>{{ num(row.t_nonoverlap, 2) }}</td>
+              <td>{{ num(row.mde80, 3) }}</td>
               <td>{{ pct(row.positive_ratio) }}</td>
               <td>{{ num(row.observations, 0) }}</td>
+              <td>{{ num(row.nonoverlap_observations, 0) }}</td>
             </tr>
           </tbody>
         </table>

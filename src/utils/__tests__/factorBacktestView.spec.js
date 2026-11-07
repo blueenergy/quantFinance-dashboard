@@ -5,6 +5,7 @@ import {
   buildNetReturnRows,
   buildQuantileBars,
   buildFactorParamRows,
+  buildScreenRows,
   buildSkippedFactorRows,
   buildYearlyIcRows,
   filterCatalogFactors,
@@ -60,6 +61,37 @@ function sampleReport() {
       { score_column: 'alpha2', horizon: 1, top_k: 20, long_excess_net: 0.04 },
     ],
   }
+}
+
+// Same report shape plus the non-overlap block the worker started writing in
+// 2026-11: a high overlapping t can shrink severalfold once the forward-return
+// windows stop overlapping.
+function nonoverlapReport() {
+  const report = sampleReport()
+  report.screen = {
+    horizon: 20,
+    ranked: [
+      { factor: 'alpha2', ic_mean: 0.3, t_stat: 6.1, t_nonoverlap: 1.1, nonoverlap_observations: 10, mde80: 0.15 },
+      { factor: 'alpha1', ic_mean: -0.11, t_stat: -3.2, t_nonoverlap: -2.4, nonoverlap_observations: 10, mde80: 0.21 },
+    ],
+  }
+  report.factors = {
+    alpha1: {
+      20: {
+        ic: { ic_mean: -0.11, ic_ir: -0.4, t_stat: -3.2, positive_ratio: 0.3, observations: 200 },
+        nonoverlap: { t_stat: -2.4, observations: 10, mde80: 0.21 },
+        quantiles: {},
+      },
+    },
+    alpha2: {
+      20: {
+        ic: { ic_mean: 0.3, ic_ir: 0.8, t_stat: 6.1, positive_ratio: 0.6, observations: 198 },
+        nonoverlap: { t_stat: 1.1, observations: 10, mde80: 0.15 },
+        quantiles: {},
+      },
+    },
+  }
+  return report
 }
 
 describe('progress labels', () => {
@@ -124,10 +156,34 @@ describe('report views', () => {
     expect(reportHorizons(report)).toEqual(['1', '5', '10'])
   })
 
-  it('ranks IC rows for one horizon by absolute IC', () => {
+  it('falls back to overlapping t when a report has no non-overlap block', () => {
     const rows = buildIcRows(sampleReport(), 1)
     expect(rows.map((row) => row.factor)).toEqual(['alpha2', 'alpha1'])
     expect(rows[1]).toMatchObject({ ic_ir: -0.4, spread: -0.025, monotonic: false })
+  })
+
+  it('exposes non-overlap t, MDE80 and the independent cross-section count', () => {
+    const rows = buildIcRows(nonoverlapReport(), 20)
+    const alpha1 = rows.find((row) => row.factor === 'alpha1')
+    expect(alpha1).toMatchObject({
+      t_stat: -3.2,
+      t_nonoverlap: -2.4,
+      mde80: 0.21,
+      nonoverlap_observations: 10,
+    })
+  })
+
+  it('ranks IC rows by non-overlap t when the newer report carries it', () => {
+    expect(buildIcRows(nonoverlapReport(), 20).map((row) => row.factor))
+      .toEqual(['alpha1', 'alpha2'])
+  })
+
+  it('ranks the screen by non-overlap t and tolerates an old report', () => {
+    expect(buildScreenRows(nonoverlapReport()).map((row) => row.factor))
+      .toEqual(['alpha1', 'alpha2'])
+    expect(buildScreenRows(sampleReport()).map((row) => row.factor))
+      .toEqual(['alpha2', 'alpha1'])
+    expect(buildScreenRows({})).toEqual([])
   })
 
   it('skips factors that were not diagnosed at that horizon', () => {

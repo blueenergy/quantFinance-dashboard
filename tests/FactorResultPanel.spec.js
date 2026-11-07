@@ -33,7 +33,7 @@ const report = {
         },
       },
     },
-    alpha2: { 5: { ic: { ic_mean: 0.3 }, quantiles: {} } },
+    alpha2: { 5: { ic: { ic_mean: 0.3, t_stat: 6.1 }, quantiles: {} } },
   },
   screen: { horizon: 5, ranked: [{ factor: 'alpha2', ic_mean: 0.3 }, { factor: 'alpha1', ic_mean: -0.11 }] },
   source: { point_in_time_universe: true },

@@ -120,9 +120,19 @@ export function screenHorizon(report) {
   return report?.screen?.horizon ?? null
 }
 
+/**
+ * Non-overlap t is the decision statistic; older reports only carry the
+ * overlapping one, so fall back rather than rendering an unsorted table.
+ */
+function decisionMagnitude(row) {
+  const value = row?.t_nonoverlap ?? row?.t_stat ?? row?.ic_mean
+  return Math.abs(Number(value) || 0)
+}
+
 export function buildScreenRows(report) {
   const ranked = report?.screen?.ranked
-  return Array.isArray(ranked) ? ranked : []
+  if (!Array.isArray(ranked)) return []
+  return [...ranked].sort((left, right) => decisionMagnitude(right) - decisionMagnitude(left))
 }
 
 /** Horizons present in the per-factor diagnostics, ascending. */
@@ -139,7 +149,7 @@ export function diagnosedFactorNames(report) {
   return Object.keys(report?.factors || {})
 }
 
-/** One row per diagnosed factor at `horizon`, sorted by |IC| descending. */
+/** One row per diagnosed factor at `horizon`, sorted by |non-overlap t| descending. */
 export function buildIcRows(report, horizon) {
   const factors = report?.factors || {}
   const key = String(horizon)
@@ -148,11 +158,15 @@ export function buildIcRows(report, horizon) {
       const bucket = perHorizon?.[key]
       if (!bucket) return null
       const quantiles = bucket.quantiles || {}
+      const nonoverlap = bucket.nonoverlap || {}
       return {
         factor: name,
         ic_mean: bucket.ic?.ic_mean,
         ic_ir: bucket.ic?.ic_ir,
         t_stat: bucket.ic?.t_stat,
+        t_nonoverlap: nonoverlap.t_stat,
+        nonoverlap_observations: nonoverlap.observations,
+        mde80: nonoverlap.mde80,
         positive_ratio: bucket.ic?.positive_ratio,
         observations: bucket.ic?.observations,
         avg_names: bucket.ic?.avg_names,
@@ -162,7 +176,7 @@ export function buildIcRows(report, horizon) {
       }
     })
     .filter(Boolean)
-    .sort((left, right) => Math.abs(Number(right.ic_mean) || 0) - Math.abs(Number(left.ic_mean) || 0))
+    .sort((left, right) => decisionMagnitude(right) - decisionMagnitude(left))
 }
 
 export function findFactorMeta(report, factor) {
