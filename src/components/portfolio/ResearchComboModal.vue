@@ -425,7 +425,9 @@ function regimeBandFill(label) {
 .combo-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  /* Same reason as the live-preview drawer: opened from the fullscreen detail
+     card, which sits at z-index 3000 after Teleport to body. */
+  z-index: 3200;
   background: rgba(15, 23, 42, .45);
   display: flex;
   align-items: flex-start;

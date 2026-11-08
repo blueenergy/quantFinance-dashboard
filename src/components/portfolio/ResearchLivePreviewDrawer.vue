@@ -506,7 +506,10 @@ onBeforeUnmount(() => {
 .preview-overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  /* Above .detail-fullscreen-shell (z-index 3000): the research detail is
+     Teleported to body for fullscreen, so a sibling drawer needs a higher
+     layer or it renders behind the maximized card. */
+  z-index: 3200;
   background: rgba(15, 23, 42, 0.42);
   display: flex;
   justify-content: flex-end;
