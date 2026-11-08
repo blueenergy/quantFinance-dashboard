@@ -42,8 +42,9 @@
             <p v-if="hasUnsupportedFeatures" class="warning">
               研究使用了实盘未实现的功能：{{ unsupportedFeatures.join('、') }}；默认不可激活。
             </p>
-            <p v-if="!parity" class="muted">
-              该预览任务未返回对账数据（旧任务）。激活默认需要 admin override。
+            <p v-if="!parity || parityStatus === 'unavailable'" class="muted">
+              该组合没有保存成交明细（不在组合研究的 combo detail 导出范围内），
+              无法逐日对比研究/实盘持仓。激活默认需要 admin override；paper 阶段可接受，live 前建议先补成交明细。
             </p>
             <template v-else>
               <p class="muted">
@@ -163,7 +164,7 @@
                 class="override"
               >
                 <input v-model="adminOverride" type="checkbox" />
-                存在未解释差异，确认以 admin override 激活
+                {{ overrideLabel }}
               </label>
 
               <p v-if="activationError" class="error">{{ activationError }}</p>
@@ -283,6 +284,18 @@ const activateLabel = computed(() =>
     ? 'Admin override 激活'
     : '激活',
 )
+const overrideLabel = computed(() => {
+  const reasons = []
+  if (parityStatus.value === 'unavailable') {
+    reasons.push('无对账数据（该组合没有保存成交明细，无法逐日对比研究/实盘持仓）')
+  } else if (parityStatus.value !== 'clean') {
+    reasons.push('存在未解释差异（研究持仓与实盘构造在近期调仓日不一致）')
+  }
+  if (hasUnsupportedFeatures.value) {
+    reasons.push(`研究使用了实盘未实现的功能：${unsupportedFeatures.value.join('、')}`)
+  }
+  return `${reasons.join('；')}。确认接受并以 admin override 激活`
+})
 
 function parityStatusLabel(status) {
   return (
