@@ -520,7 +520,7 @@ function closeComboDetail() {
 }
 
 function openLivePreview(row) {
-  if (!row?.combo_key) return
+  if (!row) return
   livePreviewRow.value = row
   livePreviewOpen.value = true
 }

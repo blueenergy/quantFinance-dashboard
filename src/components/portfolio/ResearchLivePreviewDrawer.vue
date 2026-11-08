@@ -429,6 +429,19 @@ function poll(current) {
   }, 1200)
 }
 
+function rowIdentity(row) {
+  return {
+    score_variant: row?.score_variant,
+    variant: row?.variant,
+    top_n: row?.top_n,
+    rebalance_interval_days: row?.rebalance_interval_days,
+    trailing_stop_pct: row?.trailing_stop_pct,
+    regime_mode: row?.regime_mode,
+    regime_rule: row?.regime_rule,
+    max_industry_weight: row?.max_industry_weight,
+  }
+}
+
 async function startPreview() {
   clearTimer()
   const current = ++seq
@@ -440,11 +453,12 @@ async function startPreview() {
   effectiveDateInput.value = ''
   resetActivationState()
   error.value = ''
-  if (!props.open || !props.resultId || !props.row?.combo_key) return
+  if (!props.open || !props.resultId || !props.row) return
   loading.value = true
   try {
     const response = await createPortfolioResearchLivePreview(props.resultId, {
-      combo_key: props.row.combo_key,
+      combo_key: props.row.combo_key || undefined,
+      selected_row: rowIdentity(props.row),
       as_of_date: localDateYmd(),
     })
     if (current !== seq) return
@@ -465,7 +479,18 @@ async function startPreview() {
 const taskId = ref('')
 
 watch(
-  () => [props.open, props.resultId, props.row?.combo_key],
+  () => [
+    props.open,
+    props.resultId,
+    props.row?.combo_key,
+    props.row?.score_variant,
+    props.row?.variant,
+    props.row?.top_n,
+    props.row?.rebalance_interval_days,
+    props.row?.trailing_stop_pct,
+    props.row?.regime_mode,
+    props.row?.max_industry_weight,
+  ],
   () => { startPreview() },
   { immediate: true },
 )

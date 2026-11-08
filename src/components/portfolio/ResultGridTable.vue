@@ -48,7 +48,6 @@
           <td class="col-actions detail-cell">
             <button type="button" class="link-btn" @click="$emit('select-row', row)">选为候选</button>
             <button
-              v-if="row.combo_key"
               type="button"
               class="link-btn"
               @click="$emit('live-preview', row)"
@@ -63,7 +62,6 @@
             >
               成交
             </button>
-            <span v-if="!row.combo_key" class="muted">—</span>
           </td>
         </tr>
       </tbody>
