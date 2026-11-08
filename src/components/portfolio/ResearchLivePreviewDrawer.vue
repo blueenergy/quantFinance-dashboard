@@ -489,6 +489,7 @@ watch(
     props.row?.rebalance_interval_days,
     props.row?.trailing_stop_pct,
     props.row?.regime_mode,
+    props.row?.regime_rule,
     props.row?.max_industry_weight,
   ],
   () => { startPreview() },
