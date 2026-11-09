@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 
 const requestMock = vi.fn()
 const prefetchEchartsForTab = vi.fn()
@@ -136,5 +136,45 @@ describe('useNavigationShell loadNavigationTabs', () => {
     expect(prefetchEchartsForTab).toHaveBeenCalledWith('stock-workbench')
     shell.activateTab('')
     expect(prefetchEchartsForTab).toHaveBeenCalledTimes(2)
+  })
+
+  it('persists the active tab in sessionStorage and localStorage', async () => {
+    const user = ref({ username: 'alice' })
+    const isAuthenticated = ref(true)
+    const shell = useNavigationShell({ user, isAuthenticated })
+
+    shell.activateTab('watchlist')
+    await nextTick()
+
+    expect(sessionMem.activeTab_username_v2).toBe('alice')
+    expect(sessionMem.activeTab_v2).toBe('watchlist')
+    expect(localMem.activeTab_username_v2).toBe('alice')
+    expect(localMem.activeTab_v2).toBe('watchlist')
+  })
+
+  it('prefers the per-tab sessionStorage tab over the localStorage fallback', () => {
+    localMem.user_info = JSON.stringify({ username: 'alice' })
+    localMem.activeTab_username_v2 = 'alice'
+    localMem.activeTab_v2 = 'ranking'
+    sessionMem.activeTab_username_v2 = 'alice'
+    sessionMem.activeTab_v2 = 'watchlist'
+
+    const user = ref({ username: 'alice' })
+    const isAuthenticated = ref(true)
+    const shell = useNavigationShell({ user, isAuthenticated })
+
+    expect(shell.activeTab.value).toBe('watchlist')
+  })
+
+  it('falls back to the localStorage tab when sessionStorage is empty', () => {
+    localMem.user_info = JSON.stringify({ username: 'alice' })
+    localMem.activeTab_username_v2 = 'alice'
+    localMem.activeTab_v2 = 'ranking'
+
+    const user = ref({ username: 'alice' })
+    const isAuthenticated = ref(true)
+    const shell = useNavigationShell({ user, isAuthenticated })
+
+    expect(shell.activeTab.value).toBe('ranking')
   })
 })

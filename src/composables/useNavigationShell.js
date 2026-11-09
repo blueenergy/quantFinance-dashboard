@@ -59,23 +59,47 @@ function clearNavCache() {
   }
 }
 
+function readStorageActiveTab(storage) {
+  try {
+    const username = storage.getItem(ACTIVE_TAB_USER_KEY)
+    const tab = storage.getItem(ACTIVE_TAB_KEY)
+    return username && tab ? { username, tab } : null
+  } catch {
+    return null
+  }
+}
+
 function readActiveTabCache() {
   try {
-    const username = localStorage.getItem(ACTIVE_TAB_USER_KEY)
-    const tab = localStorage.getItem(ACTIVE_TAB_KEY)
     const userJson = localStorage.getItem('user_info')
-    if (!username || !tab || !userJson) return null
+    if (!userJson) return null
     const current = JSON.parse(userJson).username
-    if (!current || current !== username) return null
-    return tab
+    if (!current) return null
+
+    // Prefer per-browser-tab sessionStorage so multiple tabs don't overwrite
+    // each other's last active page.
+    const sessionEntry = readStorageActiveTab(sessionStorage)
+    if (sessionEntry?.username === current) return sessionEntry.tab
+
+    // Fallback to the shared key for first load / browser restart.
+    const localEntry = readStorageActiveTab(localStorage)
+    if (localEntry?.username === current) return localEntry.tab
+    return null
   } catch {
     return null
   }
 }
 
 function writeActiveTabCache(tab, username) {
+  if (!tab || !username) return
   try {
-    if (!tab || !username) return
+    sessionStorage.setItem(ACTIVE_TAB_USER_KEY, username)
+    sessionStorage.setItem(ACTIVE_TAB_KEY, tab)
+  } catch {
+    /* ignore */
+  }
+  try {
+    // Global fallback for browser restart; sessionStorage is per tab.
     localStorage.setItem(ACTIVE_TAB_USER_KEY, username)
     localStorage.setItem(ACTIVE_TAB_KEY, tab)
   } catch {

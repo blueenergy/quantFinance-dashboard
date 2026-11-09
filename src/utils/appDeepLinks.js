@@ -63,8 +63,10 @@ export function parseDeepLinkFromUrl(search = window.location.search) {
     }
   }
 
-  // Stock-specific tabs require a target symbol.
-  if ((tab === 'chart' || tab === 'stock-workbench') && !params.symbol) return null
+  // Chart is a detail view and needs a target symbol. The workbench can open
+  // without one (it shows a stock search / empty state), which also makes its
+  // nav link usable for "open in new tab".
+  if (tab === 'chart' && !params.symbol) return null
 
   return { tab, params }
 }

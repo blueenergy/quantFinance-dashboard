@@ -17,6 +17,13 @@ describe('app deep links', () => {
     expect(parseDeepLinkFromUrl('?tab=chart')).toBeNull()
   })
 
+  it('parses stock workbench links without a symbol', () => {
+    expect(parseDeepLinkFromUrl('?tab=stock-workbench')).toEqual({
+      tab: 'stock-workbench',
+      params: {},
+    })
+  })
+
   it('builds stock workbench links with swot finding params', () => {
     expect(
       buildDeepLinkHref('stock-workbench', {

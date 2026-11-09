@@ -247,11 +247,17 @@ function applyDeepLink({ tab, params = {} }) {
 
   if (tab === 'stock-workbench') {
     const symbol = params.symbol
-    if (!symbol) return false
-    pendingStockWorkbenchNavigation.value = {
-      ...params,
-      symbol,
-      requestId: Date.now(),
+    if (symbol) {
+      pendingStockWorkbenchNavigation.value = {
+        ...params,
+        symbol,
+        requestId: Date.now(),
+      }
+    } else {
+      // The workbench renders an empty state with a stock search box, so a
+      // symbol-less deep link (e.g. its nav link opened in a new tab) should
+      // still activate the page instead of falling back to the last tab.
+      pendingStockWorkbenchNavigation.value = null
     }
   }
 
@@ -438,17 +444,26 @@ function onAppNavigate (e) {
   applyDeepLink(detail)
 }
 
+function onDocumentVisibilityChange() {
+  if (document.hidden) return
+  // Background tabs can initialize charts with a 0-size container. Charts
+  // that only listen for window resize need a nudge when the tab returns.
+  window.dispatchEvent(new Event('resize'))
+}
+
 onMounted(() => {
   window.addEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
   window.addEventListener('shenwan:select-industry', onShenwanSelectIndustry)
   window.addEventListener('stock-workbench:open', onOpenStockWorkbench)
   window.addEventListener('app:navigate', onAppNavigate)
+  document.addEventListener('visibilitychange', onDocumentVisibilityChange)
 })
 onUnmounted(() => {
   window.removeEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
   window.removeEventListener('shenwan:select-industry', onShenwanSelectIndustry)
   window.removeEventListener('stock-workbench:open', onOpenStockWorkbench)
   window.removeEventListener('app:navigate', onAppNavigate)
+  document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
 })
 </script>
 
