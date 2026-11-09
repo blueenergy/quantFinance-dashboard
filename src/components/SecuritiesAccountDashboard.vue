@@ -133,7 +133,7 @@
             </div>
             <div>
               <span>最新快照</span>
-              <strong>{{ accountEquityRows[accountEquityRows.length - 1]?.date || '-' }}</strong>
+              <strong>{{ formatEquitySnapshotLabel(accountEquityRows[accountEquityRows.length - 1]) }}</strong>
             </div>
           </div>
           <div class="equity-chart" aria-label="Account equity curve">
@@ -147,6 +147,13 @@
                 :cx="point.split(',')[0]"
                 :cy="point.split(',')[1]"
                 r="3"
+              />
+              <circle
+                v-if="accountEquityChart.live"
+                class="equity-live-dot"
+                :cx="accountEquityChart.live.x"
+                :cy="accountEquityChart.live.y"
+                r="5"
               />
               <text x="36" y="22">{{ formatCurrency(accountEquityChart.max) }}</text>
               <text x="36" y="186">{{ formatCurrency(accountEquityChart.min) }}</text>
@@ -375,9 +382,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, inject } from 'vue'
 import { getTraderAccount, getTraderAccountEquity, getTraderPositions, getSecuritiesAccounts, getTradeSignals, getTraderHeartbeats } from '../api/trader'
 import { getTradeExecutionsBySymbol } from '../api/trading'
+import { useVisibilityAwarePolling } from '../composables/useVisibilityAwarePolling.js'
 import TradeDialog from './TradeDialog.vue'
 
 // 证券账户列表
@@ -491,6 +499,9 @@ const accountSnapshotText = computed(() => {
 
 const accountEquityRows = computed(() => {
   return [...accountEquity.value]
+    // Stale rows are duplicated snapshots written while the broker sync was
+    // dead; plotting them draws fake flat plateaus between real observations.
+    .filter(point => !point.is_stale)
     .filter(point => Number.isFinite(Number(point.total_asset ?? point.equity)))
     .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
     .map((point, index, rows) => {
@@ -505,7 +516,7 @@ const accountEquityRows = computed(() => {
 
 const accountEquityChart = computed(() => {
   const rows = accountEquityRows.value
-  if (!rows.length) return { points: '', labels: [], min: 0, max: 0 }
+  if (!rows.length) return { points: '', live: null, labels: [], min: 0, max: 0 }
   const values = rows.map(row => row.equity)
   const min = Math.min(...values)
   const max = Math.max(...values)
@@ -513,20 +524,25 @@ const accountEquityChart = computed(() => {
   const width = 640
   const height = 220
   const pad = 28
-  const points = rows
-    .map((row, index) => {
-      const x = rows.length === 1 ? width / 2 : pad + (index * (width - pad * 2)) / (rows.length - 1)
-      const y = height - pad - ((row.equity - min) * (height - pad * 2)) / span
-      return `${x.toFixed(1)},${y.toFixed(1)}`
-    })
-    .join(' ')
+  const coords = rows.map((row, index) => {
+    const x = rows.length === 1 ? width / 2 : pad + (index * (width - pad * 2)) / (rows.length - 1)
+    const y = height - pad - ((row.equity - min) * (height - pad * 2)) / span
+    return { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) }
+  })
+  const lastRow = rows[rows.length - 1]
   return {
-    points,
+    points: coords.map(point => `${point.x},${point.y}`).join(' '),
+    live: lastRow.is_intraday ? coords[coords.length - 1] : null,
     min,
     max,
     labels: [
-      { text: rows[0].date, x: pad, y: height - 6, anchor: 'start' },
-      { text: rows[rows.length - 1].date, x: width - pad, y: height - 6, anchor: 'end' },
+      { text: formatEquityDate(rows[0].date), x: pad, y: height - 6, anchor: 'start' },
+      {
+        text: lastRow.is_intraday ? '今日实时' : formatEquityDate(lastRow.date),
+        x: width - pad,
+        y: height - 6,
+        anchor: 'end',
+      },
     ],
   }
 })
@@ -610,6 +626,29 @@ function formatPercent(value) {
   return parseFloat(value).toFixed(2) + '%';
 }
 
+// 资金曲线日期：20261106 -> 2026-11-06
+function formatEquityDate(value) {
+  const text = String(value || '')
+  if (/^\d{8}$/.test(text)) {
+    return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
+  }
+  return text || '-'
+}
+
+// 最新快照标签：盘中实时点显示同步时刻，日终帧标注“日终”
+function formatEquitySnapshotLabel(row) {
+  if (!row) return '-'
+  const dateText = formatEquityDate(row.date)
+  if (!row.is_intraday) return `${dateText} 日终`
+  const syncedAt = Number(row.live_synced_at ?? row.source_synced_at)
+  if (!Number.isFinite(syncedAt) || syncedAt <= 0) return `${dateText} 实时`
+  const timeText = new Date(syncedAt * 1000).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  return `${dateText} ${timeText} 实时`
+}
+
 // 加载账户概览
 async function loadOverview() {
   try {
@@ -676,7 +715,7 @@ async function loadAccountEquity() {
     return
   }
   try {
-    accountEquity.value = await getTraderAccountEquity(selectedAccountId.value)
+    accountEquity.value = await getTraderAccountEquity(selectedAccountId.value, { include_live: true })
   } catch (error) {
     console.error('获取账户资金曲线失败:', error)
     accountEquity.value = []
@@ -820,6 +859,14 @@ onMounted(async () => {
     await refreshData()
   }
 })
+
+// 账户工作台可见时每 60s 刷新一次，让资金曲线跟随账户同步延伸出今日实时点。
+// 账户由 quantTrader 每分钟同步一次，轮询频率与之对齐。
+const shellActiveTab = inject('shellActiveTab', null)
+const isAccountTabActive = computed(() => shellActiveTab?.value === 'securities')
+useVisibilityAwarePolling(() => {
+  if (selectedAccountId.value) refreshData()
+}, 60000, isAccountTabActive)
 
 // ========== 交易对话框相关 ==========
 const tradeDialogVisible = ref(false)
@@ -998,6 +1045,11 @@ async function openHistoryDialog(position) {
 }
 .equity-chart circle {
   fill: rgb(var(--v-theme-primary));
+}
+.equity-chart circle.equity-live-dot {
+  fill: none;
+  stroke: rgb(var(--v-theme-primary));
+  stroke-width: 2;
 }
 .equity-chart text {
   fill: rgba(var(--v-theme-on-surface), 0.55);

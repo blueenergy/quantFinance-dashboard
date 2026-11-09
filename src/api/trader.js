@@ -18,6 +18,7 @@ export async function getTraderAccountEquity(securitiesAccountId = null, params 
   if (securitiesAccountId) query.securities_account_id = securitiesAccountId
   if (params.start_date) query.start_date = params.start_date
   if (params.end_date) query.end_date = params.end_date
+  if (params.include_live !== undefined) query.include_live = params.include_live
   const data = await request({
     url: '/trader/account/equity',
     method: 'get',
