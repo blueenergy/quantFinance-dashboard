@@ -15,6 +15,14 @@ export async function getWatchlistStrategies() {
   })
 }
 
+export async function getStrategyPositionGuard(symbol, strategy) {
+  return request({
+    url: '/strategy/position-guard',
+    method: 'get',
+    params: { symbol, strategy_key: strategy },
+  })
+}
+
 export async function setWatchlistStrategy(payload) {
   try {
     return await request({

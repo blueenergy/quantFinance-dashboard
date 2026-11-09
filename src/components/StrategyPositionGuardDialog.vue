@@ -6,7 +6,9 @@
     @update:model-value="onToggle"
   >
     <v-card v-if="guard">
-      <v-card-title class="guard-title">停止策略前确认持仓</v-card-title>
+      <v-card-title class="guard-title">
+        {{ isStart ? '启动策略前确认持仓接管' : '停止策略前确认持仓' }}
+      </v-card-title>
 
       <v-card-text>
         <div class="guard-headline">
@@ -55,7 +57,7 @@
           {{ warning }}
         </v-alert>
 
-        <div v-if="hasPendingBuys" class="guard-pending">
+        <div v-if="!isStart && hasPendingBuys" class="guard-pending">
           <div class="guard-pending-line">
             在途买单 {{ pending.buy.count }} 笔 / {{ fmtQty(pending.buy.qty) }} 股
           </div>
@@ -68,10 +70,12 @@
         </div>
 
         <div class="guard-note">
-          停止后该策略不再产生任何买卖信号；保留持仓意味着止损/止盈不再生效。
+          {{ isStart
+            ? '启动后策略会按 state / 券商快照恢复持仓管理，不会补买原仓位；持仓数量以实际同步为准。'
+            : '停止后该策略不再产生任何买卖信号；保留持仓意味着止损/止盈不再生效。' }}
         </div>
-        <div v-if="sessionNote" class="guard-note">{{ sessionNote }}</div>
-        <div v-if="!guard.can_auto_clear" class="guard-warn">
+        <div v-if="!isStart && sessionNote" class="guard-note">{{ sessionNote }}</div>
+        <div v-if="!isStart && !guard.can_auto_clear" class="guard-warn">
           系统无法自动确认可清仓数量；如需卖出请到持仓页手动操作。
         </div>
       </v-card-text>
@@ -79,16 +83,23 @@
       <v-card-actions class="guard-actions">
         <v-spacer />
         <v-btn variant="text" :disabled="busy" @click="cancel">取消</v-btn>
-        <v-btn variant="outlined" color="warning" :disabled="busy" @click="keep">
-          停止但保留持仓
-        </v-btn>
-        <v-btn
-          color="error"
-          :disabled="busy || !guard.can_auto_clear"
-          @click="clear"
-        >
-          停止并清仓{{ clearLabel }}
-        </v-btn>
+        <template v-if="isStart">
+          <v-btn color="success" :disabled="busy" @click="start">
+            {{ startButtonLabel }}
+          </v-btn>
+        </template>
+        <template v-else>
+          <v-btn variant="outlined" color="warning" :disabled="busy" @click="keep">
+            停止但保留持仓
+          </v-btn>
+          <v-btn
+            color="error"
+            :disabled="busy || !guard.can_auto_clear"
+            @click="clear"
+          >
+            停止并清仓{{ clearLabel }}
+          </v-btn>
+        </template>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -98,13 +109,15 @@
 import { computed, ref, watch } from 'vue'
 import { useStrategyPositionGuard } from '../composables/strategyPositionGuard'
 
-const { visible, guard, busy, decide } = useStrategyPositionGuard()
+const { visible, guard, busy, mode, decide } = useStrategyPositionGuard()
 
 const cancelPendingBuys = ref(false)
 
 watch(guard, () => {
   cancelPendingBuys.value = false
 })
+
+const isStart = computed(() => mode.value === 'start')
 
 const position = computed(() => guard.value?.position || {})
 const account = computed(() => guard.value?.account || {})
@@ -133,6 +146,13 @@ const pnlClass = computed(() => (
 const clearLabel = computed(() => {
   const qty = Number(guard.value?.clear_qty || 0)
   return qty > 0 ? `（卖出 ${fmtQty(qty)} 股）` : ''
+})
+
+const startButtonLabel = computed(() => {
+  const qty = Number(position.value.managed_qty)
+  return Number.isFinite(qty) && qty > 0
+    ? `启动并接管（${fmtQty(qty)} 股）`
+    : '启动'
 })
 
 const sessionNote = computed(() => {
@@ -200,6 +220,10 @@ function keep() {
 
 function clear() {
   decide('clear', { cancelPendingBuys: cancelPendingBuys.value })
+}
+
+function start() {
+  decide('start')
 }
 </script>
 

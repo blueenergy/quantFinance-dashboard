@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/user', () => ({
   setWatchlistStrategy: vi.fn(),
+  getStrategyPositionGuard: vi.fn(),
 }))
 
-import { setWatchlistStrategy } from '../../api/user'
+import { getStrategyPositionGuard, setWatchlistStrategy } from '../../api/user'
 import { useStrategyPositionGuard } from '../strategyPositionGuard'
 
 const guardPayload = {
@@ -40,10 +41,12 @@ const api = useStrategyPositionGuard()
 
 beforeEach(() => {
   setWatchlistStrategy.mockReset()
+  getStrategyPositionGuard.mockReset()
   api.decide(null)
   api.visible.value = false
   api.guard.value = null
   api.busy.value = false
+  api.mode.value = 'stop'
 })
 
 describe('saveStrategyWithGuard', () => {
@@ -113,5 +116,90 @@ describe('saveStrategyWithGuard', () => {
 
     await expect(api.saveStrategyWithGuard(payload())).rejects.toThrow('VIP required')
     expect(api.visible.value).toBe(false)
+  })
+})
+
+describe('startStrategyWithGuard', () => {
+  it('starts directly when the preview has no managed position', async () => {
+    getStrategyPositionGuard.mockResolvedValue({
+      ...guardPayload,
+      position: {
+        ...guardPayload.position,
+        managed_qty: 0,
+        broker_qty: 0,
+        can_use_volume: 0,
+      },
+    })
+    setWatchlistStrategy.mockResolvedValue({ success: true })
+
+    const result = await api.startStrategyWithGuard({
+      symbol: '600000.SH',
+      strategy: 'demo_strategy',
+    })
+
+    expect(result).toEqual({ success: true })
+    expect(api.visible.value).toBe(false)
+    expect(setWatchlistStrategy).toHaveBeenCalledWith({
+      symbol: '600000.SH',
+      strategy: 'demo_strategy',
+      enabled: true,
+    })
+  })
+
+  it('shows the takeover dialog when the preview manages shares', async () => {
+    getStrategyPositionGuard.mockResolvedValue(guardPayload)
+    setWatchlistStrategy.mockResolvedValue({ success: true })
+
+    const promise = api.startStrategyWithGuard({
+      symbol: '600000.SH',
+      strategy: 'demo_strategy',
+    })
+    await vi.waitFor(() => expect(api.visible.value).toBe(true))
+    expect(api.mode.value).toBe('start')
+    api.decide('start')
+
+    await promise
+
+    expect(setWatchlistStrategy).toHaveBeenCalledWith({
+      symbol: '600000.SH',
+      strategy: 'demo_strategy',
+      enabled: true,
+    })
+  })
+
+  it('does not start when the takeover dialog is dismissed', async () => {
+    getStrategyPositionGuard.mockResolvedValue(guardPayload)
+
+    const promise = api.startStrategyWithGuard({
+      symbol: '600000.SH',
+      strategy: 'demo_strategy',
+    })
+    await vi.waitFor(() => expect(api.visible.value).toBe(true))
+    api.decide(null)
+
+    const result = await promise
+
+    expect(result).toEqual({ cancelled: true })
+    expect(setWatchlistStrategy).not.toHaveBeenCalled()
+  })
+
+  it('asks before starting when the guard preview is unavailable', async () => {
+    getStrategyPositionGuard.mockRejectedValue(new Error('manager down'))
+    const confirmSpy = vi.fn(() => true)
+    vi.stubGlobal('confirm', confirmSpy)
+    setWatchlistStrategy.mockResolvedValue({ success: true })
+
+    await api.startStrategyWithGuard({
+      symbol: '600000.SH',
+      strategy: 'demo_strategy',
+    })
+
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(setWatchlistStrategy).toHaveBeenCalledWith({
+      symbol: '600000.SH',
+      strategy: 'demo_strategy',
+      enabled: true,
+    })
+    vi.unstubAllGlobals()
   })
 })
