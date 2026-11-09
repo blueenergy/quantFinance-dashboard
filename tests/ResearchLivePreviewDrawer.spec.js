@@ -93,18 +93,47 @@ describe('ResearchLivePreviewDrawer activation', () => {
     const button = wrapper.get('.activate-btn')
     expect(button.attributes('disabled')).toBeDefined()
 
-    await wrapper.get('.override input').setValue(true)
+    await wrapper.get('.admin-override input').setValue(true)
     expect(wrapper.get('.activate-btn').attributes('disabled')).toBeUndefined()
     await wrapper.get('.activate-btn').trigger('click')
     await flushPromises()
 
     expect(apiMocks.activatePortfolioResearchLivePreview).toHaveBeenCalledWith('task-1', {
       execution_venue: 'paper',
-      effective_date: '20261118',
+      effective_date: undefined,
+      generate_now: true,
+      auto_approve: true,
       admin_override: true,
       comment: '',
     })
     expect(wrapper.text()).toContain('act-1')
+  })
+
+  it('sends the selected effective date when generate-now is off', async () => {
+    apiMocks.getPortfolioResearchLivePreview.mockResolvedValue(previewResult('clean'))
+    apiMocks.activatePortfolioResearchLivePreview.mockResolvedValue({
+      data: {
+        activation: { activation_id: 'act-2', status: 'scheduled', effective_date: '20261118' },
+        preset: { preset_id: 'preset-1' },
+        parity: { status: 'clean' },
+        applied_now: false,
+      },
+    })
+    const wrapper = await mountDrawer()
+
+    await wrapper.get('.generate-now input').setValue(false)
+    await wrapper.get('input[type="date"]').setValue('2026-11-18')
+    await wrapper.get('.activate-btn').trigger('click')
+    await flushPromises()
+
+    expect(apiMocks.activatePortfolioResearchLivePreview).toHaveBeenCalledWith('task-1', {
+      execution_venue: 'paper',
+      effective_date: '20261118',
+      generate_now: false,
+      auto_approve: false,
+      admin_override: false,
+      comment: '',
+    })
   })
 
   it('blocks unsupported research features even when parity is clean', async () => {

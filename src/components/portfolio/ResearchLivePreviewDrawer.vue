@@ -107,7 +107,9 @@
           <section class="activation-section">
             <div class="section-head">
               <h4>激活到实盘</h4>
-              <span class="muted">默认下一个调仓日生效</span>
+              <span class="muted">
+                {{ generateNow ? '立即生成并自动批准首个计划' : '默认下一个调仓日生效' }}
+              </span>
             </div>
 
             <div v-if="activation" class="activation-result">
@@ -126,7 +128,11 @@
                 advisory plan {{ activation.advisory_plan_id }} ·
                 {{ activation.advisory_item_count }} 条 · 已随激活保存，供复核
               </p>
-              <p v-if="activation.activation?.status === 'scheduled'" class="muted">
+              <p v-if="activation.activation?.generate_now" class="muted">
+                首个计划任务已入队{{ activation.activation?.first_task_id ? `（${activation.activation.first_task_id}）` : '' }}，
+                生成后自动批准；下一步只需在组合交易计划做实盘预检并发布。
+              </p>
+              <p v-else-if="activation.activation?.status === 'scheduled'" class="muted">
                 在生效日之前不会切换。
               </p>
               <button
@@ -151,7 +157,7 @@
                 </label>
                 <label class="field">
                   <span>生效日</span>
-                  <input v-model="effectiveDateInput" type="date" />
+                  <input v-model="effectiveDateInput" type="date" :disabled="generateNow" />
                 </label>
                 <label class="field field-wide">
                   <span>备注</span>
@@ -159,9 +165,14 @@
                 </label>
               </div>
 
+              <label class="override generate-now">
+                <input v-model="generateNow" type="checkbox" />
+                激活后立即生成并自动批准首个计划（仍保留实盘预检）
+              </label>
+
               <label
                 v-if="parityStatus !== 'clean' || hasUnsupportedFeatures"
-                class="override"
+                class="override admin-override"
               >
                 <input v-model="adminOverride" type="checkbox" />
                 {{ overrideLabel }}
@@ -255,6 +266,7 @@ const cancelling = ref(false)
 const activationError = ref('')
 const venue = ref('paper')
 const effectiveDateInput = ref('')
+const generateNow = ref(true)
 const adminOverride = ref(false)
 const comment = ref('')
 let timer = null
@@ -279,11 +291,12 @@ const canActivate = computed(
     (parityStatus.value === 'clean' && !hasUnsupportedFeatures.value) ||
     adminOverride.value,
 )
-const activateLabel = computed(() =>
-  adminOverride.value && (parityStatus.value !== 'clean' || hasUnsupportedFeatures.value)
-    ? 'Admin override 激活'
-    : '激活',
-)
+const activateLabel = computed(() => {
+  const suffix = generateNow.value ? '并生成计划' : ''
+  return adminOverride.value && (parityStatus.value !== 'clean' || hasUnsupportedFeatures.value)
+    ? `Admin override 激活${suffix}`
+    : `激活${suffix}`
+})
 const overrideLabel = computed(() => {
   const reasons = []
   if (parityStatus.value === 'unavailable') {
@@ -324,6 +337,7 @@ function resetActivationState() {
   activation.value = null
   activationError.value = ''
   adminOverride.value = false
+  generateNow.value = true
   comment.value = ''
   venue.value = 'paper'
 }
@@ -335,7 +349,9 @@ async function activate() {
   try {
     const response = await activatePortfolioResearchLivePreview(taskId.value, {
       execution_venue: venue.value,
-      effective_date: toYmd(effectiveDateInput.value) || undefined,
+      effective_date: generateNow.value ? undefined : (toYmd(effectiveDateInput.value) || undefined),
+      generate_now: generateNow.value,
+      auto_approve: generateNow.value,
       admin_override: adminOverride.value,
       comment: comment.value,
     })
