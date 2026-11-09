@@ -516,8 +516,11 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { VExpansionPanels, VExpansionPanel, VExpansionPanelTitle, VExpansionPanelText } from 'vuetify/components'
 import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies } from '../api/user'
 import { getTraderPositions } from '../api/trader'
+import { useStrategyPositionGuard } from '../composables/strategyPositionGuard'
 import request from '../utils/request'
 import { mdiViewColumn, mdiViewList, mdiCog, mdiInformation, mdiLock, mdiClockOutline, mdiCalendarMonth, mdiPlus } from '@mdi/js'
+
+const { saveStrategyWithGuard } = useStrategyPositionGuard()
 
 // ============================================================================
 // State Management
@@ -719,6 +722,25 @@ function hasStrategyConfig(strategies) {
   return Object.values(strategies).some(s => s.enabled || Object.keys(s.params || {}).length > 0)
 }
 
+function notifyDisableResult(result) {
+  if (!result || result.cancelled || !result.disabled) return
+  const managed = Number(result.position?.managed_qty || 0)
+  if (result.flatten_order_id) {
+    const scheduled = result.session && result.session.is_open === false
+      ? '下一交易时段'
+      : '盘中'
+    let message = `策略已停止，清仓委托已提交：卖出 ${Number(result.flatten_qty || 0).toLocaleString('zh-CN')} 股，将在${scheduled}执行。\n清仓成交前请勿重新启用该策略。`
+    if (result.state_reset === false) {
+      message += '\n注意：策略状态重置失败，重新启用前请先核对持仓与 state。'
+    }
+    alert(message)
+    return
+  }
+  if (managed > 0) {
+    alert(`策略已停止，${managed.toLocaleString('zh-CN')} 股持仓保留，但不再受该策略管理。`)
+  }
+}
+
 // ============================================================================
 // Data Loading & Processing
 // ============================================================================
@@ -894,27 +916,45 @@ function buildDetailedViewData(symbols, strategyMap, nameMap) {
 
 async function toggleStrategy(item, familyKey) {
   const entry = item.strategies[familyKey]
+  const desired = entry.enabled
   // Omit params: the API merges params, and echoing a stale snapshot here could
   // overwrite newer values. Only the enabled flag is meant to change.
-  await setWatchlistStrategy({
-    symbol: normalizeSymbol(item.symbol),
-    strategy: entry.activeKey,
-    enabled: entry.enabled
-  })
+  try {
+    const result = await saveStrategyWithGuard({
+      symbol: normalizeSymbol(item.symbol),
+      strategy: entry.activeKey,
+      enabled: desired,
+    })
+    if (result?.cancelled) entry.enabled = !desired
+    else notifyDisableResult(result)
+  } catch (err) {
+    entry.enabled = !desired
+    alert(err.message || '设置策略失败')
+  }
 }
 
 
 async function toggleStrategyDetailed(item) {
-  await setWatchlistStrategy({
-    symbol: normalizeSymbol(item.symbol),
-    strategy: item.strategy_key,
-    enabled: item.enabled
-  })
-  
-  // Sync with compact view
-  const compactRow = rows.value.find(r => r.symbol === item.symbol)
-  if (compactRow?.strategies[item.strategy_key]) {
-    compactRow.strategies[item.strategy_key].enabled = item.enabled
+  const desired = item.enabled
+  try {
+    const result = await saveStrategyWithGuard({
+      symbol: normalizeSymbol(item.symbol),
+      strategy: item.strategy_key,
+      enabled: desired,
+    })
+    if (result?.cancelled) {
+      item.enabled = !desired
+      return
+    }
+    notifyDisableResult(result)
+    // Sync with compact view
+    const compactRow = rows.value.find(r => r.symbol === item.symbol)
+    if (compactRow?.strategies[item.strategy_key]) {
+      compactRow.strategies[item.strategy_key].enabled = desired
+    }
+  } catch (err) {
+    item.enabled = !desired
+    alert(err.message || '设置策略失败')
   }
 }
 
@@ -1106,11 +1146,17 @@ async function saveParams() {
       editingRow.value.params = params
     }
 
+    let stopResult = null
     if (targetKey !== editingStrategy.value) {
       // Cadence changed: stop the old key, start the new one with the same params.
       // Omit params on the stop call so the old key's config is left untouched.
       if (wasEnabled) {
-        await setWatchlistStrategy({ symbol, strategy: editingStrategy.value, enabled: false })
+        stopResult = await saveStrategyWithGuard({
+          symbol,
+          strategy: editingStrategy.value,
+          enabled: false,
+        })
+        if (stopResult?.cancelled) return
       }
       await setWatchlistStrategy({
         symbol,
@@ -1131,9 +1177,10 @@ async function saveParams() {
 
     paramsDialog.value = false
     await loadData()
+    notifyDisableResult(stopResult)
   } catch (e) {
     console.error('Failed to save params', e)
-    alert('保存参数失败，请检查参数格式')
+    alert(e?.message || '保存参数失败，请检查参数格式')
   }
 }
 

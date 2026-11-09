@@ -24,7 +24,23 @@ export async function setWatchlistStrategy(payload) {
     })
   } catch (err) {
     const data = err.response?.data
-    const message = data?.detail || data?.message || `设置策略失败：${err.response?.status || 'unknown'}`
+    const detail = data?.detail
+    // Position guard responses carry a structured payload the disable dialog
+    // needs; plain string details keep the old message behaviour.
+    if (
+      err.response?.status === 409
+      && detail
+      && typeof detail === 'object'
+      && detail.code
+    ) {
+      const guardError = new Error(detail.message || '该策略当前有持仓，需要确认如何处理')
+      guardError.code = detail.code
+      guardError.guard = detail.guard
+      throw guardError
+    }
+    const message = typeof detail === 'string'
+      ? detail
+      : detail?.message || data?.message || `设置策略失败：${err.response?.status || 'unknown'}`
     throw new Error(message)
   }
 }

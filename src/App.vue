@@ -140,6 +140,9 @@
 
     <!-- ICP 备案号：全站底部悬挂，链至工信部 -->
     <SiteIcpFooter />
+
+    <!-- 停止实盘策略的持仓确认（配置页/运行页共用） -->
+    <StrategyPositionGuardDialog />
   </v-app>
 </template>
 
@@ -150,6 +153,7 @@ import NotificationCenter from './components/NotificationCenter.vue'
 import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
 import SiteIcpFooter from './components/common/SiteIcpFooter.vue'
+import StrategyPositionGuardDialog from './components/StrategyPositionGuardDialog.vue'
 import { computed, ref, watch, onMounted, onUnmounted, nextTick, provide } from 'vue'
 import { getRenderableTabViews, getTabProps as buildTabProps, getTabListeners as buildTabListeners } from './utils/tabViews.js'
 import { parseDeepLinkFromUrl, buildDeepLinkHref, isModifiedClick } from './utils/appDeepLinks.js'
