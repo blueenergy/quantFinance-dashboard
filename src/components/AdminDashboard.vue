@@ -255,6 +255,42 @@
           </tr>
         </tbody>
       </table>
+
+      <div class="section-header" style="margin-top:28px">
+        <h3>QMT 客户端</h3>
+      </div>
+      <p class="broker-hint">
+        登记 host 上各 QMT 客户端的 bqbox 根目录；配置实例时直接选择，无需手输路径。
+      </p>
+      <div class="broker-add-bar" style="margin-bottom:10px">
+        <input v-model="newQmtClient.name" placeholder="名称，如 国金证券-实盘" class="search-input" style="max-width:200px" />
+        <input v-model="newQmtClient.broker" placeholder="券商，如 国金证券" class="search-input" style="max-width:160px" />
+        <input v-model="newQmtClient.mailbox_root" placeholder="/mnt/.../bin.x64/bqbox" class="search-input" style="max-width:360px" />
+        <button
+          class="btn-base btn-gradient-green btn-sm"
+          :disabled="qmtClientsLoading || !newQmtClient.name || !newQmtClient.broker || !newQmtClient.mailbox_root"
+          @click="addQmtClient"
+        >
+          添加客户端
+        </button>
+      </div>
+      <div v-if="qmtClients.length === 0" class="empty-msg">暂无 QMT 客户端</div>
+      <table v-else class="broker-table">
+        <thead>
+          <tr><th>名称</th><th>券商</th><th>bqbox 根目录</th><th>状态</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="client in qmtClients" :key="client.id">
+            <td>{{ client.name }}</td>
+            <td>{{ client.broker }}</td>
+            <td class="muted">{{ client.mailbox_root }}</td>
+            <td>{{ client.enabled ? '启用' : '停用' }}</td>
+            <td>
+              <button class="btn-base btn-sm btn-gradient-red" @click="deleteQmtClient(client)">删除</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <v-dialog v-model="executorDialog" max-width="560">
@@ -266,6 +302,15 @@
         </p>
         <div class="executor-form">
           <label>QMT 账户号<input v-model="executorForm.qmt_account_id" placeholder="如 8885156549" /></label>
+          <label>
+            QMT 客户端（自动填 mailbox）
+            <select v-model="selectedExecutorClientId" @change="onExecutorClientChange">
+              <option value="">自定义 / 未选择</option>
+              <option v-for="client in executorClientOptions" :key="client.id" :value="client.id">
+                {{ client.name }}（{{ client.broker }}）
+              </option>
+            </select>
+          </label>
           <label>QMT mailbox 根目录<input v-model="executorForm.qmt_mailbox_root" placeholder="/mnt/d/.../bin.x64/bqbox" /></label>
           <label>Client ID<input v-model="executorForm.trader_client_id" placeholder="quant-trader-live" /></label>
           <label>容器名<input v-model="executorForm.trader_container_name" placeholder="quant-trader-live" /></label>
@@ -409,6 +454,11 @@ export default {
         trader_container_name: '',
         auto_manage: false,
       },
+      qmtClients: [],
+      newQmtClient: { name: '', broker: '', mailbox_root: '' },
+      selectedExecutorClientId: '',
+
+      qmtClientsLoading: false,
       
       // 登录日志
       loginLogs: [],
@@ -424,6 +474,12 @@ export default {
     }
   },
   computed: {
+    executorClientOptions() {
+      const broker = this.executorTarget?.broker
+      return this.qmtClients.filter(
+        (client) => client.enabled && (!broker || client.broker === broker)
+      )
+    },
     maxLoginCount() {
       if (!this.statistics?.trends?.daily_logins) return 1
       return Math.max(...this.statistics.trends.daily_logins.map(d => d.count)) || 1
@@ -675,16 +731,73 @@ export default {
       }
     },
 
-    openExecutorDialog(row) {
+    async openExecutorDialog(row) {
       this.executorTarget = row
+      const suffix = row.account_id || row.id
       this.executorForm = {
-        qmt_account_id: row.qmt_account_id || '',
+        qmt_account_id: row.qmt_account_id || row.account_id || '',
         qmt_mailbox_root: row.qmt_mailbox_root || '',
-        trader_client_id: row.trader_client_id || '',
-        trader_container_name: row.trader_container_name || '',
+        trader_client_id: row.trader_client_id || `quant-trader-${suffix}`,
+        trader_container_name: row.trader_container_name || `quant-trader-${suffix}`,
         auto_manage: Boolean(row.auto_manage),
       }
+      this.selectedExecutorClientId = ''
       this.executorDialog = true
+      await this.loadQmtClients()
+      const candidates = this.executorClientOptions
+      if (!this.executorForm.qmt_mailbox_root && candidates.length === 1) {
+        this.selectedExecutorClientId = candidates[0].id
+        this.executorForm.qmt_mailbox_root = candidates[0].mailbox_root
+      } else {
+        const matched = candidates.find(
+          (client) => client.mailbox_root === this.executorForm.qmt_mailbox_root
+        )
+        if (matched) this.selectedExecutorClientId = matched.id
+      }
+    },
+
+    onExecutorClientChange() {
+      const client = this.executorClientOptions.find(
+        (row) => row.id === this.selectedExecutorClientId
+      )
+      if (client) this.executorForm.qmt_mailbox_root = client.mailbox_root
+    },
+
+    async loadQmtClients() {
+      try {
+        this.qmtClients = await this.apiGet('/admin/qmt-clients')
+      } catch (error) {
+        console.error('加载 QMT 客户端失败:', error)
+        this.qmtClients = []
+      }
+    },
+
+    async addQmtClient() {
+      this.qmtClientsLoading = true
+      try {
+        const body = await request({
+          method: 'post',
+          url: '/admin/qmt-clients',
+          data: this.newQmtClient,
+        })
+        if (!body || body.success !== true) throw new Error(body?.detail || '添加失败')
+        this.newQmtClient = { name: '', broker: '', mailbox_root: '' }
+        await this.loadQmtClients()
+      } catch (error) {
+        alert(error.response?.data?.detail || error.message || '添加 QMT 客户端失败')
+      } finally {
+        this.qmtClientsLoading = false
+      }
+    },
+
+    async deleteQmtClient(client) {
+      if (!confirm(`确定删除 QMT 客户端「${client.name}」吗？已引用该路径的账户不受影响。`)) return
+      try {
+        await request({ method: 'delete', url: `/admin/qmt-clients/${client.id}` })
+        await this.loadQmtClients()
+      } catch (error) {
+        alert(error.response?.data?.detail || error.message || '删除 QMT 客户端失败')
+      }
     },
 
     async saveExecutorConfig() {
@@ -713,7 +826,11 @@ export default {
 
     async loadTraderInstances() {
       try {
-        this.traderInstances = await this.apiGet('/admin/trader-instances')
+        const [instances] = await Promise.all([
+          this.apiGet('/admin/trader-instances'),
+          this.loadQmtClients(),
+        ])
+        this.traderInstances = instances
       } catch (error) {
         console.error('加载交易实例失败:', error)
         alert(error.message || '加载交易实例失败')
@@ -1745,11 +1862,13 @@ tr:last-child td {
   color: #444;
 }
 
-.executor-form input {
+.executor-form input,
+.executor-form select {
   padding: 8px 10px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 13px;
+  background: #fff;
 }
 
 .executor-check {
