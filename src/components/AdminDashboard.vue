@@ -135,6 +135,10 @@
             style="max-width:320px"
             @keyup.enter="addBroker"
           >
+          <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:#555;">
+            <input v-model="newBrokerQmtSupported" type="checkbox" />
+            QMT 支持
+          </label>
           <button
             class="btn-base btn-gradient-green btn-sm"
             :disabled="brokerSaving || !newBrokerName.trim()"
@@ -151,6 +155,7 @@
           <tr>
             <th>券商名称</th>
             <th>状态</th>
+            <th>QMT 支持</th>
             <th>排序</th>
             <th>操作</th>
           </tr>
@@ -162,6 +167,15 @@
               <span :class="broker.enabled ? 'tag tag-status-active' : 'tag tag-status-inactive'">
                 {{ broker.enabled ? '启用' : '停用' }}
               </span>
+            </td>
+            <td>
+              <button
+                class="btn-base btn-sm"
+                :class="broker.qmt_supported ? 'btn-gradient-green' : 'btn-gradient-gray'"
+                @click="toggleBrokerQmt(broker)"
+              >
+                {{ broker.qmt_supported ? 'QMT 支持' : '未接入' }}
+              </button>
             </td>
             <td>{{ broker.sort_order }}</td>
             <td>
@@ -180,6 +194,58 @@
                 删除
               </button>
             </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 交易实例 -->
+    <div v-if="activeTab === 'trader-instances'" class="trader-instances-section">
+      <div class="section-header">
+        <h3>🧩 交易实例</h3>
+        <button class="btn-base btn-gradient-blue btn-sm" @click="loadTraderInstances">刷新</button>
+      </div>
+      <p class="broker-hint">
+        期望运行 = 接收实盘信号 + 自动托管 + QMT 映射完整。host reconciler 每分钟对齐，
+        交易时段内异常会发钉钉告警（同一账户 30 分钟一次）。
+      </p>
+      <div v-if="traderInstances.length === 0" class="empty-msg">暂无真实证券账户</div>
+      <table v-else class="broker-table">
+        <thead>
+          <tr>
+            <th>用户</th>
+            <th>账户</th>
+            <th>券商</th>
+            <th>实盘信号</th>
+            <th>自动托管</th>
+            <th>映射</th>
+            <th>期望</th>
+            <th>容器</th>
+            <th>状态</th>
+            <th>账户同步</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in traderInstances" :key="row.id">
+            <td>{{ row.username || row.user_id }}</td>
+            <td>{{ row.account_id }}</td>
+            <td>{{ row.broker }}</td>
+            <td>{{ row.live_trading_enabled ? '已开启' : '关闭' }}</td>
+            <td>{{ row.auto_manage ? '是' : '否' }}</td>
+            <td>
+              <span :class="row.mapping_complete ? 'tag tag-status-active' : 'tag tag-status-inactive'">
+                {{ row.mapping_complete ? '完整' : '缺失' }}
+              </span>
+            </td>
+            <td>{{ row.desired_running ? '运行' : '停止' }}</td>
+            <td class="muted">{{ row.trader_container_name || '-' }}</td>
+            <td>
+              <span :class="row.health === 'ok' ? 'tag tag-status-active' : 'tag tag-status-inactive'">
+                {{ traderHealthText(row.health) }}
+              </span>
+              <div class="muted" style="font-size:12px">{{ row.health_reason || '' }}</div>
+            </td>
+            <td class="muted">{{ formatTs(row.account_synced_at) }}</td>
           </tr>
         </tbody>
       </table>
@@ -273,6 +339,7 @@ export default {
         { id: 'sys-tasks', name: '后台任务调度', icon: '⏱️' },
         { id: 'users', name: '用户管理', icon: '👥' },
         { id: 'brokers', name: '券商配置', icon: '🏦' },
+        { id: 'trader-instances', name: '交易实例', icon: '🧩' },
         { id: 'permissions', name: '权限管理', icon: '🔐' },
         { id: 'logs', name: '登录日志', icon: '📋' },
         { id: 'admin-logs', name: '管理员日志', icon: '⚙️' }
@@ -291,7 +358,11 @@ export default {
       // 券商配置
       brokers: [],
       newBrokerName: '',
+      newBrokerQmtSupported: false,
       brokerSaving: false,
+
+      // 交易实例
+      traderInstances: [],
       
       // 登录日志
       loginLogs: [],
@@ -525,15 +596,63 @@ export default {
       if (!name) return
       this.brokerSaving = true
       try {
-        const body = await request({ method: 'post', url: '/admin/brokers', data: { name } })
+        const body = await request({
+          method: 'post',
+          url: '/admin/brokers',
+          data: { name, qmt_supported: this.newBrokerQmtSupported },
+        })
         if (!body || body.success !== true) throw new Error(body?.detail || '添加失败')
         this.newBrokerName = ''
+        this.newBrokerQmtSupported = false
         await this.loadBrokers()
       } catch (error) {
         alert(error.response?.data?.detail || error.message || '添加券商失败')
       } finally {
         this.brokerSaving = false
       }
+    },
+
+    async toggleBrokerQmt(broker) {
+      const next = !broker.qmt_supported
+      if (next && !confirm(`确认将「${broker.name}」标记为已接入 QMT？该券商下的真实账户将可以开启实盘信号。`)) {
+        return
+      }
+      try {
+        await request({
+          method: 'put',
+          url: `/admin/brokers/${broker.id}`,
+          data: { qmt_supported: next },
+        })
+        await this.loadBrokers()
+      } catch (error) {
+        alert(error.response?.data?.detail || error.message || '更新 QMT 支持失败')
+      }
+    },
+
+    async loadTraderInstances() {
+      try {
+        this.traderInstances = await this.apiGet('/admin/trader-instances')
+      } catch (error) {
+        console.error('加载交易实例失败:', error)
+        alert(error.message || '加载交易实例失败')
+      }
+    },
+
+    traderHealthText(health) {
+      const map = {
+        ok: '正常',
+        not_running: '未运行',
+        sync_stale: '同步过期',
+        no_mapping: '缺映射',
+        worker_stale: '心跳过期',
+        not_managed: '未托管',
+      }
+      return map[health] || (health || '-')
+    },
+
+    formatTs(ts) {
+      if (!ts || !Number(ts)) return '-'
+      return new Date(Number(ts) * 1000).toLocaleString('zh-CN')
     },
 
     async toggleBroker(broker) {
@@ -567,6 +686,8 @@ export default {
         await this.loadAdminLogs()
       } else if (this.activeTab === 'brokers' && this.brokers.length === 0) {
         await this.loadBrokers()
+      } else if (this.activeTab === 'trader-instances' && this.traderInstances.length === 0) {
+        await this.loadTraderInstances()
       }
     },
     

@@ -467,11 +467,18 @@
 
           <div v-if="currentAccount.account_type === 'real'" class="form-group">
             <label class="checkbox-label">
-              <input v-model="currentAccount.live_trading_enabled" type="checkbox" />
+              <input
+                v-model="currentAccount.live_trading_enabled"
+                type="checkbox"
+                :disabled="!selectedBrokerQmtSupported && !currentAccount.live_trading_enabled"
+              />
               允许该真实账户接收实盘交易信号
             </label>
-            <small class="form-hint">
+            <small v-if="selectedBrokerQmtSupported" class="form-hint">
               默认关闭。开启后，审核通过的组合 plan 才能发布为 quantTrader 可执行的 live trade_signals。
+            </small>
+            <small v-else class="form-hint" style="color:#c62828;">
+              该券商未接入 QMT，不能开启实盘交易信号；如需启用，请先在管理员控制台把该券商标记为「QMT 支持」。
             </small>
           </div>
 
@@ -539,7 +546,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import request from '../utils/request'
 import UpgradeRequest from './UpgradeRequest.vue'
 
@@ -655,24 +662,41 @@ export default {
     // 券商选项由 admin 在「管理员控制台 → 券商配置」维护，不再硬编码。
     const brokerOptions = ref([])
     const brokerOptionsForForm = computed(() => {
-      const names = [...brokerOptions.value]
+      const names = brokerOptions.value.map((row) => row.name)
       const current = currentAccount.broker
       // Keep an existing (possibly disabled) broker selectable while editing.
       if (current && !names.includes(current)) names.push(current)
       return names
+    })
+    const selectedBrokerQmtSupported = computed(() => {
+      const broker = brokerOptions.value.find((row) => row.name === currentAccount.broker)
+      // Unknown/disabled broker: treat as unsupported for live trading.
+      return Boolean(broker && broker.qmt_supported)
     })
     const loadBrokerOptions = async () => {
       try {
         const body = await request({ method: 'get', url: '/user/broker-options' })
         const rows = Array.isArray(body) ? body : (body?.data || [])
         brokerOptions.value = rows
-          .map((row) => (typeof row === 'string' ? row : row?.name))
-          .filter(Boolean)
+          .map((row) => (
+            typeof row === 'string'
+              ? { name: row, qmt_supported: true }  // legacy backend: keep old behaviour
+              : { name: row?.name, qmt_supported: Boolean(row?.qmt_supported) }
+          ))
+          .filter((row) => row.name)
       } catch (error) {
         console.error('加载券商选项失败:', error)
         brokerOptions.value = []
       }
     }
+    // Switching to a non-QMT broker must not leave live trading enabled.
+    watch(() => currentAccount.broker, (name) => {
+      if (!name) return
+      const broker = brokerOptions.value.find((row) => row.name === name)
+      if (broker && !broker.qmt_supported && currentAccount.live_trading_enabled) {
+        currentAccount.live_trading_enabled = false
+      }
+    })
 
     // 切换标签页
     const switchTab = (tabKey) => {
@@ -1289,6 +1313,10 @@ export default {
           alert('请输入账户ID')
           return
         }
+        if (currentAccount.live_trading_enabled && !selectedBrokerQmtSupported) {
+          alert('该券商未接入 QMT，不能开启「接收实盘交易信号」')
+          return
+        }
       }
       // 模拟账户不需要任何输入验证
       if (currentAccount.account_type === 'real' && currentAccount.live_trading_enabled) {
@@ -1489,6 +1517,7 @@ export default {
       // 证券账户
       securitiesAccounts,
       brokerOptionsForForm,
+      selectedBrokerQmtSupported,
       loadBrokerOptions,
       showAddAccountModal,
       editingAccount,
