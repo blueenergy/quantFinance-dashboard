@@ -223,6 +223,7 @@
             <th>容器</th>
             <th>状态</th>
             <th>账户同步</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -246,10 +247,45 @@
               <div class="muted" style="font-size:12px">{{ row.health_reason || '' }}</div>
             </td>
             <td class="muted">{{ formatTs(row.account_synced_at) }}</td>
+            <td>
+              <button class="btn-base btn-gradient-blue btn-sm" @click="openExecutorDialog(row)">
+                配置实例
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    <v-dialog v-model="executorDialog" max-width="560">
+      <div class="executor-dialog">
+        <h3>配置交易实例</h3>
+        <p class="broker-hint">
+          账户 {{ executorTarget?.account_id }}（{{ executorTarget?.broker }}）。
+          映射完整且开启自动托管后，host reconciler 才会起停对应容器。
+        </p>
+        <div class="executor-form">
+          <label>QMT 账户号<input v-model="executorForm.qmt_account_id" placeholder="如 8885156549" /></label>
+          <label>QMT mailbox 根目录<input v-model="executorForm.qmt_mailbox_root" placeholder="/mnt/d/.../bin.x64/bqbox" /></label>
+          <label>Client ID<input v-model="executorForm.trader_client_id" placeholder="quant-trader-live" /></label>
+          <label>容器名<input v-model="executorForm.trader_container_name" placeholder="quant-trader-live" /></label>
+          <label class="executor-check">
+            <input v-model="executorForm.auto_manage" type="checkbox" />
+            自动托管（host reconciler 负责起停）
+          </label>
+        </div>
+        <div class="executor-actions">
+          <button class="btn-base btn-gradient-gray btn-sm" @click="executorDialog = false">取消</button>
+          <button
+            class="btn-base btn-gradient-green btn-sm"
+            :disabled="executorSaving"
+            @click="saveExecutorConfig"
+          >
+            保存
+          </button>
+        </div>
+      </div>
+    </v-dialog>
 
     <!-- 权限管理 -->
     <div v-if="activeTab === 'permissions'" class="permissions-section">
@@ -363,6 +399,16 @@ export default {
 
       // 交易实例
       traderInstances: [],
+      executorDialog: false,
+      executorSaving: false,
+      executorTarget: null,
+      executorForm: {
+        qmt_account_id: '',
+        qmt_mailbox_root: '',
+        trader_client_id: '',
+        trader_container_name: '',
+        auto_manage: false,
+      },
       
       // 登录日志
       loginLogs: [],
@@ -626,6 +672,42 @@ export default {
         await this.loadBrokers()
       } catch (error) {
         alert(error.response?.data?.detail || error.message || '更新 QMT 支持失败')
+      }
+    },
+
+    openExecutorDialog(row) {
+      this.executorTarget = row
+      this.executorForm = {
+        qmt_account_id: row.qmt_account_id || '',
+        qmt_mailbox_root: row.qmt_mailbox_root || '',
+        trader_client_id: row.trader_client_id || '',
+        trader_container_name: row.trader_container_name || '',
+        auto_manage: Boolean(row.auto_manage),
+      }
+      this.executorDialog = true
+    },
+
+    async saveExecutorConfig() {
+      if (!this.executorTarget) return
+      this.executorSaving = true
+      try {
+        await request({
+          method: 'put',
+          url: `/admin/securities-accounts/${this.executorTarget.id}/executor`,
+          data: {
+            qmt_account_id: this.executorForm.qmt_account_id,
+            qmt_mailbox_root: this.executorForm.qmt_mailbox_root,
+            trader_client_id: this.executorForm.trader_client_id,
+            trader_container_name: this.executorForm.trader_container_name,
+            auto_manage: this.executorForm.auto_manage,
+          },
+        })
+        this.executorDialog = false
+        await this.loadTraderInstances()
+      } catch (error) {
+        alert(error.response?.data?.detail || error.message || '保存实例配置失败')
+      } finally {
+        this.executorSaving = false
       }
     },
 
@@ -1640,5 +1722,45 @@ tr:last-child td {
   text-align: center;
   color: #999;
   background: #fff;
+}
+
+.executor-dialog {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.executor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 18px;
+}
+
+.executor-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #444;
+}
+
+.executor-form input {
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.executor-check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+
+.executor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 </style>
