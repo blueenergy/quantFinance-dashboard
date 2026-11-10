@@ -79,6 +79,7 @@
         <thead>
           <tr>
             <th>股票</th>
+            <th>账户</th>
             <th>来源</th>
             <th>数量</th>
             <th>成本/现价</th>
@@ -96,6 +97,7 @@
               <strong>{{ pos.name || pos.symbol }}</strong>
               <div class="muted">{{ pos.symbol }}</div>
             </td>
+            <td>{{ accountLabel(pos.securities_account_id) }}</td>
             <td>{{ pos.position_source }}</td>
             <td>{{ pos.quantity }}</td>
             <td>{{ fmt(pos.cost_price) }} / {{ fmt(pos.current_price) }}</td>
@@ -215,6 +217,7 @@
         <thead>
           <tr>
             <th>时间</th>
+            <th>账户</th>
             <th>股票</th>
             <th>方向</th>
             <th>数量</th>
@@ -226,6 +229,7 @@
         <tbody>
           <tr v-for="row in executionRows" :key="row.id || row._id">
             <td>{{ formatTradeTime(row.created_at) }}</td>
+            <td>{{ accountLabel(row.securities_account_id) }}</td>
             <td>{{ row.symbol }}</td>
             <td>{{ row.action }}</td>
             <td>{{ row.quantity }}</td>
@@ -253,6 +257,7 @@
         <thead>
           <tr>
             <th>时间</th>
+            <th>账户</th>
             <th>股票</th>
             <th>信号</th>
             <th>分数</th>
@@ -265,6 +270,7 @@
         <tbody>
           <tr v-for="sig in watchSignals" :key="sig._id || `${sig.symbol}-${sig.snapshot_time}`">
             <td>{{ formatSnapshot(sig.snapshot_time) }}</td>
+            <td>{{ accountLabel(sig.securities_account_id) }}</td>
             <td>{{ sig.name || sig.symbol }}<div class="muted">{{ sig.symbol }}</div></td>
             <td><span :class="['signal', sig.signal_type]">{{ sig.signal_type }}</span></td>
             <td>{{ fmt(sig.signal_score) }}</td>
@@ -287,7 +293,7 @@
             v-if="executionState(sig).loading || executionState(sig).preview || executionState(sig).error || executionState(sig).done"
             class="sig-exec-row"
           >
-            <td colspan="8">
+            <td colspan="9">
               <div class="sig-exec">
                 <span v-if="executionState(sig).loading" class="muted">预览中…</span>
                 <template v-if="executionState(sig).preview">
@@ -380,6 +386,7 @@
         <thead>
           <tr>
             <th>时间</th>
+            <th>账户</th>
             <th>股票</th>
             <th>方向</th>
             <th>数量</th>
@@ -391,6 +398,7 @@
         <tbody>
           <tr v-for="row in tradeRows" :key="row.id || row._id">
             <td>{{ formatTradeTime(row.created_at) }}</td>
+            <td>{{ accountLabel(row.securities_account_id) }}</td>
             <td>{{ row.symbol }}</td>
             <td>{{ row.leg }}</td>
             <td>{{ row.quantity }}</td>
@@ -467,6 +475,7 @@ import axios from 'axios'
 import request from '../utils/request'
 import { listLivePortfolios } from '../api/portfolioPlans'
 import { portfolioKey, portfolioOptionLabel } from '../utils/portfolioOverviewFormat'
+import { getSecuritiesAccounts } from '../api/user'
 import {
   getIntradayT0ExecutionSettings,
   updateIntradayT0ExecutionSettings,
@@ -522,6 +531,23 @@ const executionRows = ref([])
 // Per-signal execution feedback: preview/error/done render in an expanded row
 // directly under the clicked signal, instead of a banner at the top of the page.
 const executionStates = reactive({})
+const securitiesAccounts = ref([])
+const accountLabelMap = computed(() => Object.fromEntries(
+  securitiesAccounts.value.map((account) => [String(account.id || account._id), account.account_id])
+))
+function accountLabel(id) {
+  if (!id) return '-'
+  return accountLabelMap.value[String(id)] || `…${String(id).slice(-6)}`
+}
+async function loadSecuritiesAccounts() {
+  try {
+    const accounts = await getSecuritiesAccounts()
+    securitiesAccounts.value = Array.isArray(accounts) ? accounts : []
+  } catch (err) {
+    console.error('加载证券账户失败:', err)
+    securitiesAccounts.value = []
+  }
+}
 
 const selectedExecutionPortfolio = computed(() => (
   livePortfolios.value.find((row) => row.latest_plan_id === executionSettings.plan_id) || null
@@ -800,6 +826,7 @@ async function loadAll() {
       loadExecutionSettings(),
       loadExecutionHistory(),
       loadExecutionDeps(),
+      loadSecuritiesAccounts(),
     ])
   } catch (err) {
     setError(err, '加载日内T+0数据失败')

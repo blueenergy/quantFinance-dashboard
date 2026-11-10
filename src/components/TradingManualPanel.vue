@@ -670,7 +670,9 @@ const fetchSecuritiesAccounts = async () => {
   try {
     const accounts = await get('/user/securities_accounts')
     securitiesAccounts.value = Array.isArray(accounts) ? accounts : []
-    if (!manualOrderForm.securities_account_id && securitiesAccounts.value.length) {
+    // Never guess between multiple accounts: an order could land in the wrong
+    // book.  Only auto-select when the user owns exactly one account.
+    if (!manualOrderForm.securities_account_id && securitiesAccounts.value.length === 1) {
       const first = securitiesAccounts.value[0]
       manualOrderForm.securities_account_id = first.id || first._id || first.securities_account_id || ''
     }
@@ -836,7 +838,7 @@ const submitManualOrder = async () => {
 }
 
 const resetManualOrderForm = () => {
-  if (!manualOrderForm.securities_account_id && securitiesAccounts.value.length) {
+  if (!manualOrderForm.securities_account_id && securitiesAccounts.value.length === 1) {
     const first = securitiesAccounts.value[0]
     manualOrderForm.securities_account_id = first.id || first._id || first.securities_account_id || ''
   }

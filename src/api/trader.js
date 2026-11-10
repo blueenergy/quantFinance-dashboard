@@ -27,14 +27,16 @@ export async function getTraderAccountEquity(securitiesAccountId = null, params 
   return data.data || []
 }
 
-export async function getTraderPositions(securitiesAccountId = null) {
-  const params = securitiesAccountId
-    ? { securities_account_id: securitiesAccountId }
-    : undefined
+export async function getTraderPositions(securitiesAccountId = null, options = {}) {
+  const params = {}
+  if (securitiesAccountId) params.securities_account_id = securitiesAccountId
+  // The strategy config page needs "all symbols I hold" across books; the
+  // backend requires this flag instead of silently merging accounts.
+  if (options.all_accounts) params.all_accounts = true
   const data = await request({
     url: '/trader/positions',
     method: 'get',
-    params,
+    params: Object.keys(params).length ? params : undefined,
   })
   return data.data || []
 }

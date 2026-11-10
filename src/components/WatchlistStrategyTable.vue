@@ -780,7 +780,9 @@ async function loadData() {
     getWatchlist(),
     getWatchlistStrategies(),
     getAvailableStrategies(),
-    dataSource.value === 'positions' ? getTraderPositions() : Promise.resolve([]),
+    dataSource.value === 'positions'
+      ? getTraderPositions(null, { all_accounts: true })
+      : Promise.resolve([]),
     getSecuritiesAccounts().catch(() => []),
     request({ url: '/strategy/templates', method: 'get' }),
     request({ url: '/user/profile', method: 'get' }).catch(() => null),
