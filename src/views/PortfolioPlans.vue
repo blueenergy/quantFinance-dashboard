@@ -546,7 +546,9 @@ const liveSignalStatusSummary = computed(() => summarizeByStatus(liveSignals.val
 const liveExecutionStatusSummary = computed(() => summarizeByStatus(liveExecutions.value))
 const liveAccountOptions = computed(() => securitiesAccounts.value.map((account) => ({
   id: account.id || account._id,
-  label: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}`,
+  label: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}${account.live_trading_enabled && !account.trading_ready ? ' / 未就绪' : ''}`,
+  ready: Boolean(account.trading_ready),
+  reason: account.trading_status_reason || '',
 })))
 const liveOverlay = computed(() => selectedDetail.value?.live_overlay || null)
 const scoreSnapshotStale = computed(() => Boolean(liveOverlay.value?.score_snapshot_stale))

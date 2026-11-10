@@ -641,7 +641,9 @@ const forceRebalanceBlockReason = computed(() => {
 })
 const liveAccountOptions = computed(() => securitiesAccounts.value.map((account) => ({
   id: account.id || account._id,
-  label: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}`,
+  label: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}${account.live_trading_enabled && !account.trading_ready ? ' / 未就绪' : ''}`,
+  ready: Boolean(account.trading_ready),
+  reason: account.trading_status_reason || '',
 })))
 // Normalized plan target list (buy/sell/hold, skip filtered, score-sorted).
 // AI risk (ai_risk) is written onto each item by the plan-generation worker, so

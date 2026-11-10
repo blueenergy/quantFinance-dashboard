@@ -46,17 +46,20 @@
           {{ account.label }}
         </option>
       </select>
+      <div v-if="selectedLiveAccountNotReady" class="warning-text">
+        账户未就绪：{{ selectedLiveAccountOption?.reason || '配置未完成' }}，发布会被拒绝
+      </div>
       <template v-if="!hasPublishedLiveSignals">
         <button
           type="button"
-          :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals"
+          :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals || selectedLiveAccountNotReady"
           @click="$emit('preview-publish')"
         >
           {{ livePublishLoading ? '预检中…' : '实盘预检' }}
         </button>
         <button
           type="button"
-          :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals || !canConfirmPublish"
+          :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals || !canConfirmPublish || selectedLiveAccountNotReady"
           @click="$emit('confirm-publish')"
         >
           确认发布
@@ -78,12 +81,12 @@
           >
           允许部分补单
         </label>
-        <button type="button" :disabled="remainderLoading || !selectedLiveAccountId" @click="$emit('preview-remainder')">
+        <button type="button" :disabled="remainderLoading || !selectedLiveAccountId || selectedLiveAccountNotReady" @click="$emit('preview-remainder')">
           {{ remainderLoading ? '预检中…' : '缺口预检' }}
         </button>
         <button
           type="button"
-          :disabled="remainderLoading || !selectedLiveAccountId || !canConfirmRemainder"
+          :disabled="remainderLoading || !selectedLiveAccountId || !canConfirmRemainder || selectedLiveAccountNotReady"
           @click="$emit('confirm-remainder')"
         >
           确认补单
@@ -237,6 +240,13 @@ const props = defineProps({
   remainderLoading: { type: Boolean, default: false },
   remainderReason: { type: String, default: '' },
 })
+
+const selectedLiveAccountOption = computed(() => (
+  props.liveAccountOptions.find((account) => account.id === props.selectedLiveAccountId) || null
+))
+const selectedLiveAccountNotReady = computed(() => (
+  Boolean(selectedLiveAccountOption.value && !selectedLiveAccountOption.value.ready)
+))
 
 const remainderCashUsageText = computed(() => {
   const preview = props.remainderPreview

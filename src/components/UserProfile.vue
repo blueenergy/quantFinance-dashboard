@@ -343,7 +343,12 @@
                 </div>
                 <div v-if="account.account_type === 'real'" class="detail-row">
                   <span class="detail-label">实盘信号:</span>
-                  <span class="detail-value">{{ account.live_trading_enabled ? '已启用' : '未启用' }}</span>
+                  <span
+                    class="detail-value"
+                    :class="{ 'status-warn': account.live_trading_enabled && !account.trading_ready }"
+                  >
+                    {{ liveStatusText(account) }}
+                  </span>
                 </div>
                 <div v-if="account.account_type === 'real'" class="detail-row">
                   <span class="detail-label">风控:</span>
@@ -673,6 +678,12 @@ export default {
       // Unknown/disabled broker: treat as unsupported for live trading.
       return Boolean(broker && broker.qmt_supported)
     })
+    const liveStatusText = (account) => {
+      if (!account.live_trading_enabled) return '未启用'
+      if (account.trading_ready) return '已启用 · 实例就绪'
+      return `已启用 · 未就绪（${account.trading_status_reason || '配置未完成'}）`
+    }
+
     const loadBrokerOptions = async () => {
       try {
         const body = await request({ method: 'get', url: '/user/broker-options' })
@@ -1518,6 +1529,7 @@ export default {
       securitiesAccounts,
       brokerOptionsForForm,
       selectedBrokerQmtSupported,
+      liveStatusText,
       loadBrokerOptions,
       showAddAccountModal,
       editingAccount,
@@ -1869,6 +1881,11 @@ export default {
   font-weight: 500;
   color: #555;
   min-width: 80px;
+}
+
+.status-warn {
+  color: #c62828;
+  font-weight: 600;
 }
 
 .detail-value {

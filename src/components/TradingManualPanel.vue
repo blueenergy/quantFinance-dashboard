@@ -340,6 +340,9 @@
                     placeholder="请选择下单账户"
                     required
                   ></v-select>
+                  <small v-if="manualAccountWarning" class="field-hint" style="color:#c62828;">
+                    账户未就绪：{{ manualAccountWarning }}，下单会被拒绝
+                  </small>
                 </v-col>
 
                 <v-col cols="12" md="6">
@@ -584,10 +587,22 @@ const failedSignals = ref([])
 const retryPendingSignals = ref([])
 const attentionSignals = computed(() => activeSignals.value.filter(isAttentionSignal))
 const securitiesAccounts = ref([])
-const securitiesAccountOptions = computed(() => securitiesAccounts.value.map((account) => ({
-  title: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}`,
-  value: account.id || account._id || account.securities_account_id,
-})))
+const securitiesAccountOptions = computed(() => securitiesAccounts.value.map((account) => {
+  const notReady = account.live_trading_enabled && !account.trading_ready
+  return {
+    title: `${account.broker || '-'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}${notReady ? ' / 未就绪' : ''}`,
+    value: account.id || account._id || account.securities_account_id,
+  }
+}))
+const selectedManualAccount = computed(() => securitiesAccounts.value.find(
+  (account) => String(account.id || account._id || account.securities_account_id)
+    === String(manualOrderForm.securities_account_id)
+))
+const manualAccountWarning = computed(() => {
+  const account = selectedManualAccount.value
+  if (!account || !account.live_trading_enabled || account.trading_ready) return ''
+  return account.trading_status_reason || '账户未就绪'
+})
 
 // 分页
 const failedPage = ref(1)
@@ -807,6 +822,10 @@ const submitManualOrder = async () => {
   try {
     if (!manualOrderForm.securities_account_id) {
       alert('请选择证券账户')
+      return
+    }
+    if (manualAccountWarning.value) {
+      alert(`账户未就绪：${manualAccountWarning.value}`)
       return
     }
     const payload = {
