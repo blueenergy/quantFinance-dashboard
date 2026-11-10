@@ -154,7 +154,9 @@ export function usePortfolioPlansWorkbench({
     try {
       const accounts = await getSecuritiesAccounts()
       securitiesAccounts.value = Array.isArray(accounts) ? accounts : []
-      if (!operationAccountId.value && securitiesAccounts.value.length) {
+      // Never guess between multiple accounts: a strategy plan without an
+      // account binding could be published into the personal book.
+      if (!operationAccountId.value && securitiesAccounts.value.length === 1) {
         operationAccountId.value = securitiesAccounts.value[0].id || securitiesAccounts.value[0]._id
       }
     } catch {

@@ -331,6 +331,17 @@
               hide-details
               style="max-width: 170px;"
             />
+            <v-select
+              v-model="editingAccountId"
+              :items="strategyAccountOptions"
+              item-title="title"
+              item-value="value"
+              density="compact"
+              variant="outlined"
+              label="证券账户"
+              hide-details
+              style="max-width: 280px;"
+            />
             <v-text-field
               v-model.number="accountCapital"
               type="number"
@@ -370,6 +381,9 @@
               每笔约 <b>¥{{ perTradeNotionalText }}</b> 名义资金
               <div v-if="!positionPctValid" class="sizing-warn">
                 仓位应在 0–1 之间（0.3 = 30%）
+              </div>
+              <div v-if="securitiesAccounts.length > 1 && !editingAccountId" class="sizing-warn">
+                多个证券账户：请选择本策略的交易账户，否则只出信号不下单
               </div>
             </div>
           </div>
@@ -514,7 +528,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { VExpansionPanels, VExpansionPanel, VExpansionPanelTitle, VExpansionPanelText } from 'vuetify/components'
-import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies } from '../api/user'
+import { getWatchlist, getWatchlistStrategies, setWatchlistStrategy, getAvailableStrategies, getSecuritiesAccounts } from '../api/user'
 import { getTraderPositions } from '../api/trader'
 import { useStrategyPositionGuard } from '../composables/strategyPositionGuard'
 import { notifyDisableResult } from '../utils/strategyDisableOutcome'
@@ -579,6 +593,11 @@ function familyForKey(key) {
 
 // User metadata
 const userServiceLevel = ref('free')
+// Securities accounts owned by the user.  A strategy must name one when the
+// user owns several (personal + strategy), otherwise the worker stays
+// signal-only.
+const securitiesAccounts = ref([])
+const editingAccountId = ref('')
 
 // View state
 const viewMode = ref('detailed')  // 'compact' | 'detailed'
@@ -646,6 +665,35 @@ const detailedHeaders = [
   { title: '更新时间', key: 'updated_at', width: '180px' },
   { title: '激活状态', key: 'enabled', width: '150px' },
 ]
+
+const strategyAccountOptions = computed(() => securitiesAccounts.value.map((account) => ({
+  value: String(account.id || account._id || account.securities_account_id || ''),
+  title: `${account.broker || '券商'} / ${account.account_id || '-'}${account.live_trading_enabled ? ' / live on' : ''}`,
+})))
+
+// Prefer the account most existing strategy configs already use, so a new
+// strategy defaults to the same book without hard-coding a broker account
+// number in the dashboard.
+const defaultStrategyAccountId = computed(() => {
+  const counts = new Map()
+  const bump = (id) => {
+    const value = String(id || '')
+    if (value) counts.set(value, (counts.get(value) || 0) + 1)
+  }
+  for (const row of detailedRows.value) bump(row.securities_account_id)
+  for (const row of rows.value) {
+    for (const entry of Object.values(row.strategies || {})) bump(entry.securities_account_id)
+  }
+  let best = ''
+  let bestCount = 0
+  for (const [id, count] of counts) {
+    if (count > bestCount) {
+      best = id
+      bestCount = count
+    }
+  }
+  return best
+})
 
 const selectedPresetObj = computed(() => {
   // Look in availablePresets (already normalized by loadPresetsForStrategy),
@@ -728,17 +776,21 @@ function hasStrategyConfig(strategies) {
 // ============================================================================
 
 async function loadData() {
-  const [wl, stratResp, avail, positions, templatesResp, profileResp] = await Promise.all([
+  const [wl, stratResp, avail, positions, accountsResp, templatesResp, profileResp] = await Promise.all([
     getWatchlist(),
     getWatchlistStrategies(),
     getAvailableStrategies(),
     dataSource.value === 'positions' ? getTraderPositions() : Promise.resolve([]),
+    getSecuritiesAccounts().catch(() => []),
     request({ url: '/strategy/templates', method: 'get' }),
     request({ url: '/user/profile', method: 'get' }).catch(() => null),
   ])
-  
+
   // Set user service level (default free)
   userServiceLevel.value = profileResp?.user?.service_level || 'free'
+  securitiesAccounts.value = Array.isArray(accountsResp)
+    ? accountsResp
+    : (Array.isArray(accountsResp?.data) ? accountsResp.data : [])
   
   // Filter to only show strategies with allow_live=true
   const liveStrategies = avail.filter(s => s.allow_live === true)
@@ -801,6 +853,7 @@ function buildStrategyMap(strategies) {
       params: s.params || {},
       enabled: s.enabled !== false,
       updated_at: s.updated_at,
+      securities_account_id: s.securities_account_id || '',
     }
   })
   return map
@@ -830,6 +883,7 @@ function buildCompactViewData(symbols, strategyMap, nameMap) {
         cadence: strategyMeta.value[activeKey]?.cadence || 'minute',
         params: record?.params || {},
         enabled: record?.enabled || false,
+        securities_account_id: record?.securities_account_id || '',
       }
     })
 
@@ -868,6 +922,7 @@ function buildDetailedViewData(symbols, strategyMap, nameMap) {
           strategy_key: stratKey,
           params: stratData.params,
           enabled: stratData.enabled,
+          securities_account_id: stratData.securities_account_id || '',
           updated_at: formatTimestamp(stratData.updated_at),
         })
       }
@@ -901,12 +956,15 @@ async function toggleStrategy(item, familyKey) {
   const desired = entry.enabled
   // Omit params: the API merges params, and echoing a stale snapshot here could
   // overwrite newer values. Only the enabled flag is meant to change.
+  const payload = {
+    symbol: normalizeSymbol(item.symbol),
+    strategy: entry.activeKey,
+    enabled: desired,
+  }
+  const accountId = entry.securities_account_id || (desired ? defaultStrategyAccountId.value : '')
+  if (accountId) payload.securities_account_id = accountId
   try {
-    const result = await saveStrategyWithGuard({
-      symbol: normalizeSymbol(item.symbol),
-      strategy: entry.activeKey,
-      enabled: desired,
-    })
+    const result = await saveStrategyWithGuard(payload)
     if (result?.cancelled) entry.enabled = !desired
     else notifyDisableResult(result)
   } catch (err) {
@@ -918,12 +976,15 @@ async function toggleStrategy(item, familyKey) {
 
 async function toggleStrategyDetailed(item) {
   const desired = item.enabled
+  const payload = {
+    symbol: normalizeSymbol(item.symbol),
+    strategy: item.strategy_key,
+    enabled: desired,
+  }
+  const accountId = item.securities_account_id || (desired ? defaultStrategyAccountId.value : '')
+  if (accountId) payload.securities_account_id = accountId
   try {
-    const result = await saveStrategyWithGuard({
-      symbol: normalizeSymbol(item.symbol),
-      strategy: item.strategy_key,
-      enabled: desired,
-    })
+    const result = await saveStrategyWithGuard(payload)
     if (result?.cancelled) {
       item.enabled = !desired
       return
@@ -959,6 +1020,7 @@ async function addStockWithStrategy() {
       strategy: strategyKey,
       params: {},
       enabled: false,
+      securities_account_id: defaultStrategyAccountId.value || undefined,
     })
     addStockDialog.value = false
     dataSource.value = 'watchlist'
@@ -980,7 +1042,8 @@ async function onAddStrategy(item, familyKey) {
       symbol: normalizeSymbol(item.symbol),
       strategy: strategyKey,
       params: {},
-      enabled: false
+      enabled: false,
+      securities_account_id: defaultStrategyAccountId.value || undefined,
     })
     await loadData()
   } catch (err) {
@@ -1005,6 +1068,7 @@ function openParams(item, familyKey) {
   accountCapital.value = Number(params.account_capital ?? 1000000)
   positionPct.value = Number(params.position_pct ?? 0.3)
   managedShares.value = Number(params.managed_shares ?? 0)
+  editingAccountId.value = String(entry.securities_account_id || defaultStrategyAccountId.value || '')
   loadPresetsForStrategy(entry.activeKey)
   paramsDialog.value = true
 }
@@ -1019,6 +1083,7 @@ function openParamsDetailed(item) {
   accountCapital.value = Number(params.account_capital ?? 1000000)
   positionPct.value = Number(params.position_pct ?? 0.3)
   managedShares.value = Number(params.managed_shares ?? 0)
+  editingAccountId.value = String(item.securities_account_id || defaultStrategyAccountId.value || '')
   loadPresetsForStrategy(item.strategy_key)
   paramsDialog.value = true
 }
@@ -1091,6 +1156,13 @@ function applyPreset() {
 
 async function saveParams() {
   try {
+    // A user with several securities accounts must name the book explicitly;
+    // an unbound strategy silently degrades to signal-only.
+    if (securitiesAccounts.value.length > 1 && !editingAccountId.value) {
+      alert('该用户有多个证券账户，请先选择本策略绑定的证券账户')
+      return
+    }
+
     // Use editingParams (from table) as the source of truth
     const params = { ...editingParams.value }
     // The API merges params; a key absent from `params` is kept unless it is
@@ -1145,7 +1217,8 @@ async function saveParams() {
         strategy: targetKey,
         params,
         deleted_keys: deletedKeys,
-        enabled: wasEnabled
+        enabled: wasEnabled,
+        securities_account_id: editingAccountId.value || undefined,
       })
     } else {
       await setWatchlistStrategy({
@@ -1153,7 +1226,8 @@ async function saveParams() {
         strategy: editingStrategy.value,
         params,
         deleted_keys: deletedKeys,
-        enabled: wasEnabled
+        enabled: wasEnabled,
+        securities_account_id: editingAccountId.value || undefined,
       })
     }
 

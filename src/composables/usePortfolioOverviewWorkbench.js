@@ -281,7 +281,10 @@ export function usePortfolioOverviewWorkbench({
       selectedLiveAccountId.value = portfolioAccount
       return
     }
-    if (!selectedLiveAccountId.value && securitiesAccounts.value.length) {
+    // Only auto-select when the user has exactly one account.  With several
+    // accounts (personal + strategy) a plan that does not name an account
+    // could silently publish into the wrong book.
+    if (!selectedLiveAccountId.value && securitiesAccounts.value.length === 1) {
       selectedLiveAccountId.value = (
         securitiesAccounts.value[0].id || securitiesAccounts.value[0]._id || ''
       )
