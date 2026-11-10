@@ -137,36 +137,86 @@
             </div>
           </div>
           <div class="equity-chart" aria-label="Account equity curve">
-            <svg viewBox="0 0 640 220" role="img">
-              <line x1="28" y1="28" x2="28" y2="192" />
-              <line x1="28" y1="192" x2="612" y2="192" />
-              <polyline :points="accountEquityChart.points" />
-              <circle
-                v-for="point in accountEquityChart.points.split(' ')"
-                :key="point"
-                :cx="point.split(',')[0]"
-                :cy="point.split(',')[1]"
-                r="3"
-              />
-              <circle
-                v-if="accountEquityChart.live"
-                class="equity-live-dot"
-                :cx="accountEquityChart.live.x"
-                :cy="accountEquityChart.live.y"
-                r="5"
-              />
-              <text x="36" y="22">{{ formatCurrency(accountEquityChart.max) }}</text>
-              <text x="36" y="186">{{ formatCurrency(accountEquityChart.min) }}</text>
-              <text
-                v-for="label in accountEquityChart.labels"
-                :key="label.text"
-                :x="label.x"
-                :y="label.y"
-                :text-anchor="label.anchor"
+            <div class="equity-chart-inner">
+              <svg
+                viewBox="0 0 640 220"
+                role="img"
+                @mousemove="onEquityHover"
+                @mouseleave="onEquityLeave"
               >
-                {{ label.text }}
-              </text>
-            </svg>
+                <line x1="28" y1="28" x2="28" y2="192" />
+                <line x1="28" y1="192" x2="612" y2="192" />
+                <polyline :points="accountEquityChart.points" />
+                <circle
+                  v-for="point in accountEquityChart.points.split(' ')"
+                  :key="point"
+                  :cx="point.split(',')[0]"
+                  :cy="point.split(',')[1]"
+                  r="3"
+                />
+                <circle
+                  v-if="accountEquityChart.live"
+                  class="equity-live-dot"
+                  :cx="accountEquityChart.live.x"
+                  :cy="accountEquityChart.live.y"
+                  r="5"
+                />
+                <line
+                  v-if="hoveredEquityPoint"
+                  class="equity-hover-line"
+                  :x1="hoveredEquityPoint.x"
+                  y1="28"
+                  :x2="hoveredEquityPoint.x"
+                  y2="192"
+                />
+                <circle
+                  v-if="hoveredEquityPoint"
+                  class="equity-hover-dot"
+                  :cx="hoveredEquityPoint.x"
+                  :cy="hoveredEquityPoint.y"
+                  r="4.5"
+                />
+                <text x="36" y="22">{{ formatCurrency(accountEquityChart.max) }}</text>
+                <text x="36" y="186">{{ formatCurrency(accountEquityChart.min) }}</text>
+                <text
+                  v-for="label in accountEquityChart.labels"
+                  :key="label.text"
+                  :x="label.x"
+                  :y="label.y"
+                  :text-anchor="label.anchor"
+                >
+                  {{ label.text }}
+                </text>
+              </svg>
+              <div
+                v-if="hoveredEquityPoint"
+                class="equity-tooltip"
+                :class="hoveredEquityTooltipClass"
+                :style="hoveredEquityTooltipStyle"
+              >
+                <div class="equity-tooltip-head">
+                  {{ formatEquitySnapshotLabel(hoveredEquityPoint) }}
+                </div>
+                <div class="equity-tooltip-row">
+                  <span>总资产</span>
+                  <strong>{{ formatCurrency(hoveredEquityPoint.equity) }}</strong>
+                </div>
+                <div class="equity-tooltip-row">
+                  <span>{{ hoveredEquityPoint.is_intraday ? '较昨收' : '较上一交易日' }}</span>
+                  <strong
+                    v-if="hoveredEquityPoint.change !== null"
+                    :class="hoveredEquityPoint.change >= 0 ? 'is-up' : 'is-down'"
+                  >
+                    {{ formatSignedCurrency(hoveredEquityPoint.change) }}<template v-if="hoveredEquityPoint.change_ratio !== null">（{{ formatSignedPercent(hoveredEquityPoint.change_ratio * 100) }}）</template>
+                  </strong>
+                  <strong v-else>—</strong>
+                </div>
+                <div class="equity-tooltip-row">
+                  <span>较区间起点</span>
+                  <strong>{{ formatSignedCurrency(hoveredEquityPoint.change_from_start) }}</strong>
+                </div>
+              </div>
+            </div>
           </div>
         </template>
       </v-card-text>
@@ -509,14 +559,21 @@ const accountEquityRows = computed(() => {
       const first = Number(rows[0]?.total_asset ?? rows[0]?.equity)
       const previous = index > 0 ? Number(rows[index - 1].total_asset ?? rows[index - 1].equity) : NaN
       const change = Number.isFinite(previous) ? equity - previous : null
+      const changeRatio = change !== null && previous !== 0 ? change / previous : null
       const changeFromStart = Number.isFinite(first) ? equity - first : null
-      return { ...point, equity, change, change_from_start: changeFromStart }
+      return {
+        ...point,
+        equity,
+        change,
+        change_ratio: changeRatio,
+        change_from_start: changeFromStart,
+      }
     })
 })
 
 const accountEquityChart = computed(() => {
   const rows = accountEquityRows.value
-  if (!rows.length) return { points: '', live: null, labels: [], min: 0, max: 0 }
+  if (!rows.length) return { points: '', coords: [], live: null, labels: [], min: 0, max: 0 }
   const values = rows.map(row => row.equity)
   const min = Math.min(...values)
   const max = Math.max(...values)
@@ -532,6 +589,7 @@ const accountEquityChart = computed(() => {
   const lastRow = rows[rows.length - 1]
   return {
     points: coords.map(point => `${point.x},${point.y}`).join(' '),
+    coords,
     live: lastRow.is_intraday ? coords[coords.length - 1] : null,
     min,
     max,
@@ -546,6 +604,58 @@ const accountEquityChart = computed(() => {
     ],
   }
 })
+
+// 鼠标悬停资金曲线：吸附到最近的采样点，显示该点资产与较上一交易日的变动。
+const hoveredEquityIndex = ref(null)
+
+const hoveredEquityPoint = computed(() => {
+  const index = hoveredEquityIndex.value
+  if (index === null) return null
+  const rows = accountEquityRows.value
+  const row = rows[index]
+  const coords = accountEquityChart.value.coords[index]
+  if (!row || !coords) return null
+  return { ...row, x: coords.x, y: coords.y }
+})
+
+const hoveredEquityTooltipClass = computed(() => {
+  const point = hoveredEquityPoint.value
+  if (!point) return ''
+  return {
+    'is-start': point.x < 170,
+    'is-end': point.x > 470,
+    'is-below': point.y < 100,
+  }
+})
+
+const hoveredEquityTooltipStyle = computed(() => {
+  const point = hoveredEquityPoint.value
+  if (!point) return {}
+  return {
+    left: `${(point.x / 640) * 100}%`,
+    top: `${(point.y / 220) * 100}%`,
+  }
+})
+
+function onEquityHover(event) {
+  const rows = accountEquityRows.value
+  const coords = accountEquityChart.value.coords
+  if (!rows.length || !coords.length) return
+  const rect = event.currentTarget.getBoundingClientRect()
+  if (!rect.width) return
+  const viewX = ((event.clientX - rect.left) / rect.width) * 640
+  let nearest = 0
+  for (let index = 1; index < coords.length; index += 1) {
+    if (Math.abs(coords[index].x - viewX) < Math.abs(coords[nearest].x - viewX)) {
+      nearest = index
+    }
+  }
+  hoveredEquityIndex.value = nearest
+}
+
+function onEquityLeave() {
+  hoveredEquityIndex.value = null
+}
 
 // 计算最大持仓占比
 const largestPositionRatio = computed(() => {
@@ -624,6 +734,13 @@ function formatPercent(value) {
   if (value === undefined || value === null) return 'N/A'
   // 数据库中的unrealized_pnl_pct字段已经是百分比形式（例如3.406表示3.406%）
   return parseFloat(value).toFixed(2) + '%';
+}
+
+// 涨跌幅（入参已是百分比数值，例如 0.93 -> +0.93%）
+function formatSignedPercent(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return 'N/A'
+  return `${number >= 0 ? '+' : ''}${number.toFixed(2)}%`
 }
 
 // 资金曲线日期：20261106 -> 2026-11-06
@@ -1054,5 +1171,65 @@ async function openHistoryDialog(position) {
 .equity-chart text {
   fill: rgba(var(--v-theme-on-surface), 0.55);
   font-size: 12px;
+}
+.equity-chart-inner {
+  position: relative;
+}
+.equity-chart line.equity-hover-line {
+  stroke: rgba(var(--v-theme-on-surface), 0.45);
+  stroke-dasharray: 3 3;
+}
+.equity-chart circle.equity-hover-dot {
+  fill: rgb(var(--v-theme-primary));
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.equity-tooltip {
+  position: absolute;
+  z-index: 5;
+  min-width: 190px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(18, 18, 18, 0.9);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  transform: translate(-50%, calc(-100% - 10px));
+}
+.equity-tooltip.is-start {
+  transform: translate(0, calc(-100% - 10px));
+}
+.equity-tooltip.is-end {
+  transform: translate(-100%, calc(-100% - 10px));
+}
+.equity-tooltip.is-below {
+  transform: translate(-50%, 10px);
+}
+.equity-tooltip.is-start.is-below {
+  transform: translate(0, 10px);
+}
+.equity-tooltip.is-end.is-below {
+  transform: translate(-100%, 10px);
+}
+.equity-tooltip-head {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.equity-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+}
+.equity-tooltip-row span {
+  opacity: 0.7;
+}
+.equity-tooltip-row strong.is-up {
+  color: #4ade80;
+}
+.equity-tooltip-row strong.is-down {
+  color: #f87171;
 }
 </style>
