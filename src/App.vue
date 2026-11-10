@@ -120,7 +120,10 @@
           <!-- 每个 Tab 首次被点击时才 mount，之后仅用 v-show 切换，避免反复加载 -->
             <template v-for="tabView in renderableTabViews" :key="tabView.id">
               <template v-if="shouldMountTabView(tabView.id) && (!tabView.adminOnly || user?.is_admin)">
-                <div v-show="activeTab === tabView.id" :class="['tab-page', tabView.wrapperClass || undefined]">
+                <div
+                  v-show="activeTab === tabView.id"
+                  :class="['tab-page', tabView.wrapperClass || undefined, { 'tab-page--dark': tabView.darkSurface }]"
+                >
                   <Suspense>
                     <template #default>
                       <component
@@ -862,12 +865,25 @@ onUnmounted(() => {
 /* Stable page frame: keeps the panel at a full viewport height while a lazy
    tab chunk loads, so the content window doesn't start small and jump open.
    The direct page root stretches to fill the frame, giving every tab the same
-   content canvas. */
+   content canvas.
+
+   The canvas colour is decided HERE and nowhere else. Pages paint their own
+   cards on top of it; a page root must not paint a full-page background. */
 .tab-page {
   display: flex;
   flex-direction: column;
   width: 100%;
   min-height: calc(100vh - var(--app-header-height, 68px) - 68px);
+  background: var(--surface-bg);
+  color: var(--text-primary);
+}
+
+/* Transitional escape hatch for tabs still on the dark shell palette.
+   Every tab carrying this class is a migration TODO: convert it to the light
+   surface, then delete its `darkSurface` flag in `tabViews.js`. */
+.tab-page--dark {
+  background: var(--canvas-bg-start);
+  color: var(--text-primary-on-dark);
 }
 
 .tab-page > * {

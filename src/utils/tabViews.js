@@ -96,6 +96,7 @@ export const tabViewDefinitions = [
     id: 'stock-workbench',
     component: StockWorkbench,
     wrapperClass: 'stock-workbench-view',
+    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '股票工作台加载中...',
   },
@@ -129,12 +130,14 @@ export const tabViewDefinitions = [
   {
     id: 'earnings-hunter',
     component: EarningsHunter,
+    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '财报猎手加载中...',
   },
   {
     id: 'shenwan-index',
     component: ShenwanIndustryIndex,
+    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '申万行业研究加载中...',
   },
@@ -153,12 +156,14 @@ export const tabViewDefinitions = [
   {
     id: 'fund-inventory',
     component: FundInventoryBoard,
+    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '公募库存看板加载中...',
   },
   {
     id: 'fund-copywork',
     component: FundCopyworkBoard,
+    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '抄作业看板加载中...',
   },
@@ -256,6 +261,7 @@ export const tabViewDefinitions = [
   {
     id: 'strategy-pool',
     component: StrategyStockPool,
+    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '策略股池加载中...',
   },
@@ -286,6 +292,7 @@ export const tabViewDefinitions = [
   {
     id: 'limit-up-ladder',
     component: LimitUpLadder,
+    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '连板天梯加载中...',
   },
@@ -358,12 +365,14 @@ export const tabViewDefinitions = [
   {
     id: 'sector-concept',
     component: SectorConceptAnalysis,
+    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '概念板块分析加载中...',
   },
   {
     id: 'hot-stock',
     component: HotStockAnalysis,
+    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '热股分析加载中...',
   },
