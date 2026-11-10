@@ -22,6 +22,16 @@
     <div v-else class="container" data-testid="app-shell">
       <header class="header" data-testid="app-header">
         <div class="header-left">
+          <button
+            v-if="isAuthenticated"
+            type="button"
+            class="menu-toggle"
+            data-testid="nav-menu-toggle"
+            aria-label="打开主导航"
+            aria-controls="main-nav"
+            :aria-expanded="sidebarOpen"
+            @click="toggleSidebar"
+          >☰</button>
           <h1 v-if="isAuthenticated" data-testid="app-title">🔥 悟空量化金融智能助手</h1>
         </div>
         <div class="header-right">
@@ -29,18 +39,27 @@
           <UserAvatar :user="user" @logout="handleLogout" />
         </div>
       </header>
-      
+
+      <div v-if="sidebarOpen" class="nav-backdrop" @click="closeSidebar" />
+      <NavSidebar
+        v-if="tabsShellReady"
+        :tabs="adminTabs"
+        :active-tab="activeTab"
+        :chart-symbol="chartSymbol"
+        :drawer-open="sidebarOpen"
+        @select="handleSidebarSelect"
+      />
+      <aside v-else class="nav-placeholder" data-testid="nav-sidebar-loading">
+        主导航加载中…
+      </aside>
+
       <div class="main-content">
         <!-- 普通用户显示：AI公告栏和搜索功能 -->
         <template v-if="!user?.is_admin">
-          <section class="home-welcome">
+          <section v-if="!activeTab" class="home-welcome">
             <div class="welcome-card home-welcome-card">
               <div class="home-welcome-copy">
-                <p class="welcome-eyebrow">欢迎页</p>
                 <h2>主控室摘要入口</h2>
-                <p>
-                  首页只显示轻量摘要。进入全球市场简报、数据脉搏和 AI 大盘分析时，才按需加载对应模块。
-                </p>
               </div>
 
               <div class="home-entry-grid">
@@ -96,26 +115,12 @@
         </div>
 
         <template v-if="tabsShellReady">
-        <div class="tabs">
-          <a
-            v-for="tab in adminTabs"
-            :key="tab.id"
-            :href="tabHref(tab.id)"
-            :class="['tab-button', { active: activeTab === tab.id }]"
-            :data-testid="`nav-tab-${tab.id}`"
-            @click="onTabButtonClick($event, tab.id)"
-          >
-            {{ tab.name }}
-          </a>
-        </div>
-
-        <div v-if="user?.is_admin || adminTabs.length" class="tab-content">
-          <div v-if="!activeTab" class="empty">请选择一个功能页</div>
-
+        <p v-if="!(user?.is_admin || adminTabs.length)" class="nav-policy-loading">无法加载主导航列表，请刷新页面重试。</p>
+        <div v-else-if="activeTab" class="tab-content">
           <!-- 每个 Tab 首次被点击时才 mount，之后仅用 v-show 切换，避免反复加载 -->
             <template v-for="tabView in renderableTabViews" :key="tabView.id">
               <template v-if="shouldMountTabView(tabView.id) && (!tabView.adminOnly || user?.is_admin)">
-                <div v-show="activeTab === tabView.id" :class="tabView.wrapperClass || undefined">
+                <div v-show="activeTab === tabView.id" :class="['tab-page', tabView.wrapperClass || undefined]">
                   <Suspense>
                     <template #default>
                       <component
@@ -132,7 +137,6 @@
               </template>
             </template>
         </div>
-        <p v-else class="nav-policy-loading">无法加载主导航列表，请刷新页面重试。</p>
         </template>
         <p v-else class="nav-policy-loading">主导航策略加载中…</p>
       </div>
@@ -154,9 +158,10 @@ import AccountActivate from './components/AccountActivate.vue'
 import ResetPassword from './components/ResetPassword.vue'
 import SiteIcpFooter from './components/common/SiteIcpFooter.vue'
 import StrategyPositionGuardDialog from './components/StrategyPositionGuardDialog.vue'
+import NavSidebar from './components/NavSidebar.vue'
 import { computed, ref, watch, onMounted, onUnmounted, nextTick, provide } from 'vue'
 import { getRenderableTabViews, getTabProps as buildTabProps, getTabListeners as buildTabListeners } from './utils/tabViews.js'
-import { parseDeepLinkFromUrl, buildDeepLinkHref, isModifiedClick } from './utils/appDeepLinks.js'
+import { parseDeepLinkFromUrl } from './utils/appDeepLinks.js'
 import { nextRankingTabMountedState } from './utils/rankingTabMountGate.js'
 import { useAppStartupFlow } from './composables/useAppStartupFlow.js'
 import { useHomeSummaries } from './composables/useHomeSummaries.js'
@@ -227,6 +232,7 @@ const {
 const pendingEtfNavigation = ref(null)
 const pendingStockWorkbenchNavigation = ref(null)
 const pendingPortfolioOverviewNavigation = ref(null)
+const sidebarOpen = ref(false)
 
 /**
  * @param {{ tab: string, params?: Record<string, string> }} payload
@@ -276,16 +282,18 @@ function applyDeepLink({ tab, params = {} }) {
   return true
 }
 
-function tabHref(tabId) {
-  return buildDeepLinkHref(tabId)
+function toggleSidebar() {
+  sidebarOpen.value = !sidebarOpen.value
 }
 
-function onTabButtonClick(event, tabId) {
-  // Let the browser handle modified clicks (ctrl/cmd/middle) to open a new tab.
-  if (isModifiedClick(event)) return
-  event.preventDefault()
+function closeSidebar() {
+  sidebarOpen.value = false
+}
+
+function handleSidebarSelect(tabId) {
   // Preserve existing toggle behavior on plain left click.
   switchTab(tabId, { toggle: true })
+  sidebarOpen.value = false
 }
 
 const {
@@ -451,24 +459,64 @@ function onDocumentVisibilityChange() {
   window.dispatchEvent(new Event('resize'))
 }
 
+function onNavKeydown(event) {
+  if (event.key === 'Escape') closeSidebar()
+}
+
+function onNavResize() {
+  if (window.innerWidth > 1200) closeSidebar()
+}
+
+let layoutResizeObserver = null
+let layoutResizeFrame = 0
+
+function scheduleLayoutResize() {
+  if (layoutResizeFrame) return
+  layoutResizeFrame = requestAnimationFrame(() => {
+    layoutResizeFrame = 0
+    // Charts that only listen to window.resize (and not ResizeObserver)
+    // would otherwise keep the canvas width captured at mount time.
+    window.dispatchEvent(new Event('resize'))
+  })
+}
+
 onMounted(() => {
   window.addEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
   window.addEventListener('shenwan:select-industry', onShenwanSelectIndustry)
   window.addEventListener('stock-workbench:open', onOpenStockWorkbench)
   window.addEventListener('app:navigate', onAppNavigate)
+  window.addEventListener('resize', onNavResize)
   document.addEventListener('visibilitychange', onDocumentVisibilityChange)
+  document.addEventListener('keydown', onNavKeydown)
+
+  const layoutTarget = document.querySelector('.main-content')
+  if (layoutTarget && typeof ResizeObserver !== 'undefined') {
+    layoutResizeObserver = new ResizeObserver(scheduleLayoutResize)
+    layoutResizeObserver.observe(layoutTarget)
+  }
 })
 onUnmounted(() => {
   window.removeEventListener('shenwan:open-deep-analysis', onShenwanOpenDeepAnalysis)
   window.removeEventListener('shenwan:select-industry', onShenwanSelectIndustry)
   window.removeEventListener('stock-workbench:open', onOpenStockWorkbench)
   window.removeEventListener('app:navigate', onAppNavigate)
+  window.removeEventListener('resize', onNavResize)
   document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
+  document.removeEventListener('keydown', onNavKeydown)
+  if (layoutResizeObserver) {
+    layoutResizeObserver.disconnect()
+    layoutResizeObserver = null
+  }
+  if (layoutResizeFrame) {
+    cancelAnimationFrame(layoutResizeFrame)
+    layoutResizeFrame = 0
+  }
 })
 </script>
 
 <style scoped>
 #app {
+  --app-header-height: 68px;
   min-height: 100vh;
   /* 为固定 ICP 页脚留出空间，避免遮挡内容 */
   padding-bottom: 36px;
@@ -476,8 +524,16 @@ onUnmounted(() => {
 }
 
 .container {
-  max-width: 1400px;
+  width: 100%;
+  max-width: 1620px;
   margin: 0 auto;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "header header"
+    "sidebar main";
   background: linear-gradient(135deg, #1e1e3f 0%, #2a2a5e 100%);
   min-height: 100vh;
   box-shadow: 0 0 40px rgba(138, 43, 226, 0.3);
@@ -485,6 +541,7 @@ onUnmounted(() => {
 }
 
 .header {
+  grid-area: header;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -492,7 +549,25 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #8a2be2 0%, #9370db 50%, #6a5acd 100%);
   color: white;
   box-shadow: 0 4px 20px rgba(138, 43, 226, 0.4);
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.nav-placeholder {
+  grid-area: sidebar;
+  box-sizing: border-box;
+  min-height: calc(100vh - var(--app-header-height, 68px) - 36px);
+  padding: 18px 14px;
+  border-right: 1px solid rgba(138, 43, 226, 0.22);
+  background: rgba(15, 23, 42, 0.38);
+  color: #b19cd9;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.nav-backdrop {
+  display: none;
 }
 
 .header::before {
@@ -506,6 +581,13 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
 .header-left h1 {
   margin: 0;
   font-size: 24px;
@@ -517,6 +599,26 @@ onUnmounted(() => {
   background-clip: text;
 }
 
+.menu-toggle {
+  display: none;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.menu-toggle:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -525,15 +627,17 @@ onUnmounted(() => {
 }
 
 .main-content {
-  padding: 30px;
+  grid-area: main;
+  min-width: 0;
+  padding: 16px 18px;
   background: linear-gradient(135deg, #1e1e3f 0%, #2a2a5e 100%);
 }
 
 .home-welcome {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  margin-bottom: 32px;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .home-welcome-card {
@@ -541,48 +645,39 @@ onUnmounted(() => {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 245, 249, 0.96) 100%);
 }
 
-.home-welcome-copy {
-  margin-bottom: 20px;
+.home-welcome-card.welcome-card {
+  padding: 14px 18px;
+  border-radius: 12px;
+  text-align: left;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 245, 249, 0.96) 100%);
 }
 
-.welcome-eyebrow {
-  margin: 0 0 10px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #2563eb;
+.home-welcome-copy {
+  margin-bottom: 10px;
 }
 
 .home-welcome-copy h2 {
-  margin: 0 0 12px;
-  color: #0f172a;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-}
-
-.home-welcome-copy p {
   margin: 0;
-  color: #475569;
-  line-height: 1.6;
-  max-width: 760px;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
 }
 
 .home-entry-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 10px;
 }
 
 .home-entry-card {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 188px;
-  padding: 18px;
+  min-height: 128px;
+  padding: 12px;
   border: 1px solid #dbe3ef;
-  border-radius: 16px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.9);
   text-align: left;
   cursor: pointer;
@@ -612,48 +707,49 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
+  margin-bottom: 8px;
 }
 
 .home-entry-card__icon {
-  font-size: 24px;
+  font-size: 18px;
 }
 
 .home-entry-card__badge {
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
   background: #eff6ff;
   color: #1d4ed8;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
 .home-entry-card__body h3 {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   color: #0f172a;
-  font-size: 18px;
+  font-size: 14px;
 }
 
 .home-entry-card__body p {
   margin: 0;
   color: #475569;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .home-entry-card__meta {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 14px;
+  gap: 4px;
+  margin-top: 8px;
   color: #64748b;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .home-entry-card__action {
-  margin-top: 18px;
+  margin-top: 8px;
   color: #2563eb;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -756,52 +852,30 @@ onUnmounted(() => {
   border-radius: 8px;
 }
 
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
-  max-width: 100%;
-  padding: 6px 6px 0;
-  border-bottom: 2px solid rgba(138, 43, 226, 0.3);
-  margin-bottom: 20px;
-  background: rgba(30, 30, 63, 0.5);
-  border-radius: 8px 8px 0 0;
-}
-
-.tab-button {
-  flex: 0 1 auto;
-  min-width: 0;
-  padding: 8px 12px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  color: #b19cd9;
-  text-decoration: none;
-  border-bottom: 2px solid transparent;
-  transition: all 0.3s;
-  position: relative;
-  white-space: nowrap;
-}
-
-.tab-button:hover {
-  color: #e6e6fa;
-  background: rgba(138, 43, 226, 0.1);
-}
-
-.tab-button.active {
-  color: #ffffff;
-  border-bottom-color: #8a2be2;
-  background: linear-gradient(135deg, rgba(138, 43, 226, 0.2) 0%, rgba(147, 112, 219, 0.2) 100%);
-}
-
 .tab-content {
   min-height: 400px;
   background: rgba(30, 30, 63, 0.3);
   border-radius: 8px;
-  padding: 20px;
+  padding: 0;
+}
+
+/* Stable page frame: keeps the panel at a full viewport height while a lazy
+   tab chunk loads, so the content window doesn't start small and jump open.
+   The direct page root stretches to fill the frame, giving every tab the same
+   content canvas. */
+.tab-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: calc(100vh - var(--app-header-height, 68px) - 68px);
+}
+
+.tab-page > * {
+  flex: 1 0 auto;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0;
+  margin: 0 !important;
 }
 
 .data-table {
@@ -839,19 +913,7 @@ onUnmounted(() => {
   transition: all 0.2s;
 }
 
-.empty {
-  color: #b19cd9;
-  margin-top: 30px;
-  text-align: center;
-  font-size: 18px;
-  padding: 60px;
-  background: rgba(30, 30, 63, 0.5);
-  border-radius: 8px;
-  border: 1px solid rgba(138, 43, 226, 0.2);
-}
-
-.chart-view,
-.analysis-view {
+.chart-view {
   padding: 20px 0;
   background: rgba(30, 30, 63, 0.3);
   border-radius: 8px;
@@ -870,6 +932,34 @@ onUnmounted(() => {
 .skeleton-card { height: 140px; }
 .skeleton-table { height: 220px; }
 .skeleton-chart { height: 300px; }
+
+@media (max-width: 1200px) {
+  .container {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "header"
+      "main";
+  }
+
+  .nav-placeholder {
+    display: none;
+  }
+
+  .nav-backdrop {
+    display: block;
+    position: fixed;
+    top: var(--app-header-height, 68px);
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 35;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  .menu-toggle {
+    display: inline-flex;
+  }
+}
 
 @media (max-width: 1024px) {
   .home-entry-grid {

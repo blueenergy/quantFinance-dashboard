@@ -600,7 +600,6 @@ export default {
 <style scoped>
 /* 管理员蓝白色调UI样式 - 专业、清爽、现代 */
 .admin-dashboard {
-  min-height: 100vh;
   background: #f8fafc;
   color: #1e293b;
   font-family: 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;

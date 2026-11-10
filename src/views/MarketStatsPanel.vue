@@ -486,7 +486,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .market-stats-panel {
-  min-height: 100vh;
+  padding: 0 !important;
   background: #f5f5f5;
 }
 .mrp-paper {
@@ -494,8 +494,6 @@ onBeforeUnmount(() => {
   color: #111111;
   border: 1px solid #d0d0d0;
   border-radius: 4px;
-  max-width: 1400px;
-  margin: 0 auto;
   padding: 20px 24px;
 }
 .mrp-h1 {

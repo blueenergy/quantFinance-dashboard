@@ -121,8 +121,29 @@ describe('useNavigationShell loadNavigationTabs', () => {
     await shell.loadNavigationTabs()
 
     expect(shell.adminTabs.value).toEqual([
-      { id: 'portfolio-overview', name: '📊 组合总览' },
+      { id: 'portfolio-overview', name: '📊 组合总览', group: 'trading' },
     ])
+  })
+
+  it('skips retired tabs and keeps unknown ids under 其他', async () => {
+    localMem.access_token = 'tok'
+    localMem.user_info = JSON.stringify({ username: 'alice' })
+    requestMock.mockResolvedValue({
+      success: true,
+      data: { visible_tab_ids: ['ranking', 'chat', 'x-influencer-voices', 'future-tab'] },
+    })
+
+    const user = ref({ username: 'alice' })
+    const isAuthenticated = ref(true)
+    const shell = useNavigationShell({ user, isAuthenticated })
+
+    await shell.loadNavigationTabs()
+
+    expect(shell.adminTabs.value.map((tab) => tab.id)).toEqual(['ranking', 'future-tab'])
+    expect(shell.adminTabs.value.find((tab) => tab.id === 'future-tab')).toMatchObject({
+      name: 'future-tab',
+      group: 'other',
+    })
   })
 
   it('prefetches echarts when opening a kline tab', () => {

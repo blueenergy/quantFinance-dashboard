@@ -160,7 +160,7 @@ const FactorCreateDrawer = defineAsyncComponent(
   () => import('../components/factor/FactorCreateDrawer.vue'),
 )
 
-const NARROW_MQ = '(max-width: 900px)'
+const NARROW_MQ = '(max-width: 800px)'
 
 const indexOptions = INDEX_OPTIONS
 const factorSetOptions = FACTOR_SET_OPTIONS

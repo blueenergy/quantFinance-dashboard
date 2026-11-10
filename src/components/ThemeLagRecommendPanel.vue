@@ -470,8 +470,6 @@ onMounted(() => {
   color: #111111;
   border: 1px solid #d0d0d0;
   border-radius: 4px;
-  max-width: 1200px;
-  margin: 0 auto;
 }
 
 .tl-h1 {

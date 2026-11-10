@@ -1511,8 +1511,6 @@ export default {
 <style scoped>
 .user-profile {
   padding: 20px;
-  max-width: 1000px;
-  margin: 0 auto;
   background: #f8f9fa;
   border-radius: 8px;
   min-height: 600px;

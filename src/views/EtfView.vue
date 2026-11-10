@@ -616,8 +616,6 @@ defineExpose({
   --border-color: #e2e8f0;
   --primary-color: #0466c8;
   padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
   min-height: 620px;
   box-sizing: border-box;
   border: 1px solid var(--border-color);

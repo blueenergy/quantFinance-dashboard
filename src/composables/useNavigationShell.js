@@ -1,6 +1,7 @@
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import request from '../utils/request'
 import { prefetchEchartsForTab } from '../utils/echarts/loadEcharts.js'
+import { NAV_TABS, RETIRED_NAV_TAB_IDS } from '../utils/navCatalog.js'
 
 const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v9'
 const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v2'
@@ -121,61 +122,8 @@ export function useNavigationShell({ user, isAuthenticated }) {
   })
 
   const adminTabs = computed(() => {
-    const baseTabs = [
-      { id: 'market-events', name: '📅 交易日历' },
-      { id: 'global-market-brief', name: '🌍 全球市场简报' },
-      { id: 'data-pulse', name: '🛰️ 数据脉搏' },
-      { id: 'market-analysis', name: '🤖 AI大盘分析' },
-      { id: 'limit-up-ladder', name: '📊 连板天梯' },
-      { id: 'market-risk', name: '🚨 风险预警' },
-      { id: 'market-regime', name: '📡 广度估值' },
-      { id: 'market-stats', name: '📉 市场统计' },
-      { id: 'market-trend', name: '🧭 趋势全景' },
-      { id: 'market-intraday', name: '⚡ 盘中强弱' },
-      { id: 'china-macro', name: '🇨🇳 中国宏观' },
-      { id: 'us-rates', name: '🇺🇸 美国利率' },
-      { id: 'x-influencer-voices', name: '🐦 X大V情报' },
-      { id: 'theme-lag-recommend', name: '📌 主题补涨' },
-      { id: 'daily-gold-picks', name: '⭐ 每日金股' },
-      { id: 'sector-concept', name: '📈 概念板块' },
-      { id: 'hot-stock', name: '🔥 热股分析' },
-      { id: 'etf', name: '💰 ETF淘金' },
-      { id: 'earnings-hunter', name: '🎯 财报猎手' },
-      { id: 'shenwan-index', name: '📊 申万行业研究' },
-      { id: 'history', name: '🔍 个股深度分析' },
-      { id: 'stock-workbench', name: '🔬 个股工作台' },
-      { id: 'fund-inventory', name: '公募库存' },
-      { id: 'fund-copywork', name: '抄作业' },
-      { id: 'analysis-task-queue', name: '任务队列' },
-      { id: 'strategy-pool', name: '🎯 策略股池' },
-      { id: 'ranking', name: '金榜' },
-      { id: 'entropy-ranking', name: '熵值排名' },
-      { id: 'watchlist', name: '自选股' },
-      { id: 'strategy-lab', name: '🧪 策略实验室' },
-      { id: 'factor-backtest', name: '🧬 因子回测' },
-      { id: 'portfolio-research', name: '组合研究' },
-      { id: 'model-training', name: '模型训练' },
-      { id: 'portfolio-plans', name: '📋 组合交易计划' },
-      { id: 'portfolio-overview', name: '📊 组合总览' },
-      { id: 'strategies', name: '策略配置' },
-      { id: 'strategy-workers', name: '🚀 策略运行' },
-      { id: 'trading-manual', name: '⚡ 交易执行' },
-      { id: 'trade-executions', name: '📜 交易记录' },
-      { id: 'spectrum', name: '阴阳谱' },
-      { id: 'realtime-spectrum', name: '实时阴阳谱' },
-      { id: 'intraday-t0', name: '日内T+0' },
-      { id: 'market-insights', name: '火眼金睛' },
-      { id: 'securities', name: '账户工作台' },
-      { id: 'user-profile', name: '用户配置' },
-      { id: 'chat', name: '🤖 AI助手' },
-      { id: 'kline-comparison', name: '📈 走势对比' },
-      { id: 'futures-kline', name: '📉 期货K线' },
-    ]
-
     if (user.value?.is_admin) {
-      const filteredTabs = baseTabs.map((tab) => ({ ...tab }))
-      filteredTabs.push({ id: 'admin', name: '管理后台' })
-      return filteredTabs
+      return NAV_TABS.map((tab) => ({ ...tab }))
     }
 
     if (!navPolicyResolved.value) {
@@ -187,12 +135,21 @@ export function useNavigationShell({ user, isAuthenticated }) {
       return []
     }
 
-    const tabById = Object.fromEntries(baseTabs.map((tab) => [tab.id, tab]))
-    const filteredTabs = []
-    for (const id of ids) {
-      const row = tabById[id]
-      if (row) filteredTabs.push({ ...row })
+    // Retired ids may still be returned by the backend; skip them instead of
+    // resurrecting them under "其他".
+    const visibleIds = new Set(ids.filter((id) => !RETIRED_NAV_TAB_IDS.has(id)))
+    const filteredTabs = NAV_TABS
+      .filter((tab) => !tab.adminOnly && visibleIds.has(tab.id))
+      .map((tab) => ({ ...tab }))
+
+    // Keep future/unknown ids visible instead of silently dropping them.
+    const knownIds = new Set(NAV_TABS.map((tab) => tab.id))
+    for (const id of visibleIds) {
+      if (!knownIds.has(id)) {
+        filteredTabs.push({ id, name: id, group: 'other' })
+      }
     }
+
     return filteredTabs
   })
 
@@ -231,6 +188,12 @@ export function useNavigationShell({ user, isAuthenticated }) {
     mountedTabs.value.add(tabId)
     activeTab.value = tabId
     prefetchEchartsForTab(tabId)
+    // A tab that was mounted under an older layout may still hold a stale
+    // chart canvas width. After v-show makes it visible, nudge charts that
+    // only listen to window.resize.
+    nextTick(() => {
+      window.dispatchEvent(new Event('resize'))
+    })
   }
 
   function toggleTab(tabId) {

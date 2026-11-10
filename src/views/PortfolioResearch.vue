@@ -310,7 +310,7 @@ const ResearchLivePreviewDrawer = defineAsyncComponent(
   () => import('../components/portfolio/ResearchLivePreviewDrawer.vue'),
 )
 
-const NARROW_MQ = '(max-width: 900px)'
+const NARROW_MQ = '(max-width: 800px)'
 
 const industryOptions = ref([])
 const l1NameMap = computed(() => (

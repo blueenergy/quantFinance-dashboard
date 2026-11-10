@@ -609,10 +609,12 @@ onMounted(() => {
 
 <style scoped>
 .data-pulse-widget {
+  display: flex;
+  flex-direction: column;
   background: #ffffff;
   border: 1px solid #e1e8ed;
   border-radius: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 0;
   overflow: hidden;
   box-shadow: 0 1px 4px rgba(0,0,0,0.04);
 }
@@ -660,7 +662,7 @@ onMounted(() => {
 }
 
 .pulse-label {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: #2d3748;
   white-space: nowrap;
@@ -676,7 +678,7 @@ onMounted(() => {
 }
 
 .summary-item {
-  font-size: 11px;
+  font-size: 12px;
   color: #718096;
   display: flex;
   align-items: center;
@@ -697,6 +699,10 @@ onMounted(() => {
 
 /* ── 展开面板 ── */
 .pulse-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
   border-top: 1px solid #edf2f7;
 }
 
@@ -709,8 +715,8 @@ onMounted(() => {
 .ptab {
   flex: 1;
   min-width: 0;
-  padding: 6px 8px;
-  font-size: 11px;
+  padding: 8px 10px;
+  font-size: 12px;
   font-weight: 500;
   color: #718096;
   border: none;
@@ -727,13 +733,11 @@ onMounted(() => {
 .ptab:hover:not(.active) { background: #f7fafc; }
 
 .panel-content {
+  flex: 1;
+  min-height: 0;
   padding: 10px 12px;
-  max-height: 380px;
-  overflow-y: auto;
   overflow-x: auto;
-}
-.panel-content.score-audit-wrap {
-  max-height: 560px;
+  overflow-y: auto;
 }
 
 .panel-loading, .panel-empty {
@@ -748,8 +752,8 @@ onMounted(() => {
 /* ── 新闻 ── */
 .news-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
 }
 
 .news-category {
@@ -771,7 +775,7 @@ onMounted(() => {
 
 .cat-icon { font-size: 14px; }
 .cat-name {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: #2d3748;
   text-transform: uppercase;
@@ -786,7 +790,7 @@ onMounted(() => {
 
 .news-title {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: #2d3748;
   line-height: 1.4;
   margin-bottom: 2px;
@@ -794,7 +798,7 @@ onMounted(() => {
 
 .news-title-original {
   display: block;
-  font-size: 10px;
+  font-size: 11px;
   color: #718096;
   line-height: 1.3;
   margin-bottom: 2px;
@@ -813,7 +817,7 @@ onMounted(() => {
 .news-meta {
   display: flex;
   gap: 8px;
-  font-size: 10px;
+  font-size: 11px;
   color: #a0aec0;
 }
 
@@ -865,8 +869,8 @@ onMounted(() => {
 
 .sync-jobs {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
   margin-bottom: 16px;
 }
 

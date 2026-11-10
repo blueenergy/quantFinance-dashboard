@@ -199,7 +199,7 @@ function onIndexChange(event) {
   box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 800px) {
   .mobile-hidden {
     display: none !important;
   }

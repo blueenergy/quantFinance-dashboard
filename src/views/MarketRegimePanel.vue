@@ -457,7 +457,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .regime-panel { background: #f5f7fb; min-height: 100%; }
-.regime-shell { max-width: 1280px; margin: 0 auto; }
+.regime-shell { width: 100%; }
 .regime-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 18px; }
 .regime-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .regime-eyebrow { margin: 0 0 6px; color: #607089; font-size: 13px; font-weight: 700; }

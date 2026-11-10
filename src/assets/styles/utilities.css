@@ -1,3 +1,5 @@
+html { scrollbar-gutter: stable; }
+
 .flex-row { display:flex; }
 .flex-row-center { display:flex; align-items:center; }
 .flex-wrap { flex-wrap:wrap; }

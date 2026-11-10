@@ -431,6 +431,7 @@ const displayRecords = computed(() => {
 const loading = ref(false)
 const chartRef = ref(null)
 let chartInstance = null
+let chartResizeObserver = null
 
 
 const mode = ref(props.defaultMode)
@@ -780,14 +781,33 @@ function selectSector(code) {
 }
 
 async function updateChart() {
+  // records drive `v-show` on the chart div; wait for that DOM update so
+  // echarts.init does not measure a display:none container as 0 width.
+  await nextTick()
   if (!chartRef.value) return
   if (!chartInstance) {
     if (!echarts) {
       const mod = await import('echarts')
       echarts = mod.default || mod
     }
+    // HMR / remount can leave an old ECharts instance on this DOM node;
+    // echarts.init would reuse it and keep its stale canvas width.
+    const existingChart = echarts.getInstanceByDom(chartRef.value)
+    if (existingChart) existingChart.dispose()
+    if (chartResizeObserver) {
+      chartResizeObserver.disconnect()
+      chartResizeObserver = null
+    }
     chartInstance = echarts.init(chartRef.value)
     window.addEventListener('resize', handleResize)
+    // The sidebar / page padding can change the chart container width
+    // without a window resize. Keep the canvas in sync.
+    if (typeof ResizeObserver !== 'undefined') {
+      chartResizeObserver = new ResizeObserver(() => {
+        if (chartInstance) chartInstance.resize()
+      })
+      chartResizeObserver.observe(chartRef.value)
+    }
   }
   if (!records.value || records.value.length === 0) {
     chartInstance.clear()
@@ -924,7 +944,9 @@ async function updateChart() {
     series: seriesArr
   }
   chartInstance.setOption(option, true)
-  chartInstance.resize()
+  requestAnimationFrame(() => {
+    if (chartInstance) chartInstance.resize()
+  })
 }
 
 function handleResize() {
@@ -941,6 +963,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (chartResizeObserver) {
+    chartResizeObserver.disconnect()
+    chartResizeObserver = null
+  }
   if (chartInstance) {
     window.removeEventListener('resize', handleResize)
     chartInstance.dispose()
@@ -950,7 +976,14 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.market-spectrum-page { background:#fff; padding:16px; border-radius:8px; }
+.market-spectrum-page {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  background:#fff;
+  padding:16px;
+  border-radius:8px;
+}
 .page-title { margin:0 0 16px; font-size:20px; }
 .controls { margin-bottom:12px; display:flex; flex-direction:column; gap:8px; }
 .date-range { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }

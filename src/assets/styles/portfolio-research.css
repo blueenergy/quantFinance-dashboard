@@ -288,7 +288,7 @@
   color: #b91c1c;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 800px) {
   :where(.portfolio-research) {
     padding: 18px;
   }

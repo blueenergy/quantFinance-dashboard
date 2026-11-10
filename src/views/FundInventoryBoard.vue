@@ -929,7 +929,7 @@ onBeforeUnmount(() => {
 }
 .muted { color: #94a3b8; }
 .error { color: #f87171; }
-.table-card { overflow-x: auto; }
+.table-card { overflow-x: auto; min-height: 360px; }
 table { border-collapse: collapse; width: 100%; }
 th, td { border-bottom: 1px solid rgba(148, 163, 184, .16); padding: 8px 10px; text-align: left; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }

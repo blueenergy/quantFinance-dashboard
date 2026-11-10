@@ -21,6 +21,7 @@ import {
 	VProgressLinear, VProgressCircular, VOverlay, VExpandTransition, VFadeTransition,
 	VSnackbar, VSkeletonLoader,
 	VExpansionPanels, VExpansionPanel, VExpansionPanelTitle, VExpansionPanelText,
+	VCheckbox,
 } from 'vuetify/components';
 import { Ripple } from 'vuetify/directives';
 // Use SVG icon set to avoid loading large icon font
@@ -35,6 +36,7 @@ const vuetify = createVuetify({
 		VProgressLinear, VProgressCircular, VOverlay, VExpandTransition, VFadeTransition,
 		VSnackbar, VSkeletonLoader,
 		VExpansionPanels, VExpansionPanel, VExpansionPanelTitle, VExpansionPanelText,
+		VCheckbox,
 	},
 	directives: { Ripple },
 	icons: {

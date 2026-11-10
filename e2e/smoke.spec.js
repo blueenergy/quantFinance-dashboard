@@ -25,7 +25,8 @@ test.describe('smoke (mocked API)', () => {
 
     await expect(page.getByTestId('app-shell')).toBeVisible()
     await expect(page.getByTestId('app-title')).toContainText('悟空量化')
-    await expect(page.getByTestId('nav-tab-watchlist')).toBeVisible()
+    await expect(page.getByTestId('nav-sidebar')).toBeVisible()
+    await expect(page.getByTestId('nav-group-stock')).toBeVisible()
   })
 
   test('authenticated shell loads nav, opens watchlist tab, and notification panel', async ({
@@ -37,9 +38,14 @@ test.describe('smoke (mocked API)', () => {
 
     await expect(page.getByTestId('app-shell')).toBeVisible()
     await expect(page.getByTestId('notification-center')).toBeVisible()
-    await expect(page.getByTestId('nav-tab-watchlist')).toBeVisible()
-    await expect(page.getByTestId('nav-tab-ranking')).toBeVisible()
+    await expect(page.getByTestId('nav-sidebar')).toBeVisible()
+    await expect(page.getByTestId('nav-group-stock')).toBeVisible()
 
+    await page.getByTestId('nav-group-stock').click()
+    await expect(page.getByTestId('nav-tab-watchlist')).toBeVisible()
+    await page.getByTestId('nav-group-screening').click()
+    await expect(page.getByTestId('nav-tab-ranking')).toBeVisible()
+    await page.getByTestId('nav-group-stock').click()
     await page.getByTestId('nav-tab-watchlist').click()
     await expect(page.getByTestId('nav-tab-watchlist')).toHaveClass(/active/)
     // Watchlist view mounts (async chunk); wait for something stable from that tab.
@@ -51,5 +57,26 @@ test.describe('smoke (mocked API)', () => {
     await expect(page.getByTestId('notification-panel')).toBeVisible()
     await expect(page.getByTestId('notification-panel')).toContainText('E2E smoke notification')
     await expect(page.getByTestId('notification-badge')).toHaveText('1')
+  })
+})
+
+test.describe('narrow viewport (mocked API)', () => {
+  test.use({ viewport: { width: 1024, height: 800 } })
+
+  test('opens the sidebar drawer and navigates to watchlist', async ({ page }) => {
+    await installApiMocks(page)
+    await seedAuthenticatedSession(page)
+    await page.goto('/')
+
+    await expect(page.getByTestId('app-shell')).toBeVisible()
+    await expect(page.getByTestId('nav-menu-toggle')).toBeVisible()
+
+    await page.getByTestId('nav-menu-toggle').click()
+    await expect(page.getByTestId('nav-group-stock')).toBeVisible()
+    await page.getByTestId('nav-group-stock').click()
+    await expect(page.getByTestId('nav-tab-watchlist')).toBeVisible()
+
+    await page.getByTestId('nav-tab-watchlist').click()
+    await expect(page.getByTestId('nav-tab-watchlist')).toHaveClass(/active/)
   })
 })
