@@ -1,15 +1,28 @@
 <template>
   <section class="reconcile-banner" :class="hasDrift ? 'is-drift' : 'is-manual'">
     <div class="reconcile-head">
-      <strong>{{ hasDrift ? '⚠ 系统账本与券商实时持仓不一致' : '手工仓' }}</strong>
-      <button
-        v-if="hasDrift"
-        type="button"
-        :disabled="!isLivePortfolio"
-        @click="$emit('open-external-manual')"
-      >
-        补录 miniQMT 手工操作
-      </button>
+      <strong>
+        <template v-if="hasDrift">⚠ 系统账本与券商实时持仓不一致</template>
+        <template v-else>手工仓<span v-if="manualPositions.length">（{{ manualPositions.length }} 只）</span></template>
+      </strong>
+      <div class="reconcile-actions">
+        <button
+          v-if="manualPositions.length"
+          type="button"
+          class="toggle"
+          @click="manualExpanded = !manualExpanded"
+        >
+          {{ manualExpanded ? '收起明细' : '展开明细' }}
+        </button>
+        <button
+          v-if="hasDrift"
+          type="button"
+          :disabled="!isLivePortfolio"
+          @click="$emit('open-external-manual')"
+        >
+          补录 miniQMT 手工操作
+        </button>
+      </div>
     </div>
     <p class="muted">
       <template v-if="hasDrift">
@@ -22,8 +35,8 @@
         · 券商同步于 {{ formatSyncedAt(reconcileData.account_synced_at) }}
       </span>
     </p>
-    <div v-for="group in groups" :key="group.key" class="table-wrap">
-      <p v-if="groups.length > 1" class="group-label">{{ group.label }}</p>
+    <div v-if="diffs.length" class="table-wrap">
+      <p v-if="manualPositions.length" class="group-label">账实差异</p>
       <table class="lineup-table">
         <thead>
           <tr>
@@ -35,7 +48,30 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in group.rows" :key="row.symbol">
+          <tr v-for="row in diffs" :key="row.symbol">
+            <td>{{ row.symbol }}</td>
+            <td>{{ row.name || '-' }}</td>
+            <td>{{ row.ledger_shares }}</td>
+            <td>{{ row.account_shares }}</td>
+            <td :class="row.diff > 0 ? 'pos' : 'neg'">{{ formatShareDelta(row.diff) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div v-if="manualPositions.length && manualExpanded" class="table-wrap">
+      <p v-if="diffs.length" class="group-label">手工仓</p>
+      <table class="lineup-table">
+        <thead>
+          <tr>
+            <th>代码</th>
+            <th>名称</th>
+            <th>账本股数</th>
+            <th>券商股数</th>
+            <th>差异</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in manualPositions" :key="row.symbol">
             <td>{{ row.symbol }}</td>
             <td>{{ row.name || '-' }}</td>
             <td>{{ row.ledger_shares }}</td>
@@ -49,7 +85,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { formatShareDelta } from '../../composables/usePortfolioPlanFormat'
 import { formatSyncedAt } from '../../utils/portfolioOverviewFormat'
 
@@ -62,17 +98,12 @@ defineEmits(['open-external-manual'])
 
 // Drift is the alarm: the broker moved and we did not record it. Manual positions
 // are informational: shares the strategy never bought, so there is nothing to
-// re-sync. Both can be present at once, so render them as separate tables.
-const hasDrift = computed(() => (props.reconcileData?.diffs || []).length > 0)
-
-const groups = computed(() => {
-  const out = []
-  const diffs = props.reconcileData?.diffs || []
-  const manual = props.reconcileData?.manual_positions || []
-  if (diffs.length) out.push({ key: 'diffs', label: '账实差异', rows: diffs })
-  if (manual.length) out.push({ key: 'manual', label: '手工仓', rows: manual })
-  return out
-})
+// re-sync. The drift table stays open; the manual table is collapsed by default
+// (one line + count) so shared accounts do not show a full table on every load.
+const diffs = computed(() => props.reconcileData?.diffs || [])
+const manualPositions = computed(() => props.reconcileData?.manual_positions || [])
+const hasDrift = computed(() => diffs.value.length > 0)
+const manualExpanded = ref(false)
 </script>
 
 <style scoped>
@@ -95,6 +126,20 @@ const groups = computed(() => {
   gap: 12px;
   justify-content: space-between;
   margin-bottom: 6px;
+}
+
+.reconcile-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.toggle {
+  background: transparent;
+  border-color: #9ca3af;
+  color: #374151;
+  font-size: 13px;
+  padding: 4px 8px;
 }
 
 .reconcile-head strong {

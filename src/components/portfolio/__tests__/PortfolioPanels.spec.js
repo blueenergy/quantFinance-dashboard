@@ -64,11 +64,16 @@ describe('PortfolioReconcileBanner', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('手工仓')
-    expect(wrapper.text()).toContain('300655.SZ')
+    // Manual positions are collapsed by default: count in the header, no table.
+    expect(wrapper.text()).toContain('手工仓（1 只）')
+    expect(wrapper.text()).not.toContain('300655.SZ')
     // No drift -> no alarm, and nothing to re-record.
     expect(wrapper.text()).not.toContain('不一致')
-    expect(wrapper.find('button').exists()).toBe(false)
+    const toggle = wrapper.findAll('button').find((btn) => btn.text().includes('展开明细'))
+    expect(toggle).toBeTruthy()
+    await toggle.trigger('click')
+    expect(wrapper.text()).toContain('300655.SZ')
+    expect(wrapper.text()).toContain('收起明细')
   })
 
   it('shows drift and manual positions side by side when both exist', async () => {
@@ -97,6 +102,11 @@ describe('PortfolioReconcileBanner', () => {
 
     expect(wrapper.text()).toContain('系统账本与券商实时持仓不一致')
     expect(wrapper.text()).toContain('600000.SH')
+    // The manual table is still collapsed while the drift alarm stays open.
+    expect(wrapper.text()).toContain('展开明细')
+    expect(wrapper.text()).not.toContain('300655.SZ')
+    const toggle = wrapper.findAll('button').find((btn) => btn.text().includes('展开明细'))
+    await toggle.trigger('click')
     expect(wrapper.text()).toContain('手工仓')
     expect(wrapper.text()).toContain('300655.SZ')
   })
