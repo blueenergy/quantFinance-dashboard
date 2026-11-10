@@ -445,17 +445,9 @@
               class="form-control"
             >
               <option value="">请选择券商</option>
-              <option value="中信证券">中信证券</option>
-              <option value="华泰证券">华泰证券</option>
-              <option value="国泰君安">国泰君安</option>
-              <option value="国金证券">国金证券</option>
-              <option value="招商证券">招商证券</option>
-              <option value="东方财富">东方财富</option>
-              <option value="广发证券">广发证券</option>
-              <option value="光大证券">光大证券</option>
-              <option value="海通证券">海通证券</option>
-              <option value="财通证券">财通证券</option>
-              <option value="其他">其他</option>
+              <option v-for="name in brokerOptionsForForm" :key="name" :value="name">
+                {{ name }}
+              </option>
             </select>
           </div>
           
@@ -660,6 +652,28 @@ export default {
       }
     })
     
+    // 券商选项由 admin 在「管理员控制台 → 券商配置」维护，不再硬编码。
+    const brokerOptions = ref([])
+    const brokerOptionsForForm = computed(() => {
+      const names = [...brokerOptions.value]
+      const current = currentAccount.broker
+      // Keep an existing (possibly disabled) broker selectable while editing.
+      if (current && !names.includes(current)) names.push(current)
+      return names
+    })
+    const loadBrokerOptions = async () => {
+      try {
+        const body = await request({ method: 'get', url: '/user/broker-options' })
+        const rows = Array.isArray(body) ? body : (body?.data || [])
+        brokerOptions.value = rows
+          .map((row) => (typeof row === 'string' ? row : row?.name))
+          .filter(Boolean)
+      } catch (error) {
+        console.error('加载券商选项失败:', error)
+        brokerOptions.value = []
+      }
+    }
+
     // 切换标签页
     const switchTab = (tabKey) => {
       activeTab.value = tabKey
@@ -1397,7 +1411,8 @@ export default {
     // 初始化加载个人资料
     onMounted(async () => {
       loadProfile()
-      
+      loadBrokerOptions()
+
       // 同时加载AI配置信息（获取激活配置ID和所有配置）
       try {
         // 首先获取激活配置ID
@@ -1473,6 +1488,8 @@ export default {
       
       // 证券账户
       securitiesAccounts,
+      brokerOptionsForForm,
+      loadBrokerOptions,
       showAddAccountModal,
       editingAccount,
       currentAccount,

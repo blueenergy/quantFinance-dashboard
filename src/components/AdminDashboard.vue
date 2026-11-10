@@ -123,6 +123,68 @@
       <Pagination v-if="usersPagination" :page="usersPagination.page" :total-pages="usersPagination.total_pages" @change="loadUsers" />
     </div>
 
+    <!-- 券商配置 -->
+    <div v-if="activeTab === 'brokers'" class="brokers-section">
+      <div class="section-header">
+        <h3>🏦 券商配置</h3>
+        <div class="broker-add-bar">
+          <input
+            v-model="newBrokerName"
+            placeholder="新增券商名称，如 财通证券"
+            class="search-input"
+            style="max-width:320px"
+            @keyup.enter="addBroker"
+          >
+          <button
+            class="btn-base btn-gradient-green btn-sm"
+            :disabled="brokerSaving || !newBrokerName.trim()"
+            @click="addBroker"
+          >
+            添加券商
+          </button>
+        </div>
+      </div>
+      <p class="broker-hint">这里维护「证券账户 → 券商」下拉选项。停用后新账户不再能选择，但已存在的账户不受影响。</p>
+      <div v-if="brokers.length === 0" class="empty-msg">暂无券商选项，请先添加</div>
+      <table v-else class="broker-table">
+        <thead>
+          <tr>
+            <th>券商名称</th>
+            <th>状态</th>
+            <th>排序</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="broker in brokers" :key="broker.id">
+            <td>{{ broker.name }}</td>
+            <td>
+              <span :class="broker.enabled ? 'tag tag-status-active' : 'tag tag-status-inactive'">
+                {{ broker.enabled ? '启用' : '停用' }}
+              </span>
+            </td>
+            <td>{{ broker.sort_order }}</td>
+            <td>
+              <button
+                class="btn-base btn-sm"
+                :class="broker.enabled ? 'btn-gradient-red' : 'btn-gradient-green'"
+                @click="toggleBroker(broker)"
+              >
+                {{ broker.enabled ? '停用' : '启用' }}
+              </button>
+              <button
+                class="btn-base btn-sm btn-gradient-gray"
+                style="margin-left:6px"
+                @click="deleteBroker(broker)"
+              >
+                删除
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- 权限管理 -->
     <div v-if="activeTab === 'permissions'" class="permissions-section">
       <PermissionManagement :current-user="currentUser" />
@@ -210,6 +272,7 @@ export default {
         { id: 'worker-groups', name: 'Worker组', icon: '📦' },
         { id: 'sys-tasks', name: '后台任务调度', icon: '⏱️' },
         { id: 'users', name: '用户管理', icon: '👥' },
+        { id: 'brokers', name: '券商配置', icon: '🏦' },
         { id: 'permissions', name: '权限管理', icon: '🔐' },
         { id: 'logs', name: '登录日志', icon: '📋' },
         { id: 'admin-logs', name: '管理员日志', icon: '⚙️' }
@@ -224,6 +287,11 @@ export default {
       userSearch: '',
       selectedUser: null,
       selectedUserStats: null,
+
+      // 券商配置
+      brokers: [],
+      newBrokerName: '',
+      brokerSaving: false,
       
       // 登录日志
       loginLogs: [],
@@ -442,12 +510,63 @@ export default {
       }
     },
     
+    // 券商配置
+    async loadBrokers() {
+      try {
+        this.brokers = await this.apiGet('/admin/brokers')
+      } catch (error) {
+        console.error('加载券商配置失败:', error)
+        alert(error.message || '加载券商配置失败')
+      }
+    },
+
+    async addBroker() {
+      const name = this.newBrokerName.trim()
+      if (!name) return
+      this.brokerSaving = true
+      try {
+        const body = await request({ method: 'post', url: '/admin/brokers', data: { name } })
+        if (!body || body.success !== true) throw new Error(body?.detail || '添加失败')
+        this.newBrokerName = ''
+        await this.loadBrokers()
+      } catch (error) {
+        alert(error.response?.data?.detail || error.message || '添加券商失败')
+      } finally {
+        this.brokerSaving = false
+      }
+    },
+
+    async toggleBroker(broker) {
+      try {
+        await request({
+          method: 'put',
+          url: `/admin/brokers/${broker.id}`,
+          data: { enabled: !broker.enabled },
+        })
+        await this.loadBrokers()
+      } catch (error) {
+        alert(error.response?.data?.detail || error.message || '更新券商失败')
+      }
+    },
+
+    async deleteBroker(broker) {
+      if (!confirm(`确定删除券商「${broker.name}」吗？已使用该名称的证券账户不受影响。`)) return
+      try {
+        await request({ method: 'delete', url: `/admin/brokers/${broker.id}` })
+        await this.loadBrokers()
+      } catch (error) {
+        alert(error.response?.data?.detail || error.message || '删除券商失败')
+      }
+    },
+
     // 监听标签切换
     async tabChanged() {
       if (this.activeTab === 'logs' && this.loginLogs.length === 0) {
         await this.loadLoginLogs()
       } else if (this.activeTab === 'admin-logs' && this.adminLogs.length === 0) {
         await this.loadAdminLogs()
+      } else if (this.activeTab === 'brokers' && this.brokers.length === 0) {
+        await this.loadBrokers()
       }
     },
     
@@ -1362,5 +1481,44 @@ tr:last-child td {
 
 .search-input::placeholder {
   color: #aaaaaa;
+}
+
+/* 券商配置 */
+.broker-add-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.broker-hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: #666;
+}
+
+.broker-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.broker-table th,
+.broker-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+  font-size: 14px;
+}
+
+.broker-table th {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+.empty-msg {
+  padding: 24px;
+  text-align: center;
+  color: #999;
+  background: #fff;
 }
 </style>
