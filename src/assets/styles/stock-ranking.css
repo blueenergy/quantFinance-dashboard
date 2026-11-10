@@ -33,16 +33,15 @@
   gap: 8px;
   margin-bottom: 15px;
   padding: 10px 0;
-  border-bottom: 2px solid rgba(138, 43, 226, 0.35);
+  border-bottom: 2px solid var(--surface-border, #dbe3ef);
 }
 
 :where(.stock-ranking) .mode-header h4 {
   margin: 0;
-  color: #f5f3ff;
+  color: var(--text-primary, #172033);
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: 0.2px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 :where(.stock-ranking) .mode-header-row {
@@ -60,13 +59,13 @@
 }
 
 :where(.stock-ranking) .pager-meta {
-  color: #e6e6fa;
+  color: var(--text-muted, #64748b);
   font-size: 14px;
   font-weight: 600;
 }
 
 :where(.stock-ranking) .stock-count {
-  color: #e6e6fa;
+  color: var(--text-muted, #64748b);
   font-size: 14px;
   font-weight: 600;
 }
@@ -138,17 +137,33 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Embossed gold. The original horizontal gradient plus a #fff glow needed the
+   dark canvas to read as metal; on a light surface the white shadow vanishes
+   and the gold flattens. A vertical bevel (light top rim -> dark bottom) with
+   a tight amber edge and a warm halo gives the same depth on either surface.
+   `filter` is used instead of `text-shadow` because shadows on `clip: text`
+   glyphs are unreliable. */
 :where(.stock-ranking) .ranking-title {
   margin-bottom: 18px;
-  background: linear-gradient(90deg, #ffb300 0%, #ffd700 100%);
+  background: linear-gradient(
+    180deg,
+    #fff8c4 0%,
+    #ffe066 20%,
+    #ffc61a 45%,
+    #e09b00 68%,
+    #b17600 100%
+  );
   background-clip: text;
-  color: #fffbe8;
+  color: transparent;
   font-size: 2.1rem;
   font-weight: 900;
   letter-spacing: 2px;
-  text-shadow: 0 2px 16px #ffd700, 0 1px 0 #fff, 0 0 8px #ffb300;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 1px 0 rgba(108, 68, 0, 0.55))
+    drop-shadow(0 2px 4px rgba(108, 68, 0, 0.26))
+    drop-shadow(0 0 10px rgba(255, 179, 0, 0.40));
 }
 
 @media (max-width: 768px) {
