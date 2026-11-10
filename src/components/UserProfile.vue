@@ -454,6 +454,7 @@
               <option value="广发证券">广发证券</option>
               <option value="光大证券">光大证券</option>
               <option value="海通证券">海通证券</option>
+              <option value="财通证券">财通证券</option>
               <option value="其他">其他</option>
             </select>
           </div>
