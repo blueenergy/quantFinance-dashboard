@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">Active Fund Inventory</p>
         <div class="title-row">
-          <h2>公募库存四态</h2>
+          <h2>🗃️ 公募库存四态</h2>
           <button
             type="button"
             class="metric-help-button"

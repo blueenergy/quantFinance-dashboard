@@ -2,7 +2,7 @@
   <div class="trend-panorama">
     <header class="tp-header">
       <div>
-        <h2 class="tp-title">市场趋势全景图</h2>
+        <h2 class="tp-title">🧭 市场趋势全景图</h2>
         <p class="tp-sub">宽基指数 + 申万行业 · 0–100 趋势强度分（相对自身历史）</p>
       </div>
       <div class="tp-header-right">

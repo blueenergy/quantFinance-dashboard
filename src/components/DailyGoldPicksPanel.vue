@@ -2,7 +2,7 @@
   <div class="daily-gold-paper pa-4">
     <div class="dg-row dg-row--head">
       <div class="dg-col dg-col--title">
-        <h1 class="dg-h1">每日金股</h1>
+        <h1 class="dg-h1">⭐ 每日金股</h1>
         <p class="dg-sub">
           成长×周期加权截面 Top10 观察池；每笔等权纸面账本，8% 移动止损，亏损止损后冷却 5 个交易日，满 20 个交易日调仓日复核（仍在 Top20 续持）。
           观察池每日更新，不等于每日换股。研究观察，非买卖指令。

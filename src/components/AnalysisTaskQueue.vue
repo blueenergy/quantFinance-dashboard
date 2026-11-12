@@ -2,7 +2,7 @@
   <div class="task-queue-page">
     <div class="queue-header">
       <div>
-        <h3>分析任务队列</h3>
+        <h3>🗂️ 分析任务队列</h3>
         <p>查看当前全局排队概况，以及你提交的分析任务进度。等待时间为估算值，实际耗时取决于 LLM 响应速度。</p>
       </div>
       <button class="btn-base btn-sm btn-gradient-blue" :disabled="loading" @click="fetchQueue">

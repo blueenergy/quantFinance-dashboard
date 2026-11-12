@@ -2,7 +2,7 @@
   <div class="theme-lag-paper pa-4">
     <div class="tl-row tl-row--head">
       <div class="tl-col tl-col--title">
-        <h1 class="tl-h1">主题补涨候选</h1>
+        <h1 class="tl-h1">📌 主题补涨候选</h1>
         <p class="tl-sub">
           主线概念 ∩ 指数成分 · 小涨补涨池（数据来自 quant_data；叙事来自已完成的分析任务）。
           「模拟买入价」为验证规则中的锚定日 P₀（收盘）；「退出（日 / 价）」与「规则盈亏%」来自同锚定日验证结果；未跑验证时多为「—」。

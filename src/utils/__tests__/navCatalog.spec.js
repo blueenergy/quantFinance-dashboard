@@ -21,6 +21,14 @@ describe('navCatalog', () => {
     expect(ids.has('x-influencer-voices')).toBe(false)
   })
 
+  it('prefixes every nav tab with an icon', () => {
+    for (const tab of NAV_TABS) {
+      // Sidebar labels start with an emoji/pictograph. A label starting with a
+      // letter or digit would render without an icon.
+      expect(tab.name).toMatch(/^[^\p{L}\p{N}]/u)
+    }
+  })
+
   it('maps the hidden chart detail view to the stock group', () => {
     expect(groupForTab('chart')).toBe('stock')
     expect(groupForTab('watchlist')).toBe('stock')

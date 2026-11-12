@@ -3,7 +3,7 @@
     <header class="page-header">
       <div>
         <p class="eyebrow">Entropy Factor</p>
-        <h2>熵值因子排名</h2>
+        <h2>🎲 熵值因子排名</h2>
         <p class="subtitle">内部熵减（基本面改善）× 外部熵减（筹码集中）× 未拉升门控</p>
       </div>
       <button :disabled="loading" @click="refresh">刷新</button>

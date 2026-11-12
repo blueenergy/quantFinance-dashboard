@@ -452,7 +452,7 @@ export function getTabProps(tabId, context) {
     return {
       defaultMode: 'daily',
       lockedMode: true,
-      title: '市场阴阳谱',
+      title: '☯️ 市场阴阳谱',
     }
   }
 
@@ -460,7 +460,7 @@ export function getTabProps(tabId, context) {
     return {
       defaultMode: 'minute',
       lockedMode: true,
-      title: '实时阴阳谱',
+      title: '⏱️ 实时阴阳谱',
     }
   }
 

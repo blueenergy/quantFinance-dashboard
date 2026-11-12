@@ -3,7 +3,7 @@
     <header class="page-header">
       <div>
         <p class="eyebrow">Portfolio Research</p>
-        <h2>组合研究</h2>
+        <h2>🧩 组合研究</h2>
         <p class="subtitle">用生产数据复跑组合策略研究，筛选可行参数并保存为组合交易计划可消费的参数预设。</p>
       </div>
       <div class="header-actions">

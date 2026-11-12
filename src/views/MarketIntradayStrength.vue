@@ -2,7 +2,7 @@
   <div class="intraday-panorama">
     <header class="ip-header">
       <div>
-        <h2 class="ip-title">盘中强弱全景</h2>
+        <h2 class="ip-title">⚡ 盘中强弱全景</h2>
         <p class="ip-sub">申万 L1 · 2 分钟快照 · 同一时刻跨行业短线分</p>
       </div>
       <div class="ip-header-right">

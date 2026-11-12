@@ -3,7 +3,7 @@
     <header class="page-header">
       <div>
         <p class="eyebrow">Factor Backtest</p>
-        <h2>因子回测</h2>
+        <h2>🧬 因子回测</h2>
         <p class="subtitle">
           在生产行情上评估 alpha 因子的选股能力：截面 IC、分位组收益与成本调整后的 TopK 收益。
         </p>

@@ -1,7 +1,7 @@
 <template>
   <div>
     <v-card>
-      <v-card-title>交易活动记录</v-card-title>
+      <v-card-title>📜 交易活动记录</v-card-title>
       <v-card-text>
         <div class="d-flex ga-2 mb-3">
           <v-btn

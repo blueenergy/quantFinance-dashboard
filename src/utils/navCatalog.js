@@ -41,16 +41,16 @@ export const NAV_TABS = [
   { id: 'limit-up-ladder', name: '📊 连板天梯', group: 'market' },
   { id: 'market-trend', name: '🧭 趋势全景', group: 'market' },
   { id: 'market-intraday', name: '⚡ 盘中强弱', group: 'market' },
-  { id: 'market-insights', name: '火眼金睛', group: 'market' },
-  { id: 'spectrum', name: '阴阳谱', group: 'market' },
-  { id: 'realtime-spectrum', name: '实时阴阳谱', group: 'market' },
+  { id: 'market-insights', name: '👀 火眼金睛', group: 'market' },
+  { id: 'spectrum', name: '☯️ 阴阳谱', group: 'market' },
+  { id: 'realtime-spectrum', name: '⏱️ 实时阴阳谱', group: 'market' },
 
   // 宏观
   { id: 'china-macro', name: '🇨🇳 中国宏观', group: 'macro' },
   { id: 'us-rates', name: '🇺🇸 美国利率', group: 'macro' },
 
   // 个股
-  { id: 'watchlist', name: '自选股', group: 'stock' },
+  { id: 'watchlist', name: '⭐ 自选股', group: 'stock' },
   { id: 'stock-workbench', name: '🔬 个股工作台', group: 'stock' },
   { id: 'history', name: '🔍 个股深度分析', group: 'stock' },
   { id: 'kline-comparison', name: '📈 走势对比', group: 'stock' },
@@ -60,10 +60,10 @@ export const NAV_TABS = [
   { id: 'shenwan-index', name: '📊 申万行业研究', group: 'stock' },
 
   // 选股
-  { id: 'ranking', name: '金榜', group: 'screening' },
-  { id: 'entropy-ranking', name: '熵值排名', group: 'screening' },
-  { id: 'fund-inventory', name: '公募库存', group: 'screening' },
-  { id: 'fund-copywork', name: '抄作业', group: 'screening' },
+  { id: 'ranking', name: '🏆 金榜', group: 'screening' },
+  { id: 'entropy-ranking', name: '🎲 熵值排名', group: 'screening' },
+  { id: 'fund-inventory', name: '🗃️ 公募库存', group: 'screening' },
+  { id: 'fund-copywork', name: '📝 抄作业', group: 'screening' },
   { id: 'sector-concept', name: '📈 概念板块', group: 'screening' },
   { id: 'hot-stock', name: '🔥 热股分析', group: 'screening' },
   { id: 'theme-lag-recommend', name: '📌 主题补涨', group: 'screening' },
@@ -73,23 +73,23 @@ export const NAV_TABS = [
   { id: 'strategy-pool', name: '🎯 策略股池', group: 'strategy' },
   { id: 'strategy-lab', name: '🧪 策略实验室', group: 'strategy' },
   { id: 'factor-backtest', name: '🧬 因子回测', group: 'strategy' },
-  { id: 'portfolio-research', name: '组合研究', group: 'strategy' },
-  { id: 'model-training', name: '模型训练', group: 'strategy' },
+  { id: 'portfolio-research', name: '🧩 组合研究', group: 'strategy' },
+  { id: 'model-training', name: '🧠 模型训练', group: 'strategy' },
 
   // 交易
   { id: 'portfolio-plans', name: '📋 组合交易计划', group: 'trading' },
   { id: 'portfolio-overview', name: '📊 组合总览', group: 'trading' },
-  { id: 'strategies', name: '策略配置', group: 'trading' },
+  { id: 'strategies', name: '⚙️ 策略配置', group: 'trading' },
   { id: 'strategy-workers', name: '🚀 策略运行', group: 'trading' },
   { id: 'trading-manual', name: '⚡ 交易执行', group: 'trading' },
   { id: 'trade-executions', name: '📜 交易记录', group: 'trading' },
-  { id: 'intraday-t0', name: '日内T+0', group: 'trading' },
-  { id: 'securities', name: '账户工作台', group: 'trading' },
+  { id: 'intraday-t0', name: '🔄 日内T+0', group: 'trading' },
+  { id: 'securities', name: '💼 账户工作台', group: 'trading' },
 
   // 系统
-  { id: 'user-profile', name: '用户配置', group: 'system' },
-  { id: 'analysis-task-queue', name: '分析任务队列', group: 'system' },
-  { id: 'admin', name: '管理后台', group: 'system', adminOnly: true },
+  { id: 'user-profile', name: '👤 用户配置', group: 'system' },
+  { id: 'analysis-task-queue', name: '🗂️ 分析任务队列', group: 'system' },
+  { id: 'admin', name: '🛠️ 管理后台', group: 'system', adminOnly: true },
 ]
 
 const TAB_BY_ID = new Map(NAV_TABS.map((tab) => [tab.id, tab]))

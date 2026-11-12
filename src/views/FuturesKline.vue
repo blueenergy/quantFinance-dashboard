@@ -1,6 +1,6 @@
 <template>
   <div class="futures-kline-page">
-    <h3 class="page-title">期货 K 线</h3>
+    <h3 class="page-title">📉 期货 K 线</h3>
     <div class="futures-layout">
       <aside class="futures-sidebar">
         <h4 class="sidebar-title">品种</h4>

@@ -1,6 +1,6 @@
 <template>
   <div class="kc-page">
-    <h3 class="page-title">走势对比</h3>
+    <h3 class="page-title">📈 走势对比</h3>
 
     <div class="controls">
       <!-- Symbol A & B -->

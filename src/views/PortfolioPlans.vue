@@ -3,7 +3,7 @@
     <header class="page-header">
       <div>
         <p class="eyebrow">Portfolio Plans</p>
-        <h2>组合交易计划</h2>
+        <h2>📋 组合交易计划</h2>
         <p class="subtitle">跨组合待办：审批调仓计划；发布、Paper 执行和补单请到组合总览。每日观察计划可在总览查看周期脉络。</p>
       </div>
       <button :disabled="loading" @click="refreshAll">刷新</button>

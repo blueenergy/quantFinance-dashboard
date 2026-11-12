@@ -2,7 +2,7 @@
   <div class="intraday-t0-page">
     <div class="page-header">
       <div>
-        <h3>日内T+0</h3>
+        <h3>🔄 日内T+0</h3>
         <p>基于实时日K、盘口、成交质量和大盘/板块强弱，为已有仓位或模拟仓位生成高抛低吸观察信号。</p>
       </div>
       <div class="actions">

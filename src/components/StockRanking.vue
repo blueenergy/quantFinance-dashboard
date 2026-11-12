@@ -1,7 +1,7 @@
 <!-- dashboard/src/components/StockRanking.vue -->
 <template>
   <div class="stock-ranking">
-  <h3 class="ranking-title">股票评分排行榜</h3>
+  <h3 class="ranking-title">🏆 股票评分排行榜</h3>
     <div style="margin-bottom: 20px;">
   <StockRankingControls
     :viewMode="viewMode"

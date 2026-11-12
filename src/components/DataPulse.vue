@@ -4,7 +4,7 @@
     <div class="pulse-header">
       <div class="pulse-indicator">
         <span class="pulse-dot" :class="pulseClass"></span>
-        <span class="pulse-label">数据脉搏</span>
+        <span class="pulse-label">🛰️ 数据脉搏</span>
       </div>
       <div class="pulse-summary" v-if="overview">
         <span class="summary-item" v-if="overview.sync_health">

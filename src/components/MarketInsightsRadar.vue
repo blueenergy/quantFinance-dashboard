@@ -2,7 +2,7 @@
   <div class="insights-page">
     <div class="page-header">
       <div>
-        <h3>火眼金睛</h3>
+        <h3>👀 火眼金睛</h3>
         <p>不预测，不煽动，只揭示市场结构变化的证据。</p>
       </div>
       <div class="actions">

@@ -4,7 +4,7 @@
       <header class="regime-header">
         <div>
           <p class="regime-eyebrow">A股市场温度计</p>
-          <h1>广度与估值扫描</h1>
+          <h1>📡 广度与估值扫描</h1>
           <p class="regime-sub">MCL · 兴登堡预兆 · 5年通胀调整 CAPE</p>
         </div>
         <div class="regime-actions">

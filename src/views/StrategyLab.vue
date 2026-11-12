@@ -3,7 +3,7 @@
     <header class="lab-header">
       <div>
         <p class="eyebrow">Strategy Lab</p>
-        <h2>策略实验室</h2>
+        <h2>🧪 策略实验室</h2>
         <p class="subtitle">批量回测、横截面排名、AI 复盘和下一轮实验生成。</p>
       </div>
       <div class="header-actions">

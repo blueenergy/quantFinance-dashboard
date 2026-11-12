@@ -1,7 +1,7 @@
 <template>
   <v-card>
     <v-card-title class="d-flex justify-space-between align-center">
-      <span>账户工作台</span>
+      <span>💼 账户工作台</span>
       <v-btn
         v-if="securitiesAccounts.length > 0 && !isObservationMode"
         color="primary"

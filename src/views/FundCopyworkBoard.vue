@@ -3,7 +3,7 @@
     <header class="page-header">
       <div>
         <p class="eyebrow">Active Fund Copywork</p>
-        <h2>抄作业</h2>
+        <h2>📝 抄作业</h2>
         <p class="subtitle">
           主动偏股公募的季度持仓 diff。时效性和完整性并重：未到期或前十大报告期会标成预览，不要和年报全持仓混读。
         </p>

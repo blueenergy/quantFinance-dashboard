@@ -3,7 +3,7 @@
     <header class="page-header">
       <div>
         <p class="eyebrow">Model Training</p>
-        <h2>模型训练</h2>
+        <h2>🧠 模型训练</h2>
         <p class="subtitle">
           Walk-forward IC 评估与晋升门禁；旁路 quant_ml，非正式 stock_scores。当前流水线可能仍使用合成数据验证。
         </p>
