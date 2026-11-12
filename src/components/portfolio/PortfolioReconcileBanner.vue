@@ -2,7 +2,7 @@
   <section class="reconcile-banner" :class="hasDrift ? 'is-drift' : 'is-manual'">
     <div class="reconcile-head">
       <strong>
-        <template v-if="hasDrift">⚠ 系统账本与券商实时持仓不一致</template>
+        <template v-if="hasDrift">{{ driftTitle }}</template>
         <template v-else>手工仓<span v-if="manualPositions.length">（{{ manualPositions.length }} 只）</span></template>
       </strong>
       <div class="reconcile-actions">
@@ -25,7 +25,11 @@
       </div>
     </div>
     <p class="muted">
-      <template v-if="hasDrift">
+      <template v-if="lineageBookDiffs.length">
+        各血缘账本合计与券商持仓不一致：可能是历史跨血缘卖出未归因，或某条血缘账本过期。
+        下单前请确认，避免一键清仓动用其他策略的份额。
+      </template>
+      <template v-else-if="hasDrift">
         可能是 miniQMT 端手工买卖后系统尚未记录。补录后账本即可与券商对齐。
       </template>
       <template v-else>
@@ -54,6 +58,31 @@
             <td>{{ row.ledger_shares }}</td>
             <td>{{ row.account_shares }}</td>
             <td :class="row.diff > 0 ? 'pos' : 'neg'">{{ formatShareDelta(row.diff) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div v-if="lineageBookDiffs.length" class="table-wrap">
+      <p v-if="diffs.length || manualPositions.length" class="group-label">血缘合计差异</p>
+      <table class="lineup-table">
+        <thead>
+          <tr>
+            <th>代码</th>
+            <th>名称</th>
+            <th>血缘合计股数</th>
+            <th>券商股数</th>
+            <th>差异</th>
+            <th>类型</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in lineageBookDiffs" :key="row.symbol">
+            <td>{{ row.symbol }}</td>
+            <td>{{ row.name || '-' }}</td>
+            <td>{{ row.lineage_shares }}</td>
+            <td>{{ row.account_shares }}</td>
+            <td :class="row.diff > 0 ? 'pos' : 'neg'">{{ formatShareDelta(row.diff) }}</td>
+            <td>{{ lineageKindLabel(row.kind) }}</td>
           </tr>
         </tbody>
       </table>
@@ -101,9 +130,22 @@ defineEmits(['open-external-manual'])
 // re-sync. The drift table stays open; the manual table is collapsed by default
 // (one line + count) so shared accounts do not show a full table on every load.
 const diffs = computed(() => props.reconcileData?.diffs || [])
+const lineageBookDiffs = computed(() => props.reconcileData?.lineage_book_diffs || [])
 const manualPositions = computed(() => props.reconcileData?.manual_positions || [])
-const hasDrift = computed(() => diffs.value.length > 0)
+const hasDrift = computed(() => diffs.value.length > 0 || lineageBookDiffs.value.length > 0)
+const driftTitle = computed(() => (
+  lineageBookDiffs.value.length && !diffs.value.length
+    ? '⚠ 血缘账本合计与券商持仓不一致'
+    : '⚠ 系统账本与券商实时持仓不一致'
+))
 const manualExpanded = ref(false)
+const lineageKindLabel = (kind) => (
+  kind === 'lineage_excess'
+    ? '血缘多计'
+    : kind === 'lineage_short'
+      ? '血缘少计'
+      : kind || '-'
+)
 </script>
 
 <style scoped>

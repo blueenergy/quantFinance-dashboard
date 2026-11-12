@@ -76,6 +76,31 @@ describe('PortfolioReconcileBanner', () => {
     expect(wrapper.text()).toContain('收起明细')
   })
 
+  it('raises the lineage-book alarm from lineage_book_diffs', async () => {
+    const wrapper = mount(PortfolioReconcileBanner, {
+      props: {
+        isLivePortfolio: true,
+        reconcileData: {
+          in_sync: true,
+          diffs: [],
+          lineage_book_in_sync: false,
+          lineage_book_diffs: [{
+            symbol: '600961.SH',
+            name: '株冶集团',
+            lineage_shares: 600,
+            account_shares: 0,
+            diff: -600,
+            kind: 'lineage_excess',
+          }],
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('血缘账本合计与券商持仓不一致')
+    expect(wrapper.text()).toContain('600961.SH')
+    expect(wrapper.text()).toContain('血缘多计')
+  })
+
   it('shows drift and manual positions side by side when both exist', async () => {
     const wrapper = mount(PortfolioReconcileBanner, {
       props: {

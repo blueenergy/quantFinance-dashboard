@@ -15,6 +15,9 @@
         </li>
       </ul>
       <p v-if="!targets.length" class="warning-text">没有可清仓的持仓。</p>
+      <p v-if="bookDrift" class="warning-text">
+        血缘账本合计与账户持仓不一致（{{ bookDiffCount }} 只）。下单前请确认，避免清掉其他策略的份额。
+      </p>
       <label class="checkbox-row">
         <input :checked="excludeAfter" type="checkbox" @change="$emit('update:excludeAfter', $event.target.checked)">
         将清仓标的加入排除名单（下次策略调仓不再买回）
@@ -35,7 +38,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   visible: { type: Boolean, default: false },
   isLivePortfolio: { type: Boolean, default: false },
   targets: { type: Array, default: () => [] },
@@ -43,9 +48,13 @@ defineProps({
   holdingSharesBySymbol: { type: Object, default: () => ({}) },
   excludeAfter: { type: Boolean, default: true },
   submitting: { type: Boolean, default: false },
+  reconcileData: { type: Object, default: null },
 })
 
 defineEmits(['close', 'confirm', 'update:excludeAfter'])
+
+const bookDiffCount = computed(() => (props.reconcileData?.lineage_book_diffs || []).length)
+const bookDrift = computed(() => props.reconcileData?.lineage_book_in_sync === false)
 </script>
 
 <style scoped>

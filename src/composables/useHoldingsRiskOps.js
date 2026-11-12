@@ -32,7 +32,11 @@ export function useHoldingsRiskOps({
   ))
 
   const holdingsOutOfSync = computed(() => (
-    Boolean(reconcileData.value?.applicable) && reconcileData.value?.in_sync === false
+    Boolean(reconcileData.value?.applicable)
+    && (
+      reconcileData.value?.in_sync === false
+      || reconcileData.value?.lineage_book_in_sync === false
+    )
   ))
 
   // Broker-side holdings no strategy decision accounts for -- discretionary buys

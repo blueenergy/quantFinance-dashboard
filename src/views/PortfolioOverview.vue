@@ -308,6 +308,7 @@
         :rows="manualChangeRows"
         :will-pause-after-manual="willPauseAfterManual"
         :submitting="manualSubmitting"
+        :reconcile-data="reconcileData"
         @close="showManualModal = false"
         @confirm="submitManualRebalance"
       />
@@ -320,6 +321,7 @@
         :holding-name-by-symbol="holdingNameBySymbol"
         :holding-shares-by-symbol="holdingSharesBySymbol"
         :submitting="liquidateSubmitting"
+        :reconcile-data="reconcileData"
         @close="showLiquidateModal = false"
         @confirm="submitLiveLiquidate"
       />

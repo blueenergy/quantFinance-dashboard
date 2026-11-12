@@ -17,6 +17,9 @@
         </li>
       </ul>
       <p v-if="willPauseAfterManual" class="warning-text">全部卖空后将暂停该组合自动调仓。</p>
+      <p v-if="bookDrift" class="warning-text">
+        血缘账本合计与账户持仓不一致（{{ bookDiffCount }} 只）。下单前请确认，避免动用其他策略的份额。
+      </p>
       <label class="checkbox-row">
         <input :checked="excludeAfter" type="checkbox" @change="$emit('update:excludeAfter', $event.target.checked)">
         将卖出的标的加入排除名单（下次策略调仓不再买回）
@@ -32,9 +35,10 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { formatShareDelta } from '../../composables/usePortfolioPlanFormat'
 
-defineProps({
+const props = defineProps({
   visible: { type: Boolean, default: false },
   isLivePortfolio: { type: Boolean, default: false },
   highRiskRows: { type: Array, default: () => [] },
@@ -42,9 +46,13 @@ defineProps({
   willPauseAfterManual: { type: Boolean, default: false },
   excludeAfter: { type: Boolean, default: false },
   submitting: { type: Boolean, default: false },
+  reconcileData: { type: Object, default: null },
 })
 
 defineEmits(['close', 'confirm', 'update:excludeAfter'])
+
+const bookDiffCount = computed(() => (props.reconcileData?.lineage_book_diffs || []).length)
+const bookDrift = computed(() => props.reconcileData?.lineage_book_in_sync === false)
 </script>
 
 <style scoped>
