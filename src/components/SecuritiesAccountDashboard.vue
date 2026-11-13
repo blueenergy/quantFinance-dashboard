@@ -128,8 +128,12 @@
               <strong>{{ formatCurrency(accountEquityRows[accountEquityRows.length - 1]?.equity) }}</strong>
             </div>
             <div>
-              <span>累计变化</span>
+              <span>累计总资产变化</span>
               <strong>{{ formatSignedCurrency(accountEquityRows[accountEquityRows.length - 1]?.change_from_start) }}</strong>
+            </div>
+            <div>
+              <span>当日交易盈亏</span>
+              <strong>{{ formatSignedCurrencyOrDash(accountEquityRows[accountEquityRows.length - 1]?.daily_pnl) }}</strong>
             </div>
             <div>
               <span>最新快照</span>
@@ -202,7 +206,7 @@
                   <strong>{{ formatCurrency(hoveredEquityPoint.equity) }}</strong>
                 </div>
                 <div class="equity-tooltip-row">
-                  <span>{{ hoveredEquityPoint.is_intraday ? '较昨收' : '较上一交易日' }}</span>
+                  <span>{{ hoveredEquityPoint.is_intraday ? '较昨收总资产（含出入金）' : '较上一日总资产（含出入金）' }}</span>
                   <strong
                     v-if="hoveredEquityPoint.change !== null"
                     :class="hoveredEquityPoint.change >= 0 ? 'is-up' : 'is-down'"
@@ -211,13 +215,20 @@
                   </strong>
                   <strong v-else>—</strong>
                 </div>
+                <div v-if="hasDailyPnl(hoveredEquityPoint)" class="equity-tooltip-row">
+                  <span>当日交易盈亏</span>
+                  <strong :class="hoveredEquityPoint.daily_pnl >= 0 ? 'is-up' : 'is-down'">
+                    {{ formatSignedCurrency(hoveredEquityPoint.daily_pnl) }}<template v-if="hoveredEquityPoint.daily_pnl_ratio != null">（{{ formatSignedPercent(hoveredEquityPoint.daily_pnl_ratio * 100) }}）</template>
+                  </strong>
+                </div>
                 <div class="equity-tooltip-row">
-                  <span>较区间起点</span>
+                  <span>较区间起点总资产</span>
                   <strong>{{ formatSignedCurrency(hoveredEquityPoint.change_from_start) }}</strong>
                 </div>
               </div>
             </div>
           </div>
+          <p class="equity-note">{{ equityNote }}</p>
         </template>
       </v-card-text>
     </v-card>
@@ -572,6 +583,17 @@ const accountEquityRows = computed(() => {
     })
 })
 
+const equityNote = computed(() => {
+  const row = accountEquityRows.value[accountEquityRows.value.length - 1]
+  if (row?.daily_pnl_method === 'total_asset_delta_minus_external_flow') {
+    const flow = Number(row.external_flow)
+    if (Number.isFinite(flow) && flow !== 0) {
+      return `总资产含入金/出金；当日交易盈亏已剔除确认的出入金 ${formatCurrency(flow)}。`
+    }
+  }
+  return '总资产含入金/出金；当日交易盈亏按收盘持仓估算，不含费用和分红。'
+})
+
 const accountEquityChart = computed(() => {
   const rows = accountEquityRows.value
   if (!rows.length) return { points: '', coords: [], live: null, labels: [], min: 0, max: 0 }
@@ -742,6 +764,17 @@ function formatSignedCurrency(value) {
   if (!Number.isFinite(number)) return 'N/A'
   const formatted = formatCurrency(Math.abs(number))
   return `${number >= 0 ? '+' : '-'}${formatted}`
+}
+
+function formatSignedCurrencyOrDash(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? formatSignedCurrency(number) : '—'
+}
+
+function hasDailyPnl(point) {
+  return point?.daily_pnl !== null
+    && point?.daily_pnl !== undefined
+    && Number.isFinite(Number(point.daily_pnl))
 }
 
 function formatDuration(seconds) {
@@ -1166,6 +1199,12 @@ async function openHistoryDialog(position) {
   display: block;
   color: rgba(var(--v-theme-on-surface), 0.55);
   font-size: 12px;
+}
+.equity-note {
+  margin: 8px 0 0;
+  color: rgba(var(--v-theme-on-surface), 0.55);
+  font-size: 12px;
+  line-height: 1.5;
 }
 .equity-chart {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
