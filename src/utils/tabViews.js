@@ -129,7 +129,6 @@ export const tabViewDefinitions = [
   {
     id: 'earnings-hunter',
     component: EarningsHunter,
-    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '财报猎手加载中...',
   },

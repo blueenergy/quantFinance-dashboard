@@ -10,7 +10,6 @@ import { tabViewDefinitions } from '../tabViews.js'
 const DARK_SURFACE_TABS = [
   'shenwan-index',
   'limit-up-ladder',
-  'earnings-hunter',
   'strategy-pool',
 ]
 
