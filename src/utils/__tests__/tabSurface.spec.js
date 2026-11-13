@@ -11,8 +11,6 @@ const DARK_SURFACE_TABS = [
   'shenwan-index',
   'limit-up-ladder',
   'earnings-hunter',
-  'sector-concept',
-  'hot-stock',
   'strategy-pool',
 ]
 

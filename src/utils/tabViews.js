@@ -362,14 +362,12 @@ export const tabViewDefinitions = [
   {
     id: 'sector-concept',
     component: SectorConceptAnalysis,
-    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '概念板块分析加载中...',
   },
   {
     id: 'hot-stock',
     component: HotStockAnalysis,
-    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '热股分析加载中...',
   },

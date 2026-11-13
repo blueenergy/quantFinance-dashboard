@@ -33,7 +33,7 @@
     <v-card v-if="loading" class="mb-4" variant="outlined">
       <v-card-text class="text-center py-8">
         <v-progress-circular indeterminate color="primary" size="48" />
-        <p class="text-grey mt-4">{{ statusText }}</p>
+        <p class="text-caption mt-4" style="color:var(--text-muted)">{{ statusText }}</p>
       </v-card-text>
     </v-card>
 
@@ -49,12 +49,12 @@
         <v-chip color="primary" variant="tonal" size="small">📅 {{ formatDate(tradeDate) }}</v-chip>
         <v-chip color="secondary" variant="tonal" size="small">{{ sourceName }}</v-chip>
         <v-chip color="grey" variant="outlined" size="small">{{ model }}</v-chip>
-        <span class="text-caption" style="color:rgba(255,255,255,0.5)">分析于 {{ formatDateTime(analysisTime) }}</span>
+        <span class="text-caption" style="color:var(--text-muted)">分析于 {{ formatDateTime(analysisTime) }}</span>
       </div>
 
       <!-- Thinking Process -->
       <v-card v-if="analysis.thinking_process" class="mb-4 thinking-card" variant="outlined">
-        <v-card-title class="text-subtitle-2 d-flex align-center" style="color:rgba(255,255,255,0.9)">
+        <v-card-title class="text-subtitle-2 d-flex align-center" style="color:var(--text-primary)">
           🧠 AI思维链
           <v-btn
             size="x-small"
@@ -77,9 +77,9 @@
 
       <!-- Recommended Sectors -->
       <div v-if="analysis.recommended_sectors?.length > 0" class="mb-6">
-        <h4 class="text-h6 font-weight-bold mb-3" style="color:rgba(255,255,255,0.95)">
+        <h4 class="text-h6 font-weight-bold mb-3" style="color:var(--text-primary)">
           🚀 推荐板块
-          <span class="text-body-2" style="color:rgba(255,255,255,0.5)">({{ analysis.recommended_sectors.length }})</span>
+          <span class="text-body-2" style="color:var(--text-muted)">({{ analysis.recommended_sectors.length }})</span>
         </h4>
         <v-row>
           <v-col
@@ -93,7 +93,7 @@
                 <!-- Header -->
                 <div class="d-flex justify-space-between align-center mb-2">
                   <div class="d-flex align-center ga-2">
-                    <span class="text-h6 font-weight-bold" style="color:rgba(255,255,255,0.95)">{{ sector.name }}</span>
+                    <span class="text-h6 font-weight-bold" style="color:var(--text-primary)">{{ sector.name }}</span>
                     <v-chip
                       :color="getStrengthColor(sector.strength)"
                       size="x-small"
@@ -121,11 +121,11 @@
                 </div>
 
                 <!-- Reason -->
-                <p class="text-body-2 mb-3" style="color:rgba(255,255,255,0.85)">{{ sector.reason }}</p>
+                <p class="text-body-2 mb-3" style="color:var(--text-subtle)">{{ sector.reason }}</p>
 
                 <!-- Leading Stocks -->
                 <div v-if="sector.leading_stocks?.length" class="mb-2">
-                  <span class="text-caption" style="color:rgba(255,255,255,0.6)">🔥 领涨股：</span>
+                  <span class="text-caption" style="color:var(--text-muted)">🔥 领涨股：</span>
                   <v-chip
                     v-for="stock in sector.leading_stocks"
                     :key="stock.symbol"
@@ -140,12 +140,12 @@
 
                 <!-- Catchup Stocks -->
                 <div v-if="sector.catchup_stocks?.length">
-                  <span class="text-caption" style="color:rgba(255,255,255,0.6)">💡 补涨股：</span>
+                  <span class="text-caption" style="color:var(--text-muted)">💡 补涨股：</span>
                   <div v-for="stock in sector.catchup_stocks" :key="stock.symbol" class="catchup-item mt-1">
                     <v-chip size="x-small" color="orange" variant="outlined" class="mr-1">
                       {{ stock.name }}
                     </v-chip>
-                    <span class="text-caption" style="color:rgba(255,255,255,0.8)">{{ stock.reason }}</span>
+                    <span class="text-caption" style="color:var(--text-subtle)">{{ stock.reason }}</span>
                   </div>
                 </div>
               </v-card-text>
@@ -156,9 +156,9 @@
 
       <!-- Avoid Sectors -->
       <div v-if="analysis.avoid_sectors?.length > 0" class="mb-6">
-        <h4 class="text-h6 font-weight-bold mb-3" style="color:rgba(255,255,255,0.95)">
+        <h4 class="text-h6 font-weight-bold mb-3" style="color:var(--text-primary)">
           ⚠️ 回避板块
-          <span class="text-body-2" style="color:rgba(255,255,255,0.5)">({{ analysis.avoid_sectors.length }})</span>
+          <span class="text-body-2" style="color:var(--text-muted)">({{ analysis.avoid_sectors.length }})</span>
         </h4>
         <v-alert
           v-for="(sector, idx) in analysis.avoid_sectors"
@@ -170,8 +170,8 @@
         >
           <div class="d-flex justify-space-between align-center">
             <div>
-              <strong style="color:rgba(255,255,255,0.95)">{{ sector.name }}</strong>
-              <span class="ml-2 text-body-2" style="color:rgba(255,255,255,0.85)">{{ sector.reason }}</span>
+              <strong style="color:var(--text-primary)">{{ sector.name }}</strong>
+              <span class="ml-2 text-body-2" style="color:var(--text-subtle)">{{ sector.reason }}</span>
             </div>
             <div class="d-flex ga-1">
               <v-chip size="x-small" :color="sector.pct_change > 0 ? 'red' : 'green'" variant="tonal">
@@ -187,12 +187,12 @@
 
       <!-- Summary -->
       <v-card v-if="analysis.summary" variant="outlined" class="mb-4">
-        <v-card-title class="text-subtitle-2" style="color:rgba(255,255,255,0.9)">📝 总结与操作建议</v-card-title>
-        <v-card-text class="text-body-2" style="color:rgba(255,255,255,0.85)">{{ analysis.summary }}</v-card-text>
+        <v-card-title class="text-subtitle-2" style="color:var(--text-primary)">📝 总结与操作建议</v-card-title>
+        <v-card-text class="text-body-2" style="color:var(--text-subtle)">{{ analysis.summary }}</v-card-text>
       </v-card>
 
       <!-- Meta Info -->
-      <div class="text-caption d-flex justify-space-between" style="color:rgba(255,255,255,0.45)">
+      <div class="text-caption d-flex justify-space-between" style="color:var(--text-muted)">
         <span>板块数: {{ dataSummary?.sector_count || 0 }}</span>
       </div>
     </div>
@@ -335,43 +335,44 @@ onMounted(() => {
 
 <style scoped>
 .sector-trigger {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--surface-bg);
+  border-color: var(--surface-border);
 }
 
 .date-input {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 13px;
-  color: inherit;
+  color: var(--field-fg);
   outline: none;
 }
 
 .date-input:focus {
-  border-color: rgba(var(--v-theme-primary), 0.6);
+  border-color: var(--color-primary);
 }
 
 .thinking-card {
-  border-color: rgba(33, 150, 243, 0.3);
-  background: rgba(33, 150, 243, 0.03);
+  border-color: #bfdbfe;
+  background: #eff6ff;
 }
 
 .thinking-text {
   white-space: pre-wrap;
   font-size: 13px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--text-subtle);
 }
 
 .sector-card {
   transition: all 0.2s;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--surface-bg);
+  border-color: var(--surface-border);
 }
 
 .sector-card:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-bg-muted);
   transform: translateY(-1px);
 }
 

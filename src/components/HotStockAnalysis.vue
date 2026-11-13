@@ -37,7 +37,7 @@
     <v-card v-if="loading" class="mb-4" variant="outlined">
       <v-card-text class="text-center py-8">
         <v-progress-circular indeterminate color="primary" size="48" />
-        <p class="mt-4" style="color:rgba(255,255,255,0.7)">{{ statusText }}</p>
+        <p class="mt-4" style="color:var(--text-muted)">{{ statusText }}</p>
       </v-card-text>
     </v-card>
 
@@ -49,7 +49,7 @@
     <!-- Today's History Timeline -->
     <div v-if="history.length > 1 && !loading" class="mb-4">
       <div class="d-flex align-center ga-2 mb-2">
-        <span class="text-caption" style="color:rgba(255,255,255,0.65)">今日分析记录：</span>
+        <span class="text-caption" style="color:var(--text-muted)">今日分析记录：</span>
         <v-chip
           v-for="rec in history"
           :key="rec.id"
@@ -106,12 +106,12 @@
         >
           {{ analysis.market_sentiment }}
         </v-chip>
-        <span class="text-caption" style="color:rgba(255,255,255,0.65)">{{ analysis.sentiment_reason }}</span>
+        <span class="text-caption" style="color:var(--text-muted)">{{ analysis.sentiment_reason }}</span>
       </div>
 
       <!-- Thinking Process -->
       <v-card v-if="analysis.thinking_process" class="mb-4 thinking-card" variant="outlined">
-        <v-card-title class="text-subtitle-2 d-flex align-center" style="color:rgba(255,255,255,0.9)">
+        <v-card-title class="text-subtitle-2 d-flex align-center" style="color:var(--text-primary)">
           🧠 AI思维链
           <v-btn size="x-small" variant="text" @click="showThinking = !showThinking" class="ml-2">
             {{ showThinking ? '收起' : '展开' }}
@@ -124,7 +124,7 @@
 
       <!-- Hot Themes -->
       <div v-if="analysis.hot_themes?.length" class="mb-5">
-        <h4 class="text-subtitle-1 font-weight-bold mb-2" style="color:rgba(255,255,255,0.95)">🌊 热点主题</h4>
+        <h4 class="text-subtitle-1 font-weight-bold mb-2" style="color:var(--text-primary)">🌊 热点主题</h4>
         <div class="d-flex ga-2 flex-wrap">
           <v-card
             v-for="(theme, i) in analysis.hot_themes"
@@ -138,11 +138,11 @@
                 size="x-small"
                 variant="tonal"
               >{{ theme.heat_level }}</v-chip>
-              <span class="text-body-2 font-weight-bold" style="color:rgba(255,255,255,0.95)">{{ theme.theme }}</span>
+              <span class="text-body-2 font-weight-bold" style="color:var(--text-primary)">{{ theme.theme }}</span>
             </div>
-            <div class="text-caption mt-1" style="color:rgba(255,255,255,0.65)">{{ theme.reason }}</div>
+            <div class="text-caption mt-1" style="color:var(--text-muted)">{{ theme.reason }}</div>
             <div v-if="(theme.stocks || []).length" class="d-flex ga-1 mt-2 flex-wrap align-center">
-              <span class="text-caption mr-1" style="color:rgba(255,255,255,0.6)">代表股：</span>
+              <span class="text-caption mr-1" style="color:var(--text-muted)">代表股：</span>
               <v-chip v-for="s in (theme.stocks || []).slice(0,4)" :key="s" size="x-small" color="cyan" variant="outlined" class="mr-1">{{ s }}</v-chip>
             </div>
           </v-card>
@@ -151,9 +151,9 @@
 
       <!-- Opportunities -->
       <div v-if="analysis.opportunities?.length" class="mb-5">
-        <h4 class="text-h6 font-weight-bold mb-3" style="color:rgba(255,255,255,0.95)">
+        <h4 class="text-h6 font-weight-bold mb-3" style="color:var(--text-primary)">
           🚀 机会推荐
-          <span class="text-body-2" style="color:rgba(255,255,255,0.5)">({{ analysis.opportunities.length }})</span>
+          <span class="text-body-2" style="color:var(--text-muted)">({{ analysis.opportunities.length }})</span>
         </h4>
         <v-row>
           <v-col
@@ -167,8 +167,8 @@
               <v-card-text>
                 <div class="d-flex justify-space-between align-center mb-2">
                   <div>
-                    <span class="text-h6 font-weight-bold" style="color:rgba(255,255,255,0.95)">{{ stock.name }}</span>
-                    <span class="text-caption ml-2" style="color:rgba(255,255,255,0.65)">{{ stock.ts_code }}</span>
+                    <span class="text-h6 font-weight-bold" style="color:var(--text-primary)">{{ stock.name }}</span>
+                    <span class="text-caption ml-2" style="color:var(--text-muted)">{{ stock.ts_code }}</span>
                   </div>
                   <div class="d-flex align-center ga-1">
                     <v-chip size="x-small" color="purple" variant="tonal">🏆#{{ stock.rank }}</v-chip>
@@ -188,12 +188,12 @@
                   </v-chip>
                 </div>
 
-                <p class="text-body-2 mb-2" style="color:rgba(255,255,255,0.85)">{{ stock.reason }}</p>
+                <p class="text-body-2 mb-2" style="color:var(--text-subtle)">{{ stock.reason }}</p>
 
-                <div v-if="stock.rank_reason" class="text-caption mb-1" style="color:rgba(255,255,255,0.75)">
+                <div v-if="stock.rank_reason" class="text-caption mb-1" style="color:var(--text-subtle)">
                   📌 {{ stock.rank_reason }}
                 </div>
-                <div v-if="stock.risk_note" class="text-caption" style="color:rgba(255, 160, 0, 0.85)">
+                <div v-if="stock.risk_note" class="text-caption" style="color:#b45309">
                   ⚠️ {{ stock.risk_note }}
                 </div>
               </v-card-text>
@@ -204,7 +204,7 @@
 
       <!-- Risk Warnings -->
       <div v-if="analysis.risk_warnings?.length" class="mb-4">
-        <h4 class="text-subtitle-1 font-weight-bold mb-2" style="color:rgba(255,255,255,0.95)">⚠️ 风险提示</h4>
+        <h4 class="text-subtitle-1 font-weight-bold mb-2" style="color:var(--text-primary)">⚠️ 风险提示</h4>
         <v-alert
           v-for="(w, i) in analysis.risk_warnings"
           :key="i"
@@ -219,12 +219,12 @@
 
       <!-- Summary -->
       <v-card v-if="analysis.summary" variant="outlined" class="mb-4">
-        <v-card-title class="text-subtitle-2" style="color:rgba(255,255,255,0.9)">📝 市场总结</v-card-title>
-        <v-card-text class="text-body-2" style="color:rgba(255,255,255,0.85)">{{ analysis.summary }}</v-card-text>
+        <v-card-title class="text-subtitle-2" style="color:var(--text-primary)">📝 市场总结</v-card-title>
+        <v-card-text class="text-body-2" style="color:var(--text-subtle)">{{ analysis.summary }}</v-card-text>
       </v-card>
 
       <!-- Meta footer -->
-      <div class="text-caption d-flex justify-space-between" style="color:rgba(255,255,255,0.55)">
+      <div class="text-caption d-flex justify-space-between" style="color:var(--text-muted)">
         <span>模型: {{ model }} | 热股数: {{ stockCount }}</span>
         <span>分析时间: {{ formatDateTime(analysisTime) }}</span>
       </div>
@@ -403,29 +403,31 @@ onMounted(() => {
 
 <style scoped>
 .hot-trigger {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--surface-bg);
+  border-color: var(--surface-border);
 }
 .thinking-card {
-  border-color: rgba(33, 150, 243, 0.3);
-  background: rgba(33, 150, 243, 0.03);
+  border-color: #bfdbfe;
+  background: #eff6ff;
 }
 .thinking-text {
   white-space: pre-wrap;
   font-size: 13px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--text-subtle);
 }
 .theme-chip {
-  background: rgba(255,255,255,0.03);
+  background: var(--surface-bg);
+  border-color: var(--surface-border);
   min-width: 180px;
 }
 .stock-card {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--surface-bg);
+  border-color: var(--surface-border);
   transition: all 0.2s;
 }
 .stock-card:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-bg-muted);
   transform: translateY(-1px);
 }
 .cursor-pointer {
