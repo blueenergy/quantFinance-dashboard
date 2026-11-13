@@ -27,6 +27,36 @@ export async function getTraderAccountEquity(securitiesAccountId = null, params 
   return data.data || []
 }
 
+export async function getTraderCashFlows(securitiesAccountId = null, params = {}) {
+  const query = {}
+  if (securitiesAccountId) query.securities_account_id = securitiesAccountId
+  if (params.start_date) query.start_date = params.start_date
+  if (params.end_date) query.end_date = params.end_date
+  const data = await request({
+    url: '/trader/cash-flows',
+    method: 'get',
+    params: Object.keys(query).length ? query : undefined,
+  })
+  return data.data || []
+}
+
+export async function createTraderCashFlow(payload) {
+  const data = await request({
+    url: '/trader/cash-flows',
+    method: 'post',
+    data: payload,
+  })
+  return data.data || {}
+}
+
+export async function deleteTraderCashFlow(flowId) {
+  const data = await request({
+    url: `/trader/cash-flows/${encodeURIComponent(flowId)}`,
+    method: 'delete',
+  })
+  return data
+}
+
 export async function getTraderPositions(securitiesAccountId = null, options = {}) {
   const params = {}
   if (securitiesAccountId) params.securities_account_id = securitiesAccountId

@@ -118,18 +118,35 @@
 
     <!-- 账户资金曲线 -->
     <v-card class="mb-4">
-      <v-card-title>账户资金曲线</v-card-title>
+      <v-card-title class="d-flex flex-wrap align-center justify-space-between ga-2">
+        <span>账户资金曲线</span>
+        <div class="d-flex align-center ga-2">
+          <v-btn-toggle v-model="equityMode" mandatory density="compact" variant="outlined">
+            <v-btn value="total" size="small">总资产</v-btn>
+            <v-btn value="adjusted" size="small">剔除出入金</v-btn>
+          </v-btn-toggle>
+          <v-btn
+            size="small"
+            variant="outlined"
+            color="primary"
+            :disabled="!selectedAccountId || isObservationMode"
+            @click="openCashFlowDialog"
+          >
+            记录出入金
+          </v-btn>
+        </div>
+      </v-card-title>
       <v-card-text>
         <p v-if="!accountEquityRows.length" class="muted-text">暂无账户资金曲线快照，盘后任务落库后显示。</p>
         <template v-else>
           <div class="equity-summary">
             <div>
-              <span>最新总资产</span>
-              <strong>{{ formatCurrency(accountEquityRows[accountEquityRows.length - 1]?.equity) }}</strong>
+              <span>{{ equityMode === 'adjusted' ? '最新净值（剔除出入金）' : '最新总资产' }}</span>
+              <strong>{{ formatCurrency(latestEquity) }}</strong>
             </div>
             <div>
-              <span>累计总资产变化</span>
-              <strong>{{ formatSignedCurrency(accountEquityRows[accountEquityRows.length - 1]?.change_from_start) }}</strong>
+              <span>{{ equityMode === 'adjusted' ? '累计交易盈亏' : '累计总资产变化' }}</span>
+              <strong :class="pnlClass(latestEquityChange)">{{ formatSignedCurrency(latestEquityChange) }}</strong>
             </div>
             <div>
               <span>当日交易盈亏</span>
@@ -207,6 +224,10 @@
                   <span>总资产</span>
                   <strong>{{ formatCurrency(hoveredEquityPoint.equity) }}</strong>
                 </div>
+                <div v-if="equityMode === 'adjusted'" class="equity-tooltip-row">
+                  <span>剔除出入金净值</span>
+                  <strong>{{ formatCurrency(hoveredEquityPoint.flow_adjusted_equity) }}</strong>
+                </div>
                 <div class="equity-tooltip-row">
                   <span>{{ hoveredEquityPoint.is_intraday ? '较昨收总资产（含出入金）' : '较上一日总资产（含出入金）' }}</span>
                   <strong
@@ -224,13 +245,34 @@
                   </strong>
                 </div>
                 <div class="equity-tooltip-row">
-                  <span>较区间起点总资产</span>
-                  <strong>{{ formatSignedCurrency(hoveredEquityPoint.change_from_start) }}</strong>
+                  <span>{{ equityMode === 'adjusted' ? '较区间起点净值' : '较区间起点总资产' }}</span>
+                  <strong>
+                    {{ formatSignedCurrency(
+                      equityMode === 'adjusted'
+                        ? hoveredEquityPoint.flow_adjusted_change_from_start
+                        : hoveredEquityPoint.change_from_start
+                    ) }}
+                  </strong>
                 </div>
               </div>
             </div>
           </div>
           <p class="equity-note">{{ equityNote }}</p>
+          <details v-if="cashFlows.length" class="cash-flow-details">
+            <summary>出入金记录（{{ cashFlows.length }}）</summary>
+            <div
+              v-for="flow in cashFlows"
+              :key="flow._id || flow.id"
+              class="cash-flow-row"
+            >
+              <span>{{ formatEquityDate(flow.date) }}</span>
+              <strong>{{ formatSignedCurrency(flow.amount) }}</strong>
+              <span class="cash-flow-note">{{ flow.note || '—' }}</span>
+              <v-btn size="x-small" variant="text" color="error" @click="removeCashFlow(flow)">
+                删除
+              </v-btn>
+            </div>
+          </details>
         </template>
       </v-card-text>
     </v-card>
@@ -437,6 +479,54 @@
       </v-card>
     </v-dialog>
     
+    <v-dialog v-model="cashFlowDialog" max-width="440">
+      <v-card>
+        <v-card-title>记录出入金</v-card-title>
+        <v-card-text>
+          <v-text-field
+            v-model="cashFlowForm.date"
+            type="date"
+            label="日期"
+            density="compact"
+          />
+          <v-select
+            v-model="cashFlowForm.direction"
+            :items="cashFlowDirections"
+            item-title="title"
+            item-value="value"
+            label="方向"
+            density="compact"
+          />
+          <v-text-field
+            v-model="cashFlowForm.amount"
+            type="number"
+            label="金额（元）"
+            density="compact"
+            min="0.01"
+            step="0.01"
+          />
+          <v-text-field
+            v-model="cashFlowForm.note"
+            label="备注（可选）"
+            density="compact"
+          />
+          <v-alert
+            v-if="cashFlowError"
+            type="error"
+            variant="tonal"
+            density="compact"
+          >
+            {{ cashFlowError }}
+          </v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="cashFlowDialog = false">取消</v-btn>
+          <v-btn color="primary" :loading="cashFlowSaving" @click="saveCashFlow">保存</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- 成功提示 -->
     <v-snackbar v-model="snackbar" color="success" :timeout="3000">
       {{ snackbarMessage }}
@@ -446,7 +536,17 @@
 
 <script setup>
 import { ref, onMounted, computed, inject } from 'vue'
-import { getTraderAccount, getTraderAccountEquity, getTraderPositions, getSecuritiesAccounts, getTradeSignals, getTraderHeartbeats } from '../api/trader'
+import {
+  createTraderCashFlow,
+  deleteTraderCashFlow,
+  getTraderAccount,
+  getTraderAccountEquity,
+  getTraderCashFlows,
+  getTraderPositions,
+  getSecuritiesAccounts,
+  getTradeSignals,
+  getTraderHeartbeats,
+} from '../api/trader'
 import { getTradeExecutionsBySymbol } from '../api/trading'
 import { useVisibilityAwarePolling } from '../composables/useVisibilityAwarePolling.js'
 import { assetTypeForPosition, priceDigitsForAsset } from '../utils/assetPriceFormat.js'
@@ -468,6 +568,21 @@ const overview = ref({
   daily_pnl_ratio: 0
 })
 const accountEquity = ref([])
+const cashFlows = ref([])
+const equityMode = ref('total')
+const cashFlowDialog = ref(false)
+const cashFlowSaving = ref(false)
+const cashFlowError = ref('')
+const cashFlowForm = ref({
+  date: '',
+  direction: 'deposit',
+  amount: '',
+  note: '',
+})
+const cashFlowDirections = [
+  { title: '入金', value: 'deposit' },
+  { title: '出金', value: 'withdrawal' },
+]
 
 // 持仓数据
 const positions = ref([])
@@ -561,13 +676,31 @@ const accountSnapshotText = computed(() => {
   return `本地数据库同步于 ${syncedAtText}（${ageText} 前）`
 })
 
+const flowBaselineDate = computed(() => {
+  if (!cashFlows.value.length) return ''
+  const firstFlowDate = [...cashFlows.value]
+    .map(flow => String(flow.date || ''))
+    .filter(Boolean)
+    .sort()[0]
+  if (!firstFlowDate) return ''
+  const candidates = accountEquity.value
+    .filter(point => !point.is_stale && String(point.date || '') < firstFlowDate)
+    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
+  return candidates.length ? String(candidates[candidates.length - 1].date || '') : ''
+})
+
 const accountEquityRows = computed(() => {
-  return [...accountEquity.value]
+  const sortedRows = [...accountEquity.value]
     // Stale rows are duplicated snapshots written while the broker sync was
     // dead; plotting them draws fake flat plateaus between real observations.
     .filter(point => !point.is_stale)
     .filter(point => Number.isFinite(Number(point.total_asset ?? point.equity)))
     .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
+  const baselineDate = equityMode.value === 'adjusted' ? flowBaselineDate.value : ''
+  const rows = baselineDate
+    ? sortedRows.filter(point => String(point.date || '') >= baselineDate)
+    : sortedRows
+  return rows
     .map((point, index, rows) => {
       const equity = Number(point.total_asset ?? point.equity)
       const first = Number(rows[0]?.total_asset ?? rows[0]?.equity)
@@ -575,23 +708,57 @@ const accountEquityRows = computed(() => {
       const change = Number.isFinite(previous) ? equity - previous : null
       const changeRatio = change !== null && previous !== 0 ? change / previous : null
       const changeFromStart = Number.isFinite(first) ? equity - first : null
+      const adjustedEquity = Number(point.flow_adjusted_equity ?? equity)
+      const firstAdjusted = Number(
+        rows[0]?.flow_adjusted_equity ?? rows[0]?.total_asset ?? rows[0]?.equity,
+      )
+      const adjustedChangeFromStart = Number.isFinite(firstAdjusted)
+        ? adjustedEquity - firstAdjusted
+        : null
+      const displayEquity = equityMode.value === 'adjusted' ? adjustedEquity : equity
       return {
         ...point,
         equity,
+        adjusted_equity: adjustedEquity,
+        display_equity: displayEquity,
         change,
         change_ratio: changeRatio,
         change_from_start: changeFromStart,
+        flow_adjusted_change_from_start: adjustedChangeFromStart,
       }
     })
 })
 
+const latestEquity = computed(() => {
+  const rows = accountEquityRows.value
+  const last = rows[rows.length - 1]
+  return last ? last.display_equity : null
+})
+
+const latestEquityChange = computed(() => {
+  const rows = accountEquityRows.value
+  const last = rows[rows.length - 1]
+  if (!last) return null
+  return equityMode.value === 'adjusted'
+    ? last.flow_adjusted_change_from_start
+    : last.change_from_start
+})
+
 const equityNote = computed(() => {
-  const row = accountEquityRows.value[accountEquityRows.value.length - 1]
+  const rows = accountEquityRows.value
+  const row = rows[rows.length - 1]
+  if (equityMode.value === 'adjusted') {
+    if (!cashFlows.value.length) return '暂无出入金记录，净值曲线目前与总资产相同。'
+    const baseline = flowBaselineDate.value
+    const baselineText = baseline ? `从 ${formatEquityDate(baseline)} 起算；` : ''
+    return `已剔除已记录的出入金（${baselineText}未记录的出入金仍会计入盈亏）。`
+  }
   if (row?.daily_pnl_method === 'total_asset_delta_minus_external_flow') {
     const flow = Number(row.external_flow)
     if (Number.isFinite(flow) && flow !== 0) {
       return `总资产含入金/出金；当日交易盈亏已剔除确认的出入金 ${formatCurrency(flow)}。`
     }
+    return '总资产含入金/出金；当日交易盈亏按已记录出入金调整，未记录的出入金仍会计入盈亏。'
   }
   return '总资产含入金/出金；当日交易盈亏按收盘持仓估算，不含费用和分红。'
 })
@@ -599,7 +766,7 @@ const equityNote = computed(() => {
 const accountEquityChart = computed(() => {
   const rows = accountEquityRows.value
   if (!rows.length) return { points: '', coords: [], live: null, labels: [], min: 0, max: 0 }
-  const values = rows.map(row => row.equity)
+  const values = rows.map(row => row.display_equity)
   const min = Math.min(...values)
   const max = Math.max(...values)
   const span = max - min || 1
@@ -608,7 +775,7 @@ const accountEquityChart = computed(() => {
   const pad = 28
   const coords = rows.map((row, index) => {
     const x = rows.length === 1 ? width / 2 : pad + (index * (width - pad * 2)) / (rows.length - 1)
-    const y = height - pad - ((row.equity - min) * (height - pad * 2)) / span
+    const y = height - pad - ((row.display_equity - min) * (height - pad * 2)) / span
     return { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) }
   })
   const lastRow = rows[rows.length - 1]
@@ -905,6 +1072,85 @@ async function loadAccountEquity() {
   }
 }
 
+async function loadCashFlows() {
+  if (isObservationMode.value || !selectedAccountId.value) {
+    cashFlows.value = []
+    return
+  }
+  try {
+    const rows = await getTraderCashFlows(selectedAccountId.value)
+    cashFlows.value = [...rows].sort(
+      (a, b) => String(b.date || '').localeCompare(String(a.date || '')),
+    )
+  } catch (error) {
+    console.error('获取出入金记录失败:', error)
+    cashFlows.value = []
+  }
+}
+
+function localDateInputValue() {
+  const now = new Date()
+  const offsetMs = now.getTimezoneOffset() * 60000
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10)
+}
+
+function openCashFlowDialog() {
+  cashFlowError.value = ''
+  cashFlowForm.value = {
+    date: localDateInputValue(),
+    direction: 'deposit',
+    amount: '',
+    note: '',
+  }
+  cashFlowDialog.value = true
+}
+
+async function saveCashFlow() {
+  cashFlowError.value = ''
+  const amount = Number(cashFlowForm.value.amount)
+  if (!cashFlowForm.value.date) {
+    cashFlowError.value = '请选择日期'
+    return
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    cashFlowError.value = '金额必须大于 0'
+    return
+  }
+  cashFlowSaving.value = true
+  try {
+    const signedAmount = cashFlowForm.value.direction === 'withdrawal' ? -amount : amount
+    await createTraderCashFlow({
+      securities_account_id: selectedAccountId.value,
+      date: String(cashFlowForm.value.date).replace(/-/g, ''),
+      amount: signedAmount,
+      note: cashFlowForm.value.note,
+    })
+    cashFlowDialog.value = false
+    await Promise.all([loadCashFlows(), loadAccountEquity()])
+  } catch (error) {
+    const detail = error?.response?.data?.detail
+    cashFlowError.value = (typeof detail === 'string' && detail) || error?.message || '保存失败'
+  } finally {
+    cashFlowSaving.value = false
+  }
+}
+
+async function removeCashFlow(flow) {
+  const flowId = flow?._id || flow?.id
+  if (!flowId) return
+  if (!window.confirm(
+    `删除 ${formatEquityDate(flow.date)} 的出入金 ${formatSignedCurrency(flow.amount)}？`,
+  )) return
+  try {
+    await deleteTraderCashFlow(flowId)
+    await Promise.all([loadCashFlows(), loadAccountEquity()])
+  } catch (error) {
+    console.error('删除出入金失败:', error)
+    snackbarMessage.value = error?.message || '删除出入金失败'
+    snackbar.value = true
+  }
+}
+
 // 观察模式：根据交易信号计算模拟盈亏
 async function calculateSimulatedOverview() {
   const initial_cash = currentAccount.value?.initial_cash || 1000000
@@ -1030,7 +1276,8 @@ async function refreshData() {
   await Promise.all([
     loadOverview(),
     loadPositions(),
-    loadAccountEquity()
+    loadAccountEquity(),
+    loadCashFlows()
   ])
 }
 
@@ -1214,6 +1461,43 @@ async function openHistoryDialog(position) {
   color: rgba(var(--v-theme-on-surface), 0.55);
   font-size: 12px;
   line-height: 1.5;
+}
+.cash-flow-details {
+  margin-top: 12px;
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  padding-top: 8px;
+}
+.cash-flow-details summary {
+  color: rgba(var(--v-theme-on-surface), 0.65);
+  cursor: pointer;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.cash-flow-row {
+  align-items: center;
+  border-bottom: 1px dashed rgba(var(--v-theme-on-surface), 0.12);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 90px 100px minmax(0, 1fr) auto;
+  padding: 6px 0;
+  font-size: 12px;
+}
+.cash-flow-row:last-child {
+  border-bottom: 0;
+}
+.cash-flow-note {
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .cash-flow-row {
+    grid-template-columns: 1fr auto;
+  }
+  .cash-flow-note {
+    grid-column: 1 / -1;
+  }
 }
 .equity-chart {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
