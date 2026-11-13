@@ -386,7 +386,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 8px 4px 24px;
+  padding: 24px;
 }
 .page-header {
   align-items: flex-start;

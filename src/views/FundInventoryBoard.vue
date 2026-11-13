@@ -704,7 +704,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .fund-inventory-board {
   color: var(--text-primary);
-  padding: 8px 4px 24px;
+  padding: 24px;
 }
 .page-header {
   align-items: flex-start;
