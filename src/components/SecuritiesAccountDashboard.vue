@@ -306,6 +306,15 @@
           <template #item.current_price="{ item }">
             {{ formatPositionPrice(item.raw.current_price, item.raw) }}
           </template>
+          <template #item.daily_pnl_ratio="{ item }">
+            <span
+              v-if="item.raw.daily_pnl_ratio !== null && item.raw.daily_pnl_ratio !== undefined"
+              :class="item.raw.daily_pnl_ratio > 0 ? 'red--text' : item.raw.daily_pnl_ratio < 0 ? 'green--text' : ''"
+            >
+              {{ formatSignedPercent(item.raw.daily_pnl_ratio) }}
+            </span>
+            <span v-else>—</span>
+          </template>
           <template #item.quantity="{ item }">
             {{ item.raw.quantity || 0 }}
           </template>
@@ -596,10 +605,10 @@ const positionHeaders = [
   { title: '冻结数量', key: 'frozen_qty' },
   { title: '成本价', key: 'cost_price' },
   { title: '当前价', key: 'current_price' },
+  { title: '当日盈亏比', key: 'daily_pnl_ratio' },
   { title: '市值', key: 'market_value' },
   { title: '浮盈', key: 'profit_loss' },
   { title: '浮盈比例', key: 'profit_loss_ratio' },
-  { title: '所属券商', key: 'broker' },
   { title: '账户号', key: 'account_id' },
   { title: '操作', key: 'actions', sortable: false, width: '80px' }
 ]
