@@ -322,20 +322,20 @@ async function renderHolderNumberChart() {
     xAxis: {
       type: 'category',
       data: rows.map((row) => row.date),
-      axisLabel: { color: '#94a3b8', fontSize: 11 },
-      axisLine: { lineStyle: { color: 'rgba(148,163,184,.3)' } },
+      axisLabel: { color: '#64748b', fontSize: 11 },
+      axisLine: { lineStyle: { color: '#cbd5e1' } },
       axisTick: { show: false },
     },
     yAxis: {
       type: 'value',
       axisLabel: {
-        color: '#94a3b8',
+        color: '#64748b',
         formatter: (value) => {
           if (Math.abs(value) >= 10000) return `${Math.round(value / 10000)}万`
           return `${Math.round(value)}`
         },
       },
-      splitLine: { lineStyle: { color: 'rgba(148,163,184,.16)' } },
+      splitLine: { lineStyle: { color: '#e2e8f0' } },
     },
     series: [{
       type: 'line',
@@ -343,8 +343,8 @@ async function renderHolderNumberChart() {
       smooth: true,
       symbol: 'circle',
       symbolSize: 6,
-      lineStyle: { color: '#60a5fa', width: 2 },
-      itemStyle: { color: '#93c5fd' },
+      lineStyle: { color: '#3b82f6', width: 2 },
+      itemStyle: { color: '#2563eb' },
       areaStyle: { color: 'rgba(96,165,250,.14)' },
     }],
   })
@@ -385,14 +385,14 @@ async function renderHkHoldChart() {
     xAxis: {
       type: 'category',
       data: rows.map((row) => row.date),
-      axisLabel: { color: '#94a3b8', fontSize: 11 },
-      axisLine: { lineStyle: { color: 'rgba(148,163,184,.3)' } },
+      axisLabel: { color: '#64748b', fontSize: 11 },
+      axisLine: { lineStyle: { color: '#cbd5e1' } },
       axisTick: { show: false },
     },
     yAxis: {
       type: 'value',
-      axisLabel: { color: '#94a3b8', formatter: (value) => `${value}%` },
-      splitLine: { lineStyle: { color: 'rgba(148,163,184,.16)' } },
+      axisLabel: { color: '#64748b', formatter: (value) => `${value}%` },
+      splitLine: { lineStyle: { color: '#e2e8f0' } },
     },
     series: [{
       type: 'line',
@@ -473,22 +473,22 @@ onBeforeUnmount(disposeShareholderCharts)
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 .shareholder-signal-grid article {
-  background: rgba(15, 23, 42, .45);
-  border: 1px solid rgba(148, 163, 184, .16);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 12px;
 }
 .shareholder-signal-grid h4 {
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 14px;
   margin: 0 0 8px;
 }
 .shareholder-signal-grid p {
-  color: #cbd5e1;
+  color: var(--text-subtle);
   margin: 6px 0;
 }
 .shareholder-signal-grid small {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 .chip-list {
   display: flex;
@@ -496,17 +496,17 @@ onBeforeUnmount(disposeShareholderCharts)
   gap: 8px;
 }
 .chip-pill {
-  background: rgba(96, 165, 250, .14);
-  border: 1px solid rgba(96, 165, 250, .24);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
   border-radius: 999px;
-  color: #bfdbfe;
+  color: #1d4ed8;
   font-size: 12px;
   padding: 5px 10px;
 }
 .badge-upcoming {
-  background: rgba(248, 113, 113, .16);
+  background: #fef2f2;
   border-radius: 4px;
-  color: #f87171;
+  color: #b91c1c;
   font-size: 11px;
   margin-left: 6px;
   padding: 1px 5px;

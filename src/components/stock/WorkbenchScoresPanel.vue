@@ -123,7 +123,7 @@ function weightsFor(item) {
 .score-card__detail summary {
   cursor: pointer;
   font-size: 0.82rem;
-  color: #3b82f6;
+  color: var(--color-primary);
   font-weight: 600;
 }
 .score-card__detail-body {
@@ -139,7 +139,7 @@ function weightsFor(item) {
   font-size: 0.95rem;
 }
 .muted-block {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 </style>

@@ -301,10 +301,10 @@ const financialMode = defineModel('financialMode', {
   margin: 14px 0 10px;
 }
 .financial-mode-toggle :deep(.v-btn) {
-  color: #cbd5e1;
+  color: var(--text-subtle);
 }
 .financial-mode-toggle :deep(.v-btn--active) {
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 .quality-card-grid {
   display: grid;
@@ -312,48 +312,48 @@ const financialMode = defineModel('financialMode', {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 .quality-card {
-  background: rgba(30, 41, 59, .62);
-  border: 1px solid rgba(148, 163, 184, .18);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 14px;
 }
 .quality-card span {
-  color: #94a3b8;
+  color: var(--text-muted);
   display: block;
   font-size: 12px;
   margin-bottom: 6px;
 }
 .quality-card strong {
-  color: #f8fafc;
+  color: var(--text-primary);
   display: block;
   font-size: 16px;
   margin-bottom: 8px;
 }
 .quality-card small {
-  color: #cbd5e1;
+  color: var(--text-subtle);
   line-height: 1.5;
 }
 .quality-card--good {
-  border-color: rgba(34, 197, 94, .35);
+  border-color: #a7f3d0;
 }
 .quality-card--neutral {
-  border-color: rgba(234, 179, 8, .32);
+  border-color: #fcd34d;
 }
 .quality-card--warn {
-  border-color: rgba(239, 68, 68, .35);
+  border-color: #fca5a5;
 }
 .financial-raw-sections {
   display: grid;
   gap: 12px;
 }
 .financial-raw-sections details {
-  background: rgba(30, 41, 59, .46);
-  border: 1px solid rgba(148, 163, 184, .14);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 12px 14px;
 }
 .financial-raw-sections summary {
-  color: #bfdbfe;
+  color: var(--color-primary);
   cursor: pointer;
   font-weight: 700;
 }
@@ -362,7 +362,7 @@ const financialMode = defineModel('financialMode', {
   gap: 16px;
 }
 .financial-report-group h4 {
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 14px;
   margin: 4px 0 0;
 }
@@ -386,8 +386,8 @@ const financialMode = defineModel('financialMode', {
 }
 .event-item {
   align-items: center;
-  background: rgba(30, 41, 59, .56);
-  border: 1px solid rgba(148, 163, 184, .14);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
   display: grid;
   gap: 10px;
@@ -395,18 +395,18 @@ const financialMode = defineModel('financialMode', {
   padding: 12px 14px;
 }
 .event-item span {
-  color: #93c5fd;
+  color: var(--color-primary);
   font-size: 12px;
 }
 .event-item strong {
-  color: #f8fafc;
+  color: var(--text-primary);
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .event-item small {
-  color: #94a3b8;
+  color: var(--text-muted);
   text-align: right;
 }
 </style>

@@ -1,5 +1,8 @@
 <template>
-  <div class="money-flow-panel">
+  <div
+    class="money-flow-panel"
+    :class="{ 'money-flow-panel--on-light': tone === 'on-light' }"
+  >
     <div class="money-flow-summary">
       <div v-for="metric in summaryMetrics" :key="metric.label">
         <span>{{ metric.label }}</span>
@@ -80,11 +83,17 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  tone: {
+    type: String,
+    default: 'on-dark',
+    validator: (value) => ['on-dark', 'on-light'].includes(value),
+  },
 })
 
 const chartRef = ref(null)
 let echarts = null
 let chart = null
+let chartTone = 'on-dark'
 let resizeObserver = null
 
 const periodMeta = computed(() => periodConfig(props.period))
@@ -140,7 +149,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => historyRows.value,
+  () => [historyRows.value, props.tone],
   () => {
     void scheduleRender()
   },
@@ -168,8 +177,13 @@ async function ensureChart() {
     const mod = await import('echarts')
     echarts = mod.default || mod
   }
-  if (!chart) {
-    chart = echarts.init(chartRef.value, 'dark')
+  if (!chart || chartTone !== props.tone) {
+    chart?.dispose()
+    chart = echarts.init(
+      chartRef.value,
+      props.tone === 'on-light' ? undefined : 'dark',
+    )
+    chartTone = props.tone
   }
   return chart
 }
@@ -191,7 +205,7 @@ async function renderChart() {
       fmtWanAmount,
       rollingLabel: periodMeta.value.rollingLabel,
       showRollingLine: periodMeta.value.showRollingLine,
-    }),
+    }, props.tone),
     true,
   )
   instance.resize()
@@ -498,5 +512,62 @@ function periodConfig(period) {
 
 .is-down {
   color: #22c55e !important;
+}
+
+/* Light tone: used by tabs already migrated to the A′ content surface. */
+.money-flow-panel--on-light .money-flow-summary div {
+  background: var(--surface-bg-muted);
+  border-color: var(--border-subtle);
+}
+
+.money-flow-panel--on-light .money-flow-summary span,
+.money-flow-panel--on-light .money-flow-summary small {
+  color: var(--text-muted);
+}
+
+.money-flow-panel--on-light .money-flow-summary strong {
+  color: var(--text-primary);
+}
+
+.money-flow-panel--on-light .money-flow-legend {
+  color: var(--text-subtle);
+}
+
+.money-flow-panel--on-light .money-flow-chart {
+  background: var(--surface-bg);
+  border-color: var(--surface-border);
+}
+
+.money-flow-panel--on-light .money-flow-empty {
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.money-flow-panel--on-light .money-flow-details {
+  background: var(--surface-bg-muted);
+  border-color: var(--surface-border);
+}
+
+.money-flow-panel--on-light .money-flow-details summary {
+  color: var(--color-primary);
+}
+
+.money-flow-panel--on-light .money-flow-table th,
+.money-flow-panel--on-light .money-flow-table td {
+  border-bottom-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.money-flow-panel--on-light .money-flow-table th {
+  color: var(--text-muted);
+}
+
+.money-flow-panel--on-light .is-up {
+  color: #dc2626 !important;
+}
+
+.money-flow-panel--on-light .is-down {
+  color: #15803d !important;
 }
 </style>

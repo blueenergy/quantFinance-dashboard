@@ -1,4 +1,5 @@
-export function buildMoneyFlowOption(rows, formatters = {}) {
+export function buildMoneyFlowOption(rows, formatters = {}, tone = 'on-dark') {
+  const isLight = tone === 'on-light'
   const {
     fmtAxis = (value) => String(value || ''),
     fmtWanAmount = defaultFmtWanAmount,
@@ -36,21 +37,23 @@ export function buildMoneyFlowOption(rows, formatters = {}) {
       smooth: true,
       symbol: 'none',
       data: mainNet5d,
-      lineStyle: { width: 2, color: '#60a5fa' },
+      lineStyle: { width: 2, color: isLight ? '#2563eb' : '#60a5fa' },
     })
   }
 
   return {
     backgroundColor: 'transparent',
-    color: ['#f87171', '#fb923c', '#60a5fa'],
+    color: isLight
+      ? ['#dc2626', '#ea580c', '#2563eb']
+      : ['#f87171', '#fb923c', '#60a5fa'],
     legend: { show: false },
     grid: { left: 64, right: 24, top: 18, bottom: 58 },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'cross' },
-      backgroundColor: 'rgba(15, 23, 42, .94)',
-      borderColor: 'rgba(148, 163, 184, .28)',
-      textStyle: { color: '#e2e8f0' },
+      backgroundColor: isLight ? '#ffffff' : 'rgba(15, 23, 42, .94)',
+      borderColor: isLight ? '#e2e8f0' : 'rgba(148, 163, 184, .28)',
+      textStyle: { color: isLight ? '#172033' : '#e2e8f0' },
       formatter(params) {
         const idx = params?.[0]?.dataIndex ?? 0
         const row = data[idx] || {}
@@ -68,25 +71,25 @@ export function buildMoneyFlowOption(rows, formatters = {}) {
     xAxis: {
       type: 'category',
       data: times,
-      axisLine: { lineStyle: { color: '#475569' } },
-      axisLabel: { color: '#94a3b8' },
+      axisLine: { lineStyle: { color: isLight ? '#cbd5e1' : '#475569' } },
+      axisLabel: { color: isLight ? '#64748b' : '#94a3b8' },
     },
     yAxis: {
       type: 'value',
       name: '亿元',
       scale: true,
       axisLabel: {
-        color: '#94a3b8',
+        color: isLight ? '#64748b' : '#94a3b8',
         formatter(value) {
           const n = Number(value)
           return Number.isFinite(n) ? (n / 10000).toFixed(1) : '-'
         },
       },
-      splitLine: { lineStyle: { color: 'rgba(148, 163, 184, .14)' } },
+      splitLine: { lineStyle: { color: isLight ? '#e2e8f0' : 'rgba(148, 163, 184, .14)' } },
     },
     dataZoom: [
       { type: 'inside' },
-      { type: 'slider', height: 18, bottom: 16, borderColor: 'rgba(148, 163, 184, .25)' },
+      { type: 'slider', height: 18, bottom: 16, borderColor: isLight ? '#cbd5e1' : 'rgba(148, 163, 184, .25)' },
     ],
     series,
   }

@@ -105,8 +105,8 @@ defineProps({
 
 <style scoped>
 .nine-turn-summary {
-  background: rgba(30, 41, 59, .62);
-  border: 1px solid rgba(148, 163, 184, .18);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 16px;
 }
@@ -117,7 +117,7 @@ defineProps({
 }
 .nine-turn-summary span,
 .nine-turn-summary p {
-  color: #cbd5e1;
+  color: var(--text-subtle);
   font-size: 13px;
   line-height: 1.6;
   margin: 0;
@@ -127,10 +127,10 @@ defineProps({
   gap: 10px;
 }
 .nine-turn-rules span {
-  background: rgba(15, 23, 42, .58);
-  border: 1px solid rgba(148, 163, 184, .16);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  color: #cbd5e1;
+  color: var(--text-subtle);
   font-size: 13px;
   line-height: 1.5;
   padding: 10px 12px;

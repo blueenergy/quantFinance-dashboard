@@ -103,19 +103,19 @@ async function renderRadar() {
     radar: {
       indicator: items.map((item) => ({ name: item.label, max: 100 })),
       radius: '62%',
-      splitLine: { lineStyle: { color: 'rgba(148,163,184,.35)' } },
-      splitArea: { areaStyle: { color: ['rgba(15,23,42,.25)', 'rgba(30,41,59,.35)'] } },
-      axisName: { color: '#cbd5e1' },
-      axisLine: { lineStyle: { color: 'rgba(148,163,184,.35)' } },
+      splitLine: { lineStyle: { color: '#cbd5e1' } },
+      splitArea: { areaStyle: { color: ['#f8fafc', '#ffffff'] } },
+      axisName: { color: '#475569' },
+      axisLine: { lineStyle: { color: '#cbd5e1' } },
     },
     series: [{
       type: 'radar',
       data: [{
         name: '评分',
         value: items.map((item) => Number(item.score || 0)),
-        areaStyle: { color: 'rgba(96,165,250,.25)' },
-        lineStyle: { color: '#60a5fa', width: 2 },
-        itemStyle: { color: '#93c5fd' },
+        areaStyle: { color: 'rgba(37,99,235,.18)' },
+        lineStyle: { color: '#2563eb', width: 2 },
+        itemStyle: { color: '#3b82f6' },
       }],
     }],
   })
@@ -155,7 +155,7 @@ onBeforeUnmount(() => {
   min-height: 360px;
 }
 .summary-line {
-  color: #f8fafc;
+  color: var(--text-primary);
   font-size: 18px;
   line-height: 1.7;
 }
@@ -166,14 +166,14 @@ onBeforeUnmount(() => {
   margin: 12px 0;
 }
 .summary-meta span {
-  background: rgba(96, 165, 250, .12);
-  border: 1px solid rgba(96, 165, 250, .24);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
   border-radius: 999px;
-  color: #bfdbfe;
+  color: #1d4ed8;
   padding: 5px 10px;
 }
 .analysis-summary ul {
-  color: #cbd5e1;
+  color: var(--text-subtle);
   margin: 12px 0 0;
   padding-left: 18px;
 }
@@ -183,17 +183,18 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .status-grid div {
-  background: rgba(30, 41, 59, .78);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 14px;
 }
 .status-grid span {
-  color: #94a3b8;
+  color: var(--text-muted);
   display: block;
   font-size: 12px;
 }
 .status-grid strong {
-  color: #f8fafc;
+  color: var(--text-primary);
   display: block;
   font-size: 22px;
   margin: 4px 0;

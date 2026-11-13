@@ -96,7 +96,6 @@ export const tabViewDefinitions = [
     id: 'stock-workbench',
     component: StockWorkbench,
     wrapperClass: 'stock-workbench-view',
-    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '股票工作台加载中...',
   },

@@ -144,19 +144,19 @@ const fmtPct = (v) => {
   font-size: 1.2rem;
   font-weight: 600;
 }
-.score-high { color: #81c784; }
-.score-medium { color: #ffd54f; }
-.score-low { color: #e57373; }
+.score-high { color: #15803d; }
+.score-medium { color: #b45309; }
+.score-low { color: #b91c1c; }
 .report-beat {
   padding: 2px 10px;
   border-radius: 12px;
-  background: rgba(25, 118, 210, 0.15);
-  color: #64b5f6;
+  background: #eff6ff;
+  color: #1d4ed8;
   font-size: 0.85rem;
 }
 .report-verdict {
   margin: 8px 0 12px;
-  color: var(--text-color, #ddd);
+  color: var(--text-subtle);
   line-height: 1.6;
 }
 .report-progress {
@@ -165,7 +165,7 @@ const fmtPct = (v) => {
 .report-risks {
   margin: 12px 0 0 18px;
   padding: 0;
-  color: var(--text-muted, #aaa);
+  color: var(--text-muted);
   font-size: 0.9rem;
   line-height: 1.6;
 }
@@ -174,15 +174,16 @@ const fmtPct = (v) => {
 }
 .report-details summary {
   cursor: pointer;
-  color: #64b5f6;
+  color: var(--color-primary);
   font-size: 0.9rem;
 }
 .report-narrative {
   margin-top: 12px;
   padding: 14px;
   border-radius: 6px;
-  background: var(--surface-ground, #1e1e1e);
-  color: var(--text-color, #ddd);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
   font-size: 0.9rem;
   line-height: 1.7;
 }

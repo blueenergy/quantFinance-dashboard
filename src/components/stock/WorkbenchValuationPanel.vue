@@ -391,14 +391,14 @@ function openValuationHelp(topic) {
 
 <style scoped>
 .analysis-points-list {
-  color: #cbd5e1;
+  color: var(--text-subtle);
   line-height: 1.7;
   margin: 12px 0 0;
   padding-left: 18px;
 }
 .quote-table th.valuation-ddm-g-source-col,
 .quote-table td.valuation-ddm-g-source {
-  color: #e8eef7;
+  color: var(--text-primary);
   font-size: 12px;
   line-height: 1.4;
   max-width: 220px;
@@ -406,33 +406,34 @@ function openValuationHelp(topic) {
   white-space: normal;
 }
 .quote-table th.valuation-ddm-g-source-col {
-  color: #cbd5e1;
+  color: var(--text-muted);
 }
 .quote-table td.valuation-na-cell {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-style: italic;
 }
 .valuation-help-card {
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  color: var(--text-primary);
 }
 .valuation-help-content {
-  color: #cbd5e1;
+  color: var(--text-subtle);
   line-height: 1.7;
 }
 .valuation-help-content .muted {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 .valuation-help-content h4 {
-  color: #f8fafc;
+  color: var(--text-primary);
   font-size: 14px;
   margin: 16px 0 6px;
 }
 .valuation-help-content code {
-  background: rgba(15, 23, 42, .86);
-  border: 1px solid rgba(148, 163, 184, .2);
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
-  color: #bfdbfe;
+  color: #1d4ed8;
   display: block;
   padding: 10px 12px;
   white-space: normal;

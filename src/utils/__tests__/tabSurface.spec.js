@@ -8,7 +8,6 @@ import { tabViewDefinitions } from '../tabViews.js'
  * page to `--surface-bg`, then drop its `darkSurface` flag and this list entry.
  */
 const DARK_SURFACE_TABS = [
-  'stock-workbench',
   'shenwan-index',
   'limit-up-ladder',
   'earnings-hunter',

@@ -233,7 +233,7 @@ function accuracyLabel(value) {
 }
 
 .analysis-time {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 13px;
   margin: -4px 0 14px;
 }
@@ -250,8 +250,8 @@ function accuracyLabel(value) {
 
 .evaluation-item {
   align-items: center;
-  background: rgba(30, 41, 59, .62);
-  border: 1px solid rgba(148, 163, 184, .16);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
   display: grid;
   gap: 12px;
@@ -261,13 +261,13 @@ function accuracyLabel(value) {
 
 .evaluation-item span,
 .evaluation-item small {
-  color: #94a3b8;
+  color: var(--text-muted);
   display: block;
   font-size: 12px;
 }
 
 .evaluation-item strong {
-  color: #f8fafc;
+  color: var(--text-primary);
   display: block;
   margin: 2px 0;
   overflow: hidden;
@@ -277,9 +277,9 @@ function accuracyLabel(value) {
 
 .evaluation-badge,
 .evaluation-inline-badge {
-  border: 1px solid rgba(148, 163, 184, .24);
+  border: 1px solid #cbd5e1;
   border-radius: 999px;
-  color: #cbd5e1;
+  color: var(--text-subtle);
   font-size: 12px;
   font-weight: 700;
   padding: 4px 8px;
@@ -288,23 +288,23 @@ function accuracyLabel(value) {
 
 .evaluation-badge.accurate,
 .evaluation-inline-badge.accurate {
-  background: rgba(34, 197, 94, .14);
-  border-color: rgba(34, 197, 94, .34);
-  color: #86efac;
+  background: #dcfce7;
+  border-color: #a7f3d0;
+  color: #15803d;
 }
 
 .evaluation-badge.mixed,
 .evaluation-inline-badge.mixed {
-  background: rgba(234, 179, 8, .14);
-  border-color: rgba(234, 179, 8, .34);
-  color: #fde68a;
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #b45309;
 }
 
 .evaluation-badge.inaccurate,
 .evaluation-inline-badge.inaccurate {
-  background: rgba(239, 68, 68, .14);
-  border-color: rgba(239, 68, 68, .34);
-  color: #fca5a5;
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
 }
 
 .evaluation-inline-badge {
@@ -314,10 +314,10 @@ function accuracyLabel(value) {
 }
 
 .analysis-history-item {
-  background: rgba(30, 41, 59, .62);
-  border: 1px solid rgba(148, 163, 184, .16);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  color: #cbd5e1;
+  color: var(--text-subtle);
   cursor: pointer;
   display: grid;
   gap: 6px;
@@ -328,18 +328,18 @@ function accuracyLabel(value) {
 
 .analysis-history-item:hover,
 .analysis-history-item.active {
-  background: rgba(96, 165, 250, .14);
-  border-color: rgba(96, 165, 250, .34);
+  background: #eff6ff;
+  border-color: #93c5fd;
 }
 
 .analysis-history-item span,
 .analysis-history-item small {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
 .analysis-history-item strong {
-  color: #f8fafc;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -353,19 +353,19 @@ function accuracyLabel(value) {
 }
 
 .trading-context-grid article {
-  background: rgba(30, 41, 59, .56);
-  border: 1px solid rgba(148, 163, 184, .14);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 14px;
 }
 
 .trading-context-grid h4 {
-  color: #e2e8f0;
+  color: var(--text-primary);
   margin: 0 0 10px;
 }
 
 .trading-context-grid p {
-  color: #f8fafc;
+  color: var(--text-primary);
   display: flex;
   gap: 8px;
   justify-content: space-between;
@@ -373,7 +373,7 @@ function accuracyLabel(value) {
 }
 
 .trading-context-grid span {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 @media (max-width: 700px) {

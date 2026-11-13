@@ -26,10 +26,10 @@ function mountSearchBar(props = {}) {
 }
 
 describe('WorkbenchSearchBar', () => {
-  it('passes tone on-dark to StockSearchInput', () => {
+  it('passes tone on-light to StockSearchInput', () => {
     const wrapper = mountSearchBar()
     const input = wrapper.findComponent({ name: 'StockSearchInput' })
-    expect(input.props('tone')).toBe('on-dark')
+    expect(input.props('tone')).toBe('on-light')
     wrapper.unmount()
   })
 

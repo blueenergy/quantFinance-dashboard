@@ -106,6 +106,7 @@
       :markers="decisionGsMarkers"
       :tf="quoteKlineTf"
       :chart-meta="quoteChartMeta"
+      tone="on-light"
     />
     <p v-if="decisionGsEnabled && decisionGsSummary" class="quote-gs-summary">
       {{ decisionGsSummary }}
@@ -156,6 +157,7 @@
       :period="quoteKlineTf"
       :kline-rows="quoteKlineRows"
       :loading="moneyFlowIsLoading"
+      tone="on-light"
     />
   </section>
 </template>
@@ -255,8 +257,8 @@ const quoteChartMeta = computed(() => {
   justify-content: flex-end;
 }
 .quote-kline-tf {
-  background: rgba(15, 23, 42, .72);
-  border: 1px solid rgba(148, 163, 184, .18);
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
   border-radius: 999px;
   display: inline-flex;
   gap: 4px;
@@ -266,124 +268,124 @@ const quoteChartMeta = computed(() => {
   background: transparent;
   border: 0;
   border-radius: 999px;
-  color: #94a3b8;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 12px;
   padding: 5px 10px;
 }
 .quote-kline-tf button:hover {
-  color: #dbeafe;
+  color: var(--color-primary);
 }
 .quote-kline-tf button.on {
-  background: rgba(37, 99, 235, .88);
+  background: var(--color-primary);
   color: #fff;
 }
 .quote-gs-toggle {
   background: transparent;
-  border: 1px solid rgba(148, 163, 184, .28);
+  border: 1px solid #cbd5e1;
   border-radius: 999px;
-  color: #94a3b8;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 12px;
   padding: 5px 10px;
 }
 .quote-gs-toggle:hover {
-  color: #dbeafe;
+  color: var(--color-primary);
 }
 .quote-gs-toggle.on {
-  background: rgba(234, 179, 8, .16);
-  border-color: rgba(250, 204, 21, .45);
-  color: #fde68a;
+  background: #fef3c7;
+  border-color: #fcd34d;
+  color: #b45309;
 }
 .quote-gs-summary {
-  color: #cbd5e1;
+  color: var(--text-subtle);
   font-size: 12px;
   line-height: 1.5;
   margin: 10px 0 0;
 }
 .entry-risk-badge {
-  border: 1px solid rgba(148, 163, 184, .28);
+  border: 1px solid #cbd5e1;
   border-radius: 999px;
-  color: #cbd5e1;
+  color: var(--text-subtle);
   font-size: 12px;
   font-weight: 700;
   padding: 4px 10px;
 }
 .entry-risk-high {
-  background: rgba(239, 68, 68, .14);
-  border-color: rgba(239, 68, 68, .35);
-  color: #fca5a5;
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
 }
 .entry-risk-medium {
-  background: rgba(234, 179, 8, .14);
-  border-color: rgba(234, 179, 8, .35);
-  color: #fde68a;
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #b45309;
 }
 .entry-risk-low {
-  background: rgba(59, 130, 246, .14);
-  border-color: rgba(59, 130, 246, .35);
-  color: #bfdbfe;
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
 .entry-risk-none {
-  background: rgba(34, 197, 94, .12);
-  border-color: rgba(34, 197, 94, .32);
-  color: #bbf7d0;
+  background: #dcfce7;
+  border-color: #a7f3d0;
+  color: #15803d;
 }
 .entry-risk-narrative {
   display: grid;
   gap: 10px;
 }
 .entry-risk-narrative div {
-  background: rgba(15, 23, 42, .46);
-  border: 1px solid rgba(148, 163, 184, .14);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 10px 12px;
 }
 .entry-risk-narrative span {
-  color: #94a3b8;
+  color: var(--text-muted);
   display: block;
   font-size: 12px;
   margin-bottom: 4px;
 }
 .entry-risk-narrative strong {
-  color: #f8fafc;
+  color: var(--text-primary);
   font-size: 14px;
   line-height: 1.5;
 }
 .entry-risk-text-high {
-  color: #fca5a5 !important;
+  color: #b91c1c !important;
 }
 .entry-risk-text-medium {
-  color: #fde68a !important;
+  color: #b45309 !important;
 }
 .entry-risk-text-low {
-  color: #bfdbfe !important;
+  color: #1d4ed8 !important;
 }
 .entry-risk-summary,
 .entry-risk-explain {
-  color: #cbd5e1;
+  color: var(--text-subtle);
   font-size: 13px;
   line-height: 1.6;
   margin: 12px 0 0;
 }
 .quote-details {
-  background: rgba(15, 23, 42, .36);
-  border: 1px solid rgba(148, 163, 184, .14);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   margin-top: 14px;
   padding: 10px 12px;
 }
 .quote-details summary {
-  color: #bfdbfe;
+  color: var(--color-primary);
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
 }
 .partial-kline-tag {
-  background: rgba(96, 165, 250, .14);
-  border: 1px solid rgba(96, 165, 250, .34);
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
   border-radius: 999px;
-  color: #bfdbfe;
+  color: #1d4ed8;
   display: inline-flex;
   font-size: 11px;
   margin-left: 6px;

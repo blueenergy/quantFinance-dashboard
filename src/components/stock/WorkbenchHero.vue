@@ -80,10 +80,10 @@ defineEmits(['select-panel'])
 
 <style scoped>
 .hero-card {
-  background: rgba(15, 23, 42, 0.76);
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   border-radius: 18px;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--surface-shadow);
   display: grid;
   gap: 22px;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -91,19 +91,19 @@ defineEmits(['select-panel'])
   padding: 24px;
 }
 .eyebrow {
-  color: #93c5fd;
+  color: var(--color-primary);
   font-size: 12px;
   letter-spacing: .08em;
   margin: 0 0 5px;
   text-transform: uppercase;
 }
 .hero-main h1 {
-  color: #f8fafc;
+  color: var(--text-primary);
   font-size: 34px;
   margin: 0;
 }
 .hero-main h1 span {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 20px;
   font-weight: 500;
 }
@@ -114,10 +114,10 @@ defineEmits(['select-panel'])
   margin-top: 12px;
 }
 .hero-tags span {
-  background: rgba(96, 165, 250, .12);
-  border: 1px solid rgba(96, 165, 250, .24);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
   border-radius: 999px;
-  color: #bfdbfe;
+  color: #1d4ed8;
   padding: 5px 10px;
 }
 .section-status-row {
@@ -127,10 +127,10 @@ defineEmits(['select-panel'])
   margin-top: 16px;
 }
 .section-status-chip {
-  background: rgba(34, 197, 94, .10);
-  border: 1px solid rgba(34, 197, 94, .30);
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
   border-radius: 14px;
-  color: #dcfce7;
+  color: #15803d;
   cursor: pointer;
   display: grid;
   gap: 2px;
@@ -139,17 +139,17 @@ defineEmits(['select-panel'])
   text-align: left;
 }
 .section-status-chip:hover {
-  background: rgba(34, 197, 94, .18);
+  background: #dcfce7;
 }
 .section-status-chip.is-missing {
-  background: rgba(148, 163, 184, .10);
-  border-color: rgba(148, 163, 184, .24);
-  color: #cbd5e1;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: var(--text-subtle);
 }
 .section-status-chip.is-stale {
-  background: rgba(245, 158, 11, .12);
-  border-color: rgba(245, 158, 11, .35);
-  color: #fde68a;
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #b45309;
 }
 .section-status-chip span {
   font-size: 12px;
@@ -169,24 +169,25 @@ defineEmits(['select-panel'])
   grid-template-columns: repeat(3, 130px);
 }
 .hero-metrics div {
-  background: rgba(30, 41, 59, .78);
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 14px;
 }
 .hero-metrics small {
-  color: #94a3b8;
+  color: var(--text-muted);
   display: block;
   font-size: 12px;
 }
 .hero-metrics strong {
-  color: #f8fafc;
+  color: var(--text-primary);
   display: block;
   font-size: 22px;
   margin: 4px 0;
 }
 .hero-metrics .muted,
 .price-change-line {
-  color: #94a3b8;
+  color: var(--text-muted);
   display: block;
   font-size: 12px;
   line-height: 1.35;
@@ -195,10 +196,10 @@ defineEmits(['select-panel'])
   cursor: help;
 }
 .price-change-line.is-up {
-  color: #ef4444;
+  color: #dc2626;
 }
 .price-change-line.is-down {
-  color: #22c55e;
+  color: #15803d;
 }
 @media (max-width: 980px) {
   .hero-card {

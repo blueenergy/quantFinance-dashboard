@@ -13,7 +13,7 @@
           label="输入股票代码 / 名称 / 拼音"
           placeholder="例如 600519、平安银行、PAYH、600519.SH"
           density="comfortable"
-          tone="on-dark"
+          tone="on-light"
           @update:model-value="$emit('update:modelValue', $event)"
           @select="$emit('select', $event)"
           @submit="$emit('submit')"
@@ -87,10 +87,10 @@ defineEmits(['update:modelValue', 'select', 'submit', 'load-symbol', 'clear-rece
 <style scoped>
 .workbench-search {
   align-items: center;
-  background: rgba(15, 23, 42, 0.76);
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   border-radius: 18px;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--surface-shadow);
   display: grid;
   gap: 20px;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 460px);
@@ -98,7 +98,7 @@ defineEmits(['update:modelValue', 'select', 'submit', 'load-symbol', 'clear-rece
   padding: 22px;
 }
 .eyebrow {
-  color: #93c5fd;
+  color: var(--color-primary);
   font-size: 12px;
   letter-spacing: .08em;
   margin: 0 0 5px;
@@ -108,7 +108,7 @@ h2 {
   margin: 0;
 }
 .workbench-search p:not(.eyebrow) {
-  color: #94a3b8;
+  color: var(--text-muted);
   margin: 7px 0 0;
 }
 .stock-input-panel {
@@ -123,22 +123,22 @@ h2 {
 }
 .quick-symbols {
   align-items: center;
-  color: #94a3b8;
+  color: var(--text-muted);
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   font-size: 13px;
 }
 .quick-symbols button {
-  background: rgba(96, 165, 250, .14);
-  border: 1px solid rgba(96, 165, 250, .32);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
   border-radius: 999px;
-  color: #bfdbfe;
+  color: #1d4ed8;
   cursor: pointer;
   padding: 5px 10px;
 }
 .quick-symbols button:hover {
-  background: rgba(96, 165, 250, .24);
+  background: #dbeafe;
 }
 .quick-symbols .recent-stock-btn {
   align-items: flex-start;
@@ -150,11 +150,11 @@ h2 {
   padding: 6px 10px;
 }
 .recent-stock-btn strong {
-  color: #e0f2fe;
+  color: #1d4ed8;
   font-size: 13px;
 }
 .recent-stock-btn small {
-  color: #93c5fd;
+  color: var(--text-muted);
   font-size: 11px;
   opacity: .88;
 }
