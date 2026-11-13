@@ -10,8 +10,6 @@ import { tabViewDefinitions } from '../tabViews.js'
 const DARK_SURFACE_TABS = [
   'stock-workbench',
   'shenwan-index',
-  'fund-inventory',
-  'fund-copywork',
   'limit-up-ladder',
   'earnings-hunter',
   'sector-concept',

@@ -156,14 +156,12 @@ export const tabViewDefinitions = [
   {
     id: 'fund-inventory',
     component: FundInventoryBoard,
-    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '公募库存看板加载中...',
   },
   {
     id: 'fund-copywork',
     component: FundCopyworkBoard,
-    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '抄作业看板加载中...',
   },
