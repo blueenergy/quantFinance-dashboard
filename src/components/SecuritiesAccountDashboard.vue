@@ -133,7 +133,9 @@
             </div>
             <div>
               <span>当日交易盈亏</span>
-              <strong>{{ formatSignedCurrencyOrDash(accountEquityRows[accountEquityRows.length - 1]?.daily_pnl) }}</strong>
+              <strong :class="pnlClass(accountEquityRows[accountEquityRows.length - 1]?.daily_pnl)">
+                {{ formatSignedCurrencyOrDash(accountEquityRows[accountEquityRows.length - 1]?.daily_pnl) }}
+              </strong>
             </div>
             <div>
               <span>最新快照</span>
@@ -244,12 +246,12 @@
           :sort-by="[{ key: 'market_value', order: 'desc' }]"
         >
           <template #item.profit_loss_ratio="{ item }">
-            <span :class="item.raw.profit_loss_ratio >= 0 ? 'green--text' : 'red--text'">
+            <span :class="item.raw.profit_loss_ratio >= 0 ? 'red--text' : 'green--text'">
               {{ formatPercent(item.raw.profit_loss_ratio) }}
             </span>
           </template>
           <template #item.profit_loss="{ item }">
-            <span :class="item.raw.profit_loss >= 0 ? 'green--text' : 'red--text'">
+            <span :class="item.raw.profit_loss >= 0 ? 'red--text' : 'green--text'">
               {{ formatCurrency(item.raw.profit_loss) }}
             </span>
           </template>
@@ -777,6 +779,13 @@ function hasDailyPnl(point) {
     && Number.isFinite(Number(point.daily_pnl))
 }
 
+// A-share convention: red = up/gain, green = down/loss.
+function pnlClass(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number) || number === 0) return ''
+  return number > 0 ? 'is-up' : 'is-down'
+}
+
 function formatDuration(seconds) {
   if (seconds === null || seconds === undefined) return '未知'
   const value = Number(seconds)
@@ -1289,10 +1298,16 @@ async function openHistoryDialog(position) {
 .equity-tooltip-row span {
   opacity: 0.7;
 }
+.equity-summary strong.is-up {
+  color: #dc2626;
+}
+.equity-summary strong.is-down {
+  color: #15803d;
+}
 .equity-tooltip-row strong.is-up {
-  color: #4ade80;
+  color: #f87171;
 }
 .equity-tooltip-row strong.is-down {
-  color: #f87171;
+  color: #4ade80;
 }
 </style>
