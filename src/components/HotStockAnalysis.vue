@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="hot-stock-page">
     <!-- Trigger Card -->
     <v-card class="hot-trigger mb-4" variant="outlined">
       <v-card-text class="d-flex align-center justify-space-between flex-wrap ga-2">
@@ -402,6 +402,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.hot-stock-page {
+  padding: 24px;
+}
+
 .hot-trigger {
   background: var(--surface-bg);
   border-color: var(--surface-border);

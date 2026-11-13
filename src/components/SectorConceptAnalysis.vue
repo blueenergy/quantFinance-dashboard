@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="sector-page">
     <!-- Trigger Card -->
     <v-card class="sector-trigger mb-4" variant="outlined">
       <v-card-text class="d-flex align-center justify-space-between flex-wrap ga-2">
@@ -334,6 +334,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.sector-page {
+  padding: 24px;
+}
+
 .sector-trigger {
   background: var(--surface-bg);
   border-color: var(--surface-border);
