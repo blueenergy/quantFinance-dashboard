@@ -246,10 +246,10 @@
             {{ formatCurrency(item.raw.market_value) }}
           </template>
           <template #item.cost_price="{ item }">
-            {{ formatCurrency(item.raw.cost_price) }}
+            {{ formatPositionPrice(item.raw.cost_price, item.raw) }}
           </template>
           <template #item.current_price="{ item }">
-            {{ formatCurrency(item.raw.current_price) }}
+            {{ formatPositionPrice(item.raw.current_price, item.raw) }}
           </template>
           <template #item.quantity="{ item }">
             {{ item.raw.quantity || 0 }}
@@ -391,7 +391,7 @@
               </v-chip>
             </template>
             <template #item.filled_price="{ item }">
-              ¥{{ parseFloat(item.filled_price || item.price || 0).toFixed(2) }}
+              {{ formatHistoryFilledPrice(item.filled_price || item.price || 0) }}
             </template>
             <template #item.filled_qty="{ item }">
               {{ item.filled_size || item.filled_qty || item.size || item.quantity || 0 }}
@@ -436,6 +436,7 @@ import { ref, onMounted, computed, inject } from 'vue'
 import { getTraderAccount, getTraderAccountEquity, getTraderPositions, getSecuritiesAccounts, getTradeSignals, getTraderHeartbeats } from '../api/trader'
 import { getTradeExecutionsBySymbol } from '../api/trading'
 import { useVisibilityAwarePolling } from '../composables/useVisibilityAwarePolling.js'
+import { assetTypeForPosition, priceDigitsForAsset } from '../utils/assetPriceFormat.js'
 import TradeDialog from './TradeDialog.vue'
 
 // 证券账户列表
@@ -706,6 +707,29 @@ function formatCurrency(value) {
   return '¥' + parseFloat(value).toLocaleString('zh-CN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
+  })
+}
+
+// 价格按标的 tick 展示：ETF 3 位小数，股票 2 位（金额类字段仍保持 2 位）
+function formatPositionPrice(value, row) {
+  if (value === undefined || value === null || value === '') return 'N/A'
+  const number = Number(value)
+  if (!Number.isFinite(number)) return 'N/A'
+  const digits = priceDigitsForAsset(assetTypeForPosition(row))
+  return '¥' + number.toLocaleString('zh-CN', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
+  })
+}
+
+// 交易明细成交价：按当前查看的标的识别 ETF / 股票
+function formatHistoryFilledPrice(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '-'
+  const digits = priceDigitsForAsset(assetTypeForPosition({ symbol: historyDialogSymbol.value }))
+  return '¥' + number.toLocaleString('zh-CN', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
   })
 }
 
