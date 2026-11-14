@@ -141,15 +141,44 @@
                   </div>
                 </div>
 
-                <div class="d-flex ga-2 mb-2 flex-wrap">
-                  <v-chip size="x-small" :color="stock.pct_change > 0 ? 'red' : 'green'" variant="tonal">
-                    {{ stock.pct_change > 0 ? '+' : '' }}{{ stock.pct_change?.toFixed(2) }}%
+                <div class="d-flex ga-2 mb-2 flex-wrap align-center">
+                  <v-chip v-if="fmtPct(stock.pct_change)" size="x-small" :color="pctColor(stock.pct_change)" variant="tonal">
+                    今日 {{ fmtPct(stock.pct_change) }}
                   </v-chip>
-                  <v-chip size="x-small" variant="outlined" color="cyan">
+                  <v-chip
+                    size="x-small"
+                    variant="outlined"
+                    :color="stock.opportunity_type === '高位分歧' ? 'warning' : 'cyan'"
+                  >
                     {{ stock.opportunity_type || '机会' }}
                   </v-chip>
                   <v-chip v-if="stock.concept" size="x-small" variant="outlined" color="grey">
                     {{ stock.concept }}
+                  </v-chip>
+                </div>
+
+                <!-- 历史位置：由日线行情确定性计算，不是 LLM 的表述 -->
+                <div v-if="hasHistory(stock)" class="history-strip d-flex ga-2 mb-2 flex-wrap align-center">
+                  <span class="text-caption" style="color:var(--text-muted)">历史位置</span>
+                  <v-chip v-if="fmtPct(stock.pct_5d)" size="x-small" :color="pctColor(stock.pct_5d)" variant="tonal">
+                    近5日 {{ fmtPct(stock.pct_5d) }}
+                  </v-chip>
+                  <v-chip v-if="fmtPct(stock.pct_20d)" size="x-small" :color="pctColor(stock.pct_20d)" variant="outlined">
+                    近20日 {{ fmtPct(stock.pct_20d) }}
+                  </v-chip>
+                  <v-chip
+                    v-if="isNumber(stock.limit_up_5d)"
+                    size="x-small"
+                    variant="tonal"
+                    :color="stock.limit_up_5d >= 2 ? 'warning' : 'grey'"
+                  >
+                    5日涨停 {{ stock.limit_up_5d }} 次
+                  </v-chip>
+                  <v-chip v-if="stock.limit_up_streak > 0" size="x-small" color="deep-orange" variant="tonal">
+                    {{ stock.limit_up_streak }} 连板
+                  </v-chip>
+                  <v-chip v-if="isNumber(stock.vol_ratio)" size="x-small" variant="outlined" color="grey">
+                    量比 {{ stock.vol_ratio.toFixed(2) }}
                   </v-chip>
                 </div>
 
@@ -315,6 +344,29 @@ function selectHistory(rec) {
   analysisTime.value = rec.created_at || ''
 }
 
+function isNumber(v) {
+  return typeof v === 'number' && !Number.isNaN(v)
+}
+
+/** "+5.54%" / "-2.27%"；无值返回 null，方便 v-if 隐藏。 */
+function fmtPct(v) {
+  if (!isNumber(v)) return null
+  return `${v > 0 ? '+' : ''}${v.toFixed(2)}%`
+}
+
+function pctColor(v) {
+  if (!isNumber(v)) return 'grey'
+  if (v > 0) return 'red'
+  if (v < 0) return 'green'
+  return 'grey'
+}
+
+/** 旧分析（补历史动量之前生成的）没有这些字段，整条隐藏。 */
+function hasHistory(stock) {
+  return isNumber(stock?.pct_5d) || isNumber(stock?.pct_20d) ||
+    isNumber(stock?.limit_up_5d) || isNumber(stock?.vol_ratio)
+}
+
 function sentimentColor(s) {
   if (s === '强势') return 'red'
   if (s === '偏强') return 'orange'
@@ -357,6 +409,10 @@ onMounted(() => {
 .thinking-card {
   border-color: #bfdbfe;
   background: #eff6ff;
+}
+.history-strip {
+  padding: 4px 0;
+  border-top: 1px dashed var(--surface-border);
 }
 .thinking-text {
   white-space: pre-wrap;

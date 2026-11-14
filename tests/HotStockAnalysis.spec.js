@@ -88,6 +88,64 @@ describe('HotStockAnalysis', () => {
     expect(wrapper.text()).toContain('数据最新')
   })
 
+  it('renders recent momentum on the opportunity card', async () => {
+    requestMock.mockImplementation((config) => {
+      if (config.url.endsWith('/hot-stock/latest')) {
+        return Promise.resolve({
+          success: true,
+          source: 'ths',
+          source_name: '同花顺(THS)',
+          rank_time: '2026-11-13 22:30:41',
+          trade_date: '20261113',
+          analysis: {
+            ...ANALYSIS,
+            opportunities: [
+              {
+                ts_code: '603366.SH',
+                name: '日出东方',
+                rank: 3,
+                pct_change: 5.54,
+                opportunity_type: '高位分歧',
+                confidence: 50,
+                pct_5d: 54.62,
+                pct_20d: 90.93,
+                limit_up_5d: 4,
+                limit_up_streak: 0,
+                vol_ratio: 4.58,
+                reason: '近5日涨停 4 次',
+              },
+            ],
+          },
+          model: 'test-model',
+          stock_count: 99,
+          created_at: '2026-11-13T23:05:16',
+        })
+      }
+      if (config.url.endsWith('/hot-stock/history')) {
+        return Promise.resolve({ success: true, trade_date: '20261113', count: 0, records: [] })
+      }
+      return Promise.resolve(RAW_STATUS)
+    })
+    const wrapper = await mountPanel()
+    const text = wrapper.text()
+
+    expect(text).toContain('历史位置')
+    expect(text).toContain('近5日 +54.62%')
+    expect(text).toContain('近20日 +90.93%')
+    expect(text).toContain('5日涨停 4 次')
+    expect(text).toContain('量比 4.58')
+    expect(text).toContain('高位分歧')
+  })
+
+  it('hides the momentum strip for analyses generated before it existed', async () => {
+    mockResponses()
+    const wrapper = await mountPanel()
+    const text = wrapper.text()
+
+    expect(text).not.toContain('历史位置')
+    expect(text).not.toContain('undefined%')
+  })
+
   it('warns that the conclusion is outdated when the hot list moved on', async () => {
     requestMock.mockImplementation((config) => {
       if (config.url.endsWith('/hot-stock/latest')) {
