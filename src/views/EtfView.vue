@@ -19,14 +19,6 @@
         >
           产品列表
         </button>
-        <button
-          type="button"
-          class="main-tab"
-          :class="{ on: mainTab === 'national-team' }"
-          @click="switchToNationalTeamTab"
-        >
-          国家队动向
-        </button>
       </div>
       <div class="header-meta" v-if="mainTab === 'list' && listTradeDate && !searchQuery.trim() && !selectedEtf">
         规模数据日：<strong>{{ listTradeDate }}</strong> · 已加载 {{ etfList.length }} / {{ listTotal }} 只 · 默认按<strong>基金份额（万份）</strong>降序
@@ -55,10 +47,6 @@
 
     <div v-if="mainTab === 'heatmap' && !selectedEtf && !loading" class="content-section">
       <EtfHeatmapPanel ref="heatmapPanelRef" @open-etf="openEtfFromHeatmap" />
-    </div>
-
-    <div v-else-if="mainTab === 'national-team' && !selectedEtf" class="content-section">
-      <NationalTeamPanel />
     </div>
 
     <div v-else-if="loading" class="loading-state">正在加载数据...</div>
@@ -181,7 +169,6 @@ import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import request from '../utils/request'
 import EtfChart from '../components/EtfChart.vue'
 import EtfHeatmapPanel from '../components/EtfHeatmapPanel.vue'
-import NationalTeamPanel from '../components/NationalTeamPanel.vue'
 
 const props = defineProps({
   pendingNavigation: {
@@ -330,12 +317,6 @@ function switchToListTab() {
   if (!etfList.value.length && !loading.value) {
     fetchList({ append: false })
   }
-}
-
-function switchToNationalTeamTab() {
-  mainTab.value = 'national-team'
-  selectedEtf.value = null
-  detailReturnTab.value = 'list'
 }
 
 async function openEtfFromHeatmap(tsCode) {
@@ -601,7 +582,6 @@ defineExpose({
   leaveDetail,
   switchToListTab,
   switchToHeatmapTab,
-  switchToNationalTeamTab,
 })
 </script>
 

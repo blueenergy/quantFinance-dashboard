@@ -41,6 +41,7 @@ export const NAV_TABS = [
   { id: 'limit-up-ladder', name: '📊 连板天梯', group: 'market' },
   { id: 'market-trend', name: '🧭 趋势全景', group: 'market' },
   { id: 'market-intraday', name: '⚡ 盘中强弱', group: 'market' },
+  { id: 'national-team', name: '🏛️ 国家队动向', group: 'market' },
   { id: 'market-insights', name: '👀 火眼金睛', group: 'market' },
   { id: 'spectrum', name: '☯️ 阴阳谱', group: 'market' },
   { id: 'realtime-spectrum', name: '⏱️ 实时阴阳谱', group: 'market' },

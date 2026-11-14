@@ -55,6 +55,7 @@ const MarketRiskPanel = defineAsyncComponent(() => import('../views/MarketRiskPa
 const MarketRegimePanel = defineAsyncComponent(() => import('../views/MarketRegimePanel.vue'))
 const MarketTrendPanorama = defineAsyncComponent(() => import('../views/MarketTrendPanorama.vue'))
 const MarketIntradayStrength = defineAsyncComponent(() => import('../views/MarketIntradayStrength.vue'))
+const NationalTeamView = defineAsyncComponent(() => import('../views/NationalTeamView.vue'))
 const MarketStatsPanel = defineAsyncComponent(() => import('../views/MarketStatsPanel.vue'))
 const ChinaMacroPanel = defineAsyncComponent(() => import('../views/ChinaMacroPanel.vue'))
 const UsRatesPanel = defineAsyncComponent(() => import('../views/UsRatesPanel.vue'))
@@ -321,6 +322,12 @@ export const tabViewDefinitions = [
     component: MarketIntradayStrength,
     fallbackClass: 'skeleton-table',
     fallbackText: '盘中强弱加载中...',
+  },
+  {
+    id: 'national-team',
+    component: NationalTeamView,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '国家队动向加载中...',
   },
   {
     id: 'china-macro',
