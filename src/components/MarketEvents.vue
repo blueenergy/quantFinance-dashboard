@@ -698,7 +698,7 @@ onMounted(() => {
 
 <style scoped>
 .market-events-card {
-  background: white;
+  background: var(--surface-bg);
   border-radius: 12px;
   border: 1px solid #e1e8ed;
   margin-bottom: 20px;

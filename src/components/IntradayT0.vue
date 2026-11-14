@@ -1077,7 +1077,7 @@ onMounted(loadAll)
 
 <style scoped>
 .intraday-t0-page {
-  background: #fff;
+  background: var(--surface-bg);
   border-radius: 8px;
   padding: 16px;
   color: #1f2937;

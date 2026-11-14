@@ -600,7 +600,7 @@ defineExpose({
   box-sizing: border-box;
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  background: #f5f7fa;
+  background: var(--surface-bg-muted);
   color: var(--text-color);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 }

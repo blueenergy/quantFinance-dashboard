@@ -458,7 +458,7 @@ async function submitFeedback(msg, msgIndex, rating) {
 .chat-panel {
   display: flex;
   height: calc(100vh - 110px);
-  background: var(--bg-primary, #f5f7fa);
+  background: var(--surface-bg-muted);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0,0,0,0.08);

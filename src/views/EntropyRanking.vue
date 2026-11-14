@@ -186,7 +186,7 @@ onMounted(refresh)
 
 .page-header,
 .card {
-  background: #fff;
+  background: var(--surface-bg);
   color: #1f2937;
   border: 1px solid #e5e7eb;
   border-radius: 12px;

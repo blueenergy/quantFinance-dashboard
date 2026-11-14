@@ -146,11 +146,11 @@ onMounted(() => {
 /* 与 MarketRiskPanel 一致的纸面浅灰底 + 白底内容区 */
 .market-risk-panel {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: var(--surface-bg-muted);
 }
 
 .mrp-paper {
-  background: #ffffff;
+  background: var(--surface-bg);
   color: #111111;
   border: 1px solid #d0d0d0;
   border-radius: 4px;

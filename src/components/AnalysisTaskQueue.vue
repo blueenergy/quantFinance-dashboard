@@ -182,7 +182,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.task-queue-page { background:#fff; padding:16px; border-radius:8px; }
+.task-queue-page { background: var(--surface-bg); padding:16px; border-radius:8px; }
 .queue-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:14px; }
 .queue-header h3 { margin:0 0 6px; font-size:20px; }
 .queue-header p { margin:0; color:#64748b; font-size:13px; }

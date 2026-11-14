@@ -611,7 +611,7 @@ onMounted(() => {
 .data-pulse-widget {
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--surface-bg);
   border: 1px solid #e1e8ed;
   border-radius: 12px;
   margin-bottom: 0;

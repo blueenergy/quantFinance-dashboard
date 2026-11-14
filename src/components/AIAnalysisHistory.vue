@@ -1223,7 +1223,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.ai-analysis-history { background:#fff; padding:24px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.08); margin:20px 0; }
+.ai-analysis-history { background: var(--surface-bg); padding:24px; border-radius:12px; box-shadow: var(--surface-shadow); margin:20px 0; }
 .history-title { margin:0 0 16px; font-size:22px; font-weight:700; color:#2c3e50; }
 
 /* 主输入区 */

@@ -920,7 +920,7 @@ export default {
 <style scoped>
 /* 管理员蓝白色调UI样式 - 专业、清爽、现代 */
 .admin-dashboard {
-  background: #f8fafc;
+  background: var(--surface-bg-muted);
   color: #1e293b;
   font-family: 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
   padding: 20px;
@@ -930,7 +930,7 @@ export default {
 /* 导航样式 - 蓝白专业工具栏 */
 .admin-nav {
   margin-bottom: 40px;
-  background: #ffffff;
+  background: var(--surface-bg);
   padding: 32px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;

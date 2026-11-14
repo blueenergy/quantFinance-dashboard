@@ -848,12 +848,12 @@ onMounted(loadOverview)
 
 .market-risk-panel {
   padding: 0 !important;
-  background: #f5f5f5;
+  background: var(--surface-bg-muted);
 }
 
 /* Outer paper container */
 .mrp-paper {
-  background: #ffffff;
+  background: var(--surface-bg);
   color: #111111;
   border: 1px solid #d0d0d0;
   border-radius: 4px;

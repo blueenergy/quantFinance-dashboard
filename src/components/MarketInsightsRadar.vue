@@ -945,7 +945,7 @@ onMounted(loadAll)
 
 <style scoped>
 .insights-page {
-  background: #fff;
+  background: var(--surface-bg);
   border-radius: 8px;
   color: #1f2937;
   padding: 16px;

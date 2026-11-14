@@ -477,7 +477,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.kc-page { background: #fff; padding: 16px; border-radius: 8px; }
+.kc-page { background: var(--surface-bg); padding: 16px; border-radius: 8px; }
 .page-title { margin: 0 0 14px; font-size: 20px; }
 .controls { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
 .symbol-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }

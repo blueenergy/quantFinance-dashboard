@@ -609,10 +609,10 @@ onMounted(() => {
 /* ── Shared paper theme (mirrors MarketRiskPanel scoped styles) ── */
 .market-risk-panel {
   padding: 0 !important;
-  background: #f5f5f5;
+  background: var(--surface-bg-muted);
 }
 .mrp-paper {
-  background: #ffffff;
+  background: var(--surface-bg);
   color: #111111;
   border: 1px solid #d0d0d0;
   border-radius: 4px;

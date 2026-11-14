@@ -540,7 +540,7 @@ onUnmounted(() => {
 
 <style scoped>
 .daily-gold-paper {
-  background: #f5f5f5;
+  background: var(--surface-bg-muted);
   color: #111;
   min-height: 100%;
 }

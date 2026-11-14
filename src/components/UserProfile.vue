@@ -1552,7 +1552,7 @@ export default {
 <style scoped>
 .user-profile {
   padding: 20px;
-  background: #f8f9fa;
+  background: var(--surface-bg-muted);
   border-radius: 8px;
   min-height: 600px;
 }

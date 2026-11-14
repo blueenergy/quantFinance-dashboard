@@ -456,7 +456,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.regime-panel { background: #f5f7fb; min-height: 100%; }
+.regime-panel { background: var(--surface-bg-muted); min-height: 100%; }
 .regime-shell { width: 100%; }
 .regime-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 18px; }
 .regime-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
@@ -468,15 +468,15 @@ onBeforeUnmount(() => {
 .regime-refresh:disabled { opacity: .55; cursor: not-allowed; }
 .regime-empty { background: #ffffff; border: 1px solid #d9e1ee; border-radius: 8px; padding: 28px; color: #667085; text-align: center; }
 .regime-empty.is-error { color: #b42318; border-color: #f3b8b0; }
-.regime-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; border-radius: 8px; padding: 18px; margin-bottom: 14px; border: 1px solid #d8e0ea; background: #ffffff; }
+.regime-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; border-radius: 8px; padding: 18px; margin-bottom: 14px; border: 1px solid #d8e0ea; background: var(--surface-bg); }
 .summary-label { display: block; color: #68758b; font-size: 12px; margin-bottom: 6px; }
 .regime-summary strong { color: #172033; font-size: 22px; }
 .alert-medium { border-left: 5px solid #d9921f; }
 .alert-high { border-left: 5px solid #c2410c; }
 .alert-extreme { border-left: 5px solid #b42318; }
 .regime-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
-.metric-panel, .cape-section, .warning-panel, .history-section, .ai-section { background: #ffffff; border: 1px solid #d9e1ee; border-radius: 8px; padding: 16px; }
-.mcl-chart-section { background: #ffffff; border: 1px solid #d9e1ee; border-radius: 8px; padding: 16px; margin-bottom: 14px; }
+.metric-panel, .cape-section, .warning-panel, .history-section, .ai-section { background: var(--surface-bg); border: 1px solid #d9e1ee; border-radius: 8px; padding: 16px; }
+.mcl-chart-section { background: var(--surface-bg); border: 1px solid #d9e1ee; border-radius: 8px; padding: 16px; margin-bottom: 14px; }
 .mcl-chart { width: 100%; height: 280px; }
 .panel-title, .section-title { color: #25324a; font-weight: 800; margin-bottom: 12px; }
 .section-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; }

@@ -980,7 +980,7 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: none;
   box-sizing: border-box;
-  background:#fff;
+  background: var(--surface-bg);
   padding:16px;
   border-radius:8px;
 }

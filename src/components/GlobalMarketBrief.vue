@@ -977,7 +977,7 @@ async function refreshAnalysis() {
 
 <style scoped>
 .global-brief-card {
-  background: white;
+  background: var(--surface-bg);
   border-radius: 12px;
   border: 1px solid #e1e8ed;
   margin-bottom: 20px;
