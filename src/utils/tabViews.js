@@ -32,6 +32,7 @@ const GlobalMarketBrief = defineAsyncComponent(() => import('../components/Globa
 const AdminDashboard = defineAsyncComponent(() => import('../components/AdminDashboard.vue'))
 const StockRanking = defineAsyncComponent(() => import('../components/StockRanking.vue'))
 const EntropyRanking = defineAsyncComponent(() => import('../views/EntropyRanking.vue'))
+const ChipMonitor = defineAsyncComponent(() => import('../views/ChipMonitor.vue'))
 const FundInventoryBoard = defineAsyncComponent(() => import('../views/FundInventoryBoard.vue'))
 const FundCopyworkBoard = defineAsyncComponent(() => import('../views/FundCopyworkBoard.vue'))
 const MarketSpectrum = defineAsyncComponent(() => import('../components/MarketSpectrum.vue'))
@@ -150,6 +151,12 @@ export const tabViewDefinitions = [
     component: EntropyRanking,
     fallbackClass: 'skeleton-table',
     fallbackText: '熵值因子排名加载中...',
+  },
+  {
+    id: 'chip-monitor',
+    component: ChipMonitor,
+    fallbackClass: 'skeleton-table',
+    fallbackText: '筹码监控加载中...',
   },
   {
     id: 'fund-inventory',

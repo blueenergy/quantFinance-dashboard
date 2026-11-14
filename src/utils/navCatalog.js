@@ -63,6 +63,7 @@ export const NAV_TABS = [
   // 选股
   { id: 'ranking', name: '🏆 金榜', group: 'screening' },
   { id: 'entropy-ranking', name: '🎲 熵值排名', group: 'screening' },
+  { id: 'chip-monitor', name: '🧩 筹码监控', group: 'screening' },
   { id: 'fund-inventory', name: '🗃️ 公募库存', group: 'screening' },
   { id: 'fund-copywork', name: '📝 抄作业', group: 'screening' },
   { id: 'sector-concept', name: '📈 概念板块', group: 'screening' },
