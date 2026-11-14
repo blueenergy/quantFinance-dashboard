@@ -149,6 +149,7 @@
           <div v-if="chartLoading" class="chart-loading">加载 K 线与买卖点…</div>
           <StockKLineChart
             v-else-if="chartRecords.length"
+            tone="on-light"
             :records="chartRecords"
             :markers="chartMarkers"
             :chart-meta="chartMeta"
@@ -613,33 +614,33 @@ watch(selectedPreset, async () => {
 
 <style scoped>
 .strategy-pool {
-  padding: 10px;
-  color: #e6e6fa;
+  padding: 24px;
+  color: var(--text-primary);
 }
 
 .controls-card {
   display: flex;
   flex-wrap: wrap;
   gap: 16px 20px;
-  background: rgba(30, 30, 63, 0.6);
+  background: var(--surface-bg);
   padding: 20px;
   border-radius: 12px;
   margin-bottom: 15px;
-  border: 1px solid rgba(138, 43, 226, 0.3);
+  border: 1px solid var(--surface-border);
   align-items: center;
 }
 
 .range-hint {
   flex: 1 1 280px;
   margin: 0;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.5;
 }
 
 .strategy-info-card {
-  background: rgba(138, 43, 226, 0.1);
-  border: 1px solid rgba(138, 43, 226, 0.3);
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
   border-radius: 12px;
   padding: 15px 20px;
   margin-bottom: 25px;
@@ -647,7 +648,7 @@ watch(selectedPreset, async () => {
 
 .info-header {
   margin-bottom: 12px;
-  border-bottom: 1px solid rgba(138, 43, 226, 0.2);
+  border-bottom: 1px solid #e9d5ff;
   padding-bottom: 8px;
   cursor: pointer;
   list-style: none;
@@ -658,7 +659,7 @@ watch(selectedPreset, async () => {
 }
 
 .info-title {
-  color: #b19cd9;
+  color: #6d28d9;
   font-weight: 600;
   font-size: 15px;
 }
@@ -677,12 +678,12 @@ watch(selectedPreset, async () => {
 
 .param-label {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .param-value {
   font-size: 14px;
-  color: #fff;
+  color: var(--text-primary);
   font-weight: 600;
 }
 
@@ -694,15 +695,15 @@ watch(selectedPreset, async () => {
 
 .control-group label {
   font-weight: 600;
-  color: #b19cd9;
+  color: #6d28d9;
 }
 
 select {
   padding: 8px 12px;
-  background: rgba(15, 15, 35, 0.8);
-  border: 1px solid rgba(138, 43, 226, 0.5);
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
   border-radius: 6px;
-  color: white;
+  color: var(--field-fg);
   outline: none;
 }
 
@@ -736,9 +737,9 @@ select {
 .pool-list {
   max-height: 640px;
   overflow: auto;
-  border: 1px solid rgba(138, 43, 226, 0.25);
+  border: 1px solid var(--surface-border);
   border-radius: 10px;
-  background: rgba(15, 15, 35, 0.45);
+  background: var(--surface-bg);
 }
 
 .pool-table {
@@ -751,18 +752,18 @@ select {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: rgba(30, 30, 63, 0.95);
-  color: #b19cd9;
+  background: var(--surface-bg-muted);
+  color: var(--text-primary);
   font-weight: 600;
   text-align: left;
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(138, 43, 226, 0.3);
+  border-bottom: 1px solid var(--surface-border);
   white-space: nowrap;
 }
 
 .pool-table td {
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(138, 43, 226, 0.12);
+  border-bottom: 1px solid var(--border-subtle);
   vertical-align: middle;
 }
 
@@ -772,7 +773,7 @@ select {
 
 .rank-num {
   font-weight: 700;
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .top-chip {
@@ -780,9 +781,9 @@ select {
   margin-left: 4px;
   padding: 0 5px;
   border-radius: 999px;
-  background: rgba(251, 191, 36, 0.2);
-  border: 1px solid rgba(251, 191, 36, 0.45);
-  color: #fbbf24;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #b45309;
   font-size: 10px;
   font-weight: 700;
   line-height: 1.5;
@@ -805,23 +806,23 @@ select {
 }
 
 .pool-row:hover td {
-  background: rgba(76, 29, 149, 0.28);
+  background: #f5f3ff;
 }
 
 .pool-row.selected td {
-  background: rgba(76, 29, 149, 0.55);
+  background: #ede9fe;
 }
 
 .pool-row-top td {
   box-shadow: inset 3px 0 0 #fbbf24;
 }
 
-.return-pos { color: #4ade80; font-weight: 700; }
-.return-neg { color: #f87171; font-weight: 700; }
-.return-flat { color: #94a3b8; }
+.return-pos { color: #15803d; font-weight: 700; }
+.return-neg { color: #dc2626; font-weight: 700; }
+.return-flat { color: var(--text-muted); }
 
 .muted-metric {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .row-backtest-btn {
@@ -829,16 +830,16 @@ select {
   width: auto;
   padding: 4px 8px;
   background: transparent;
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid #cbd5e1;
   border-radius: 6px;
-  color: #cbd5e1;
+  color: var(--text-primary);
   cursor: pointer;
   font-size: 12px;
 }
 
 .pool-chart-pane {
-  background: rgba(15, 23, 42, 0.45);
-  border: 1px solid rgba(138, 43, 226, 0.25);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   padding: 12px;
   min-height: 480px;
@@ -855,14 +856,14 @@ select {
 .chart-title {
   margin: 0;
   font-size: 18px;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .chart-symbol {
   margin-left: 8px;
   font-family: monospace;
   font-size: 13px;
-  color: #c4b5fd;
+  color: #6d28d9;
 }
 
 .industry-chip {
@@ -870,9 +871,9 @@ select {
   align-items: center;
   padding: 1px 7px;
   border-radius: 999px;
-  background: rgba(56, 189, 248, 0.16);
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  color: #7dd3fc;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
   font-size: 11px;
   line-height: 1.4;
   white-space: nowrap;
@@ -887,7 +888,7 @@ select {
 
 .chart-disclaimer {
   margin: 4px 0 0;
-  color: #fbbf24;
+  color: #b45309;
   font-size: 12px;
 }
 
@@ -906,12 +907,12 @@ select {
 }
 
 .forward-label {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
-.forward-pos { color: #4ade80; font-weight: 700; }
-.forward-neg { color: #f87171; font-weight: 700; }
-.forward-flat, .forward-na { color: #94a3b8; }
+.forward-pos { color: #15803d; font-weight: 700; }
+.forward-neg { color: #dc2626; font-weight: 700; }
+.forward-flat, .forward-na { color: var(--text-muted); }
 
 .chart-loading,
 .chart-empty {
@@ -919,7 +920,7 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #b19cd9;
+  color: #6d28d9;
 }
 
 @media (max-width: 960px) {
@@ -932,9 +933,9 @@ select {
 }
 
 .stock-card {
-  background: rgba(42, 42, 94, 0.6);
+  background: var(--surface-bg);
   border-radius: 12px;
-  border: 1px solid rgba(138, 43, 226, 0.2);
+  border: 1px solid var(--surface-border);
   padding: 15px;
   transition: all 0.3s;
   cursor: pointer;
@@ -945,8 +946,8 @@ select {
 .stock-card:hover {
   transform: translateY(-5px);
   border-color: #8a2be2;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-  background: rgba(50, 50, 110, 0.8);
+  box-shadow: var(--surface-shadow);
+  background: var(--surface-bg-muted);
 }
 
 .stock-header {
@@ -954,22 +955,22 @@ select {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 15px;
-  border-bottom: 1px solid rgba(138, 43, 226, 0.2);
+  border-bottom: 1px solid #e9d5ff;
   padding-bottom: 10px;
 }
 
 .stock-name {
   font-size: 18px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .stock-symbol {
   font-family: monospace;
-  background: rgba(138, 43, 226, 0.2);
+  background: #f5f3ff;
   padding: 2px 8px;
   border-radius: 4px;
-  color: #b19cd9;
+  color: #6d28d9;
 }
 
 .stock-body {
@@ -986,7 +987,7 @@ select {
 }
 
 .label {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .value {
@@ -994,30 +995,30 @@ select {
 }
 
 .price-tag {
-  color: #fbbf24;
+  color: #b45309;
   font-weight: 700;
   font-size: 16px;
 }
 
 .analysis-section {
   margin-top: 15px;
-  background: rgba(138, 43, 226, 0.1);
+  background: #faf5ff;
   padding: 12px;
   border-radius: 6px;
-  border-left: 3px solid rgba(138, 43, 226, 0.6);
+  border-left: 3px solid #7c3aed;
 }
 
 .hist-metrics {
   margin-top: 12px;
-  background: rgba(75, 192, 192, 0.1);
+  background: #f0fdfa;
   padding: 10px;
   border-radius: 6px;
-  border: 1px solid rgba(75, 192, 192, 0.3);
+  border: 1px solid #99f6e4;
 }
 
 .metrics-title {
   font-size: 12px;
-  color: #4bc0c0;
+  color: #0f766e;
   font-weight: 600;
   margin-bottom: 8px;
 }
@@ -1035,53 +1036,53 @@ select {
 }
 
 .metric-label {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .metric-value {
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .metric-excellent {
-  color: #10b981 !important;
+  color: #059669 !important;
 }
 
 .metric-good {
-  color: #3b82f6 !important;
+  color: #2563eb !important;
 }
 
 .metric-fair {
-  color: #f59e0b !important;
+  color: #b45309 !important;
 }
 
 .metric-poor {
-  color: #ef4444 !important;
+  color: #dc2626 !important;
 }
 
 .analysis-section {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px dashed rgba(138, 43, 226, 0.2);
+  border-top: 1px dashed #e9d5ff;
 }
 
 .analysis-label {
   font-size: 12px;
-  color: #b19cd9;
+  color: #6d28d9;
   margin-bottom: 4px;
 }
 
 .analysis-text {
   font-size: 13px;
-  color: #e6e6fa;
+  color: var(--text-primary);
   line-height: 1.5;
-  background: rgba(138, 43, 226, 0.1);
+  background: #faf5ff;
   padding: 8px;
   border-radius: 4px;
 }
 
 .action-buy {
-  color: #4ade80;
+  color: #15803d;
   font-weight: 700;
 }
 
@@ -1093,10 +1094,10 @@ select {
 .view-btn {
   width: 100%;
   padding: 8px;
-  background: rgba(138, 43, 226, 0.15);
-  border: 1px solid rgba(138, 43, 226, 0.4);
+  background: #f5f3ff;
+  border: 1px solid #c4b5fd;
   border-radius: 6px;
-  color: #b19cd9;
+  color: #6d28d9;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -1110,16 +1111,16 @@ select {
 .empty-state, .loading-state {
   text-align: center;
   padding: 100px;
-  background: rgba(30, 30, 63, 0.3);
+  background: var(--surface-bg-muted);
   border-radius: 12px;
-  color: #b19cd9;
+  color: var(--text-muted);
   font-size: 18px;
 }
 
 .error-msg {
-  background: rgba(220, 38, 38, 0.2);
-  border: 1px solid rgba(220, 38, 38, 0.5);
-  color: #f87171;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
   padding: 12px;
   border-radius: 8px;
   margin-bottom: 20px;

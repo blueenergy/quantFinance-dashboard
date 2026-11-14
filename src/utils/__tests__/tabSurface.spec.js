@@ -7,11 +7,7 @@ import { tabViewDefinitions } from '../tabViews.js'
  * TODO against the A′ plan (purple frame + light content surface): convert the
  * page to `--surface-bg`, then drop its `darkSurface` flag and this list entry.
  */
-const DARK_SURFACE_TABS = [
-  'shenwan-index',
-  'limit-up-ladder',
-  'strategy-pool',
-]
+const DARK_SURFACE_TABS = []
 
 describe('tab surface contract', () => {
   it('marks exactly the unmigrated dark tabs', () => {

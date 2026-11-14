@@ -147,14 +147,14 @@ function initChart() {
       axisLabel: {
         fontSize: 10,
         interval: 0,
-        color: '#9e9e9e'
+        color: '#64748b'
       },
-      axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }
+      axisLine: { lineStyle: { color: '#e2e8f0' } }
     },
     yAxis: {
       type: 'value',
-      splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
-      axisLabel: { color: '#9e9e9e' }
+      splitLine: { lineStyle: { color: '#f1f5f9' } },
+      axisLabel: { color: '#64748b' }
     },
     series: [
       {
@@ -165,7 +165,7 @@ function initChart() {
           show: true,
           position: 'top',
           fontSize: 10,
-          color: '#fff'
+          color: '#475569'
         },
         itemStyle: {
           color: (params) => {
@@ -174,7 +174,7 @@ function initChart() {
               { offset: 0, color: '#ff5252' },
               { offset: 1, color: '#b71c1c' }
             ])
-            if (index === 5) return '#757575'
+            if (index === 5) return '#94a3b8'
             return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
               { offset: 0, color: '#4caf50' },
               { offset: 1, color: '#1b5e20' }
@@ -226,8 +226,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .market-spectrum-chart-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   overflow: hidden;
 }
 
@@ -241,8 +241,8 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   z-index: 10;
-  background: rgba(20, 20, 30, 0.4);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .summary-item {

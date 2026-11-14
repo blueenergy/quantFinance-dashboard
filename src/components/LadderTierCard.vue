@@ -45,7 +45,7 @@
         >
           <div class="stock-info d-flex align-center">
             <span class="stock-name font-weight-medium">{{ stock.name }}</span>
-            <span class="stock-symbol text-grey ml-2">{{ stock.symbol }}</span>
+            <span class="stock-symbol ml-2" style="color: var(--text-muted);">{{ stock.symbol }}</span>
             <v-chip v-if="stock.streak >= 4" size="x-small" color="red" class="ml-2">
               {{ stock.streak }}连板
             </v-chip>
@@ -64,7 +64,7 @@
             <v-chip size="x-small" variant="tonal" class="mr-2">
               {{ stock.sector }}
             </v-chip>
-            <span class="seal-info text-caption text-grey">
+            <span class="seal-info text-caption" style="color: var(--text-muted);">
               {{ formatTime(stock.limit_up_time) }}
               <span v-if="stock.open_count > 0" class="text-orange ml-1">
                 开{{ stock.open_count }}次
@@ -168,14 +168,14 @@ function formatTime(timeValue) {
 
 <style scoped>
 .ladder-tier-card {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-bg);
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--surface-border);
   overflow: hidden;
 }
 
 .tier-header {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-bg-muted);
   border-left: 4px solid;
 }
 
@@ -184,17 +184,17 @@ function formatTime(timeValue) {
 }
 
 .sector-summary {
-  background: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--surface-bg-muted);
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .stock-item {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-subtle);
   transition: background 0.2s;
 }
 
 .stock-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-bg-muted);
 }
 
 .stock-item:last-child {

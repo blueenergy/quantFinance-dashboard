@@ -136,7 +136,6 @@ export const tabViewDefinitions = [
   {
     id: 'shenwan-index',
     component: ShenwanIndustryIndex,
-    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '申万行业研究加载中...',
   },
@@ -258,7 +257,6 @@ export const tabViewDefinitions = [
   {
     id: 'strategy-pool',
     component: StrategyStockPool,
-    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '策略股池加载中...',
   },
@@ -289,7 +287,6 @@ export const tabViewDefinitions = [
   {
     id: 'limit-up-ladder',
     component: LimitUpLadder,
-    darkSurface: true,
     fallbackClass: 'skeleton-table',
     fallbackText: '连板天梯加载中...',
   },

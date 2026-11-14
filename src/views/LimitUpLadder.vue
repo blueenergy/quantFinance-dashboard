@@ -5,11 +5,11 @@
       <v-col cols="12" md="6">
         <h1 class="text-h4 font-weight-bold">
           📊 连板天梯
-          <span v-if="displayDate" class="text-h6 text-grey-lighten-1 ml-2">
+          <span v-if="displayDate" class="text-h6 ml-2" style="color: var(--text-muted);">
             {{ displayDate }}
           </span>
         </h1>
-        <p class="text-subtitle-1 text-grey mt-1">
+        <p class="text-subtitle-1 mt-1" style="color: var(--text-muted);">
           A股连板高度分布 · 板块资金流向 · 市场情绪追踪
         </p>
       </v-col>
@@ -24,7 +24,7 @@
             @update:model-value="handleAutoRefreshChange"
           >
             <template v-slot:label>
-              <span class="text-caption text-grey-lighten-1">
+              <span class="text-caption" style="color: var(--text-muted);">
                 {{ autoRefresh ? `自动刷新 (${countdown}s)` : '自动刷新' }}
               </span>
             </template>
@@ -32,7 +32,7 @@
         </div>
         
         <div class="d-flex flex-column align-end mr-3">
-          <span class="text-caption text-grey">上次更新</span>
+          <span class="text-caption" style="color: var(--text-muted);">上次更新</span>
           <span class="text-caption font-weight-medium">{{ lastUpdatedTime || '--:--:--' }}</span>
         </div>
 
@@ -43,10 +43,9 @@
           density="compact"
           variant="outlined"
           hide-details
-          style="max-width: 150px; color: rgba(255, 255, 255, 0.9);"
+          style="max-width: 150px;"
           @update:model-value="loadData"
           @click="openDatePicker"
-          :input-props="{ style: 'color: rgba(255, 255, 255, 0.9) !important;' }"
         />
         <v-btn
           color="primary"
@@ -125,7 +124,7 @@
     <!-- 涨停全景市场动向总结 -->
     <v-row class="mb-4">
       <v-col cols="12">
-        <v-card style="border: 1px solid rgba(255,255,255,0.1); background: rgba(20,30,50,0.7);">
+        <v-card class="narrative-card">
           <v-card-title class="d-flex align-center">
             <span>📝 市场动向总结</span>
             <v-chip
@@ -149,7 +148,7 @@
               <div class="text-caption text-grey mt-2">AI 正在生成分析，请稍后刷新页面</div>
             </div>
             <div v-else-if="narrative && narrative.narrative_markdown">
-              <div v-if="narrative.headline" class="text-subtitle-1 font-weight-bold mb-3 text-white">
+              <div v-if="narrative.headline" class="text-subtitle-1 font-weight-bold mb-3 narrative-headline">
                 {{ narrative.headline }}
               </div>
               <div class="narrative-body" v-html="renderNarrative(narrative.narrative_markdown)" />
@@ -227,8 +226,8 @@
         </v-card>
 
         <!-- 炸板股区域 -->
-        <v-card v-if="brokenLimitUps && brokenLimitUps.length > 0" class="mb-4" style="border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(30, 30, 40, 0.6);">
-          <v-card-title class="text-subtitle-1 font-weight-bold text-grey-lighten-1">
+        <v-card v-if="brokenLimitUps && brokenLimitUps.length > 0" class="mb-4 broken-card">
+          <v-card-title class="text-subtitle-1 font-weight-bold" style="color: var(--text-muted);">
             💥 炸板 / 开板 ({{ brokenLimitUps.length }})
           </v-card-title>
           <v-card-text>
@@ -240,7 +239,7 @@
                 color="grey-darken-3"
                 size="small"
                 class="mr-2 mb-2"
-                style="border: 1px solid #555"
+                style="border: 1px solid var(--surface-border)"
                 @click="handleShowReasoning(stock)"
               >
                 <span class="mr-1 text-white font-weight-bold">{{ stock.name }}</span>
@@ -838,7 +837,8 @@ onUnmounted(() => {
 
 <style scoped>
 .limit-up-ladder {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: transparent;
+  padding: 24px;
 }
 
 .sentiment-card {
@@ -871,13 +871,27 @@ onUnmounted(() => {
 }
 
 .indicator-card {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+}
+
+.narrative-card {
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+}
+
+.narrative-headline {
+  color: var(--text-primary);
+}
+
+.broken-card {
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
 }
 
 .sector-item {
   padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .sector-item:last-child {
@@ -953,23 +967,23 @@ onUnmounted(() => {
 
 /* 市场动向总结正文 */
 .narrative-body {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--text-primary);
   line-height: 1.8;
   font-size: 14px;
 }
 
 .narrative-body :deep(h2.narrative-h2),
 .narrative-body :deep(h3.narrative-h3) {
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
   font-weight: 600;
   margin: 16px 0 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--surface-border);
   padding-bottom: 4px;
 }
 
 .narrative-body :deep(h3.narrative-h3) {
   font-size: 14px;
-  color: #90caf9;
+  color: #1d4ed8;
 }
 
 .narrative-body :deep(ul) {
@@ -986,23 +1000,22 @@ onUnmounted(() => {
 }
 
 .narrative-body :deep(strong) {
-  color: #ffcc80;
+  color: #b45309;
   font-weight: 600;
 }
 
-/* Fix date picker text color in dark theme */
+/* Date picker on the light surface */
 .v-text-field input[type="date"] {
-  color: rgba(255, 255, 255, 0.9) !important;
-  -webkit-text-fill-color: rgba(255, 255, 255, 0.9) !important;
+  color: var(--field-fg) !important;
+  -webkit-text-fill-color: var(--field-fg) !important;
 }
 
 .v-text-field input[type="date"]::-webkit-datetime-edit {
-  color: rgba(255, 255, 255, 0.9) !important;
-  -webkit-text-fill-color: rgba(255, 255, 255, 0.9) !important;
+  color: var(--field-fg) !important;
+  -webkit-text-fill-color: var(--field-fg) !important;
 }
 
 .v-text-field input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1);
   cursor: pointer;
 }
 </style>

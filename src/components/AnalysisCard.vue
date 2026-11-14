@@ -95,7 +95,7 @@
                       <div class="d-flex justify-space-between align-center mb-2">
                         <div>
                           <span class="text-h6 font-weight-bold">{{ opp.name }}</span>
-                          <span class="text-grey-lighten-1 ml-2">{{ opp.symbol }}</span>
+                          <span class="ml-2" style="color: var(--text-muted);">{{ opp.symbol }}</span>
                         </div>
                         <v-chip 
                           :color="getScoreColor(opp.catchup_score)" 
@@ -348,30 +348,32 @@ onMounted(() => {
 
 <style scoped>
 .analysis-trigger-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .analysis-trigger-card:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-bg-muted);
 }
 
 .opportunity-card {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   transition: all 0.2s;
   height: 100%;
 }
 
 .opportunity-card:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-bg-muted);
+  box-shadow: var(--surface-shadow);
   transform: translateY(-2px);
 }
 
 .divider {
   border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--surface-border);
   margin: 0;
 }
 </style>

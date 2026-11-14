@@ -140,6 +140,7 @@
           <div v-if="industryMoneyError" class="err-msg">{{ industryMoneyError }}</div>
           <MoneyFlowPanel
             v-else
+            tone="on-light"
             :history="industryMoneyRows"
             :summary="industryMoneySummary"
             :period="tf"
@@ -534,25 +535,25 @@ async function drawPepb () {
     const mod = await import('echarts')
     echarts = mod.default || mod
   }
-  if (!pepbInstance) pepbInstance = echarts.init(pepbElRef.value, 'dark')
+  if (!pepbInstance) pepbInstance = echarts.init(pepbElRef.value)
   const dates = rows.map(r => r.date)
   const peVals = rows.map(r => r.pe)
   const pbVals = rows.map(r => r.pb)
   const hasPe = peVals.some(v => v != null)
   const hasPb = pbVals.some(v => v != null)
   const series = []
-  if (hasPe) series.push({ name: 'PE', type: 'line', data: peVals, smooth: true, symbol: 'none', color: '#ffd54f', lineStyle: { width: 1.5 }, itemStyle: { color: '#ffd54f' }, connectNulls: true })
-  if (hasPb) series.push({ name: 'PB', type: 'line', data: pbVals, smooth: true, symbol: 'none', color: '#80cbc4', lineStyle: { width: 1.5 }, itemStyle: { color: '#80cbc4' }, connectNulls: true, yAxisIndex: hasPe ? 1 : 0 })
+  if (hasPe) series.push({ name: 'PE', type: 'line', data: peVals, smooth: true, symbol: 'none', color: '#b45309', lineStyle: { width: 1.5 }, itemStyle: { color: '#b45309' }, connectNulls: true })
+  if (hasPb) series.push({ name: 'PB', type: 'line', data: pbVals, smooth: true, symbol: 'none', color: '#0f766e', lineStyle: { width: 1.5 }, itemStyle: { color: '#0f766e' }, connectNulls: true, yAxisIndex: hasPe ? 1 : 0 })
   const yAxes = hasPe && hasPb
-    ? [{ type: 'value', name: 'PE', nameTextStyle: { color: '#ffd54f' }, axisLabel: { color: '#aaa', fontSize: 10 }, splitLine: { lineStyle: { color: '#2a2a2a' } } },
-       { type: 'value', name: 'PB', nameTextStyle: { color: '#80cbc4' }, axisLabel: { color: '#aaa', fontSize: 10 }, splitLine: { show: false } }]
-    : [{ type: 'value', axisLabel: { color: '#aaa', fontSize: 10 }, splitLine: { lineStyle: { color: '#2a2a2a' } } }]
+    ? [{ type: 'value', name: 'PE', nameTextStyle: { color: '#b45309' }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#e2e8f0' } } },
+       { type: 'value', name: 'PB', nameTextStyle: { color: '#0f766e' }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { show: false } }]
+    : [{ type: 'value', axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#e2e8f0' } } }]
   pepbInstance.setOption({
-    backgroundColor: '#121212',
-    tooltip: { trigger: 'axis', backgroundColor: '#1e1e2e', borderColor: '#444', textStyle: { color: '#eee', fontSize: 11 } },
-    legend: { data: series.map(s => s.name), textStyle: { color: '#aaa', fontSize: 11 }, top: 4 },
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', backgroundColor: '#ffffff', borderColor: '#e2e8f0', textStyle: { color: '#1e293b', fontSize: 11 } },
+    legend: { data: series.map(s => s.name), textStyle: { color: '#64748b', fontSize: 11 }, top: 4 },
     grid: { top: 32, bottom: 28, left: 48, right: hasPe && hasPb ? 48 : 12 },
-    xAxis: { type: 'category', data: dates, axisLabel: { color: '#777', fontSize: 10, rotate: 30 }, axisLine: { lineStyle: { color: '#333' } } },
+    xAxis: { type: 'category', data: dates, axisLabel: { color: '#64748b', fontSize: 10, rotate: 30 }, axisLine: { lineStyle: { color: '#e2e8f0' } } },
     yAxis: yAxes,
     series,
   }, true)
@@ -714,7 +715,7 @@ function ensureChart () {
   if (!echarts) return
   if (!chartElRef.value) return
   if (!chartInstance) {
-    chartInstance = echarts.init(chartElRef.value, 'dark')
+    chartInstance = echarts.init(chartElRef.value)
     if (ro == null && chartBoxRef.value && typeof ResizeObserver !== 'undefined') {
       ro = new ResizeObserver(() => { if (chartInstance) chartInstance.resize() })
       ro.observe(chartBoxRef.value)
@@ -748,7 +749,7 @@ async function drawCandles () {
       formatAmountQianYuan,
       formatMvWan
     },
-    { tf: tf.value }
+    { tf: tf.value, tone: 'on-light' }
   )
   c.setOption(option, true)
   c.resize()
@@ -978,7 +979,7 @@ async function onNavigateToIndustry (e) {
 </script>
 
 <style scoped>
-.shenwan-wrap { padding: 0.75rem 1rem; }
+.shenwan-wrap { padding: 24px; }
 .shenwan-layout {
   display: flex;
   gap: 1rem;
@@ -988,32 +989,32 @@ async function onNavigateToIndustry (e) {
 .shenwan-tree {
   flex: 0 0 320px;
   min-width: 240px;
-  background: #1e1e1e;
+  background: var(--surface-bg);
   border-radius: 8px;
   padding: 0.75rem;
-  border: 1px solid #333;
+  border: 1px solid var(--surface-border);
 }
-.panel-title { font-size: 1rem; margin: 0 0 0.5rem; color: #eee; }
+.panel-title { font-size: 1rem; margin: 0 0 0.5rem; color: var(--text-primary); }
 .columns { display: flex; gap: 0.5rem; }
 .col {
   list-style: none; margin: 0; padding: 0; flex: 1;
-  max-height: 420px; overflow: auto; font-size: 12px; border: 1px solid #2a2a2a; border-radius: 4px;
-  background: #111;
+  max-height: 420px; overflow: auto; font-size: 12px; border: 1px solid var(--surface-border); border-radius: 4px;
+  background: var(--surface-bg);
 }
-.col li { padding: 4px 6px; cursor: pointer; color: #ccc; }
-.col li:hover { background: #2a2a2a; }
-.col li.active { background: #1565c0; color: #fff; }
-.muted { color: #888; }
-.err-msg { color: #f88; font-size: 12px; }
-.skeleton { color: #999; }
-.hint, .footer-hint { font-size: 11px; color: #888; margin-top: 0.5rem; }
+.col li { padding: 4px 6px; cursor: pointer; color: var(--text-primary); }
+.col li:hover { background: var(--surface-bg-muted); }
+.col li.active { background: #dbeafe; color: #1d4ed8; }
+.muted { color: var(--text-muted); }
+.err-msg { color: #b91c1c; font-size: 12px; }
+.skeleton { color: var(--text-muted); }
+.hint, .footer-hint { font-size: 11px; color: var(--text-muted); margin-top: 0.5rem; }
 .shenwan-main { flex: 1; min-width: 280px; }
 .meta { margin-bottom: 0.5rem; }
-.crumb { color: #bbb; font-size: 14px; }
-.sep { margin: 0 4px; color: #666; }
+.crumb { color: var(--text-muted); font-size: 14px; }
+.sep { margin: 0 4px; color: var(--text-muted); }
 .code-line { margin-top: 4px; }
-.code-line code { color: #ffcc80; }
-.name { margin-left: 8px; color: #eee; }
+.code-line code { color: #b45309; }
+.name { margin-left: 8px; color: var(--text-primary); }
 .toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin: 0.5rem 0; }
 .kline-stage-anchor--held { min-height: 580px; }
 .kline-inline-shell { display: contents; }
@@ -1043,8 +1044,8 @@ async function onNavigateToIndustry (e) {
   min-height: 0;
   padding: 8px 16px 16px;
   overflow: hidden;
-  background: #121212;
-  border: 1px solid #2a2a2a;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   box-shadow: 0 20px 60px rgba(15, 23, 42, 0.32);
 }
@@ -1061,9 +1062,9 @@ async function onNavigateToIndustry (e) {
 }
 .kline-fullscreen-btn {
   margin-left: auto;
-  background: #333;
-  color: #e2e8f0;
-  border: 1px solid #555;
+  background: #f1f5f9;
+  color: var(--text-primary);
+  border: 1px solid #cbd5e1;
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
@@ -1071,15 +1072,15 @@ async function onNavigateToIndustry (e) {
   padding: 4px 10px;
 }
 .kline-fullscreen-btn:hover {
-  background: #444;
-  color: #fff;
+  background: #e2e8f0;
+  color: var(--text-primary);
 }
 .tf-btns button {
-  background: #333; color: #ccc; border: 1px solid #555; padding: 4px 10px; margin-right: 4px; border-radius: 4px; cursor: pointer;
+  background: #f1f5f9; color: var(--text-primary); border: 1px solid #cbd5e1; padding: 4px 10px; margin-right: 4px; border-radius: 4px; cursor: pointer;
 }
 .tf-btns button.on { background: #1565c0; color: #fff; border-color: #42a5f5; }
-.dates label { color: #aaa; font-size: 12px; margin-right: 0.5rem; }
-.d-inp { background: #222; color: #ddd; border: 1px solid #444; border-radius: 4px; }
+.dates label { color: var(--text-muted); font-size: 12px; margin-right: 0.5rem; }
+.d-inp { background: var(--field-bg); color: var(--field-fg); border: 1px solid var(--field-border); border-radius: 4px; }
 .sm { font-size: 11px; }
 .kline-info {
   display: flex;
@@ -1087,21 +1088,21 @@ async function onNavigateToIndustry (e) {
   gap: 0.5rem 1rem;
   align-items: center;
   font-size: 12px;
-  color: #aaa;
+  color: var(--text-muted);
   margin: 0.25rem 0 0.35rem;
   min-height: 1.4em;
 }
-.kline-info .d { color: #e0e0e0; font-weight: 600; }
-.kline-info .q-up { color: #e57373; }
-.kline-info .q-dn { color: #81c784; }
-.kline-info .q-eq { color: #9e9e9e; }
+.kline-info .d { color: var(--text-primary); font-weight: 600; }
+.kline-info .q-up { color: #dc2626; }
+.kline-info .q-dn { color: #15803d; }
+.kline-info .q-eq { color: var(--text-muted); }
 .chart-box {
   position: relative;
   width: 100%;
   height: 500px;
   min-height: 480px;
-  background: #121212;
-  border: 1px solid #2a2a2a;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   border-radius: 6px;
 }
 /* 空 div 不设高度时 ECharts 会报 clientWidth/Height 为 0，导致「有数据但不出图」 */
@@ -1119,22 +1120,22 @@ async function onNavigateToIndustry (e) {
 .chart-box > :deep(.echarts) { width: 100% !important; height: 100% !important; min-height: 440px; }
 .overlay {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  color: #aaa; background: rgba(0,0,0,0.35);
+  color: var(--text-muted); background: rgba(255,255,255,0.75);
 }
-.overlay.err { color: #f88; }
-.overlay.hint { color: #fb8; padding: 1rem; text-align: center; }
+.overlay.err { color: #b91c1c; }
+.overlay.hint { color: #b45309; padding: 1rem; text-align: center; }
 
 /* PE/PB */
 .pepb-section { margin-top: 1rem; }
-.section-title { font-size: 13px; font-weight: 600; color: #bbb; margin: 0 0 0.4rem; }
-.pepb-box { width: 100%; height: 180px; background: #121212; border: 1px solid #2a2a2a; border-radius: 6px; position: relative; }
+.section-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 0 0 0.4rem; }
+.pepb-box { width: 100%; height: 180px; background: var(--surface-bg); border: 1px solid var(--surface-border); border-radius: 6px; position: relative; }
 .pepb-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 
 /* 行业主力资金 */
 .industry-money-section {
   margin-top: 1rem;
-  background: #161616;
-  border: 1px solid #2a2a2a;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   padding: 12px;
 }
@@ -1147,25 +1148,25 @@ async function onNavigateToIndustry (e) {
 }
 .industry-money-header .section-title { margin: 0; }
 .coverage {
-  border: 1px solid #333;
+  border: 1px solid var(--surface-border);
   border-radius: 999px;
   font-size: 11px;
   padding: 3px 9px;
 }
 .coverage-ok {
-  background: rgba(76, 175, 80, .14);
-  border-color: rgba(76, 175, 80, .34);
-  color: #a5d6a7;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
 }
 .coverage-partial {
-  background: rgba(255, 193, 7, .14);
-  border-color: rgba(255, 193, 7, .34);
-  color: #ffe082;
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #b45309;
 }
 .coverage-low {
-  background: rgba(244, 67, 54, .14);
-  border-color: rgba(244, 67, 54, .34);
-  color: #ef9a9a;
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
 }
 .industry-money-top-grid {
   display: grid;
@@ -1174,13 +1175,13 @@ async function onNavigateToIndustry (e) {
   margin-top: 12px;
 }
 .industry-money-top-grid article {
-  background: rgba(30, 30, 46, .58);
-  border: 1px solid #2a2a4a;
+  background: var(--surface-bg-muted);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   padding: 10px;
 }
 .industry-money-top-grid h5 {
-  color: #bbb;
+  color: var(--text-muted);
   font-size: 12px;
   margin: 0 0 8px;
 }
@@ -1188,8 +1189,8 @@ async function onNavigateToIndustry (e) {
   align-items: center;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, .12);
-  color: #ddd;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -1197,8 +1198,10 @@ async function onNavigateToIndustry (e) {
   width: 100%;
 }
 .industry-money-top-grid button:hover span {
-  color: #90caf9;
+  color: var(--color-primary);
 }
+.industry-money-top-grid .q-up { color: #dc2626; }
+.industry-money-top-grid .q-dn { color: #15803d; }
 .industry-money-top-grid button:last-child {
   border-bottom: 0;
 }
@@ -1226,7 +1229,7 @@ async function onNavigateToIndustry (e) {
 }
 .member-section-header .section-title { margin: 0; }
 
-.member-count { font-size: 11px; font-weight: 400; color: #666; margin-left: 6px; }
+.member-count { font-size: 11px; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
 .member-grid {
   display: flex;
   flex-wrap: wrap;
@@ -1238,30 +1241,30 @@ async function onNavigateToIndustry (e) {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   border-radius: 6px;
   padding: 5px 10px;
   cursor: pointer;
   transition: .15s;
   min-width: 96px;
 }
-.member-chip:hover { background: #1e3a5f; border-color: #42a5f5; }
+.member-chip:hover { background: #eff6ff; border-color: #bfdbfe; }
 .member-sort-btns { display: flex; gap: 4px; }
 .member-sort-btns button {
   padding: 3px 10px;
   font-size: 11px;
-  border: 1px solid #333;
+  border: 1px solid #cbd5e1;
   border-radius: 4px;
-  background: #1a1a2e;
-  color: #aaa;
+  background: #f1f5f9;
+  color: var(--text-primary);
   cursor: pointer;
   transition: .15s;
 }
 .member-sort-btns button.on,
-.member-sort-btns button:hover { background: #1e3a5f; border-color: #42a5f5; color: #e0e0e0; }
-.member-name { font-size: 12px; color: #e0e0e0; font-weight: 600; white-space: nowrap; }
-.member-code { font-size: 10px; color: #888; margin-top: 1px; }
+.member-sort-btns button:hover { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+.member-name { font-size: 12px; color: var(--text-primary); font-weight: 600; white-space: nowrap; }
+.member-code { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
 
 /* AI 行业分析区 */
 .industry-analysis-section {
@@ -1292,15 +1295,20 @@ async function onNavigateToIndustry (e) {
 }
 .btn-analyze:hover:not(:disabled) { filter: brightness(1.15); }
 .btn-analyze:disabled { opacity: .5; cursor: not-allowed; }
-.ia-status { margin-bottom: 8px; font-size: 13px; color: #555; }
-.ia-age { font-size: 12px; color: #888; margin-left: 4px; }
+.ia-status { margin-bottom: 8px; font-size: 13px; color: var(--text-subtle); }
+.ia-age { font-size: 12px; color: var(--text-muted); margin-left: 4px; }
 
 /* chip 文字色在白底下的可读性修正（原色为暗底设计） */
+.industry-analysis-section :deep(.analysis-chip--buy)      { color: #991b1b; }
+.industry-analysis-section :deep(.analysis-chip--sell)     { color: #166534; }
 .industry-analysis-section :deep(.analysis-chip--hold)     { color: #92400e; }
 .industry-analysis-section :deep(.analysis-chip--na),
 .industry-analysis-section :deep(.analysis-chip--risk-na)  { color: #475569; }
+.industry-analysis-section :deep(.analysis-chip--risk-high)   { color: #991b1b; }
 .industry-analysis-section :deep(.analysis-chip--risk-medium) { color: #92400e; }
+.industry-analysis-section :deep(.analysis-chip--risk-low)    { color: #166534; }
 .industry-analysis-section :deep(.expert-review-chip--cycle)       { color: #7c3aed; }
+.industry-analysis-section :deep(.expert-review-chip--industry_specialist) { color: #0f766e; }
 .industry-analysis-section :deep(.expert-review-chip--fundamental) { color: #1d4ed8; }
 .industry-analysis-section :deep(.expert-review-chip--growth)      { color: #166534; }
 .industry-analysis-section :deep(.expert-review-chip--technical)   { color: #92400e; }
@@ -1311,36 +1319,36 @@ async function onNavigateToIndustry (e) {
   position: fixed;
   z-index: 9999;
   width: 240px;
-  background: #1e2130;
-  border: 1px solid #3a3f5c;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   border-radius: 10px;
-  box-shadow: 0 8px 28px rgba(0,0,0,.55);
+  box-shadow: var(--surface-shadow);
   padding: 12px 14px 10px;
   pointer-events: auto;
   font-size: 13px;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 .mt-header { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
 .mt-name { font-weight: 700; font-size: 14px; flex: 1; }
-.mt-code { font-size: 11px; color: #888; }
+.mt-code { font-size: 11px; color: var(--text-muted); }
 .mt-close {
   margin-left: auto;
   background: none; border: none;
-  color: #666; font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px;
+  color: var(--text-muted); font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px;
 }
-.mt-close:hover { color: #e0e0e0; }
+.mt-close:hover { color: var(--text-primary); }
 .mt-industry {
-  font-size: 11px; color: #7b8ab8; margin-bottom: 8px;
+  font-size: 11px; color: #1d4ed8; margin-bottom: 8px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .mt-body { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
 .mt-row { display: flex; justify-content: space-between; }
-.mt-label { color: #8892b0; }
-.mt-val { font-weight: 600; color: #cdd6f4; }
+.mt-label { color: var(--text-muted); }
+.mt-val { font-weight: 600; color: var(--text-primary); }
 .mt-goto {
   width: 100%; padding: 5px 0; font-size: 12px;
-  border: 1px solid #4a6fa5; border-radius: 6px;
-  background: transparent; color: #7eb3f5; cursor: pointer; transition: .15s;
+  border: 1px solid #cbd5e1; border-radius: 6px;
+  background: transparent; color: var(--color-primary); cursor: pointer; transition: .15s;
 }
-.mt-goto:hover { background: #1e3a5f; color: #e0e0e0; }
+.mt-goto:hover { background: #eff6ff; color: #1d4ed8; }
 </style>
