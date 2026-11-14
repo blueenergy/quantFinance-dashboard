@@ -2,54 +2,25 @@
   <div class="hot-stock-page">
     <!-- Trigger Card -->
     <v-card class="hot-trigger mb-4" variant="outlined">
-      <v-card-text class="d-flex align-center justify-space-between flex-wrap ga-2">
-        <div class="d-flex align-center ga-3">
-          <span class="text-subtitle-1 font-weight-bold">🔥 热股实时分析</span>
-          <v-chip-group v-model="sourceIndex" mandatory selected-class="text-primary" density="compact">
-            <v-chip size="small" variant="outlined" value="0">📊 同花顺</v-chip>
-            <v-chip size="small" variant="outlined" value="1">🏦 东方财富</v-chip>
-          </v-chip-group>
-        </div>
-        <div class="d-flex align-center ga-2">
-          <v-btn
-            color="primary"
-            variant="tonal"
-            size="small"
-            :loading="loading"
-            @click="startAnalysis(false)"
-          >
-            🔍 分析最新
-          </v-btn>
-          <v-btn
-            color="secondary"
-            variant="outlined"
-            size="small"
-            :loading="loading"
-            @click="startAnalysis(true)"
-          >
-            🔄 强制刷新
-          </v-btn>
-        </div>
-      </v-card-text>
-    </v-card>
-
-    <!-- Loading -->
-    <v-card v-if="loading" class="mb-4" variant="outlined">
-      <v-card-text class="text-center py-8">
-        <v-progress-circular indeterminate color="primary" size="48" />
-        <p class="mt-4" style="color:var(--text-muted)">{{ statusText }}</p>
+      <v-card-text class="d-flex align-center flex-wrap ga-3">
+        <span class="text-subtitle-1 font-weight-bold">🔥 热股实时分析</span>
+        <v-chip-group v-model="sourceIndex" mandatory selected-class="text-primary" density="compact">
+          <v-chip size="small" variant="outlined" value="0">📊 同花顺</v-chip>
+          <v-chip size="small" variant="outlined" value="1">🏦 东方财富</v-chip>
+        </v-chip-group>
+        <span class="text-caption" style="color:var(--text-muted)">自动同步 22:50 · 自动分析 23:05</span>
       </v-card-text>
     </v-card>
 
     <!-- Error -->
-    <v-alert v-if="error && !loading" type="error" variant="tonal" class="mb-4" closable @click:close="error = ''">
+    <v-alert v-if="error" type="error" variant="tonal" class="mb-4" closable @click:close="error = ''">
       {{ error }}
     </v-alert>
 
-    <!-- Today's History Timeline -->
-    <div v-if="history.length > 1 && !loading" class="mb-4">
+    <!-- Analysis records of the shown trade date -->
+    <div v-if="history.length > 1" class="mb-4">
       <div class="d-flex align-center ga-2 mb-2">
-        <span class="text-caption" style="color:var(--text-muted)">今日分析记录：</span>
+        <span class="text-caption" style="color:var(--text-muted)">{{ historyTradeDate }} 分析记录：</span>
         <v-chip
           v-for="rec in history"
           :key="rec.id"
@@ -64,23 +35,17 @@
       </div>
     </div>
 
-    <!-- Data Freshness Status -->
+    <!-- Data Freshness: shown analysis vs latest raw snapshot -->
     <v-alert
-      v-if="dataStatus && dataStatus.has_data"
-      :type="dataStatus.is_fresh ? 'success' : 'warning'"
+      v-if="freshness"
+      :type="freshness.type"
       variant="tonal"
       density="compact"
       class="mb-3"
     >
-      <div class="d-flex align-center justify-space-between">
-        <span>
-          📊 原始数据: {{ dataStatus.trade_date }} |
-          {{ dataStatus.stock_count }} 只热股 |
-          {{ dataStatus.freshness_minutes < 60 ? dataStatus.freshness_minutes + '分钟前获取' : Math.floor(dataStatus.freshness_minutes / 60) + '小时前获取' }}
-        </span>
-        <v-chip size="x-small" :color="dataStatus.is_fresh ? 'success' : 'warning'">
-          {{ dataStatus.is_fresh ? '数据就绪' : '数据较旧' }}
-        </v-chip>
+      <div class="d-flex align-center justify-space-between flex-wrap ga-2">
+        <span>{{ freshness.text }}</span>
+        <v-chip size="x-small" :color="freshness.type">{{ freshness.badge }}</v-chip>
       </div>
     </v-alert>
     <v-alert
@@ -90,11 +55,11 @@
       density="compact"
       class="mb-3"
     >
-      暂无原始数据，点击分析按钮将自动获取
+      暂无原始热榜数据；每个交易日 22:50 自动同步、23:05 自动分析。
     </v-alert>
 
     <!-- Analysis Result -->
-    <div v-if="analysis && !loading">
+    <div v-if="analysis">
       <!-- Meta badges -->
       <div class="d-flex align-center ga-2 mb-4 flex-wrap">
         <v-chip color="primary" variant="tonal" size="small">🕐 数据: {{ rankTime || '未知' }}</v-chip>
@@ -231,8 +196,8 @@
     </div>
 
     <!-- No data -->
-    <v-alert v-if="!analysis && !loading && !error && initialized" type="info" variant="tonal">
-      暂无热股分析数据，点击"分析最新"获取当前热榜分析。
+    <v-alert v-if="!analysis && !error && initialized" type="info" variant="tonal">
+      暂无热股分析数据；每个交易日 23:05 自动生成分析。
     </v-alert>
   </div>
 </template>
@@ -240,22 +205,18 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import {
-  analyzeHotStock,
   getLatestHotStock,
   getHotStockHistory,
-  getHotStockDataStatus,
-  pollHotStockTask
+  getHotStockDataStatus
 } from '../api/hotStock'
+import { describeHotStockFreshness } from '../utils/hotStockFreshness'
 
 const sourceIndex = ref('0')
 const source = computed(() => sourceIndex.value === '0' ? 'ths' : 'dc')
 
 const dataStatus = ref(null)
-const dataStatusLoading = ref(false)
 
-const loading = ref(false)
 const error = ref('')
-const statusText = ref('')
 const analysis = ref(null)
 const rankTime = ref('')
 const sourceName = ref('')
@@ -264,8 +225,30 @@ const stockCount = ref(0)
 const analysisTime = ref('')
 const showThinking = ref(false)
 const initialized = ref(false)
+const tradeDate = ref('')
 const history = ref([])
 const selectedHistoryId = ref(null)
+const historyTradeDate = ref('')
+
+/** YYYYMMDD → YYYY-MM-DD for display. */
+function formatTradeDate(s) {
+  if (!s || !/^\d{8}$/.test(String(s))) return ''
+  const v = String(s)
+  return `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}`
+}
+
+/**
+ * Staleness of what is on screen, judged against the newest raw snapshot —
+ * not against wall clock. The raw list is synced once per trading day at
+ * 22:50, so "older than 60 minutes" is the normal state all day and says
+ * nothing about staleness.
+ */
+const freshness = computed(() => describeHotStockFreshness(dataStatus.value, analysis.value, {
+  shownRankTime: rankTime.value,
+  shownTradeDate: tradeDate.value,
+  viewingOldRecord: history.value.length > 0 &&
+    selectedHistoryId.value !== history.value[history.value.length - 1]?.id,
+}))
 
 watch(source, () => {
   loadLatest()
@@ -274,7 +257,6 @@ watch(source, () => {
 })
 
 async function fetchDataStatus() {
-  dataStatusLoading.value = true
   try {
     const res = await getHotStockDataStatus(source.value)
     if (res.success) {
@@ -282,8 +264,6 @@ async function fetchDataStatus() {
     }
   } catch (err) {
     console.error('Failed to fetch data status:', err)
-  } finally {
-    dataStatusLoading.value = false
   }
 }
 
@@ -305,6 +285,7 @@ async function loadHistory() {
     const res = await getHotStockHistory(source.value)
     if (res.success) {
       history.value = res.records
+      historyTradeDate.value = formatTradeDate(res.trade_date)
       if (history.value.length > 0) {
         selectedHistoryId.value = history.value[history.value.length - 1].id
       }
@@ -317,6 +298,7 @@ async function loadHistory() {
 function setAnalysis(res) {
   analysis.value = res.analysis
   rankTime.value = res.rank_time || ''
+  tradeDate.value = res.trade_date || ''
   sourceName.value = res.source_name || (source.value === 'ths' ? '同花顺' : '东方财富')
   model.value = res.model || ''
   stockCount.value = res.stock_count || 0
@@ -327,48 +309,10 @@ function selectHistory(rec) {
   selectedHistoryId.value = rec.id
   analysis.value = rec.analysis
   rankTime.value = rec.rank_time || ''
+  tradeDate.value = (rec.rank_time || '').slice(0, 10).replace(/-/g, '')
   sourceName.value = rec.source_name || sourceName.value
   stockCount.value = rec.stock_count || 0
-}
-
-async function startAnalysis(force = false) {
-  loading.value = true
-  error.value = ''
-  statusText.value = '正在提交分析任务...'
-
-  try {
-    const res = await analyzeHotStock(source.value, force)
-    if (!res.success) {
-      error.value = res.error || '提交失败'
-      return
-    }
-
-    statusText.value = '🤖 AI正在分析热股数据...'
-    const result = await pollHotStockTask(res.task_id, (prog) => {
-      if (prog.status === 'pending') statusText.value = '⏳ 任务排队中...'
-      else if (prog.status === 'processing') statusText.value = '🤖 AI正在分析中...'
-    })
-
-    if (result.status === 'completed') {
-      if (result.skip) {
-        error.value = '热榜数据未更新，无需重新分析。可点击"强制刷新"。'
-      } else {
-        setAnalysis(result)
-        await loadHistory()
-        await fetchDataStatus()
-        showThinking.value = false
-      }
-    } else if (result.status === 'failed') {
-      error.value = result.error || '分析失败'
-    } else {
-      error.value = result.error || '分析超时'
-    }
-  } catch (e) {
-    error.value = e.message || '请求失败'
-  } finally {
-    loading.value = false
-    statusText.value = ''
-  }
+  analysisTime.value = rec.created_at || ''
 }
 
 function sentimentColor(s) {
