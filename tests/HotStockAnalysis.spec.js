@@ -146,6 +146,41 @@ describe('HotStockAnalysis', () => {
     expect(text).not.toContain('undefined%')
   })
 
+  it('renders the HK execution hint with merged sources', async () => {
+    requestMock.mockImplementation((config) => {
+      if (config.url.endsWith('/hot-stock/hk-execution-hint')) {
+        return Promise.resolve({
+          success: true,
+          top_n: 20,
+          sources: [
+            { source: 'ths_hk', name: '同花顺(港股)', stock_count: 50, rank_time: '2026-11-13 22:30:00', trade_date: '20261113' },
+            { source: 'dc_hk', name: '东方财富(港股)', stock_count: 100, rank_time: '2026-11-13 22:30:03', trade_date: '20261113' },
+          ],
+          count: 1,
+          rows: [
+            { ts_code: '00700.HK', name: '腾讯控股', rank: 1, pct_change: -3.06, sources: ['ths_hk', 'dc_hk'], in_both: true },
+          ],
+          hint: {
+            title: '港股人气榜 · 次日执行提示',
+            detail: '以下股票当日进入港股人气榜前 20 名。',
+            stats: '次日振幅 +2.88pp',
+            caveat: '样本仅 43 个交易日',
+          },
+        })
+      }
+      if (config.url.endsWith('/hot-stock/latest')) return Promise.resolve({ success: false })
+      if (config.url.endsWith('/hot-stock/history')) return Promise.resolve({ success: true, trade_date: '20261113', count: 0, records: [] })
+      return Promise.resolve(RAW_STATUS)
+    })
+    const wrapper = await mountPanel()
+    const text = wrapper.text()
+
+    expect(text).toContain('港股人气榜 · 次日执行提示')
+    expect(text).toContain('执行信号 · 非选股')
+    expect(text).toContain('腾讯控股')
+    expect(text).toContain('+2.88pp')
+  })
+
   it('warns that the conclusion is outdated when the hot list moved on', async () => {
     requestMock.mockImplementation((config) => {
       if (config.url.endsWith('/hot-stock/latest')) {

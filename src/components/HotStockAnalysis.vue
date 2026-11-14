@@ -58,6 +58,59 @@
       暂无原始热榜数据；每个交易日 22:50 自动同步、23:05 自动分析。
     </v-alert>
 
+    <!-- HK execution hint: attention shock -> next-day amplitude (not a stock pick) -->
+    <v-card v-if="hkHint && hkHint.rows?.length" class="mb-4 hk-hint" variant="outlined">
+      <v-card-title class="text-subtitle-2 d-flex align-center flex-wrap ga-2" style="color:var(--text-primary)">
+        🇭🇰 {{ hkHint.hint?.title || '港股人气榜 · 次日执行提示' }}
+        <v-chip size="x-small" color="warning" variant="tonal">执行信号 · 非选股</v-chip>
+        <v-btn size="x-small" variant="text" class="ml-2" @click="showHkHint = !showHkHint">
+          {{ showHkHint ? '收起' : '展开' }}
+        </v-btn>
+      </v-card-title>
+      <v-card-text v-if="showHkHint">
+        <p class="text-body-2 mb-2" style="color:var(--text-subtle)">{{ hkHint.hint?.detail }}</p>
+        <p class="text-caption mb-3" style="color:var(--text-muted)">
+          {{ hkHint.hint?.stats }}<br>{{ hkHint.hint?.caveat }}
+        </p>
+        <div class="d-flex ga-2 flex-wrap mb-3">
+          <v-chip v-for="s in hkHint.sources" :key="s.source" size="x-small" variant="outlined" color="grey">
+            {{ s.name }} {{ s.stock_count }} 只 · {{ s.rank_time }}
+          </v-chip>
+        </div>
+        <v-table density="compact" class="hk-hint-table">
+          <thead>
+            <tr>
+              <th class="text-left">排名</th>
+              <th class="text-left">代码</th>
+              <th class="text-left">名称</th>
+              <th class="text-right">当日涨幅</th>
+              <th class="text-left">上榜来源</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in hkHint.rows" :key="row.ts_code">
+              <td>#{{ row.rank }}</td>
+              <td class="text-caption">{{ row.ts_code }}</td>
+              <td>{{ row.name }}</td>
+              <td class="text-right" :style="{ color: (row.pct_change || 0) > 0 ? '#dc2626' : '#16a34a' }">
+                {{ fmtPct(row.pct_change) || '-' }}
+              </td>
+              <td>
+                <v-chip
+                  v-for="src in row.sources"
+                  :key="src"
+                  size="x-small"
+                  variant="tonal"
+                  :color="row.in_both ? 'deep-orange' : 'grey'"
+                  class="mr-1"
+                >{{ src === 'ths_hk' ? '同花顺' : '东财' }}</v-chip>
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card-text>
+    </v-card>
+
     <!-- Analysis Result -->
     <div v-if="analysis">
       <!-- Meta badges -->
@@ -236,7 +289,8 @@ import { ref, computed, onMounted, watch } from 'vue'
 import {
   getLatestHotStock,
   getHotStockHistory,
-  getHotStockDataStatus
+  getHotStockDataStatus,
+  getHkExecutionHint
 } from '../api/hotStock'
 import { describeHotStockFreshness } from '../utils/hotStockFreshness'
 
@@ -244,6 +298,8 @@ const sourceIndex = ref('0')
 const source = computed(() => sourceIndex.value === '0' ? 'ths' : 'dc')
 
 const dataStatus = ref(null)
+const hkHint = ref(null)
+const showHkHint = ref(true)
 
 const error = ref('')
 const analysis = ref(null)
@@ -306,6 +362,15 @@ async function loadLatest() {
     error.value = `加载失败: ${e.message}`
   } finally {
     initialized.value = true
+  }
+}
+
+async function loadHkHint() {
+  try {
+    const res = await getHkExecutionHint()
+    if (res.success) hkHint.value = res
+  } catch (err) {
+    console.error('Failed to load HK execution hint:', err)
   }
 }
 
@@ -394,6 +459,7 @@ onMounted(() => {
   loadLatest()
   loadHistory()
   fetchDataStatus()
+  loadHkHint()
 })
 </script>
 
@@ -409,6 +475,14 @@ onMounted(() => {
 .thinking-card {
   border-color: #bfdbfe;
   background: #eff6ff;
+}
+.hk-hint {
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+.hk-hint-table {
+  background: transparent;
+  font-size: 13px;
 }
 .history-strip {
   padding: 4px 0;

@@ -33,3 +33,12 @@ export async function getHotStockDataStatus(source = 'ths') {
         params: { source },
     })
 }
+
+/** 港股人气榜 → 次日执行提示（只读，基于 P1 检验结论）。 */
+export async function getHkExecutionHint(topN = 20) {
+    return request({
+        url: '/hot-stock/hk-execution-hint',
+        method: 'get',
+        params: { top_n: topN },
+    })
+}
