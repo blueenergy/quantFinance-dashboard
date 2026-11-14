@@ -3,7 +3,7 @@ import request from '../utils/request'
 import { prefetchEchartsForTab } from '../utils/echarts/loadEcharts.js'
 import { NAV_TABS, RETIRED_NAV_TAB_IDS } from '../utils/navCatalog.js'
 
-const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v9'
+const NAV_CACHE_IDS_KEY = 'nav_visible_tab_ids_v10'
 const NAV_CACHE_USER_KEY = 'nav_visible_tab_username_v2'
 const ACTIVE_TAB_KEY = 'activeTab_v2'
 const ACTIVE_TAB_USER_KEY = 'activeTab_username_v2'
@@ -17,6 +17,7 @@ const LEGACY_NAV_CACHE_KEYS = [
   'nav_visible_tab_ids_v6',
   'nav_visible_tab_ids_v7',
   'nav_visible_tab_ids_v8',
+  'nav_visible_tab_ids_v9',
 ]
 
 const LEGACY_NAV_CACHE_USER_KEYS = [
