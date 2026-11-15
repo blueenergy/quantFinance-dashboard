@@ -39,6 +39,7 @@ describe('portfolio overview formatting', () => {
         end: '2026-07-19',
         count: 2,
         maxDrift: 0.08,
+        nodes,
       },
     ])
   })
@@ -62,6 +63,7 @@ describe('portfolio overview formatting', () => {
         end: '2026-07-18',
         count: 1,
         maxDrift: 0,
+        nodes: [nodes[0]],
       },
       { type: 'node', node: actionNode },
       {
@@ -70,6 +72,7 @@ describe('portfolio overview formatting', () => {
         end: '2026-07-20',
         count: 1,
         maxDrift: 0,
+        nodes: [nodes[2]],
       },
     ])
   })

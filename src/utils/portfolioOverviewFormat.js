@@ -85,11 +85,13 @@ export function foldedTimeline(nodes) {
           end: node.date,
           count: 1,
           maxDrift: drift,
+          nodes: [node],
         }
       } else {
         monitorRun.end = node.date
         monitorRun.count += 1
         monitorRun.maxDrift = Math.max(monitorRun.maxDrift, drift)
+        monitorRun.nodes.push(node)
       }
       continue
     }
