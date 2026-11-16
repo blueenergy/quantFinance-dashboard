@@ -241,7 +241,6 @@
       :universe-options="universeOptions"
       :industry-options="industryOptions"
       :model-options="modelOptions"
-      :show-historical-models="showHistoricalModels"
       :submitting="submitting"
       :title="drawerTitle"
       :subtitle="drawerSubtitle"
@@ -251,7 +250,6 @@
       @update:form="onDrawerFormUpdate"
       @name-touched="nameTouched = true"
       @universe-change="syncDefaultName"
-      @toggle-history-models="onToggleHistoryModels"
     />
 
     <ResearchComboModal
@@ -421,7 +419,6 @@ const livePreviewRow = ref(null)
 
 const universeOptions = UNIVERSE_OPTIONS
 const modelOptions = ref([])
-const showHistoricalModels = ref(false)
 
 async function loadIndustryOptions() {
   try {
@@ -437,7 +434,7 @@ async function loadModelOptions() {
   try {
     const response = await listPredictionModels({
       limit: 500,
-      accepted_only: !showHistoricalModels.value,
+      accepted_only: true,
     })
     // Research models first so the default pick has a backtestable history;
     // shadow profiles are useful for live observation but often cover 1-2 days.
@@ -445,23 +442,17 @@ async function loadModelOptions() {
       if (Boolean(a.research) !== Boolean(b.research)) return a.research ? -1 : 1
       return String(b.last_trade_date || '').localeCompare(String(a.last_trade_date || ''))
     })
-    // Hiding historical models can remove the current selection. Fall back to
-    // the first accepted research model instead of leaving a stale id.
+    // Portfolio research only accepts platform-promoted models. A rerun form
+    // that still carries a research-only model must not silently submit it.
     const current = String(form.value.model_id || '').trim()
     if (form.value.score_mode === 'model' && current
       && !modelOptions.value.some((model) => model.model_id === current)) {
-      const fallback = modelOptions.value.find((model) => model.research) || modelOptions.value[0]
-      form.value = { ...form.value, model_id: fallback?.model_id || '' }
+      form.value = { ...form.value, model_id: '' }
     }
   } catch (error) {
     console.warn('load prediction models failed', error)
     modelOptions.value = []
   }
-}
-
-function onToggleHistoryModels(value) {
-  showHistoricalModels.value = Boolean(value)
-  loadModelOptions()
 }
 
 watch(drawerOpen, (open) => {
