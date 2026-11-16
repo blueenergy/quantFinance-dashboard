@@ -65,8 +65,8 @@
       </div>
 
       <div class="toolbar-group" v-else>
-        <input type="date" v-model="selectedMinuteDate" @change="fetchMinuteData" class="theme-input" />
-        <button @click="fetchMinuteData" :disabled="loading" class="btn-refresh">🔄</button>
+        <input type="date" v-model="selectedMinuteDate" @change="handleDayControl" class="theme-input" />
+        <button @click="handleDayControl" :disabled="loading" class="btn-refresh">🔄</button>
       </div>
 
       <div class="toolbar-group" v-if="showAdjustToolbar">
@@ -106,7 +106,10 @@
     <div class="chart-main-wrapper" ref="chartWrapperRef">
       <div ref="chartRef" class="chart-canvas"></div>
       <div v-if="error" class="chart-overlay error">{{ error }}</div>
-      <div v-else-if="!loading && !dataLoading && isOneDayMinute && !minuteBars.length" class="chart-overlay empty">暂无分时数据</div>
+      <div
+        v-else-if="!loading && !dataLoading && ((isOneDayMinute && !minuteBars.length) || (isIntradayLine && !intradayLine?.bars?.length))"
+        class="chart-overlay empty"
+      >{{ isIntradayLine ? '暂无分时数据' : '暂无1分钟K线数据' }}</div>
       <div v-if="loading || dataLoading" class="chart-overlay loading"><div class="spinner"></div></div>
     </div>
       </div>
@@ -128,6 +131,7 @@ import {
   shiftVisibleEarlier,
 } from '../utils/chartVisibleWindow.js'
 import { loadEcharts } from '../utils/echarts/loadEcharts.js'
+import { assetTypeForSymbol, formatAssetPrice } from '../utils/assetPriceFormat.js'
 import {
   barChangePctForSeries,
   changePct,
@@ -172,6 +176,10 @@ const startDate = ref('')
 const endDate = ref('')
 const selectedMinuteDate = ref('')
 const minuteBars = ref([])
+/** 真正的分时线：/intraday-line/ 的价格线 + 均价线（股票与 ETF 同一套槽位）。 */
+const intradayLine = ref(null)
+let intradayFetchToken = 0
+let intradayPollTimer = null
 /** 周/月 K：来自 /records/?tf=（股票与 ETF 同一套聚合规则），不再拿日线冒充。 */
 const periodKline = ref([])
 const periodLoading = ref(false)
@@ -185,7 +193,8 @@ let resizeObserver = null
 let tooltipRows = []
 
 const intervalOptions = [
-  { label: '分时', value: 'minute' },
+  { label: '分时', value: 'intraday' },
+  { label: '1分', value: 'minute' },
   { label: '30分', value: '30m' },
   { label: '60分', value: '60m' },
   { label: '日线', value: 'day' },
@@ -193,20 +202,28 @@ const intervalOptions = [
   { label: '月线', value: 'month' }
 ]
 const isOneDayMinute = computed(() => kType.value === 'minute')
+const isIntradayLine = computed(() => kType.value === 'intraday')
 const isIntradayGs = computed(() => kType.value === '30m' || kType.value === '60m')
 const isPeriodKline = computed(() => kType.value === 'week' || kType.value === 'month')
 const periodTf = computed(() => (kType.value === 'month' ? '1m' : '1w'))
-const showDateRange = computed(() => !isOneDayMinute.value)
-const showAdjustToolbar = computed(() => !isOneDayMinute.value && !isIntradayGs.value)
-const showGsToolbar = computed(() => !isOneDayMinute.value)
+const showDateRange = computed(() => !isOneDayMinute.value && !isIntradayLine.value)
+const showAdjustToolbar = computed(
+  () => !isOneDayMinute.value && !isIntradayLine.value && !isIntradayGs.value,
+)
+const showGsToolbar = computed(() => !isOneDayMinute.value && !isIntradayLine.value)
 const showDailyPaging = computed(() => kType.value === 'day')
 const kTypeLabel = computed(() => {
   if (kType.value === '30m') return '30分钟'
   if (kType.value === '60m') return '60分钟'
-  if (kType.value === 'minute') return '分时'
+  if (kType.value === 'minute') return '1分'
+  if (kType.value === 'intraday') return '分时'
   return '天'
 })
 const latestDayPct = computed(() => {
+  if (isIntradayLine.value) {
+    const pct = intradayLine.value?.summary?.pct
+    return Number.isFinite(Number(pct)) ? Number(pct) : null
+  }
   const rows = isOneDayMinute.value || isIntradayGs.value
     ? (Array.isArray(minuteBars.value) ? minuteBars.value : [])
     : activeKlineRows()
@@ -222,7 +239,12 @@ const latestDayPct = computed(() => {
   return barChangePct(latest, rows.indexOf(latest), rows)
 })
 const dataCountLabel = computed(() => {
-  if (isOneDayMinute.value) return `${minuteBars.value.length} 条分时`
+  if (isIntradayLine.value) {
+    const summary = intradayLine.value?.summary || {}
+    const day = intradayLine.value?.session_date || ''
+    return `${summary.count || 0} 点分时${day ? ` · ${day}` : ''}`
+  }
+  if (isOneDayMinute.value) return `${minuteBars.value.length} 根1分K`
   if (isIntradayGs.value) return `${minuteBars.value.length} 根${kTypeLabel.value}`
   if (isPeriodKline.value) {
     return `${periodKline.value.length} 根${kType.value === 'month' ? '月' : '周'}K`
@@ -237,6 +259,7 @@ const adjustOptions = [
 ]
 
 function activeKlineRows() {
+  if (isIntradayLine.value) return []
   if (isIntradayGs.value) return Array.isArray(minuteBars.value) ? minuteBars.value : []
   if (isPeriodKline.value) return Array.isArray(periodKline.value) ? periodKline.value : []
   return Array.isArray(props.records) ? props.records : []
@@ -412,6 +435,72 @@ async function fetchMinuteData() {
   }
 }
 
+/** 真正的分时线：241 个分钟点 + 均价 + 昨收，来自 /intraday-line/。 */
+async function fetchIntradayLine({ silent = false } = {}) {
+  if (!props.symbol) return
+  const token = ++intradayFetchToken
+  if (!silent) loading.value = true
+  error.value = ''
+  try {
+    const params = { symbol: props.symbol }
+    if (selectedMinuteDate.value) params.date = String(selectedMinuteDate.value).replace(/-/g, '')
+    const payload = await request({
+      method: 'get',
+      url: '/intraday-line/',
+      params,
+      timeout: 15000,
+    })
+    if (token !== intradayFetchToken) return
+    intradayLine.value = payload?.success ? payload : null
+    drawChart()
+  } catch (e) {
+    if (token !== intradayFetchToken) return
+    intradayLine.value = null
+    error.value = '加载失败'
+    drawChart()
+  } finally {
+    if (token === intradayFetchToken) loading.value = false
+  }
+}
+
+function intradaySessionIsToday(payload) {
+  const now = new Date()
+  const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+  return payload?.session_date === ymd
+}
+
+function inTradingSessionNow() {
+  const now = new Date()
+  const minutes = now.getHours() * 60 + now.getMinutes()
+  return (minutes >= 9 * 60 + 25 && minutes <= 11 * 60 + 35)
+    || (minutes >= 12 * 60 + 55 && minutes <= 15 * 60 + 5)
+}
+
+function stopIntradayPolling() {
+  if (intradayPollTimer) {
+    clearInterval(intradayPollTimer)
+    intradayPollTimer = null
+  }
+}
+
+/** 分时是盘中要跟的，60s 静默刷新一次；非交易时段/看历史日不轮询。 */
+function startIntradayPolling() {
+  stopIntradayPolling()
+  intradayPollTimer = setInterval(() => {
+    if (document.hidden || kType.value !== 'intraday') return
+    if (!inTradingSessionNow() || !intradaySessionIsToday(intradayLine.value)) return
+    void fetchIntradayLine({ silent: true })
+  }, 60000)
+}
+
+function handleDayControl() {
+  if (isIntradayLine.value) {
+    void fetchIntradayLine()
+    return
+  }
+  fetchMinuteData()
+}
+
 function intradayCacheKey(symbol, tf) {
   return `${symbol || ''}|${tf || ''}`
 }
@@ -499,7 +588,8 @@ async function initECharts() {
 
 function drawChart() {
   if (!chartInstance) return
-  if (kType.value === 'minute') renderMinute()
+  if (isIntradayLine.value) renderIntradayLine()
+  else if (kType.value === 'minute') renderMinute()
   else renderDaily()
 }
 
@@ -590,6 +680,189 @@ function renderMinute() {
   }]
   if (hasVol) option.series.push(volumeBarSeries(tooltipRows, 1))
   if (hasAmt) option.series.push(amountBarSeries(tooltipRows, hasVol ? 2 : 1))
+  chartInstance.setOption(option, true)
+}
+
+function renderIntradayLine() {
+  const payload = intradayLine.value
+  const bars = Array.isArray(payload?.bars) ? payload.bars : []
+  if (!bars.length) {
+    chartInstance.clear()
+    return
+  }
+  const isDark = theme.value === 'dark'
+  const axisColor = isDark ? '#444c56' : '#d1d5da'
+  const labelColor = isDark ? '#768390' : '#586069'
+  const splitColor = isDark ? '#2d333b' : '#eaecef'
+  const labelColors = candleLabelColors()
+  const asset = assetTypeForSymbol(props.symbol)
+  const priceText = (value) => formatAssetPrice(value, asset)
+
+  const times = Array.isArray(payload.times) && payload.times.length
+    ? payload.times
+    : bars.map((bar) => bar.time)
+  const preClose = Number(payload.pre_close)
+  const hasPreClose = Number.isFinite(preClose) && preClose > 0
+  const prices = bars.map((bar) => (bar.price == null ? null : Number(bar.price)))
+  const avgs = bars.map((bar) => (bar.avg == null ? null : Number(bar.avg)))
+
+  // 量柱：当前分钟价 vs 上一个成交分钟价（第一根比昨收）
+  const volumeData = []
+  let prevPrice = hasPreClose ? preClose : null
+  for (const bar of bars) {
+    const price = bar.price == null ? null : Number(bar.price)
+    const base = prevPrice == null ? price : prevPrice
+    volumeData.push({
+      value: bar.volume ?? 0,
+      itemStyle: {
+        color: price == null || base == null
+          ? 'transparent'
+          : (price >= base ? labelColors.up : labelColors.down),
+      },
+    })
+    if (price != null) prevPrice = price
+  }
+
+  const basis = prices.filter((value) => value != null)
+  if (hasPreClose) basis.push(preClose)
+  const hi = basis.length ? Math.max(...basis) : 0
+  const lo = basis.length ? Math.min(...basis) : 0
+  const pad = (hi - lo) * 0.02 || Math.max(Math.abs(hi) * 0.002, 0.001)
+  const priceMin = Number((lo - pad).toFixed(4))
+  const priceMax = Number((hi + pad).toFixed(4))
+  const pctSpan = hasPreClose
+    ? Math.max(Math.abs(priceMax - preClose), Math.abs(preClose - priceMin)) / preClose * 100
+    : 5
+  const pctMax = Math.max(Number(pctSpan.toFixed(2)), 0.5)
+
+  tooltipRows = bars
+
+  const timeLabel = (value) => {
+    if (value === '13:01') return '13:00'
+    return ['09:30', '10:30', '11:30', '14:00', '15:00'].includes(value) ? value : ''
+  }
+
+  const option = {
+    backgroundColor: 'transparent',
+    textStyle: { color: labelColor },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' },
+      formatter: (params) => {
+        if (!Array.isArray(params) || !params.length) return ''
+        const idx = params[0].dataIndex
+        const bar = bars[idx]
+        if (!bar) return ''
+        const pctText = bar.pct == null ? '' : formatPctChange(bar.pct)
+        const pctHtml = pctText
+          ? `　<span style="color:${pctChangeColor(bar.pct, labelColors)}">${pctText}</span>`
+          : ''
+        return `<div class="k-tip"><strong>${bar.time}</strong><br/>`
+          + `价格 ${bar.price == null ? '-' : priceText(bar.price)}${pctHtml}<br/>`
+          + `均价 ${bar.avg == null ? '-' : priceText(bar.avg)}<br/>`
+          + `成交量 ${bar.volume == null ? '-' : compactVolumeLabel(bar.volume)}手</div>`
+      },
+    },
+    grid: [
+      { left: 56, right: 64, top: 24, height: '62%' },
+      { left: 56, right: 64, top: '76%', height: '16%' },
+    ],
+    xAxis: [
+      {
+        type: 'category',
+        data: times,
+        gridIndex: 0,
+        boundaryGap: false,
+        axisLine: { lineStyle: { color: axisColor } },
+        axisTick: { show: false },
+        axisLabel: { color: labelColor, fontSize: 11, formatter: timeLabel },
+      },
+      {
+        type: 'category',
+        data: times,
+        gridIndex: 1,
+        boundaryGap: false,
+        axisLine: { lineStyle: { color: axisColor } },
+        axisTick: { show: false },
+        axisLabel: { color: labelColor, fontSize: 11, formatter: timeLabel },
+      },
+    ],
+    yAxis: [
+      {
+        type: 'value',
+        gridIndex: 0,
+        min: priceMin,
+        max: priceMax,
+        splitLine: { lineStyle: { color: splitColor } },
+        axisLabel: { color: labelColor, fontSize: 11, formatter: (v) => priceText(v) },
+        axisPointer: { label: { formatter: (p) => priceText(p?.value) } },
+      },
+      {
+        type: 'value',
+        gridIndex: 0,
+        position: 'right',
+        min: -pctMax,
+        max: pctMax,
+        splitLine: { show: false },
+        axisLabel: {
+          color: labelColor,
+          fontSize: 11,
+          formatter: (v) => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(1)}%`,
+        },
+      },
+      {
+        type: 'value',
+        gridIndex: 1,
+        scale: true,
+        axisLabel: { show: false },
+        splitLine: { show: false },
+      },
+    ],
+    series: [
+      {
+        name: '价格',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: prices,
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 1.4, color: isDark ? '#7ab0ff' : '#0466c8' },
+        emphasis: { focus: 'series' },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          label: {
+            position: 'insideEndTop',
+            fontSize: 10,
+            color: labelColor,
+            formatter: hasPreClose ? `昨收 ${priceText(preClose)}` : '',
+          },
+          lineStyle: { color: labelColor, type: 'dashed', width: 1 },
+          data: hasPreClose ? [{ yAxis: preClose }] : [],
+        },
+      },
+      {
+        name: '均价',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: avgs,
+        showSymbol: false,
+        connectNulls: false,
+        lineStyle: { width: 1, color: '#f5c542' },
+        emphasis: { focus: 'series' },
+      },
+      {
+        name: '成交量',
+        type: 'bar',
+        xAxisIndex: 1,
+        yAxisIndex: 2,
+        data: volumeData,
+        barMaxWidth: 4,
+      },
+    ],
+  }
   chartInstance.setOption(option, true)
 }
 
@@ -1041,11 +1314,19 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  stopIntradayPolling()
   resizeObserver?.disconnect()
   chartInstance?.dispose()
 })
 
 watch(() => kType.value, (t) => {
+  stopIntradayPolling()
+  if (t === 'intraday') {
+    intradayLine.value = null
+    startIntradayPolling()
+    void fetchIntradayLine()
+    return
+  }
   if (t === 'minute') {
     fetchMinuteData()
     return
@@ -1085,6 +1366,13 @@ watch(() => props.symbol, (sym, prev) => {
     tooltipRows = []
     chartInstance?.clear()
     fetchPeriodKline()
+    return
+  }
+  if (isIntradayLine.value) {
+    intradayLine.value = null
+    tooltipRows = []
+    chartInstance?.clear()
+    void fetchIntradayLine()
     return
   }
   if (kType.value === 'minute') {

@@ -48,7 +48,7 @@ const todayBars = [
   },
 ]
 
-describe('StockChart 分时', () => {
+describe('StockChart 1分K', () => {
   beforeEach(() => {
     stubResizeObserver()
     request.mockReset()
@@ -69,7 +69,7 @@ describe('StockChart 分时', () => {
       },
     })
 
-    await buttonByText(wrapper.element, '分时').click()
+    await buttonByText(wrapper.element, '1分').click()
     await flushPromises()
 
     const calls = minuteCalls()
@@ -80,13 +80,13 @@ describe('StockChart 分时', () => {
       limit: 1000,
     })
     expect(request.mock.calls.some((args) => args[0]?.url === '/trade-signals/')).toBe(false)
-    expect(wrapper.text()).toContain('2 条分时')
+    expect(wrapper.text()).toContain('2 根1分K')
     expect(wrapper.find('input[type="date"]').element.value).toBe('2026-09-08')
 
     wrapper.unmount()
   })
 
-  it('keeps fetching after flipping symbols on 分时', async () => {
+  it('keeps fetching after flipping symbols on 1分K', async () => {
     const wrapper = mount(StockChart, {
       attachTo: document.body,
       props: {
@@ -95,7 +95,7 @@ describe('StockChart 分时', () => {
       },
     })
 
-    await buttonByText(wrapper.element, '分时').click()
+    await buttonByText(wrapper.element, '1分').click()
     await flushPromises()
 
     await wrapper.setProps({ symbol: '000002.SZ' })
@@ -119,7 +119,7 @@ describe('StockChart 分时', () => {
       },
     })
 
-    await buttonByText(wrapper.element, '分时').click()
+    await buttonByText(wrapper.element, '1分').click()
     await flushPromises()
 
     request.mockResolvedValueOnce({ data: [], tf: '1m', day: '', success: true })
@@ -132,7 +132,7 @@ describe('StockChart 分时', () => {
     const datedIndex = calls.findIndex((args) => args[0].params.start_date === '20260901')
     expect(datedIndex).toBeGreaterThanOrEqual(0)
     expect(calls.slice(datedIndex + 1).some((args) => !args[0].params.start_date)).toBe(true)
-    expect(wrapper.text()).toContain('2 条分时')
+    expect(wrapper.text()).toContain('2 根1分K')
     expect(dateInput.element.value).toBe('2026-09-08')
 
     wrapper.unmount()
