@@ -143,6 +143,17 @@
             >
               {{ opt.label }}
             </button>
+            <span class="kline-tf-label adjust-label">复权</span>
+            <button
+              v-for="opt in klineAdjustOptions"
+              :key="opt.value"
+              type="button"
+              class="tf-pill"
+              :class="{ on: klineAdjust === opt.value, busy: klineLoading }"
+              @click="klineAdjust = opt.value"
+            >
+              {{ opt.label }}
+            </button>
             <span v-if="klineLoading" class="kline-loading-hint" aria-live="polite">加载中（周/月 K 需聚合较多日线，请稍候）…</span>
           </div>
           <EtfChart
@@ -151,6 +162,7 @@
             :symbol="selectedEtf.ts_code"
             :name="selectedEtf.name"
             :tf="klineTf"
+            :adjust="klineAdjust"
             :loading="klineLoading"
             :records="chartRecords"
           />
@@ -169,6 +181,7 @@ import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import request from '../utils/request'
 import EtfChart from '../components/EtfChart.vue'
 import EtfHeatmapPanel from '../components/EtfHeatmapPanel.vue'
+import { PRICE_ADJUST_STORAGE_KEY, VALID_PRICE_ADJUST } from '../composables/useChartWorkspace.js'
 
 const props = defineProps({
   pendingNavigation: {
@@ -215,6 +228,24 @@ const klineTfOptions = [
   { value: '1w', label: '周K' },
   { value: '1m', label: '月K' },
 ]
+
+/** 复权口径：与自选 K 线共用同一个 localStorage 偏好。 */
+function readStoredKlineAdjust() {
+  try {
+    const stored = localStorage.getItem(PRICE_ADJUST_STORAGE_KEY)
+    if (VALID_PRICE_ADJUST.includes(stored)) return stored
+  } catch (e) { /* private mode */ }
+  return 'qfq'
+}
+const klineAdjust = ref(readStoredKlineAdjust())
+const klineAdjustOptions = [
+  { value: 'qfq', label: '前复权' },
+  { value: 'hfq', label: '后复权' },
+  { value: 'none', label: '不复权' },
+]
+watch(klineAdjust, (value) => {
+  try { localStorage.setItem(PRICE_ADJUST_STORAGE_KEY, value) } catch (e) { /* private mode */ }
+})
 
 const showLoadMore = computed(() => {
   if (searchQuery.value.trim()) return false
@@ -395,9 +426,10 @@ async function switchToEtfFromSharedSearch() {
   }
 }
 
-async function loadEtfKline (tsCode, tfForRequest) {
+async function loadEtfKline (tsCode, tfForRequest, adjustForRequest) {
   if (!tsCode) return
   const tf = tfForRequest != null && tfForRequest !== '' ? tfForRequest : klineTf.value
+  const adjust = adjustForRequest != null && adjustForRequest !== '' ? adjustForRequest : klineAdjust.value
   if (klineAbort) {
     try { klineAbort.abort() } catch (e) { /* noop */ }
   }
@@ -407,7 +439,7 @@ async function loadEtfKline (tsCode, tfForRequest) {
   klineLoading.value = true
   try {
     const body = await request.get(`/etf/${tsCode}/kline`, {
-      params: { limit: 250, tf },
+      params: { limit: 250, tf, adjust },
       signal,
     })
     if (myGen !== klineLoadGen) return
@@ -488,7 +520,7 @@ watch(
 const klineRequestSig = computed(() => {
   const c = selectedEtf.value?.ts_code
   if (!c) return null
-  return { tsCode: c, tf: klineTf.value }
+  return { tsCode: c, tf: klineTf.value, adjust: klineAdjust.value }
 })
 
 watch(
@@ -500,7 +532,7 @@ watch(
       }
       return
     }
-    await loadEtfKline(sig.tsCode, sig.tf)
+    await loadEtfKline(sig.tsCode, sig.tf, sig.adjust)
   }
 )
 
@@ -918,6 +950,10 @@ defineExpose({
 .kline-tf-label {
   margin-right: 0.25rem;
   color: #888;
+}
+
+.kline-tf-label.adjust-label {
+  margin-left: 0.75rem;
 }
 
 .tf-pill {

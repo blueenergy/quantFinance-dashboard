@@ -133,6 +133,7 @@ import {
   changePct,
   compactYmd,
   dayChangePctForBar,
+  finitePrice,
   formatChartNum2,
   formatPctChange,
   pctChangeColor,
@@ -171,6 +172,10 @@ const startDate = ref('')
 const endDate = ref('')
 const selectedMinuteDate = ref('')
 const minuteBars = ref([])
+/** 周/月 K：来自 /records/?tf=（股票与 ETF 同一套聚合规则），不再拿日线冒充。 */
+const periodKline = ref([])
+const periodLoading = ref(false)
+let periodFetchToken = 0
 const theme = ref(localStorage.getItem('chart-theme') || 'dark')
 const decisionGsEnabled = ref(true)
 
@@ -189,10 +194,12 @@ const intervalOptions = [
 ]
 const isOneDayMinute = computed(() => kType.value === 'minute')
 const isIntradayGs = computed(() => kType.value === '30m' || kType.value === '60m')
+const isPeriodKline = computed(() => kType.value === 'week' || kType.value === 'month')
+const periodTf = computed(() => (kType.value === 'month' ? '1m' : '1w'))
 const showDateRange = computed(() => !isOneDayMinute.value)
 const showAdjustToolbar = computed(() => !isOneDayMinute.value && !isIntradayGs.value)
 const showGsToolbar = computed(() => !isOneDayMinute.value)
-const showDailyPaging = computed(() => showAdjustToolbar.value)
+const showDailyPaging = computed(() => kType.value === 'day')
 const kTypeLabel = computed(() => {
   if (kType.value === '30m') return '30分钟'
   if (kType.value === '60m') return '60分钟'
@@ -202,17 +209,24 @@ const kTypeLabel = computed(() => {
 const latestDayPct = computed(() => {
   const rows = isOneDayMinute.value || isIntradayGs.value
     ? (Array.isArray(minuteBars.value) ? minuteBars.value : [])
-    : (Array.isArray(props.records) ? props.records : [])
+    : activeKlineRows()
   if (!rows.length) return null
-  const last = rows[rows.length - 1]
+  // Props/API may be newest-first; always take the row with the largest date.
+  const latest = rows.reduce(
+    (best, row) => (barOrderKey(row) > barOrderKey(best) ? row : best),
+    rows[0],
+  )
   if (isOneDayMinute.value || isIntradayGs.value) {
-    return dayChangeFromDaily(last)
+    return dayChangeFromDaily(latest)
   }
-  return dayChangePctForBar(last, rows.length - 1, rows, dailyRowsForSymbol())
+  return barChangePct(latest, rows.indexOf(latest), rows)
 })
 const dataCountLabel = computed(() => {
   if (isOneDayMinute.value) return `${minuteBars.value.length} 条分时`
   if (isIntradayGs.value) return `${minuteBars.value.length} 根${kTypeLabel.value}`
+  if (isPeriodKline.value) {
+    return `${periodKline.value.length} 根${kType.value === 'month' ? '月' : '周'}K`
+  }
   return `${props.records?.length || 0} 天数据`
 })
 const intradayCache = new Map()
@@ -224,6 +238,7 @@ const adjustOptions = [
 
 function activeKlineRows() {
   if (isIntradayGs.value) return Array.isArray(minuteBars.value) ? minuteBars.value : []
+  if (isPeriodKline.value) return Array.isArray(periodKline.value) ? periodKline.value : []
   return Array.isArray(props.records) ? props.records : []
 }
 
@@ -430,6 +445,43 @@ async function fetchIntradayGsBars() {
   }
 }
 
+/** 周/月 K 走 /records/?tf= —— 股票与 ETF 都由后端用同一套聚合规则生成
+ *  （trade_date = 周期内最后一个交易日，pct_chg = 相对上一根）。 */
+async function fetchPeriodKline() {
+  if (!props.symbol || !isPeriodKline.value) return
+  const tf = periodTf.value
+  const token = ++periodFetchToken
+  periodLoading.value = true
+  error.value = ''
+  try {
+    const rows = await request({
+      method: 'get',
+      url: '/records/',
+      params: {
+        symbol: props.symbol,
+        tf,
+        limit: 200,
+        sort: '-trade_date',
+        adjust: props.priceAdjust || 'qfq',
+        include_scores: false,
+      },
+      timeout: 15000,
+    })
+    if (token !== periodFetchToken) return
+    periodKline.value = Array.isArray(rows) ? rows : []
+    startDate.value = ''
+    endDate.value = ''
+    drawChart()
+  } catch (e) {
+    if (token !== periodFetchToken) return
+    periodKline.value = []
+    error.value = '加载失败'
+    drawChart()
+  } finally {
+    if (token === periodFetchToken) periodLoading.value = false
+  }
+}
+
 // --- Chart Rendering ---
 async function initECharts() {
   if (!echarts) {
@@ -483,6 +535,10 @@ function dayChangeFromDaily(row) {
 }
 
 function barChangePct(row, index, rows) {
+  // /records/ now stamps pre_close/pct_chg server-side for 日/周/月（同一套口径）;
+  // 分时 bar 没有这两列，继续走下面的本地推导。
+  const serverPct = finitePrice(row?.pct_chg)
+  if (serverPct != null) return serverPct
   if (isOneDayMinute.value || isIntradayGs.value
     || kType.value === 'week' || kType.value === 'month') {
     return barChangePctForSeries(row, index, rows)
@@ -927,7 +983,7 @@ function getBaseOption(xData, { legendData, hasVol = false, hasAmt = false } = {
 // --- Data Zoom / Infinite Scroll ---
 let isPaging = false
 function handleDataZoom(params) {
-  if (isPaging || isOneDayMinute.value || isIntradayGs.value) return
+  if (isPaging || isOneDayMinute.value || isIntradayGs.value || isPeriodKline.value) return
   
   // Get the start percentage of the zoom scale
   let start = 100
@@ -998,9 +1054,17 @@ watch(() => kType.value, (t) => {
     fetchIntradayGsBars()
     return
   }
+  if (t === 'week' || t === 'month') {
+    periodKline.value = []
+    fetchPeriodKline()
+    return
+  }
   startDate.value = ''
   if (props.records?.length) applyVisibleWindow(props.records)
   drawChart()
+})
+watch(() => props.priceAdjust, () => {
+  if (isPeriodKline.value) fetchPeriodKline()
 })
 watch(() => decisionGsEnabled.value, () => drawChart())
 
@@ -1015,6 +1079,13 @@ watch(() => props.symbol, (sym, prev) => {
     minuteBars.value = []
     tooltipRows = []
     chartInstance?.clear()
+  }
+  if (isPeriodKline.value) {
+    periodKline.value = []
+    tooltipRows = []
+    chartInstance?.clear()
+    fetchPeriodKline()
+    return
   }
   if (kType.value === 'minute') {
     fetchMinuteData()

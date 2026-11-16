@@ -19,6 +19,8 @@
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, computed, nextTick } from 'vue'
 import { formatAssetPrice } from '../utils/assetPriceFormat.js'
+import { formatEtfKlineTooltip, etfRowPct } from '../utils/etfKlineTooltip.js'
+import { formatPctChange, pctChangeColor } from '../utils/klineTooltip.js'
 import { loadEcharts } from '../utils/echarts/loadEcharts.js'
 
 const props = defineProps({
@@ -26,6 +28,8 @@ const props = defineProps({
   name: String,
   /** 1d | 1w | 1m — matches API /api/etf/.../kline?tf= */
   tf: { type: String, default: '1d' },
+  /** qfq | hfq | none — matches API /api/etf/.../kline?adjust= */
+  adjust: { type: String, default: 'qfq' },
   /** True while parent fetches kline (especially weekly / monthly aggregate). */
   loading: { type: Boolean, default: false },
   records: { type: Array, default: () => [] }
@@ -38,11 +42,18 @@ const tfLabel = computed(() => {
   return '日K'
 })
 
+const adjustLabel = computed(() => {
+  const mode = (props.adjust || 'qfq').toLowerCase()
+  if (mode === 'hfq') return '后复权'
+  if (mode === 'none') return '不复权'
+  return '前复权'
+})
+
 const klineCountLabel = computed(() => {
   if (props.loading) {
-    return `加载中… · ${tfLabel.value}`
+    return `加载中… · ${tfLabel.value} · ${adjustLabel.value}`
   }
-  return `${props.records?.length || 0} 根 · ${tfLabel.value}`
+  return `${props.records?.length || 0} 根 · ${tfLabel.value} · ${adjustLabel.value}`
 })
 
 const containerRef = ref(null)
@@ -113,6 +124,11 @@ watch(
   { deep: true }
 )
 
+/** Rows currently drawn, ascending — tooltip reads by dataIndex because
+ *  ECharts' candlestick items get `item.unshift(index)` (params.data is
+ *  [index, open, close, low, high], not the 4 values we passed). */
+let tooltipRows = []
+
 async function drawChart() {
   await ensureEchartsAndInit()
   if (!chartInstance || !props.records.length) return
@@ -120,23 +136,30 @@ async function drawChart() {
   // Sort data ascending for echarts
   // The records from the API are descending, so reverse a copy
   const dataList = [...props.records].reverse()
-  
+  tooltipRows = dataList
+
   const dates = dataList.map(r => r.trade_date)
-  const klineData = dataList.map(r => [
-    r.pre_adj_open, 
-    r.pre_adj_close, 
-    r.pre_adj_low, 
-    r.pre_adj_high
-  ])
-  
+  const klineData = dataList.map((row, index) => {
+    const pct = etfRowPct(row, index, dataList)
+    const pctText = formatPctChange(pct)
+    return {
+      value: [row.open, row.close, row.low, row.high],
+      label: {
+        show: Boolean(pctText),
+        formatter: pctText,
+        color: pctChangeColor(pct),
+      },
+    }
+  })
+
   const volumes = dataList.map(r => ({
-    value: r.vol,
+    value: r.vol ?? r.volume,
     itemStyle: {
-      color: r.pre_adj_close >= r.pre_adj_open ? '#ef232a' : '#14b143'
+      color: Number(r.close) >= Number(r.open) ? '#ef232a' : '#14b143'
     }
   }))
-  
-  const shares = dataList.map(r => r.fd_share || 0)
+
+  const shares = dataList.map(r => r.fd_share ?? null)
 
   const option = {
     backgroundColor: '#ffffff',
@@ -146,25 +169,10 @@ async function drawChart() {
       axisPointer: { type: 'cross' },
       formatter: (params) => {
         if (!Array.isArray(params) || !params.length) return ''
-        const lines = [String(params[0].axisValue ?? '')]
-        for (const p of params) {
-          if (p.seriesType === 'candlestick') {
-            const arr = Array.isArray(p.data) ? p.data : p.value
-            if (Array.isArray(arr) && arr.length >= 4) {
-              lines.push(
-                `开 ${formatAssetPrice(arr[0], 'etf')}　收 ${formatAssetPrice(arr[1], 'etf')}<br/>`
-                + `低 ${formatAssetPrice(arr[2], 'etf')}　高 ${formatAssetPrice(arr[3], 'etf')}`
-              )
-            }
-            continue
-          }
-          if (p.seriesName) {
-            const raw = Array.isArray(p.data) ? p.data : p.value
-            const value = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw.value : raw
-            lines.push(`${p.marker || ''}${p.seriesName}: ${value ?? '-'}`)
-          }
-        }
-        return lines.filter(Boolean).join('<br/>')
+        // Read the source row by dataIndex: candlestick items are mutated by
+        // ECharts (`item.unshift(index)`), so params.data is
+        // [index, open, close, low, high] — reading arr[0..3] shifts every label.
+        return formatEtfKlineTooltip(tooltipRows, params[0]?.dataIndex)
       },
     },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
@@ -226,11 +234,13 @@ async function drawChart() {
     ],
     series: [
       {
-        name: '前复权K线',
+        name: 'K线',
         type: 'candlestick',
         data: klineData,
         xAxisIndex: 0,
         yAxisIndex: 0,
+        legendHoverLink: false,
+        label: { show: true, position: 'top', fontSize: 10, hideOverlap: true },
         itemStyle: {
           color: '#ef232a',
           color0: '#14b143',
