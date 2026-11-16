@@ -70,20 +70,19 @@
     <template v-else-if="snapshot">
       <div class="summary-grid">
         <div class="summary-card level-card" :class="'level-' + snapshot.level">
-          <span class="card-label">今日态势</span>
+          <span class="card-label">今日量价态势</span>
           <span class="level-line">
             <strong class="card-value">{{ snapshot.level_label }}</strong>
-            <span
-              v-if="snapshot.share?.direction"
-              class="direction-chip"
-              :class="'dir-' + snapshot.share.direction"
-            >
-              {{ snapshot.share.direction_label }}
-            </span>
           </span>
           <span class="card-sub">
             首次观察 {{ fmtTime(snapshot.first_signal?.watch) }}
             · 首次疑似 {{ fmtTime(snapshot.first_signal?.suspect) }}
+          </span>
+          <span
+            v-if="snapshot.level === 'high' && snapshot.share?.stale && snapshot.share?.date"
+            class="card-sub"
+          >
+            高置信含份额确认（截至 {{ fmtShortDate(snapshot.share.date) }}）
           </span>
         </div>
         <div class="summary-card">
@@ -110,7 +109,16 @@
         </div>
         <div class="summary-card">
           <span class="card-label">份额确认（T+1）</span>
-          <strong class="card-value">{{ fmtPct(snapshot.share?.avg_chg_1d) }}</strong>
+          <span class="level-line">
+            <strong class="card-value">{{ fmtPct(snapshot.share?.avg_chg_1d) }}</strong>
+            <span
+              v-if="snapshot.share?.direction"
+              class="direction-chip"
+              :class="'dir-' + snapshot.share.direction"
+            >
+              {{ snapshot.share.direction_label }}
+            </span>
+          </span>
           <span class="card-sub">
             5 日 {{ fmtPct(snapshot.share?.avg_chg_5d) }}
             <template v-if="snapshot.share?.date">
