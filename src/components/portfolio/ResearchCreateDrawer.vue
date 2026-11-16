@@ -117,6 +117,14 @@
               </select>
             </label>
             <small class="field-hint">模型评分优先于规则分；研究窗口需与模型预测覆盖区间有交集，否则后端会拒绝。</small>
+            <label class="inline-check score-spec-field model-history-toggle">
+              <input
+                type="checkbox"
+                :checked="showHistoricalModels"
+                @change="$emit('toggle-history-models', $event.target.checked)"
+              />
+              显示历史模型（实验/已停用）
+            </label>
             <div v-if="selectedModel" class="weight-breakdown">
               <strong>{{ selectedModel.model_id }}</strong>
               <span>{{ selectedModel.index_code || '-' }} · {{ selectedModel.first_trade_date }} → {{ selectedModel.last_trade_date }}</span>
@@ -338,13 +346,14 @@ const props = defineProps({
   universeOptions: { type: Array, default: () => [] },
   industryOptions: { type: Array, default: () => [] },
   modelOptions: { type: Array, default: () => [] },
+  showHistoricalModels: { type: Boolean, default: false },
   submitting: { type: Boolean, default: false },
   title: { type: String, default: '新建研究任务' },
   subtitle: { type: String, default: '' },
   submitLabel: { type: String, default: '提交研究任务' },
 })
 
-const emit = defineEmits(['close', 'submit', 'update:form', 'name-touched', 'universe-change'])
+const emit = defineEmits(['close', 'submit', 'update:form', 'name-touched', 'universe-change', 'toggle-history-models'])
 
 const selectedScoreColumns = computed(() => resolveScoreColumns(props.form))
 const dynamicSelection = computed(() => (
@@ -484,11 +493,12 @@ function onModelChange(event) {
 
 function modelOptionLabel(model) {
   const kind = model.shadow ? 'shadow' : model.research ? 'research' : 'model'
+  const acceptance = model.accepted === false ? ' · 历史' : ''
   const index = model.index_code ? ` · ${model.index_code}` : ''
   const coverage = model.first_trade_date && model.last_trade_date
     ? ` · ${model.first_trade_date}→${model.last_trade_date}`
     : ''
-  return `${model.model_id} · ${kind}${index}${coverage}`
+  return `${model.model_id} · ${kind}${acceptance}${index}${coverage}`
 }
 
 function onNameInput(event) {

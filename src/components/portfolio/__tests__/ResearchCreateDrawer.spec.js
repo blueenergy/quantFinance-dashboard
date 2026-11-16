@@ -43,6 +43,7 @@ function mountDrawer(overrides = {}, modelOverrides = {}) {
       universeOptions: [],
       industryOptions: [],
       modelOptions: [{ ...model, ...modelOverrides }],
+      showHistoricalModels: false,
       submitting: false,
       title: 'new research',
       subtitle: '',
@@ -74,5 +75,25 @@ describe('ResearchCreateDrawer model mode', () => {
     const wrapper = mountDrawer({}, { last_trade_date: '20191231' })
     expect(wrapper.text()).toContain('该模型覆盖区间与当前研究窗口无交集')
     expect(submitButton(wrapper).element.disabled).toBe(true)
+  })
+
+  it('shows the historical-model toggle and emits changes', async () => {
+    const wrapper = mountDrawer()
+    const checkbox = wrapper.find('.model-history-toggle input[type="checkbox"]')
+    expect(checkbox.exists()).toBe(true)
+    await checkbox.setValue(true)
+    expect(wrapper.emitted('toggle-history-models')).toEqual([[true]])
+  })
+
+  it('marks non-accepted models as historical', () => {
+    const wrapper = mountDrawer({}, { accepted: false })
+    const optionText = wrapper.findAll('option').map((option) => option.text()).join(' ')
+    expect(optionText).toContain('历史')
+  })
+
+  it('does not mark accepted models as historical', () => {
+    const wrapper = mountDrawer({}, { accepted: true })
+    const optionText = wrapper.findAll('option').map((option) => option.text()).join(' ')
+    expect(optionText).not.toContain('历史')
   })
 })
