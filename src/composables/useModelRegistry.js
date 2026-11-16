@@ -1,4 +1,4 @@
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import {
   getModelRegistrySummary,
   getRegistryModel,
@@ -102,6 +102,10 @@ export function useModelRegistry() {
     },
     { deep: true },
   )
+
+  onBeforeUnmount(() => {
+    if (filterTimer !== null) clearTimeout(filterTimer)
+  })
 
   return {
     summary,
