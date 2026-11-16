@@ -111,11 +111,25 @@
         <div class="summary-card">
           <span class="card-label">份额确认（T+1）</span>
           <strong class="card-value">{{ fmtPct(snapshot.share?.avg_chg_1d) }}</strong>
-          <span class="card-sub">5 日 {{ fmtPct(snapshot.share?.avg_chg_5d) }}</span>
+          <span class="card-sub">
+            5 日 {{ fmtPct(snapshot.share?.avg_chg_5d) }}
+            <template v-if="snapshot.share?.date">
+              · 数据日 {{ fmtShortDate(snapshot.share.date) }}
+            </template>
+          </span>
           <span class="card-sub">
             净申赎 {{ fmtPct(snapshot.share?.pool_flow) }}
             <template v-if="snapshot.share?.rotation != null">
               · 相消 {{ fmtRatio(snapshot.share.rotation) }}
+            </template>
+            <template
+              v-if="
+                snapshot.share?.covered != null &&
+                snapshot.share.covered > 0 &&
+                snapshot.share.covered < snapshot.share.total
+              "
+            >
+              · 覆盖 {{ snapshot.share.covered }}/{{ snapshot.share.total }}
             </template>
           </span>
         </div>
@@ -186,8 +200,10 @@
               <th class="num">今日成交额</th>
               <th class="num">量比（20日 / 昨 / 5日）</th>
               <th class="num">尾盘占比</th>
-              <th class="num">份额日变</th>
-              <th class="num">份额 5 日</th>
+              <th class="num" :title="shareDateTitle">
+                份额日变<small v-if="snapshot.share?.date" class="muted">（{{ fmtShortDate(snapshot.share.date) }}）</small>
+              </th>
+              <th class="num" :title="shareDateTitle">份额 5 日</th>
               <th>信号</th>
               <th>前十名国家队（2025 年报）</th>
             </tr>
@@ -211,7 +227,11 @@
                 <div class="ratio-sub">昨 {{ fmtRatio(etf.prev_day_ratio) }} · 5日 {{ fmtRatio(etf.avg5_ratio) }}</div>
               </td>
               <td class="num">{{ fmtPct(etf.tail_share) }}</td>
-              <td class="num" :class="valueClass(etf.share_chg_1d)">{{ fmtPct(etf.share_chg_1d) }}</td>
+              <td
+                class="num"
+                :class="valueClass(etf.share_chg_1d)"
+                :title="etf.share_stale ? `数据日 ${fmtDate(etf.share_date)}` : ''"
+              >{{ fmtPct(etf.share_chg_1d) }}</td>
               <td class="num" :class="valueClass(etf.share_chg_5d)">{{ fmtPct(etf.share_chg_5d) }}</td>
               <td>
                 <span class="signal-badge" :class="'signal-' + etf.signal">{{ etf.signal_label }}</span>
@@ -291,6 +311,7 @@ let echartsLib = null
 let resizeOb = null
 let historyResizeOb = null
 let refreshTimer = null
+let historyTimer = null
 
 const asOfLabel = computed(() => {
   const hm = asOf.value || snapshot.value?.as_of || ''
@@ -323,6 +344,11 @@ const pickerValue = computed(() => {
 
 const activeHistoryDate = computed(() => {
   return selectedDate.value || snapshot.value?.trade_date || ''
+})
+
+const shareDateTitle = computed(() => {
+  const date = snapshot.value?.share?.date
+  return date ? `份额数据日 ${fmtDate(date)}（T+1 发布）` : '份额数据日未知'
 })
 
 function fmtYi(value) {
@@ -516,12 +542,23 @@ function historyTitle(row) {
   if (row.pool_ratio != null) parts.push(`量比 ${Number(row.pool_ratio).toFixed(2)}x`)
   parts.push(`广度 ≥2.5x ${row.breadth_25x} 只`)
   if (row.tail_ratio != null) parts.push(`尾盘 ${Number(row.tail_ratio).toFixed(2)}x`)
+  if (row.share_stale) {
+    parts.push(`份额待更新（最近 ${fmtShortDate(row.share_date)}）`)
+  }
   if (row.share_chg_1d != null) parts.push(`份额日变 ${Number(row.share_chg_1d).toFixed(2)}%`)
   if (row.pool_share_flow != null) {
     const sign = row.pool_share_flow >= 0 ? '+' : ''
     parts.push(`净申赎 ${sign}${Number(row.pool_share_flow).toFixed(2)}%`)
   }
   if (row.share_rotation != null) parts.push(`相消 ${Number(row.share_rotation).toFixed(2)}`)
+  if (
+    !row.share_stale &&
+    row.share_covered != null &&
+    row.share_covered > 0 &&
+    row.share_covered < row.share_total
+  ) {
+    parts.push(`份额覆盖 ${row.share_covered}/${row.share_total} 只`)
+  }
   if (row.baseline_days < 20) parts.push(`基线 ${row.baseline_days}/20 日`)
   if (row.partial) parts.push('盘中未收盘')
   return parts.join(' · ')
@@ -635,6 +672,9 @@ function drawHistoryChart() {
           if (row.pool_ratio != null) lines.push(`池子量比：${Number(row.pool_ratio).toFixed(2)}x`)
           lines.push(`放量广度：≥2.5x ${row.breadth_25x} 只 · ≥2.0x ${row.breadth_2x} 只`)
           if (row.tail_ratio != null) lines.push(`尾盘占比：${Number(row.tail_ratio).toFixed(2)}x`)
+          if (row.share_stale) {
+            lines.push(`份额待更新（最近 ${fmtShortDate(row.share_date)}）`)
+          }
           if (row.share_chg_1d != null) {
             const sign = row.share_chg_1d >= 0 ? '+' : ''
             lines.push(`份额日变：${sign}${Number(row.share_chg_1d).toFixed(2)}%`)
@@ -645,6 +685,14 @@ function drawHistoryChart() {
           }
           if (row.share_rotation != null) {
             lines.push(`相消比：${Number(row.share_rotation).toFixed(2)}`)
+          }
+          if (
+            !row.share_stale &&
+            row.share_covered != null &&
+            row.share_covered > 0 &&
+            row.share_covered < row.share_total
+          ) {
+            lines.push(`份额覆盖：${row.share_covered}/${row.share_total} 只`)
           }
           if (row.baseline_days < 20) lines.push(`基线：${row.baseline_days}/20 日`)
           if (row.partial) lines.push('盘中未收盘')
@@ -876,6 +924,12 @@ function setupTimer() {
   refreshTimer = setInterval(() => {
     if (!asOf.value && !selectedDate.value) loadSnapshot()
   }, 30000)
+  // History is not part of the snapshot poll: without this, a page left open
+  // across the T+1 share sync keeps showing the stale "份额待更新" bar.
+  if (historyTimer) clearInterval(historyTimer)
+  historyTimer = setInterval(() => {
+    if (!asOf.value && !selectedDate.value) loadHistory()
+  }, 60000)
 }
 
 watch(activeHistoryDate, () => drawHistoryChart())
@@ -892,6 +946,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (refreshTimer) clearInterval(refreshTimer)
+  if (historyTimer) clearInterval(historyTimer)
   if (resizeOb) resizeOb.disconnect()
   if (historyResizeOb) historyResizeOb.disconnect()
   if (chartInstance) chartInstance.dispose()
