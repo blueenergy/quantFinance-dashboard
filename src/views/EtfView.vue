@@ -143,21 +143,23 @@
             >
               {{ opt.label }}
             </button>
-            <span class="kline-tf-label adjust-label">复权</span>
-            <button
-              v-for="opt in klineAdjustOptions"
-              :key="opt.value"
-              type="button"
-              class="tf-pill"
-              :class="{ on: klineAdjust === opt.value, busy: klineLoading }"
-              @click="klineAdjust = opt.value"
-            >
-              {{ opt.label }}
-            </button>
+            <template v-if="klineTf !== 'intraday'">
+              <span class="kline-tf-label adjust-label">复权</span>
+              <button
+                v-for="opt in klineAdjustOptions"
+                :key="opt.value"
+                type="button"
+                class="tf-pill"
+                :class="{ on: klineAdjust === opt.value, busy: klineLoading }"
+                @click="klineAdjust = opt.value"
+              >
+                {{ opt.label }}
+              </button>
+            </template>
             <span v-if="klineLoading" class="kline-loading-hint" aria-live="polite">加载中（周/月 K 需聚合较多日线，请稍候）…</span>
           </div>
           <EtfChart
-            v-if="selectedEtf && (chartRecords.length > 0 || klineLoading)"
+            v-if="selectedEtf && (chartRecords.length > 0 || intradayPayload || klineLoading)"
             :key="selectedEtf.ts_code"
             :symbol="selectedEtf.ts_code"
             :name="selectedEtf.name"
@@ -165,6 +167,7 @@
             :adjust="klineAdjust"
             :loading="klineLoading"
             :records="chartRecords"
+            :intraday="intradayPayload"
           />
           <div
             v-else-if="selectedEtf"
@@ -218,12 +221,15 @@ const analysisMeta = ref(null)
 const analyzing = ref(false)
 const pollingTimer = ref(null)
 const chartRecords = ref([])
+/** 分时模式：/intraday-line/ 的 241 点（价格线 + 均价线）。 */
+const intradayPayload = ref(null)
 const klineLoading = ref(false)
 let klineLoadGen = 0
 let klineAbort = null
 
 const klineTf = ref('1d')
 const klineTfOptions = [
+  { value: 'intraday', label: '分时' },
   { value: '1d', label: '日K' },
   { value: '1w', label: '周K' },
   { value: '1m', label: '月K' },
@@ -373,6 +379,7 @@ function leaveDetail() {
   analysisResult.value = null
   analysisMeta.value = null
   chartRecords.value = []
+  intradayPayload.value = null
   mainTab.value = backTo === 'heatmap' ? 'heatmap' : 'list'
 }
 
@@ -438,15 +445,25 @@ async function loadEtfKline (tsCode, tfForRequest, adjustForRequest) {
   const myGen = ++klineLoadGen
   klineLoading.value = true
   try {
-    const body = await request.get(`/etf/${tsCode}/kline`, {
-      params: { limit: 250, tf, adjust },
-      signal,
-    })
-    if (myGen !== klineLoadGen) return
-    if (body?.success) {
-      chartRecords.value = body.data || []
+    if (tf === 'intraday') {
+      const body = await request.get('/intraday-line/', {
+        params: { symbol: tsCode },
+        signal,
+      })
+      if (myGen !== klineLoadGen) return
+      intradayPayload.value = body?.success ? body : null
     } else {
-      chartRecords.value = []
+      const body = await request.get(`/etf/${tsCode}/kline`, {
+        params: { limit: 250, tf, adjust },
+        signal,
+      })
+      if (myGen !== klineLoadGen) return
+      intradayPayload.value = null
+      if (body?.success) {
+        chartRecords.value = body.data || []
+      } else {
+        chartRecords.value = []
+      }
     }
   } catch (e) {
     if (
@@ -459,6 +476,7 @@ async function loadEtfKline (tsCode, tfForRequest, adjustForRequest) {
     console.error('Failed to fetch ETF K-line data', e)
     if (myGen === klineLoadGen) {
       chartRecords.value = []
+      intradayPayload.value = null
     }
   } finally {
     if (myGen === klineLoadGen) {
@@ -467,12 +485,52 @@ async function loadEtfKline (tsCode, tfForRequest, adjustForRequest) {
   }
 }
 
+let intradayPollTimer = null
+
+function inTradingSessionNow() {
+  const now = new Date()
+  const minutes = now.getHours() * 60 + now.getMinutes()
+  return (minutes >= 9 * 60 + 25 && minutes <= 11 * 60 + 35)
+    || (minutes >= 12 * 60 + 55 && minutes <= 15 * 60 + 5)
+}
+
+function stopIntradayPolling() {
+  if (intradayPollTimer) {
+    clearInterval(intradayPollTimer)
+    intradayPollTimer = null
+  }
+}
+
+/** 分时模式盘中 60s 静默刷新，不动 loading、不 abort 用户请求。 */
+function startIntradayPolling() {
+  stopIntradayPolling()
+  intradayPollTimer = setInterval(() => {
+    if (document.hidden || klineTf.value !== 'intraday' || !selectedEtf.value) return
+    const now = new Date()
+    const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+    if (intradayPayload.value?.session_date !== ymd || !inTradingSessionNow()) return
+    const code = selectedEtf.value.ts_code
+    request.get('/intraday-line/', { params: { symbol: code } })
+      .then((body) => {
+        if (klineTf.value !== 'intraday' || selectedEtf.value?.ts_code !== code) return
+        if (body?.success) intradayPayload.value = body
+      })
+      .catch(() => { /* polling is best effort */ })
+  }, 60000)
+}
+
+watch(klineTf, (tf) => {
+  if (tf === 'intraday') startIntradayPolling()
+  else stopIntradayPolling()
+})
+
 const selectEtf = async (etf) => {
   detailReturnTab.value = mainTab.value === 'heatmap' ? 'heatmap' : 'list'
   selectedEtf.value = etf
   analysisResult.value = null
   analysisMeta.value = null
   chartRecords.value = []
+  intradayPayload.value = null
   klineTf.value = '1d'
   fetchLatestAnalysis(etf.ts_code)
 }
@@ -597,6 +655,7 @@ const pollTaskStatus = (taskId) => {
 }
 
 onBeforeUnmount(() => {
+  stopIntradayPolling()
   if (pollingTimer.value) {
     clearInterval(pollingTimer.value)
     pollingTimer.value = null

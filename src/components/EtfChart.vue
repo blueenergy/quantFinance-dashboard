@@ -20,25 +20,31 @@
 import { ref, watch, onMounted, onBeforeUnmount, computed, nextTick } from 'vue'
 import { formatAssetPrice } from '../utils/assetPriceFormat.js'
 import { formatEtfKlineTooltip, etfRowPct } from '../utils/etfKlineTooltip.js'
+import { buildIntradayLineOption } from '../utils/echarts/intradayLineOption.js'
 import { formatPctChange, pctChangeColor } from '../utils/klineTooltip.js'
 import { loadEcharts } from '../utils/echarts/loadEcharts.js'
 
 const props = defineProps({
   symbol: String,
   name: String,
-  /** 1d | 1w | 1m — matches API /api/etf/.../kline?tf= */
+  /** 1d | 1w | 1m | intraday — matches API /api/etf/.../kline?tf= / /intraday-line/ */
   tf: { type: String, default: '1d' },
   /** qfq | hfq | none — matches API /api/etf/.../kline?adjust= */
   adjust: { type: String, default: 'qfq' },
   /** True while parent fetches kline (especially weekly / monthly aggregate). */
   loading: { type: Boolean, default: false },
-  records: { type: Array, default: () => [] }
+  records: { type: Array, default: () => [] },
+  /** /intraday-line/ payload for the 分时 mode. */
+  intraday: { type: Object, default: null }
 })
+
+const isIntradayMode = computed(() => (props.tf || '').toLowerCase() === 'intraday')
 
 const tfLabel = computed(() => {
   const t = (props.tf || '1d').toLowerCase()
   if (t === '1w' || t === 'w') return '周K'
   if (t === '1m' || t === 'm') return '月K'
+  if (t === 'intraday') return '分时'
   return '日K'
 })
 
@@ -50,6 +56,12 @@ const adjustLabel = computed(() => {
 })
 
 const klineCountLabel = computed(() => {
+  if (isIntradayMode.value) {
+    if (props.loading) return '加载中… · 分时'
+    const summary = props.intraday?.summary || {}
+    const day = props.intraday?.session_date || ''
+    return `${summary.count || 0} 点 · 分时${day ? ` · ${day}` : ''}`
+  }
   if (props.loading) {
     return `加载中… · ${tfLabel.value} · ${adjustLabel.value}`
   }
@@ -85,7 +97,7 @@ onMounted(async () => {
   await nextTick()
   if (!chartRef.value) return
   await ensureEchartsAndInit()
-  if (props.records?.length) {
+  if (props.records?.length || props.intraday?.bars?.length) {
     await drawChart()
   }
 })
@@ -103,15 +115,12 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => [props.records, props.loading, props.tf],
+  () => [props.records, props.intraday, props.loading, props.tf],
   () => {
-    if (props.loading && (!props.records || !props.records.length)) {
-      if (chartInstance) {
-        try { chartInstance.clear() } catch (e) { /* noop */ }
-      }
-      return
-    }
-    if (!props.records || !props.records.length) {
+    const hasData = isIntradayMode.value
+      ? Boolean(props.intraday?.bars?.length)
+      : Boolean(props.records?.length)
+    if (!hasData) {
       if (chartInstance) {
         try { chartInstance.clear() } catch (e) { /* noop */ }
       }
@@ -131,7 +140,19 @@ let tooltipRows = []
 
 async function drawChart() {
   await ensureEchartsAndInit()
-  if (!chartInstance || !props.records.length) return
+  if (!chartInstance) return
+  if (isIntradayMode.value) {
+    if (!props.intraday?.bars?.length) {
+      chartInstance.clear()
+      return
+    }
+    chartInstance.setOption(
+      buildIntradayLineOption(props.intraday, { theme: 'light', symbol: props.symbol }),
+      true,
+    )
+    return
+  }
+  if (!props.records.length) return
 
   // Sort data ascending for echarts
   // The records from the API are descending, so reverse a copy

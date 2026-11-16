@@ -131,7 +131,7 @@ import {
   shiftVisibleEarlier,
 } from '../utils/chartVisibleWindow.js'
 import { loadEcharts } from '../utils/echarts/loadEcharts.js'
-import { assetTypeForSymbol, formatAssetPrice } from '../utils/assetPriceFormat.js'
+import { buildIntradayLineOption } from '../utils/echarts/intradayLineOption.js'
 import {
   barChangePctForSeries,
   changePct,
@@ -685,185 +685,15 @@ function renderMinute() {
 
 function renderIntradayLine() {
   const payload = intradayLine.value
-  const bars = Array.isArray(payload?.bars) ? payload.bars : []
-  if (!bars.length) {
+  if (!payload || !Array.isArray(payload.bars) || !payload.bars.length) {
     chartInstance.clear()
     return
   }
-  const isDark = theme.value === 'dark'
-  const axisColor = isDark ? '#444c56' : '#d1d5da'
-  const labelColor = isDark ? '#768390' : '#586069'
-  const splitColor = isDark ? '#2d333b' : '#eaecef'
-  const labelColors = candleLabelColors()
-  const asset = assetTypeForSymbol(props.symbol)
-  const priceText = (value) => formatAssetPrice(value, asset)
-
-  const times = Array.isArray(payload.times) && payload.times.length
-    ? payload.times
-    : bars.map((bar) => bar.time)
-  const preClose = Number(payload.pre_close)
-  const hasPreClose = Number.isFinite(preClose) && preClose > 0
-  const prices = bars.map((bar) => (bar.price == null ? null : Number(bar.price)))
-  const avgs = bars.map((bar) => (bar.avg == null ? null : Number(bar.avg)))
-
-  // 量柱：当前分钟价 vs 上一个成交分钟价（第一根比昨收）
-  const volumeData = []
-  let prevPrice = hasPreClose ? preClose : null
-  for (const bar of bars) {
-    const price = bar.price == null ? null : Number(bar.price)
-    const base = prevPrice == null ? price : prevPrice
-    volumeData.push({
-      value: bar.volume ?? 0,
-      itemStyle: {
-        color: price == null || base == null
-          ? 'transparent'
-          : (price >= base ? labelColors.up : labelColors.down),
-      },
-    })
-    if (price != null) prevPrice = price
-  }
-
-  const basis = prices.filter((value) => value != null)
-  if (hasPreClose) basis.push(preClose)
-  const hi = basis.length ? Math.max(...basis) : 0
-  const lo = basis.length ? Math.min(...basis) : 0
-  const pad = (hi - lo) * 0.02 || Math.max(Math.abs(hi) * 0.002, 0.001)
-  const priceMin = Number((lo - pad).toFixed(4))
-  const priceMax = Number((hi + pad).toFixed(4))
-  const pctSpan = hasPreClose
-    ? Math.max(Math.abs(priceMax - preClose), Math.abs(preClose - priceMin)) / preClose * 100
-    : 5
-  const pctMax = Math.max(Number(pctSpan.toFixed(2)), 0.5)
-
-  tooltipRows = bars
-
-  const timeLabel = (value) => {
-    if (value === '13:01') return '13:00'
-    return ['09:30', '10:30', '11:30', '14:00', '15:00'].includes(value) ? value : ''
-  }
-
-  const option = {
-    backgroundColor: 'transparent',
-    textStyle: { color: labelColor },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'cross' },
-      formatter: (params) => {
-        if (!Array.isArray(params) || !params.length) return ''
-        const idx = params[0].dataIndex
-        const bar = bars[idx]
-        if (!bar) return ''
-        const pctText = bar.pct == null ? '' : formatPctChange(bar.pct)
-        const pctHtml = pctText
-          ? `　<span style="color:${pctChangeColor(bar.pct, labelColors)}">${pctText}</span>`
-          : ''
-        return `<div class="k-tip"><strong>${bar.time}</strong><br/>`
-          + `价格 ${bar.price == null ? '-' : priceText(bar.price)}${pctHtml}<br/>`
-          + `均价 ${bar.avg == null ? '-' : priceText(bar.avg)}<br/>`
-          + `成交量 ${bar.volume == null ? '-' : compactVolumeLabel(bar.volume)}手</div>`
-      },
-    },
-    grid: [
-      { left: 56, right: 64, top: 24, height: '62%' },
-      { left: 56, right: 64, top: '76%', height: '16%' },
-    ],
-    xAxis: [
-      {
-        type: 'category',
-        data: times,
-        gridIndex: 0,
-        boundaryGap: false,
-        axisLine: { lineStyle: { color: axisColor } },
-        axisTick: { show: false },
-        axisLabel: { color: labelColor, fontSize: 11, formatter: timeLabel },
-      },
-      {
-        type: 'category',
-        data: times,
-        gridIndex: 1,
-        boundaryGap: false,
-        axisLine: { lineStyle: { color: axisColor } },
-        axisTick: { show: false },
-        axisLabel: { color: labelColor, fontSize: 11, formatter: timeLabel },
-      },
-    ],
-    yAxis: [
-      {
-        type: 'value',
-        gridIndex: 0,
-        min: priceMin,
-        max: priceMax,
-        splitLine: { lineStyle: { color: splitColor } },
-        axisLabel: { color: labelColor, fontSize: 11, formatter: (v) => priceText(v) },
-        axisPointer: { label: { formatter: (p) => priceText(p?.value) } },
-      },
-      {
-        type: 'value',
-        gridIndex: 0,
-        position: 'right',
-        min: -pctMax,
-        max: pctMax,
-        splitLine: { show: false },
-        axisLabel: {
-          color: labelColor,
-          fontSize: 11,
-          formatter: (v) => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(1)}%`,
-        },
-      },
-      {
-        type: 'value',
-        gridIndex: 1,
-        scale: true,
-        axisLabel: { show: false },
-        splitLine: { show: false },
-      },
-    ],
-    series: [
-      {
-        name: '价格',
-        type: 'line',
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        data: prices,
-        showSymbol: false,
-        connectNulls: false,
-        lineStyle: { width: 1.4, color: isDark ? '#7ab0ff' : '#0466c8' },
-        emphasis: { focus: 'series' },
-        markLine: {
-          silent: true,
-          symbol: 'none',
-          label: {
-            position: 'insideEndTop',
-            fontSize: 10,
-            color: labelColor,
-            formatter: hasPreClose ? `昨收 ${priceText(preClose)}` : '',
-          },
-          lineStyle: { color: labelColor, type: 'dashed', width: 1 },
-          data: hasPreClose ? [{ yAxis: preClose }] : [],
-        },
-      },
-      {
-        name: '均价',
-        type: 'line',
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        data: avgs,
-        showSymbol: false,
-        connectNulls: false,
-        lineStyle: { width: 1, color: '#f5c542' },
-        emphasis: { focus: 'series' },
-      },
-      {
-        name: '成交量',
-        type: 'bar',
-        xAxisIndex: 1,
-        yAxisIndex: 2,
-        data: volumeData,
-        barMaxWidth: 4,
-      },
-    ],
-  }
-  chartInstance.setOption(option, true)
+  tooltipRows = payload.bars
+  chartInstance.setOption(
+    buildIntradayLineOption(payload, { theme: theme.value, symbol: props.symbol }),
+    true,
+  )
 }
 
 function renderDaily() {
