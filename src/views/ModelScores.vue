@@ -216,7 +216,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { getDailyModelScores, listModelScoreModels } from '../api/modelScores'
 import {
   MAX_COMPARE_MODELS,
@@ -379,6 +379,8 @@ async function refresh() {
   await loadCatalog()
   await loadDaily()
 }
+
+onMounted(refresh)
 
 </script>
 
