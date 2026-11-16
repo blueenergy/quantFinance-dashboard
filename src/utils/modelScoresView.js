@@ -32,6 +32,16 @@ export function modelLabel(model) {
   return `${id}${tag}`
 }
 
+/**
+ * Models worth showing by default: those the system actually runs (active
+ * strategy activation or enabled shadow profile). Research models that stopped
+ * producing predictions stay out unless the user asks for the full history.
+ */
+export function filterAcceptedModels(models = [], showAll = false) {
+  if (showAll) return models
+  return models.filter((model) => model?.accepted)
+}
+
 /** Group catalog rows by index_code; recent models first inside each group. */
 export function groupModelsByUniverse(models = []) {
   const groups = new Map()

@@ -45,6 +45,10 @@
         <input v-model="onlyTop" type="checkbox" />
         只看 Top {{ topN }}
       </label>
+      <label class="toggle-field">
+        <input v-model="showAllModels" type="checkbox" @change="onShowAllChange" />
+        显示历史模型
+      </label>
     </section>
 
     <section class="card models-card">
@@ -68,7 +72,8 @@
           />
           <span class="model-id">{{ model.model_id }}</span>
           <span class="model-meta">
-            {{ model.shadow ? 'shadow' : 'research' }} · {{ coverageLabel(model) }}
+            <span v-for="reason in model.accepted_reasons || []" :key="reason" class="reason-tag">{{ reason }}</span>
+            {{ coverageLabel(model) }}
             <template v-if="!model.recent"> · 历史</template>
           </span>
         </label>
@@ -221,6 +226,7 @@ import { getDailyModelScores, listModelScoreModels } from '../api/modelScores'
 import {
   MAX_COMPARE_MODELS,
   coverageLabel,
+  filterAcceptedModels,
   formatRankDelta,
   formatScore,
   groupModelsByUniverse,
@@ -241,7 +247,9 @@ const payload = ref(null)
 const loading = ref(false)
 const errorMessage = ref('')
 
-const universeGroups = computed(() => groupModelsByUniverse(catalog.value))
+const showAllModels = ref(false)
+const visibleCatalog = computed(() => filterAcceptedModels(catalog.value, showAllModels.value))
+const universeGroups = computed(() => groupModelsByUniverse(visibleCatalog.value))
 const universeModels = computed(
   () => universeGroups.value.find((group) => group.indexCode === universe.value)?.models || [],
 )
@@ -298,9 +306,17 @@ function toggleModel(modelId, checked) {
   loadDaily()
 }
 
+function onShowAllChange() {
+  const stillVisible = universeGroups.value.some((group) => group.indexCode === universe.value)
+  if (!stillVisible && universeGroups.value.length) {
+    universe.value = universeGroups.value[0].indexCode
+  }
+  onUniverseChange()
+}
+
 function onUniverseChange() {
   const defaults = pickDefaultModels(
-    catalog.value.filter((model) => (model.index_code || 'unknown') === universe.value),
+    visibleCatalog.value.filter((model) => (model.index_code || 'unknown') === universe.value),
   )
   selectedModelIds.value = defaults.length
     ? defaults
@@ -337,9 +353,9 @@ async function loadCatalog() {
   try {
     const res = await listModelScoreModels()
     catalog.value = res?.data?.models || []
-    const defaults = pickDefaultModels(catalog.value)
+    const defaults = pickDefaultModels(visibleCatalog.value)
     const first = defaults[0]
-    const group = catalog.value.find((model) => model.model_id === first)
+    const group = visibleCatalog.value.find((model) => model.model_id === first)
     universe.value = group?.index_code || universeGroups.value[0]?.indexCode || ''
     selectedModelIds.value = defaults
     if (!selectedModelIds.value.length && universeModels.value.length) {
@@ -517,6 +533,17 @@ h4,
 .model-meta {
   font-size: 12px;
   color: #64748b;
+}
+
+.reason-tag {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  background: #dcfce7;
+  color: #166534;
 }
 
 .status-card {

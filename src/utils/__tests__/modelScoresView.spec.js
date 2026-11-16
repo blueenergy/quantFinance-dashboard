@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   coverageLabel,
+  filterAcceptedModels,
   formatRankDelta,
   groupModelsByUniverse,
   pickDefaultModels,
@@ -12,6 +13,8 @@ const CATALOG = [
   {
     model_id: 'research-csi1000-clean-raw5',
     index_code: 'csi1000',
+    accepted: true,
+    accepted_reasons: ['live', 'shadow'],
     shadow: true,
     recent: true,
     last_trade_date: '20261113',
@@ -22,6 +25,8 @@ const CATALOG = [
   {
     model_id: 'promo-csi1000-e243b409',
     index_code: 'csi1000',
+    accepted: true,
+    accepted_reasons: ['shadow'],
     shadow: true,
     recent: true,
     last_trade_date: '20261113',
@@ -32,6 +37,8 @@ const CATALOG = [
   {
     model_id: 'promo-hs300-b7618410',
     index_code: 'hs300',
+    accepted: true,
+    accepted_reasons: ['shadow'],
     shadow: true,
     recent: true,
     last_trade_date: '20261113',
@@ -41,6 +48,8 @@ const CATALOG = [
   {
     model_id: 'research-rolling60-hs300',
     index_code: 'hs300',
+    accepted: false,
+    accepted_reasons: [],
     shadow: false,
     recent: false,
     last_trade_date: '20241119',
@@ -48,6 +57,17 @@ const CATALOG = [
     date_count: 93,
   },
 ]
+
+describe('filterAcceptedModels', () => {
+  it('drops retired research models unless showAll', () => {
+    expect(filterAcceptedModels(CATALOG).map((model) => model.model_id)).toEqual([
+      'research-csi1000-clean-raw5',
+      'promo-csi1000-e243b409',
+      'promo-hs300-b7618410',
+    ])
+    expect(filterAcceptedModels(CATALOG, true)).toHaveLength(4)
+  })
+})
 
 describe('groupModelsByUniverse', () => {
   it('groups by universe and keeps recent models first', () => {
