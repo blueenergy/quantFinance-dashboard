@@ -107,3 +107,40 @@
   background: #f8fafc;
   border-radius: 8px;
 }
+
+:where(.model-training) .factory-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+:where(.model-training) .factory-tabs button {
+  padding: 7px 12px;
+  border: 1px solid #d7dde7;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+:where(.model-training) .factory-tabs button.active {
+  border-color: #0f6bdc;
+  background: #eff6ff;
+  color: #0f4fa8;
+  font-weight: 600;
+}
+
+:where(.model-training) .catalog-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.55fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  :where(.model-training) .catalog-workspace {
+    grid-template-columns: 1fr;
+  }
+}

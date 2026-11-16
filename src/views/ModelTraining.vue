@@ -2,22 +2,58 @@
   <section class="portfolio-research model-training">
     <header class="page-header">
       <div>
-        <p class="eyebrow">Model Training</p>
-        <h2>🧠 模型训练</h2>
+        <p class="eyebrow">Model Factory</p>
+        <h2>🧠 模型工厂</h2>
         <p class="subtitle">
-          Walk-forward IC 评估与晋升门禁；旁路 quant_ml，非正式 stock_scores。当前流水线可能仍使用合成数据验证。
+          模型目录、生命周期状态与验证证据；训练任务仍是底层生产环节。
         </p>
       </div>
       <div class="header-actions">
         <button type="button" @click="openCreateDrawer">新建训练</button>
-        <button type="button" :disabled="loading" @click="refreshAll">刷新</button>
+        <button type="button" :disabled="loading || catalogLoading" @click="refreshCurrentView">刷新</button>
       </div>
     </header>
 
-    <p v-if="message" class="message">{{ message }}</p>
-    <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+    <div class="factory-tabs">
+      <button
+        type="button"
+        :class="{ active: activeView === 'catalog' }"
+        @click="activeView = 'catalog'"
+      >
+        模型目录
+      </button>
+      <button
+        type="button"
+        :class="{ active: activeView === 'jobs' }"
+        @click="activeView = 'jobs'"
+      >
+        训练任务
+      </button>
+    </div>
 
-    <section class="workspace">
+    <p v-if="activeView === 'jobs' && message" class="message">{{ message }}</p>
+    <p v-if="activeView === 'jobs' && errorMessage" class="error">{{ errorMessage }}</p>
+    <p v-if="activeView === 'catalog' && catalogError" class="error">{{ catalogError }}</p>
+
+    <section v-if="activeView === 'catalog'" class="catalog-workspace">
+      <ModelCatalogPanel
+        :summary="registrySummary"
+        :models="registryModels"
+        :loading="catalogLoading"
+        :filters="registryFilters"
+        :selected-model-id="selectedModelId"
+        @update:filters="onRegistryFiltersUpdate"
+        @select-model="selectRegistryModel"
+        @refresh="refreshCatalog"
+      />
+      <ModelCatalogDetail
+        :model="selectedRegistryModel"
+        :loading="registryDetailLoading"
+        :error="registryDetailError"
+      />
+    </section>
+
+    <section v-else class="workspace">
       <ModelTrainingJobList
         :jobs="jobs"
         :loading="loading"
@@ -218,9 +254,12 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import '../assets/styles/portfolio-research.css'
 import '../assets/styles/model-training.css'
+import ModelCatalogDetail from '../components/modelTraining/ModelCatalogDetail.vue'
+import ModelCatalogPanel from '../components/modelTraining/ModelCatalogPanel.vue'
 import ModelTrainingCreateDrawer from '../components/modelTraining/ModelTrainingCreateDrawer.vue'
 import ModelTrainingFoldPanel from '../components/modelTraining/ModelTrainingFoldPanel.vue'
 import ModelTrainingJobList from '../components/modelTraining/ModelTrainingJobList.vue'
+import { useModelRegistry } from '../composables/useModelRegistry'
 import { useModelTrainingDetail } from '../composables/useModelTrainingDetail'
 import { useModelTrainingForm } from '../composables/useModelTrainingForm'
 import { useModelTrainingJobs } from '../composables/useModelTrainingJobs'
@@ -305,6 +344,30 @@ const universeOptions = ML_UNIVERSE_OPTIONS
 const isNarrow = ref(typeof window !== 'undefined' ? window.matchMedia(NARROW_MQ).matches : false)
 let narrowMql = null
 
+const activeView = ref('catalog')
+const {
+  summary: registrySummary,
+  models: registryModels,
+  loading: catalogLoading,
+  errorMessage: catalogError,
+  detailLoading: registryDetailLoading,
+  detailError: registryDetailError,
+  filters: registryFilters,
+  selectedModelId,
+  selectedModel: selectedRegistryModel,
+  selectModel: selectRegistryModel,
+  refresh: refreshCatalog,
+} = useModelRegistry()
+
+function onRegistryFiltersUpdate(patch) {
+  registryFilters.value = { ...registryFilters.value, ...patch }
+}
+
+async function refreshCurrentView() {
+  if (activeView.value === 'catalog') await refreshCatalog()
+  else await refreshAll()
+}
+
 const baselineModelIc = computed(() => {
   const folds = resultDetail.value?.fold_reports || []
   if (!folds.length) return null
@@ -325,7 +388,7 @@ onMounted(async () => {
       isNarrow.value = e.matches
     })
   }
-  await loadJobs()
+  await Promise.all([loadJobs(), refreshCatalog()])
 })
 
 onUnmounted(() => {
