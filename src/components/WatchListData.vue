@@ -128,7 +128,17 @@
               <th>涨跌额</th>
               <th>涨跌幅</th>
               <th>成交量</th>
-              <th v-if="useRealtimeData">量比(同时刻)</th>
+              <th
+                v-if="useRealtimeData"
+                class="sortable-th"
+                :title="volumeSortTitle"
+                @click="cycleVolumeSort"
+              >
+                量比(同时刻)
+                <span v-if="watchlistSort !== 'default'" class="sort-arrow">
+                  {{ watchlistSort === 'volume_desc' ? '▼' : '▲' }}
+                </span>
+              </th>
               <th v-if="useRealtimeData">更新时间</th>
               <th style="min-width: 280px;">操作</th>
             </tr>
@@ -301,6 +311,7 @@ const historyModalMaximized = ref(false)
 const DEEP_ANALYSIS_MODE_STORAGE_KEY = 'deep_analysis_mode'
 const WATCHLIST_COLLAPSED_STORAGE_KEY = 'watchlist_collapsed'
 const WATCHLIST_FILTER_STORAGE_KEY = 'watchlist_filter'
+const WATCHLIST_SORT_STORAGE_KEY = 'watchlist_sort'
 const WATCHLIST_COLLAPSED_LIMIT = 10
 
 function readDeepAnalysisMode() {
@@ -311,6 +322,11 @@ function readDeepAnalysisMode() {
 const deepAnalysisMode = ref(readDeepAnalysisMode())
 const watchlistCollapsed = ref(localStorage.getItem(WATCHLIST_COLLAPSED_STORAGE_KEY) !== 'false')
 const watchlistFilter = ref(localStorage.getItem(WATCHLIST_FILTER_STORAGE_KEY) || 'all')
+const watchlistSort = ref(
+  ['default', 'volume_desc', 'volume_asc'].includes(localStorage.getItem(WATCHLIST_SORT_STORAGE_KEY))
+    ? localStorage.getItem(WATCHLIST_SORT_STORAGE_KEY)
+    : 'default'
+)
 
 function setDeepAnalysisMode(mode) {
   deepAnalysisMode.value = mode === 'multi_expert_v1' ? 'multi_expert_v1' : 'classic'
@@ -348,6 +364,38 @@ function getStockPctChange(stock) {
 
 function setWatchlistFilter(value) {
   watchlistFilter.value = value || 'all'
+}
+
+const volumeSortTitle = computed(() => {
+  if (watchlistSort.value === 'volume_desc') return '当前：量比从高到低；点击切换为从低到高'
+  if (watchlistSort.value === 'volume_asc') return '当前：量比从低到高；点击恢复默认顺序'
+  return '点击按量比排序（从高到低）'
+})
+
+function cycleVolumeSort() {
+  if (watchlistSort.value === 'default') {
+    watchlistSort.value = 'volume_desc'
+  } else if (watchlistSort.value === 'volume_desc') {
+    watchlistSort.value = 'volume_asc'
+  } else {
+    watchlistSort.value = 'default'
+  }
+}
+
+function sortByVolumeRatio(rows) {
+  if (watchlistSort.value === 'default' || !useRealtimeData.value) return rows
+  const direction = watchlistSort.value === 'volume_asc' ? 1 : -1
+  return [...rows].sort((a, b) => {
+    const aValue = Number(a?.volume_ratio)
+    const bValue = Number(b?.volume_ratio)
+    const aValid = a?.volume_ratio !== undefined && a?.volume_ratio !== null && Number.isFinite(aValue)
+    const bValid = b?.volume_ratio !== undefined && b?.volume_ratio !== null && Number.isFinite(bValue)
+    // 没有量比的（盘前 / 分钟未覆盖）永远排在最后，不随方向翻转。
+    if (!aValid && !bValid) return 0
+    if (!aValid) return 1
+    if (!bValid) return -1
+    return direction * (aValue - bValue)
+  })
 }
 
 function toggleWatchlistCollapsed() {
@@ -436,7 +484,9 @@ const watchlistFilterOptions = computed(() => {
   return options
 })
 
-const filteredStocksData = computed(() => stocksData.value.filter(matchesWatchlistFilter))
+const filteredStocksData = computed(() => sortByVolumeRatio(
+  stocksData.value.filter(matchesWatchlistFilter)
+))
 
 const filteredStocksWithoutData = computed(() => (
   watchlistFilter.value === 'all' || watchlistFilter.value === 'no_data'
@@ -487,6 +537,10 @@ watch(watchlistCollapsed, (collapsed) => {
 
 watch(watchlistFilter, (filter) => {
   localStorage.setItem(WATCHLIST_FILTER_STORAGE_KEY, filter)
+})
+
+watch(watchlistSort, (sort) => {
+  localStorage.setItem(WATCHLIST_SORT_STORAGE_KEY, sort)
 })
 
 // 处理用户登录
@@ -1556,6 +1610,22 @@ onMounted(async () => {
   font-family: 'Courier New', monospace;
   font-weight: 700;
   text-shadow: 0 0 8px rgba(251, 113, 133, 0.4);
+}
+
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable-th:hover {
+  background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
+}
+
+.sort-arrow {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.75em;
+  opacity: 0.9;
 }
 
 .chart-btn {
