@@ -47,7 +47,7 @@
       </label>
       <label class="toggle-field">
         <input v-model="showAllModels" type="checkbox" @change="onShowAllChange" />
-        显示历史模型
+        显示研究已验收模型
       </label>
     </section>
 
@@ -73,6 +73,9 @@
           <span class="model-id">{{ model.model_id }}</span>
           <span class="model-meta">
             <span v-for="reason in model.accepted_reasons || []" :key="reason" class="reason-tag">{{ reason }}</span>
+            <span v-if="model.validated" class="reason-tag validated">
+              validated({{ model.validation?.verdict || 'weak' }})
+            </span>
             {{ coverageLabel(model) }}
             <template v-if="!model.recent"> · 历史</template>
           </span>
@@ -544,6 +547,11 @@ h4,
   line-height: 18px;
   background: #dcfce7;
   color: #166534;
+}
+
+.reason-tag.validated {
+  background: #ede9fe;
+  color: #6d28d9;
 }
 
 .status-card {

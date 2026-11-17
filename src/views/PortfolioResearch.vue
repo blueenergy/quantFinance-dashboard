@@ -435,6 +435,7 @@ async function loadModelOptions() {
     const response = await listPredictionModels({
       limit: 500,
       accepted_only: true,
+      include_validated: true,
     })
     // Research models first so the default pick has a backtestable history;
     // shadow profiles are useful for live observation but often cover 1-2 days.

@@ -76,9 +76,24 @@ describe('ResearchCreateDrawer model mode', () => {
     expect(submitButton(wrapper).element.disabled).toBe(true)
   })
 
-  it('states that only platform-promoted models are shown', () => {
+  it('explains that live/shadow and validated models are shown', () => {
     const wrapper = mountDrawer()
-    expect(wrapper.text()).toContain('仅显示平台已认可的模型')
+    expect(wrapper.text()).toContain('显示 live/shadow 与「研究已验收」模型')
     expect(wrapper.find('.model-history-toggle').exists()).toBe(false)
+  })
+
+  it('labels a research-validated model and shows its verdict', () => {
+    const wrapper = mountDrawer(
+      { model_id: 'research-csi1000-clean-raw5-oos2025' },
+      {
+        model_id: 'research-csi1000-clean-raw5-oos2025',
+        state: 'validated',
+        validated: true,
+        accepted: false,
+        validation: { protocol: 'portfolio_oos', verdict: 'weak' },
+      },
+    )
+    expect(wrapper.text()).toContain('研究已验收')
+    expect(wrapper.text()).toContain('weak')
   })
 })

@@ -116,11 +116,14 @@
                 </option>
               </select>
             </label>
-            <small class="field-hint">仅显示平台已认可的模型（live/shadow）；研究窗口需与模型预测覆盖区间有交集，否则后端会拒绝。纯研究模型请在模型训练页查看。</small>
+            <small class="field-hint">显示 live/shadow 与「研究已验收」模型；原始研究模型仍在模型训练页。研究窗口需与模型预测覆盖区间有交集，否则后端会拒绝。</small>
             <div v-if="selectedModel" class="weight-breakdown">
               <strong>{{ selectedModel.model_id }}</strong>
               <span>{{ selectedModel.index_code || '-' }} · {{ selectedModel.first_trade_date }} → {{ selectedModel.last_trade_date }}</span>
               <span>{{ selectedModel.date_count }} 个预测日 · {{ selectedModel.prediction_count }} 条预测</span>
+              <span v-if="selectedModel.validated">
+                研究已验收 · {{ selectedModel.validation?.verdict || 'weak' }}（非 live/shadow）
+              </span>
               <span v-if="!modelCoversWindow" class="model-warning">该模型覆盖区间与当前研究窗口无交集</span>
             </div>
           </div>
@@ -484,11 +487,14 @@ function onModelChange(event) {
 
 function modelOptionLabel(model) {
   const kind = model.shadow ? 'shadow' : model.research ? 'research' : 'model'
+  const stateLabel = model.validated
+    ? ` · 研究已验收(${model.validation?.verdict || 'weak'})`
+    : (model.state && model.state !== kind ? ` · ${model.state}` : '')
   const index = model.index_code ? ` · ${model.index_code}` : ''
   const coverage = model.first_trade_date && model.last_trade_date
     ? ` · ${model.first_trade_date}→${model.last_trade_date}`
     : ''
-  return `${model.model_id} · ${kind}${index}${coverage}`
+  return `${model.model_id} · ${kind}${stateLabel}${index}${coverage}`
 }
 
 function onNameInput(event) {

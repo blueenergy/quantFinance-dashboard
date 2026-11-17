@@ -59,13 +59,34 @@ const CATALOG = [
 ]
 
 describe('filterAcceptedModels', () => {
-  it('drops retired research models unless showAll', () => {
+  const VALIDATED = {
+    model_id: 'research-csi1000-clean-raw5-oos2025',
+    index_code: 'csi1000',
+    accepted: false,
+    validated: true,
+    state: 'validated',
+    shadow: false,
+    recent: true,
+    last_trade_date: '20261113',
+    recent_trade_dates: ['20261113'],
+    date_count: 451,
+  }
+
+  it('drops raw research and only admits validated on request', () => {
     expect(filterAcceptedModels(CATALOG).map((model) => model.model_id)).toEqual([
       'research-csi1000-clean-raw5',
       'promo-csi1000-e243b409',
       'promo-hs300-b7618410',
     ])
-    expect(filterAcceptedModels(CATALOG, true)).toHaveLength(4)
+    const withValidated = filterAcceptedModels([...CATALOG, VALIDATED], true)
+      .map((model) => model.model_id)
+    expect(withValidated).toEqual([
+      'research-csi1000-clean-raw5',
+      'promo-csi1000-e243b409',
+      'promo-hs300-b7618410',
+      'research-csi1000-clean-raw5-oos2025',
+    ])
+    expect(withValidated).not.toContain('research-rolling60-hs300')
   })
 })
 
