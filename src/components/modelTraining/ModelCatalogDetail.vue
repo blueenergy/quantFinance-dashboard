@@ -40,6 +40,13 @@
           <strong>{{ model.health?.last_prediction_date || '-' }}</strong>
           <small v-if="model.health?.stale_days">落后 {{ model.health.stale_days }}d</small>
         </div>
+        <div>
+          <span>健康 / 漂移</span>
+          <strong>{{ healthLabel(model.health?.status) }}</strong>
+          <small v-if="model.health?.score_drift_z !== null && model.health?.score_drift_z !== undefined">
+            drift z {{ formatDrift(model.health.score_drift_z) }}
+          </small>
+        </div>
       </div>
 
       <p v-if="gateConflict" class="gate-warning">
@@ -198,6 +205,16 @@
           <input v-model="transitionOverride" type="checkbox" />
           admin override（危险，写入审计）
         </label>
+        <template v-if="canRetire">
+          <label class="transition-override">
+            <input v-model="retireDisableProfiles" type="checkbox" />
+            退役时停用 shadow profiles
+          </label>
+          <label class="transition-override">
+            <input v-model="retireCancelActivations" type="checkbox" />
+            退役时取消 active/scheduled activations（危险）
+          </label>
+        </template>
         <p v-if="localTransitionError" class="error">{{ localTransitionError }}</p>
         <p v-if="transitionError" class="error">{{ transitionError }}</p>
       </section>
@@ -221,6 +238,8 @@ const emit = defineEmits(['transition'])
 const transitionReason = ref('')
 const transitionEvidence = ref('')
 const transitionOverride = ref(false)
+const retireDisableProfiles = ref(true)
+const retireCancelActivations = ref(false)
 const localTransitionError = ref('')
 
 const canValidate = computed(() => props.model?.state === 'research')
@@ -257,12 +276,17 @@ function submitTransition(targetState) {
     || (props.model?.state === 'shadow' && targetState === 'validated')
   )
   if (isDemotion) evidence = { ...evidence, demotion: true }
-  emit('transition', {
+  const payload = {
     target_state: targetState,
     reason,
     evidence,
     admin_override: Boolean(transitionOverride.value),
-  })
+  }
+  if (targetState === 'retired') {
+    payload.disable_shadow_profiles = Boolean(retireDisableProfiles.value)
+    payload.cancel_activations = Boolean(retireCancelActivations.value)
+  }
+  emit('transition', payload)
 }
 
 function stateLabel(state) {
@@ -282,6 +306,20 @@ function verdictLabel(verdict) {
     weak: 'weak',
     fail: 'fail',
   }[verdict] || verdict || '-'
+}
+
+function healthLabel(status) {
+  return {
+    current: 'current',
+    stale: 'stale',
+    inactive: 'inactive',
+    no_predictions: '无预测',
+  }[status] || status || '-'
+}
+
+function formatDrift(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number.toFixed(2) : '-'
 }
 
 const gateLabel = computed(() => {

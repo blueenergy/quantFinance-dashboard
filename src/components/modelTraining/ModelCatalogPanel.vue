@@ -102,6 +102,9 @@
               <small v-if="model.health?.stale_days" class="stale-days">
                 · {{ model.health.stale_days }}d
               </small>
+              <small v-if="model.health?.status" class="health-status" :class="model.health.status">
+                {{ healthLabel(model.health.status) }}
+              </small>
             </td>
             <td class="num-cell">
               {{ model.health?.date_count ?? 0 }} / {{ model.health?.prediction_count ?? 0 }}
@@ -179,6 +182,15 @@ function gateLabel(model) {
   if (!gate) return '-'
   if (gate.passed) return 'pass'
   return gate.reason ? `fail · ${gate.reason}` : 'fail'
+}
+
+function healthLabel(status) {
+  return {
+    current: 'current',
+    stale: 'stale',
+    inactive: 'inactive',
+    no_predictions: '无预测',
+  }[status] || status
 }
 </script>
 
@@ -376,6 +388,20 @@ tbody tr.active {
 .stale-days {
   color: #b45309;
 }
+
+.health-status {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.health-status.current { background: #dcfce7; color: #047857; }
+.health-status.stale { background: #fef3c7; color: #b45309; }
+.health-status.no_predictions { background: #fee2e2; color: #b91c1c; }
 
 .state-badge,
 .accepted-pill {

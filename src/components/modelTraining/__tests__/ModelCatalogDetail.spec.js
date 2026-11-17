@@ -136,6 +136,27 @@ describe('ModelCatalogDetail', () => {
     ])
   })
 
+  it('includes retirement cleanup options in the transition payload', async () => {
+    const wrapper = mountDetail()
+    await wrapper.find('.transition-field input[type="text"]').setValue('retire live model')
+    const retireButton = wrapper
+      .findAll('.transition-actions button')
+      .find((button) => button.text().includes('退役'))
+    await retireButton.trigger('click')
+    expect(wrapper.emitted('transition')).toEqual([
+      [
+        {
+          target_state: 'retired',
+          reason: 'retire live model',
+          evidence: {},
+          admin_override: false,
+          disable_shadow_profiles: true,
+          cancel_activations: false,
+        },
+      ],
+    ])
+  })
+
   it('renders a loading state and an error state', () => {
     expect(mountDetail({ model: null, loading: true }).text()).toContain('加载模型详情')
     expect(mountDetail({ model: null, error: 'boom' }).text()).toContain('boom')
