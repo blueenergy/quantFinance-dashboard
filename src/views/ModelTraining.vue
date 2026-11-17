@@ -50,6 +50,9 @@
         :model="selectedRegistryModel"
         :loading="registryDetailLoading"
         :error="registryDetailError"
+        :transitioning="registryTransitioning"
+        :transition-error="registryTransitionError"
+        @transition="onRegistryTransition"
       />
     </section>
 
@@ -352,15 +355,23 @@ const {
   errorMessage: catalogError,
   detailLoading: registryDetailLoading,
   detailError: registryDetailError,
+  transitioning: registryTransitioning,
+  transitionError: registryTransitionError,
   filters: registryFilters,
   selectedModelId,
   selectedModel: selectedRegistryModel,
   selectModel: selectRegistryModel,
+  transitionModel: registryTransitionModel,
   refresh: refreshCatalog,
 } = useModelRegistry()
 
 function onRegistryFiltersUpdate(patch) {
   registryFilters.value = { ...registryFilters.value, ...patch }
+}
+
+async function onRegistryTransition(payload) {
+  if (!selectedModelId.value) return
+  await registryTransitionModel(selectedModelId.value, payload)
 }
 
 async function refreshCurrentView() {

@@ -11,3 +11,11 @@ export function listRegistryModels(params = {}) {
 export function getRegistryModel(modelId) {
   return request({ url: `/model-registry/models/${encodeURIComponent(modelId)}`, method: 'get' })
 }
+
+export function transitionRegistryModel(modelId, data) {
+  return request({
+    url: `/model-registry/models/${encodeURIComponent(modelId)}/transition`,
+    method: 'post',
+    data,
+  })
+}

@@ -154,18 +154,116 @@
           </span>
         </div>
       </section>
+
+      <section class="detail-section transition-section">
+        <div class="section-title">
+          <h4>状态操作</h4>
+          <span class="muted">admin only · 写入 state_history</span>
+        </div>
+        <p class="muted">
+          validated 需要 evidence.result_id；shadow 需要 enabled profile；live 需要 live activation；override 会记入审计。
+        </p>
+        <div class="transition-actions">
+          <button v-if="canValidate" type="button" :disabled="transitioning" @click="submitTransition('validated')">
+            标记已验收
+          </button>
+          <button v-if="canPromoteShadow" type="button" :disabled="transitioning" @click="submitTransition('shadow')">
+            晋升影子
+          </button>
+          <button v-if="canPromoteLive" type="button" :disabled="transitioning" @click="submitTransition('live')">
+            晋升实盘
+          </button>
+          <button v-if="canDemoteShadow" type="button" :disabled="transitioning" @click="submitTransition('shadow')">
+            降级影子
+          </button>
+          <button v-if="canDemoteValidated" type="button" :disabled="transitioning" @click="submitTransition('validated')">
+            降级已验收
+          </button>
+          <button v-if="canRetire" type="button" class="danger" :disabled="transitioning" @click="submitTransition('retired')">
+            退役
+          </button>
+          <button v-if="canReject" type="button" class="danger" :disabled="transitioning" @click="submitTransition('rejected')">
+            否决
+          </button>
+        </div>
+        <label class="transition-field">
+          操作理由（必填）
+          <input v-model="transitionReason" type="text" placeholder="例如：OOS 21 期 weak，进入影子观察" />
+        </label>
+        <label class="transition-field">
+          证据 JSON（可选；validated 需 result_id）
+          <textarea v-model="transitionEvidence" rows="2" placeholder='{"result_id":"65fef1dc-..."}' />
+        </label>
+        <label class="transition-override">
+          <input v-model="transitionOverride" type="checkbox" />
+          admin override（危险，写入审计）
+        </label>
+        <p v-if="localTransitionError" class="error">{{ localTransitionError }}</p>
+        <p v-if="transitionError" class="error">{{ transitionError }}</p>
+      </section>
     </template>
   </aside>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   model: { type: Object, default: null },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
+  transitioning: { type: Boolean, default: false },
+  transitionError: { type: String, default: '' },
 })
+
+const emit = defineEmits(['transition'])
+
+const transitionReason = ref('')
+const transitionEvidence = ref('')
+const transitionOverride = ref(false)
+const localTransitionError = ref('')
+
+const canValidate = computed(() => props.model?.state === 'research')
+const canPromoteShadow = computed(() => props.model?.state === 'validated')
+const canPromoteLive = computed(() => props.model?.state === 'shadow')
+const canDemoteShadow = computed(() => props.model?.state === 'live')
+const canDemoteValidated = computed(() => props.model?.state === 'shadow')
+const canRetire = computed(() => ['validated', 'shadow', 'live'].includes(props.model?.state))
+const canReject = computed(() => ['research', 'validated'].includes(props.model?.state))
+
+function submitTransition(targetState) {
+  localTransitionError.value = ''
+  const reason = String(transitionReason.value || '').trim()
+  if (!reason) {
+    localTransitionError.value = '请填写操作理由'
+    return
+  }
+  let evidence = {}
+  const rawEvidence = String(transitionEvidence.value || '').trim()
+  if (rawEvidence) {
+    try {
+      evidence = JSON.parse(rawEvidence)
+    } catch {
+      localTransitionError.value = '证据 JSON 不是合法对象'
+      return
+    }
+    if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
+      localTransitionError.value = '证据 JSON 必须是对象'
+      return
+    }
+  }
+  const isDemotion = (
+    (props.model?.state === 'live' && targetState === 'shadow')
+    || (props.model?.state === 'shadow' && targetState === 'validated')
+  )
+  if (isDemotion) evidence = { ...evidence, demotion: true }
+  emit('transition', {
+    target_state: targetState,
+    reason,
+    evidence,
+    admin_override: Boolean(transitionOverride.value),
+  })
+}
 
 function stateLabel(state) {
   return {
@@ -519,3 +617,70 @@ function historyFrom(item) {
   color: #64748b;
 }
 </style>
+
+.transition-section {
+  padding-top: 4px;
+  border-top: 1px solid #eef2f7;
+}
+
+.transition-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.transition-actions button {
+  padding: 7px 10px;
+  border: 1px solid #d7dde7;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.transition-actions button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.transition-actions button.danger {
+  border-color: #fecaca;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.transition-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.transition-field input,
+.transition-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 8px;
+  border: 1px solid #d7dde7;
+  border-radius: 8px;
+  background: #fff;
+  color: #172033;
+  font: inherit;
+  font-size: 12px;
+}
+
+.transition-field textarea {
+  resize: vertical;
+  font-family: ui-monospace, monospace;
+}
+
+.transition-override {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #9a3412;
+  font-size: 12px;
+}

@@ -3,6 +3,7 @@ import {
   getModelRegistrySummary,
   getRegistryModel,
   listRegistryModels,
+  transitionRegistryModel,
 } from '../api/modelRegistry'
 import { formatResearchApiError } from '../utils/portfolioResearchPayload'
 
@@ -13,6 +14,8 @@ export function useModelRegistry() {
   const errorMessage = ref('')
   const detailLoading = ref(false)
   const detailError = ref('')
+  const transitioning = ref(false)
+  const transitionError = ref('')
   const filters = ref({
     state: '',
     index_code: '',
@@ -86,6 +89,19 @@ export function useModelRegistry() {
     }
   }
 
+  async function transitionModel(modelId, payload) {
+    transitioning.value = true
+    transitionError.value = ''
+    try {
+      await transitionRegistryModel(modelId, payload)
+      await refresh()
+    } catch (err) {
+      transitionError.value = formatResearchApiError(err, '状态迁移失败')
+    } finally {
+      transitioning.value = false
+    }
+  }
+
   async function refresh() {
     await Promise.all([loadSummary(), loadModels()])
     if (selectedModelId.value) await selectModel(selectedModelId.value)
@@ -114,12 +130,15 @@ export function useModelRegistry() {
     errorMessage,
     detailLoading,
     detailError,
+    transitioning,
+    transitionError,
     filters,
     selectedModelId,
     selectedModel,
     loadSummary,
     loadModels,
     selectModel,
+    transitionModel,
     refresh,
   }
 }

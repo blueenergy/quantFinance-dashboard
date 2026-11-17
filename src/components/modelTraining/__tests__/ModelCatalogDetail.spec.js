@@ -100,6 +100,42 @@ describe('ModelCatalogDetail', () => {
     expect(wrapper.text()).toContain('选择左侧模型查看详情')
   })
 
+  it('emits a transition payload with reason and evidence', async () => {
+    const researchModel = {
+      ...model,
+      state: 'research',
+      accepted: false,
+      accepted_reasons: [],
+      operational_gate: null,
+      latest_validation: null,
+      state_flags: {},
+      validation_runs: [],
+      artifacts: [],
+      training_jobs: [],
+      prediction_sets: [],
+      shadow_profiles: [],
+      activations: [],
+      state_history: [],
+    }
+    const wrapper = mountDetail({ model: researchModel })
+    await wrapper.find('.transition-field input[type="text"]').setValue('OOS validation recorded')
+    await wrapper.find('.transition-field textarea').setValue('{"result_id":"65fef1dc"}')
+    const validateButton = wrapper
+      .findAll('.transition-actions button')
+      .find((button) => button.text().includes('标记已验收'))
+    await validateButton.trigger('click')
+    expect(wrapper.emitted('transition')).toEqual([
+      [
+        {
+          target_state: 'validated',
+          reason: 'OOS validation recorded',
+          evidence: { result_id: '65fef1dc' },
+          admin_override: false,
+        },
+      ],
+    ])
+  })
+
   it('renders a loading state and an error state', () => {
     expect(mountDetail({ model: null, loading: true }).text()).toContain('加载模型详情')
     expect(mountDetail({ model: null, error: 'boom' }).text()).toContain('boom')
