@@ -28,6 +28,13 @@ describe('modelTrainingPayload', () => {
     expect(payload.snapshot_id).toBe('uuid')
   })
 
+  it('round-trips the optional registry model_id', () => {
+    const form = formFromJobParams({ model_id: 'csi1000-raw5-v2' })
+    expect(form.model_id).toBe('csi1000-raw5-v2')
+    const payload = buildModelTrainingPayload(form)
+    expect(payload.model_id).toBe('csi1000-raw5-v2')
+  })
+
   it('withModelTrainingRerunNameSuffix avoids double suffix', () => {
     expect(withModelTrainingRerunNameSuffix('foo')).toBe('foo (rerun)')
     expect(withModelTrainingRerunNameSuffix('foo (rerun)')).toBe('foo (rerun)')

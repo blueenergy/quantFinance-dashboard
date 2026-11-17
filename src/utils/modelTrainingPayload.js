@@ -12,6 +12,8 @@ export function buildModelTrainingPayload(form) {
   if (parquet) payload.parquet_path = parquet
   const snapshot = String(form.snapshot_id || '').trim()
   if (snapshot) payload.snapshot_id = snapshot
+  const modelId = String(form.model_id || '').trim()
+  if (modelId) payload.model_id = modelId
   return payload
 }
 
@@ -25,6 +27,7 @@ export function defaultModelTrainingForm() {
     purge_days: 60,
     parquet_path: '',
     snapshot_id: '',
+    model_id: '',
     showAdvanced: false,
   }
 }
@@ -57,6 +60,7 @@ export function formFromJobParams(params = {}, jobName = '') {
     train_days: Number.isFinite(train_days) && train_days >= 5 ? train_days : defaults.train_days,
     test_days: Number.isFinite(test_days) && test_days >= 1 ? test_days : defaults.test_days,
     purge_days: Number.isFinite(purge_days) && purge_days >= 0 ? purge_days : defaults.purge_days,
+    model_id: String(p.model_id || '').trim(),
     parquet_path,
     snapshot_id,
     showAdvanced: Boolean(parquet_path || snapshot_id),

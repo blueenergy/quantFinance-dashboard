@@ -21,6 +21,15 @@
             <input :value="form.name" @input="patch({ name: $event.target.value })" />
           </label>
           <label>
+            模型 ID（可选）
+            <input
+              :value="form.model_id"
+              placeholder="例如 csi1000-raw5-v2"
+              @input="patch({ model_id: $event.target.value })"
+            />
+            <small class="field-hint">填写后训练完成会自动注册到模型工厂（research 状态）。</small>
+          </label>
+          <label>
             指数池
             <select :value="form.index_code" @change="onIndexChange($event.target.value)">
               <option v-for="u in universeOptions" :key="u.value" :value="u.value">{{ u.label }}</option>
