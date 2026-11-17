@@ -23,6 +23,14 @@ export function mapRealtimeWatchlistRows(rows) {
     change: stock.change,
     change_pct: stock.change_pct,
     volume: stock.volume,
+    volume_ratio: stock.volume_ratio,
+    volume_ratio_basis: stock.volume_ratio_basis,
+    volume_ratio_same_time: stock.volume_ratio_same_time,
+    volume_ratio_traditional: stock.volume_ratio_traditional,
+    volume_ratio_prev_day: stock.volume_ratio_prev_day,
+    volume_ratio_avg5: stock.volume_ratio_avg5,
+    volume_ratio_samples: stock.volume_ratio_samples,
+    volume_ratio_at: stock.volume_ratio_at,
     update_time: stock.update_time,
   }))
 }

@@ -197,4 +197,41 @@ describe('watchlistService return contracts', () => {
     ])
     expect(symbolsFromWatchlistRows([{ symbol: '000001.SZ' }, {}])).toEqual(['000001.SZ'])
   })
+
+  it('maps the intraday volume-ratio fields from the realtime row', () => {
+    const [row] = mapRealtimeWatchlistRows([
+      {
+        symbol: '600600.SH',
+        name: '青岛啤酒',
+        price: 54.02,
+        change_pct: 1.29,
+        volume_ratio: 1.65,
+        volume_ratio_basis: 'same_time',
+        volume_ratio_same_time: 1.65,
+        volume_ratio_traditional: 1.73,
+        volume_ratio_prev_day: 1.65,
+        volume_ratio_avg5: 1.57,
+        volume_ratio_samples: 20,
+        volume_ratio_at: '11:16',
+      },
+    ])
+
+    expect(row.volume_ratio).toBe(1.65)
+    expect(row.volume_ratio_basis).toBe('same_time')
+    expect(row.volume_ratio_same_time).toBe(1.65)
+    expect(row.volume_ratio_traditional).toBe(1.73)
+    expect(row.volume_ratio_prev_day).toBe(1.65)
+    expect(row.volume_ratio_avg5).toBe(1.57)
+    expect(row.volume_ratio_samples).toBe(20)
+    expect(row.volume_ratio_at).toBe('11:16')
+  })
+
+  it('keeps the volume-ratio fields null when the backend has no ratio', () => {
+    const [row] = mapRealtimeWatchlistRows([
+      { symbol: '000001.SZ', name: '平安银行', price: 10.5 },
+    ])
+
+    expect(row.volume_ratio).toBeUndefined()
+    expect(row.volume_ratio_basis).toBeUndefined()
+  })
 })

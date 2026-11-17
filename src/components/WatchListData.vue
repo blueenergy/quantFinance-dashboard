@@ -128,6 +128,7 @@
               <th>涨跌额</th>
               <th>涨跌幅</th>
               <th>成交量</th>
+              <th v-if="useRealtimeData">量比(同时刻)</th>
               <th v-if="useRealtimeData">更新时间</th>
               <th style="min-width: 280px;">操作</th>
             </tr>
@@ -153,6 +154,9 @@
                 {{ formatPercent(stock.change_percent || stock.change_pct) }}
               </td>
               <td>{{ formatVolume(stock.volume) }}</td>
+              <td v-if="useRealtimeData" :class="volumeRatioClass(stock)">
+                <span :title="volumeRatioTooltip(stock)">{{ formatVolumeRatio(stock) }}</span>
+              </td>
               <td v-if="useRealtimeData" class="update-time">{{ formatUpdateTime(stock.update_time) }}</td>
               <td style="white-space: nowrap;">
                   <div class="action-btn-group" style="white-space: nowrap;">
@@ -179,6 +183,7 @@
                 <span class="stock-name-text" :title="getStockName(symbol) || symbol">{{ getStockName(symbol) || symbol }}</span>
               </td>
               <td colspan="7" class="no-data">暂无数据</td>
+              <td v-if="useRealtimeData" class="no-data"></td>
               <td v-if="useRealtimeData" class="no-data"></td>
               <td>
                 <button @click="selectChart(symbol)" class="chart-btn">📈 K线</button>
@@ -1068,6 +1073,54 @@ function getPriceChangeClass(value) {
   return value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral'
 }
 
+// 盘中量比：主值是「同时刻 / 过去20日同时刻中位数」，传统量比（5日均速折算）
+// 作为副值放在 tooltip 里，方便和券商行情软件对账。
+function formatVolumeRatio(stock) {
+  const value = stock?.volume_ratio
+  if (value === undefined || value === null) return '-'
+  return Number(value).toFixed(2)
+}
+
+function volumeRatioClass(stock) {
+  const value = stock?.volume_ratio
+  if (value === undefined || value === null) return 'vr-none'
+  if (value >= 2.5) return 'vr-hot'
+  if (value >= 1.5) return 'vr-high'
+  if (value <= 0.8) return 'vr-low'
+  return 'vr-normal'
+}
+
+function volumeRatioTooltip(stock) {
+  if (!stock) return ''
+  const lines = []
+  if (stock.volume_ratio_basis === 'same_time') {
+    lines.push(`同时刻量比 ${Number(stock.volume_ratio).toFixed(2)}×`)
+    lines.push('口径：今日累计成交量 ÷ 过去 20 个交易日同一时刻累计量的中位数')
+  } else if (stock.volume_ratio_basis === 'traditional') {
+    lines.push(`传统量比 ${Number(stock.volume_ratio).toFixed(2)}×`)
+    lines.push('口径：今日累计量 ÷（5 日全日均速 × 已开盘分钟）')
+    lines.push('分钟数据未覆盖，暂用传统口径')
+  } else {
+    lines.push('量比：数据不足（盘前 / 分钟未覆盖）')
+  }
+  if (stock.volume_ratio_traditional !== undefined && stock.volume_ratio_traditional !== null) {
+    lines.push(`传统量比 ${Number(stock.volume_ratio_traditional).toFixed(2)}×`)
+  }
+  if (stock.volume_ratio_prev_day !== undefined && stock.volume_ratio_prev_day !== null) {
+    lines.push(`较昨日同时刻 ${Number(stock.volume_ratio_prev_day).toFixed(2)}×`)
+  }
+  if (stock.volume_ratio_avg5 !== undefined && stock.volume_ratio_avg5 !== null) {
+    lines.push(`较5日同时刻均值 ${Number(stock.volume_ratio_avg5).toFixed(2)}×`)
+  }
+  if (stock.volume_ratio_samples) {
+    lines.push(`样本 ${stock.volume_ratio_samples} 日`)
+  }
+  if (stock.volume_ratio_at) {
+    lines.push(`截至 ${stock.volume_ratio_at}`)
+  }
+  return lines.join('\n')
+}
+
 
 
 // 组件挂载时初始化
@@ -1473,6 +1526,36 @@ onMounted(async () => {
 
 .neutral {
   color: var(--text-muted);
+}
+
+/* 盘中量比 */
+.vr-none {
+  color: var(--text-muted);
+  font-family: 'Courier New', monospace;
+}
+
+.vr-low {
+  color: var(--text-muted);
+  font-family: 'Courier New', monospace;
+}
+
+.vr-normal {
+  color: #fbbf24;
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+}
+
+.vr-high {
+  color: #f87171;
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+}
+
+.vr-hot {
+  color: #fb7185;
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  text-shadow: 0 0 8px rgba(251, 113, 133, 0.4);
 }
 
 .chart-btn {
