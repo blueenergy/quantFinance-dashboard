@@ -19,7 +19,7 @@
               {{ opt.label }}
             </button>
           </div>
-          <button class="mrp-btn-sm mrp-btn-ghost" :disabled="loading" @click="loadOverview">↻ 刷新</button>
+          <button class="mrp-btn-sm mrp-btn-ghost" :disabled="loading || penLoading" @click="refreshAll">↻ 刷新</button>
         </v-col>
       </v-row>
 
@@ -117,6 +117,62 @@
             </template>
           </article>
         </v-col>
+        <v-col cols="12">
+          <article class="stat-card">
+            <header class="stat-card-head">
+              <div>
+                <h2>头部宽基 ETF 渗透率</h2>
+                <p class="mrp-caption">
+                  头部 ETF 合计规模 / 指数流通市值；两边同乘指数点位，曲线≈份额申赎
+                </p>
+                <div v-if="penetrationIndices.length > 1" class="index-toggle">
+                  <button
+                    v-for="idx in penetrationIndices"
+                    :key="idx.key"
+                    type="button"
+                    class="range-btn"
+                    :class="{ active: penIndex === idx.key }"
+                    @click="setPenIndex(idx.key)"
+                  >
+                    {{ idx.name }}
+                  </button>
+                </div>
+              </div>
+              <div class="stat-latest">
+                <strong>{{ fmtPct(penLatest?.ratio_pct) }}</strong>
+                <span>份额截至 {{ fmtDate(penLatest?.trade_date) }}</span>
+              </div>
+            </header>
+            <div class="pen-toolbar">
+              <span class="mrp-caption">
+                {{ penPoolLabel }}
+                <template v-if="penCoverage?.first_full_date">
+                  · 头部池全部成立后起 {{ fmtDate(penCoverage.first_full_date) }}
+                </template>
+              </span>
+              <div class="range-toggle">
+                <button
+                  v-for="opt in penRangeOptions"
+                  :key="opt.days"
+                  type="button"
+                  class="range-btn"
+                  :class="{ active: penDays === opt.days }"
+                  @click="setPenDays(opt.days)"
+                >
+                  {{ opt.label }}
+                </button>
+              </div>
+            </div>
+            <div v-if="penError" class="xiv-error-bar mb-3">{{ penError }}</div>
+            <div v-if="penLoading && !penData" class="stat-empty">加载中…</div>
+            <template v-else>
+              <div v-if="!penSeries.length" class="stat-empty">
+                暂无数据：需先同步 index_daily_basic 的 float_mv 与 ETF 份额。
+              </div>
+              <div v-show="penSeries.length" ref="penetrationRef" class="stat-chart stat-chart-wide"></div>
+            </template>
+          </article>
+        </v-col>
       </v-row>
     </div>
   </v-container>
@@ -124,7 +180,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getMarketStatsOverview } from '../api/marketStats.js'
+import { getEtfPenetration, getMarketStatsOverview } from '../api/marketStats.js'
 
 const rangeOptions = [
   { label: '3月', days: 60 },
@@ -140,16 +196,30 @@ const loading = ref(false)
 const errorMsg = ref('')
 const overview = ref(null)
 
+// 头部宽基 ETF 渗透率：独立于页面顶部公共区间，自带更长的历史窗口。
+const penRangeOptions = [
+  { label: '5年', days: 1250 },
+  { label: '10年', days: 2500 },
+  { label: '全部', days: 0 },
+]
+const penIndex = ref('hs300')
+const penDays = ref(2500)
+const penLoading = ref(false)
+const penError = ref('')
+const penData = ref(null)
+
 const marginTotalRef = ref(null)
 const marginDeltaRef = ref(null)
 const marginDailyRef = ref(null)
 const peChartRef = ref(null)
+const penetrationRef = ref(null)
 
 let echartsMod = null
 let marginTotalChart = null
 let marginDeltaChart = null
 let marginDailyChart = null
 let peChart = null
+let penetrationChart = null
 const resizeObservers = []
 
 const MARGIN_DAILY_DAYS = 60
@@ -192,6 +262,16 @@ const peCaption = computed(() => {
   return '市盈率 TTM · 数据来自指数估值指标'
 })
 
+const penSeries = computed(() => penData.value?.series || [])
+const penLatest = computed(() => penData.value?.latest || null)
+const penCoverage = computed(() => penData.value?.coverage || null)
+const penetrationIndices = computed(() => penData.value?.available_indices || [])
+const penPoolLabel = computed(() => {
+  const funds = penData.value?.index?.funds || []
+  if (!funds.length) return '头部池加载中'
+  return `头部池 ${funds.map((fund) => fund.ts_code).join(' / ')}`
+})
+
 function fmtDate(value) {
   if (!value) return '—'
   const text = String(value)
@@ -202,6 +282,11 @@ function fmtDate(value) {
 function fmtPe(value) {
   if (value == null || Number.isNaN(Number(value))) return '—'
   return Number(value).toFixed(2)
+}
+
+function fmtPct(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  return `${Number(value).toFixed(2)}%`
 }
 
 function fmtYi(value) {
@@ -371,6 +456,145 @@ function barOption({ dates, values, yFormatter }) {
   }
 }
 
+function fmtYiAmt(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  return `${Number(value).toFixed(1)} 亿`
+}
+
+function fmtCapWanYi(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  return `${(Number(value) / 1e4).toFixed(2)} 万亿`
+}
+
+function penetrationOption({ dates, values, rows }) {
+  const lastRow = rows.length ? rows[rows.length - 1] : null
+  return {
+    animation: false,
+    grid: { top: 24, left: 56, right: 40, bottom: 28 },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#ffffff',
+      borderColor: '#d9e1ee',
+      textStyle: { color: '#172033', fontSize: 12 },
+      formatter: (items) => {
+        if (!items?.length) return ''
+        const row = rows[items[0].dataIndex]
+        if (!row) return ''
+        return [
+          `<div style="font-weight:600">${fmtDate(row.trade_date)}</div>`,
+          `占比 <b>${Number(row.ratio_pct).toFixed(2)}%</b>`,
+          `头部 ETF 规模 ${fmtYiAmt(row.aum_yi)}`,
+          `指数流通市值 ${fmtCapWanYi(row.float_mv_yi)}`,
+          `覆盖 ${row.n_funds} 只头部 ETF`,
+        ].join('<br/>')
+      },
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      boundaryGap: false,
+      axisLine: { lineStyle: { color: '#c8d2e2' } },
+      axisLabel: {
+        color: '#667085',
+        fontSize: 11,
+        interval: Math.max(Math.floor(dates.length / 6), 0),
+        showMaxLabel: true,
+        showMinLabel: true,
+      },
+    },
+    yAxis: {
+      type: 'value',
+      scale: true,
+      axisLine: { show: false },
+      axisLabel: { color: '#667085', fontSize: 11, formatter: (v) => `${Number(v).toFixed(2)}%` },
+      splitLine: { lineStyle: { color: '#edf1f7' } },
+    },
+    series: [
+      {
+        type: 'line',
+        showSymbol: false,
+        data: values,
+        lineStyle: { width: 2, color: '#0f766e' },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: '#0f766e2e' },
+              { offset: 1, color: '#0f766e05' },
+            ],
+          },
+        },
+        markPoint: lastRow
+          ? {
+              symbol: 'circle',
+              symbolSize: 7,
+              itemStyle: { color: '#0f766e' },
+              label: {
+                show: true,
+                position: 'left',
+                formatter: `${Number(lastRow.ratio_pct).toFixed(2)}%`,
+                color: '#0f766e',
+                fontSize: 11,
+                fontWeight: 600,
+              },
+              data: [{ xAxis: dates[dates.length - 1], yAxis: values[values.length - 1] }],
+            }
+          : undefined,
+      },
+    ],
+  }
+}
+
+async function renderPenetration() {
+  if (!penSeries.value.length || !penetrationRef.value) return
+  await ensureEcharts()
+  await nextTick()
+  if (!penetrationChart) penetrationChart = bindChart(penetrationRef.value)
+  penetrationChart?.setOption(
+    penetrationOption({
+      dates: chartDates(penSeries.value),
+      values: penSeries.value.map((row) => (row.ratio_pct == null ? null : Number(row.ratio_pct))),
+      rows: penSeries.value,
+    }),
+    true,
+  )
+  penetrationChart?.resize()
+}
+
+async function loadPenetration() {
+  penLoading.value = true
+  penError.value = ''
+  try {
+    const body = await getEtfPenetration({ index: penIndex.value, days: penDays.value })
+    penData.value = body || { series: [], latest: null, coverage: null, available_indices: [] }
+    await renderPenetration()
+  } catch (err) {
+    penError.value = err?.message || '头部 ETF 渗透率加载失败'
+  } finally {
+    penLoading.value = false
+  }
+}
+
+async function setPenIndex(key) {
+  if (penIndex.value === key) return
+  penIndex.value = key
+  await loadPenetration()
+}
+
+async function setPenDays(nextDays) {
+  if (penDays.value === nextDays) return
+  penDays.value = nextDays
+  await loadPenetration()
+}
+
+async function refreshAll() {
+  await Promise.all([loadOverview(), loadPenetration()])
+}
+
 async function renderCharts() {
   await ensureEcharts()
   await nextTick()
@@ -473,7 +697,10 @@ watch([marginSeries, peSeries], () => {
   nextTick(renderCharts)
 })
 
-onMounted(loadOverview)
+onMounted(() => {
+  loadOverview()
+  loadPenetration()
+})
 
 onBeforeUnmount(() => {
   resizeObservers.forEach((obs) => obs.disconnect())
@@ -481,6 +708,7 @@ onBeforeUnmount(() => {
   marginDeltaChart?.dispose()
   marginDailyChart?.dispose()
   peChart?.dispose()
+  penetrationChart?.dispose()
 })
 </script>
 
@@ -527,6 +755,14 @@ onBeforeUnmount(() => {
 }
 .index-toggle {
   margin-top: 8px;
+}
+.pen-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 10px 0 4px;
 }
 .range-btn {
   border: 1px solid #d0d5dd;

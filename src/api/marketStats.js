@@ -9,3 +9,11 @@ export async function getMarketStatsOverview({ days = 750, peIndex } = {}) {
     params,
   })
 }
+
+export async function getEtfPenetration({ index = 'hs300', days = 2500 } = {}) {
+  return requestOrNull({
+    url: '/market-stats/etf-penetration',
+    method: 'get',
+    params: { index, days },
+  })
+}
