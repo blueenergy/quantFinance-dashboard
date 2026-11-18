@@ -114,6 +114,13 @@
                 >
                   加载原参数
                 </button>
+                <button
+                  type="button"
+                  :disabled="selectedJob.status !== 'completed'"
+                  @click="openRetrainDialog"
+                >
+                  重训新版本
+                </button>
               </div>
             </div>
 
@@ -236,6 +243,16 @@
       </Teleport>
     </section>
 
+    <ModelTrainingRetrainDialog
+      v-if="retrainOpen"
+      :open="retrainOpen"
+      :job="retrainSourceJob"
+      :submitting="retrainSubmitting"
+      :error="retrainError"
+      @close="closeRetrainDialog"
+      @submit="submitRetrain"
+    />
+
     <ModelTrainingCreateDrawer
       v-if="drawerOpen"
       :open="drawerOpen"
@@ -262,6 +279,9 @@ import ModelCatalogPanel from '../components/modelTraining/ModelCatalogPanel.vue
 import ModelTrainingCreateDrawer from '../components/modelTraining/ModelTrainingCreateDrawer.vue'
 import ModelTrainingFoldPanel from '../components/modelTraining/ModelTrainingFoldPanel.vue'
 import ModelTrainingJobList from '../components/modelTraining/ModelTrainingJobList.vue'
+import ModelTrainingRetrainDialog from '../components/modelTraining/ModelTrainingRetrainDialog.vue'
+import { retrainModelTrainingJob } from '../api/modelTraining'
+import { formatResearchApiError } from '../utils/portfolioResearchPayload'
 import { useModelRegistry } from '../composables/useModelRegistry'
 import { useModelTrainingDetail } from '../composables/useModelTrainingDetail'
 import { useModelTrainingForm } from '../composables/useModelTrainingForm'
@@ -377,6 +397,46 @@ async function onRegistryTransition(payload) {
 async function refreshCurrentView() {
   if (activeView.value === 'catalog') await refreshCatalog()
   else await refreshAll()
+}
+
+const retrainOpen = ref(false)
+const retrainSubmitting = ref(false)
+const retrainError = ref('')
+const retrainSourceJob = ref(null)
+
+function openRetrainDialog() {
+  if (!selectedJob.value) return
+  retrainSourceJob.value = selectedJob.value
+  retrainError.value = ''
+  retrainOpen.value = true
+}
+
+function closeRetrainDialog() {
+  if (retrainSubmitting.value) return
+  retrainOpen.value = false
+  retrainError.value = ''
+}
+
+async function submitRetrain(payload) {
+  const sourceJob = retrainSourceJob.value
+  if (!sourceJob) return
+  retrainSubmitting.value = true
+  retrainError.value = ''
+  try {
+    const response = await retrainModelTrainingJob(sourceJob.job_id, payload)
+    const newJobId = response?.data?.job_id
+    retrainOpen.value = false
+    if (jobsApi.message) {
+      jobsApi.message.value = newJobId
+        ? `已创建重训任务 ${newJobId}（来源 ${sourceJob.job_id}）`
+        : '已创建重训任务'
+    }
+    await loadJobs()
+  } catch (error) {
+    retrainError.value = formatResearchApiError(error, '创建重训任务失败')
+  } finally {
+    retrainSubmitting.value = false
+  }
 }
 
 const baselineModelIc = computed(() => {

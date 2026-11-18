@@ -27,3 +27,11 @@ export function getModelTrainingResults(jobId) {
 export function getModelTrainingPromotionContext(jobId) {
   return request({ url: `/model-training/jobs/${jobId}/promotion-context`, method: 'get' })
 }
+
+export function retrainModelTrainingJob(jobId, data) {
+  return request({
+    url: `/model-training/jobs/${encodeURIComponent(jobId)}/retrain`,
+    method: 'post',
+    data,
+  })
+}
