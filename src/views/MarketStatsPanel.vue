@@ -150,17 +150,27 @@
                   · 头部池全部成立后起 {{ fmtDate(penCoverage.first_full_date) }}
                 </template>
               </span>
-              <div class="range-toggle">
+              <div class="pen-controls">
                 <button
-                  v-for="opt in penRangeOptions"
-                  :key="opt.days"
                   type="button"
                   class="range-btn"
-                  :class="{ active: penDays === opt.days }"
-                  @click="setPenDays(opt.days)"
+                  :class="{ active: penShowIndex }"
+                  @click="togglePenShowIndex"
                 >
-                  {{ opt.label }}
+                  指数走势
                 </button>
+                <div class="range-toggle">
+                  <button
+                    v-for="opt in penRangeOptions"
+                    :key="opt.days"
+                    type="button"
+                    class="range-btn"
+                    :class="{ active: penDays === opt.days }"
+                    @click="setPenDays(opt.days)"
+                  >
+                    {{ opt.label }}
+                  </button>
+                </div>
               </div>
             </div>
             <div v-if="penError" class="xiv-error-bar mb-3">{{ penError }}</div>
@@ -169,7 +179,12 @@
               <div v-if="!penSeries.length" class="stat-empty">
                 暂无数据：需先同步 index_daily_basic 的 float_mv 与 ETF 份额。
               </div>
-              <div v-show="penSeries.length" ref="penetrationRef" class="stat-chart stat-chart-wide"></div>
+              <div
+                v-show="penSeries.length"
+                ref="penetrationRef"
+                class="stat-chart"
+                :class="penShowIndex ? 'stat-chart-tall' : 'stat-chart-wide'"
+              ></div>
             </template>
           </article>
         </v-col>
@@ -204,6 +219,7 @@ const penRangeOptions = [
 ]
 const penIndex = ref('hs300')
 const penDays = ref(2500)
+const penShowIndex = ref(true)
 const penLoading = ref(false)
 const penError = ref('')
 const penData = ref(null)
@@ -466,86 +482,155 @@ function fmtCapWanYi(value) {
   return `${(Number(value) / 1e4).toFixed(2)} 万亿`
 }
 
-function penetrationOption({ dates, values, rows }) {
+function penetrationOption({ dates, values, indexValues, rows, showIndex, indexName }) {
   const lastRow = rows.length ? rows[rows.length - 1] : null
+  const xLabel = {
+    color: '#667085',
+    fontSize: 11,
+    interval: Math.max(Math.floor(dates.length / 6), 0),
+    showMaxLabel: true,
+    showMinLabel: true,
+  }
+  const xAxis = showIndex
+    ? [
+        {
+          type: 'category',
+          gridIndex: 0,
+          data: dates,
+          boundaryGap: false,
+          axisLine: { lineStyle: { color: '#c8d2e2' } },
+          axisTick: { show: false },
+          axisLabel: { show: false },
+        },
+        {
+          type: 'category',
+          gridIndex: 1,
+          data: dates,
+          boundaryGap: false,
+          axisLine: { lineStyle: { color: '#c8d2e2' } },
+          axisTick: { show: false },
+          axisLabel: xLabel,
+        },
+      ]
+    : [
+        {
+          type: 'category',
+          data: dates,
+          boundaryGap: false,
+          axisLine: { lineStyle: { color: '#c8d2e2' } },
+          axisLabel: xLabel,
+        },
+      ]
+  const ratioAxis = {
+    type: 'value',
+    scale: true,
+    axisLine: { show: false },
+    axisLabel: { color: '#667085', fontSize: 11, formatter: (v) => `${Number(v).toFixed(2)}%` },
+    splitLine: { lineStyle: { color: '#edf1f7' } },
+  }
+  const yAxis = showIndex
+    ? [
+        { ...ratioAxis, gridIndex: 0 },
+        {
+          type: 'value',
+          gridIndex: 1,
+          scale: true,
+          name: indexName,
+          nameTextStyle: { color: '#98a2b3', fontSize: 11, align: 'left' },
+          axisLine: { show: false },
+          axisLabel: { color: '#98a2b3', fontSize: 11, formatter: (v) => Number(v).toFixed(0) },
+          splitLine: { lineStyle: { color: '#f2f4f7' } },
+        },
+      ]
+    : [ratioAxis]
+  const ratioSeries = {
+    name: '渗透率',
+    type: 'line',
+    xAxisIndex: 0,
+    yAxisIndex: 0,
+    showSymbol: false,
+    data: values,
+    lineStyle: { width: 2, color: '#0f766e' },
+    areaStyle: {
+      color: {
+        type: 'linear',
+        x: 0,
+        y: 0,
+        x2: 0,
+        y2: 1,
+        colorStops: [
+          { offset: 0, color: '#0f766e2e' },
+          { offset: 1, color: '#0f766e05' },
+        ],
+      },
+    },
+    markPoint: lastRow
+      ? {
+          symbol: 'circle',
+          symbolSize: 7,
+          itemStyle: { color: '#0f766e' },
+          label: {
+            show: true,
+            position: 'left',
+            formatter: `${Number(lastRow.ratio_pct).toFixed(2)}%`,
+            color: '#0f766e',
+            fontSize: 11,
+            fontWeight: 600,
+          },
+          data: [{ xAxis: dates[dates.length - 1], yAxis: values[values.length - 1] }],
+        }
+      : undefined,
+  }
+  const indexSeries = {
+    name: indexName,
+    type: 'line',
+    xAxisIndex: showIndex ? 1 : 0,
+    yAxisIndex: showIndex ? 1 : 0,
+    showSymbol: false,
+    data: indexValues,
+    lineStyle: { width: 1.5, color: '#94a3b8' },
+  }
   return {
     animation: false,
-    grid: { top: 24, left: 56, right: 40, bottom: 28 },
+    axisPointer: { link: [{ xAxisIndex: 'all' }] },
+    grid: showIndex
+      ? [
+          { left: 56, right: 40, top: 16, height: '50%' },
+          { left: 56, right: 40, top: '68%', bottom: 26 },
+        ]
+      : [{ left: 56, right: 40, top: 24, bottom: 28 }],
     tooltip: {
       trigger: 'axis',
       backgroundColor: '#ffffff',
       borderColor: '#d9e1ee',
       textStyle: { color: '#172033', fontSize: 12 },
+      axisPointer: { type: 'line', lineStyle: { color: '#c8d2e2' } },
       formatter: (items) => {
         if (!items?.length) return ''
-        const row = rows[items[0].dataIndex]
+        const idx = items[0].dataIndex
+        const row = rows[idx]
         if (!row) return ''
-        return [
+        const lines = [
           `<div style="font-weight:600">${fmtDate(row.trade_date)}</div>`,
           `占比 <b>${Number(row.ratio_pct).toFixed(2)}%</b>`,
           `头部 ETF 规模 ${fmtYiAmt(row.aum_yi)}`,
           `指数流通市值 ${fmtCapWanYi(row.float_mv_yi)}`,
-          `覆盖 ${row.n_funds} 只头部 ETF`,
-        ].join('<br/>')
+        ]
+        if (row.index_close != null) {
+          const prev = idx >= 20 ? rows[idx - 20] : null
+          const chg = prev && prev.index_close != null
+            ? (Number(row.index_close) / Number(prev.index_close) - 1) * 100
+            : null
+          const chgText = chg == null ? '' : `（20日 ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%）`
+          lines.push(`${indexName} ${Number(row.index_close).toFixed(2)}${chgText}`)
+        }
+        lines.push(`覆盖 ${row.n_funds} 只头部 ETF`)
+        return lines.join('<br/>')
       },
     },
-    xAxis: {
-      type: 'category',
-      data: dates,
-      boundaryGap: false,
-      axisLine: { lineStyle: { color: '#c8d2e2' } },
-      axisLabel: {
-        color: '#667085',
-        fontSize: 11,
-        interval: Math.max(Math.floor(dates.length / 6), 0),
-        showMaxLabel: true,
-        showMinLabel: true,
-      },
-    },
-    yAxis: {
-      type: 'value',
-      scale: true,
-      axisLine: { show: false },
-      axisLabel: { color: '#667085', fontSize: 11, formatter: (v) => `${Number(v).toFixed(2)}%` },
-      splitLine: { lineStyle: { color: '#edf1f7' } },
-    },
-    series: [
-      {
-        type: 'line',
-        showSymbol: false,
-        data: values,
-        lineStyle: { width: 2, color: '#0f766e' },
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
-            colorStops: [
-              { offset: 0, color: '#0f766e2e' },
-              { offset: 1, color: '#0f766e05' },
-            ],
-          },
-        },
-        markPoint: lastRow
-          ? {
-              symbol: 'circle',
-              symbolSize: 7,
-              itemStyle: { color: '#0f766e' },
-              label: {
-                show: true,
-                position: 'left',
-                formatter: `${Number(lastRow.ratio_pct).toFixed(2)}%`,
-                color: '#0f766e',
-                fontSize: 11,
-                fontWeight: 600,
-              },
-              data: [{ xAxis: dates[dates.length - 1], yAxis: values[values.length - 1] }],
-            }
-          : undefined,
-      },
-    ],
+    xAxis,
+    yAxis,
+    series: showIndex ? [ratioSeries, indexSeries] : [ratioSeries],
   }
 }
 
@@ -558,7 +643,10 @@ async function renderPenetration() {
     penetrationOption({
       dates: chartDates(penSeries.value),
       values: penSeries.value.map((row) => (row.ratio_pct == null ? null : Number(row.ratio_pct))),
+      indexValues: penSeries.value.map((row) => (row.index_close == null ? null : Number(row.index_close))),
       rows: penSeries.value,
+      showIndex: penShowIndex.value,
+      indexName: penData.value?.index?.name || '指数',
     }),
     true,
   )
@@ -589,6 +677,13 @@ async function setPenDays(nextDays) {
   if (penDays.value === nextDays) return
   penDays.value = nextDays
   await loadPenetration()
+}
+
+async function togglePenShowIndex() {
+  penShowIndex.value = !penShowIndex.value
+  await nextTick()
+  penetrationChart?.resize()
+  await renderPenetration()
 }
 
 async function refreshAll() {
@@ -763,6 +858,15 @@ onBeforeUnmount(() => {
   gap: 12px;
   flex-wrap: wrap;
   margin: 10px 0 4px;
+}
+.pen-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.stat-chart-tall {
+  height: 430px;
 }
 .range-btn {
   border: 1px solid #d0d5dd;
