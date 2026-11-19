@@ -59,6 +59,10 @@ export function usePlanOps({
   const livePublishPreview = ref(null)
   const livePublishLoading = ref(false)
   const showPublishModal = ref(false)
+  // The plan the open preview belongs to. Approval can auto-preview a plan that
+  // is not the one selected in the workbench, so confirm must publish *that*
+  // plan rather than whatever happens to be selected.
+  const previewPlanId = ref('')
   const allowPartialPublish = ref(false)
   const paperExecuteLoading = ref(false)
   const cancelPlanLoading = ref(false)
@@ -128,9 +132,12 @@ export function usePlanOps({
     return remainderActionableCount.value > 0 && remainderBlockers.value.length === 0
   })
 
-  async function previewLivePublish() {
-    const planId = selectedOperationPlanId.value
-    if (!planId || !selectedLiveAccountId.value || !canPublishLiveSignals.value) return
+  async function previewLivePublish(planIdOverride) {
+    const planId = planIdOverride || selectedOperationPlanId.value
+    // An explicit planId comes from the approval flow, where the just-approved
+    // plan may not be the selected one; the backend re-validates either way.
+    if (!planId || !selectedLiveAccountId.value) return 'skipped'
+    if (!planIdOverride && !canPublishLiveSignals.value) return 'skipped'
     livePublishLoading.value = true
     onMessage('', false)
     try {
@@ -139,10 +146,13 @@ export function usePlanOps({
         dry_run: true,
         allow_partial: allowPartialPublish.value,
       })
+      previewPlanId.value = planId
       livePublishPreview.value = res.data || {}
       showPublishModal.value = true
+      return 'ok'
     } catch (error) {
       onMessage(formatApiError(error, '实盘发布预检失败'), true)
+      return 'error'
     } finally {
       livePublishLoading.value = false
     }
@@ -158,8 +168,12 @@ export function usePlanOps({
   }
 
   async function publishLiveSignals() {
-    const planId = selectedOperationPlanId.value
-    if (!planId || !selectedLiveAccountId.value || !canPublishLiveSignals.value) return
+    const planId = previewPlanId.value || selectedOperationPlanId.value
+    if (!planId || !selectedLiveAccountId.value) return
+    // canPublishLiveSignals describes the *selected* plan; a preview opened by
+    // the approval flow may target a different (just-approved) plan, which the
+    // backend re-validates on publish.
+    if (planId === selectedOperationPlanId.value && !canPublishLiveSignals.value) return
     livePublishLoading.value = true
     onMessage('', false)
     try {
@@ -287,8 +301,21 @@ export function usePlanOps({
     onMessage('', false)
     try {
       await approvePortfolioPlan(planId, { comment: 'approved from portfolio overview' })
-      onMessage(`计划 ${planId} 已批准。`, false)
       await onRefresh()
+      if (!selectedLiveAccountId.value) {
+        onMessage(`计划 ${planId} 已批准。请选择实盘账户后点「发布实盘信号」完成下单。`, false)
+        return
+      }
+      // Approval is the "看" gate; publishing is the "发" gate. Chain them so a
+      // normal rebalance is two clicks (批准 -> 确认发布) instead of three, while
+      // the repriced order sheet still has to be seen before anything is sent.
+      const previewed = await previewLivePublish(planId)
+      if (previewed === 'ok') {
+        onMessage(`计划 ${planId} 已批准，已按最新价预检，请核对后确认发布。`, false)
+      } else if (previewed === 'skipped') {
+        onMessage(`计划 ${planId} 已批准。请点「发布实盘信号」完成下单。`, false)
+      }
+      // previewed === 'error': previewLivePublish already surfaced the reason.
     } catch (error) {
       onMessage(formatApiError(error, '批准失败'), true)
     } finally {
@@ -316,6 +343,7 @@ export function usePlanOps({
 
   function resetPlanOpsState() {
     livePublishPreview.value = null
+    previewPlanId.value = ''
     remainderPreview.value = null
     remainderReason.value = ''
     showPublishModal.value = false

@@ -112,19 +112,25 @@
         {{ loading ? '提交中...' : '生成 plan' }}
       </button>
       <p v-if="task" class="task-status">
-        任务 {{ task.task_id }}：{{ task.status }}
+        任务 {{ task.task_id }}：{{ statusLabel }}
         <span v-if="task.plan_id"> / plan {{ task.plan_id }}</span>
-        <span v-if="task.error_message"> / {{ task.error_message }}</span>
+      </p>
+      <p v-if="waitingDetail" class="muted">
+        {{ waitingDetail }}
+      </p>
+      <p v-else-if="failureDetail" class="watermark-warning">
+        {{ failureDetail }}
       </p>
     </div>
   </section>
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { num, pct } from '../../composables/usePortfolioPlanFormat'
 import { REGIME_CASH_REMINDER } from '../../utils/regimeCash'
 
-defineProps({
+const props = defineProps({
   expanded: { type: Boolean, default: false },
   form: { type: Object, required: true },
   strategies: { type: Array, default: () => [] },
@@ -142,6 +148,55 @@ const emit = defineEmits([
   'toggle', 'strategy-change', 'field-change', 'preset-change', 'param-change',
   'growth-change', 'cycle-change', 'watermark-refresh', 'generate',
 ])
+
+const STATUS_LABELS = {
+  pending: '排队中',
+  running: '生成中',
+  waiting_for_scores: '等待当日评分完成',
+  completed: '已完成',
+  failed: '失败',
+}
+
+const statusLabel = computed(() => STATUS_LABELS[props.task?.status] || props.task?.status || '-')
+
+// The backend serializes naive UTC datetimes with isoformat() and no offset, so
+// Date would read them as local time (8 hours off in CST). Pin to UTC.
+function parseServerTime(value) {
+  if (!value) return null
+  const text = String(value)
+  const normalized = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(text) ? text : `${text}Z`
+  const ts = new Date(normalized).getTime()
+  return Number.isFinite(ts) ? ts : null
+}
+
+function formatElapsed(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return minutes ? `${minutes} 分 ${seconds} 秒` : `${seconds} 秒`
+}
+
+// Scoring gates plan generation: the worker cannot start until the day's
+// scoring run for this universe is marked completed, and all universes are
+// marked together (13-18 minutes after 19:00 in practice). Saying so beats
+// leaving the user staring at a bare English status string.
+const waitingDetail = computed(() => {
+  const task = props.task
+  if (!task || task.status !== 'waiting_for_scores') return ''
+  const parts = []
+  const scope = [task.waiting_score_date, task.waiting_universe_index].filter(Boolean).join(' ')
+  parts.push(scope ? `等待 ${scope} 评分完成` : '等待当日评分完成')
+  const since = parseServerTime(task.waiting_since || task.created_at)
+  if (since != null) parts.push(`已等待 ${formatElapsed(Date.now() - since)}`)
+  parts.push('19:00 触发的评分通常需要 13–18 分钟，完成后会自动生成，无需重试')
+  return parts.join('；')
+})
+
+const failureDetail = computed(() => {
+  const task = props.task
+  if (!task || task.status !== 'failed') return ''
+  return `失败原因：${task.error_message || '未提供'}`
+})
 
 function presetLabel(preset) {
   const defaultText = preset.is_default ? '默认 · ' : ''

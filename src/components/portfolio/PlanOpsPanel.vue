@@ -50,19 +50,15 @@
         账户未就绪：{{ selectedLiveAccountOption?.reason || '配置未完成' }}，发布会被拒绝
       </div>
       <template v-if="!hasPublishedLiveSignals">
+        <!-- One entry point only: publish always goes through the repriced
+             preview modal. A separate confirm button here could send live
+             signals without anyone seeing the repriced order sheet. -->
         <button
           type="button"
           :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals || selectedLiveAccountNotReady"
           @click="$emit('preview-publish')"
         >
-          {{ livePublishLoading ? '预检中…' : '实盘预检' }}
-        </button>
-        <button
-          type="button"
-          :disabled="livePublishLoading || !selectedLiveAccountId || !canPublishLiveSignals || !canConfirmPublish || selectedLiveAccountNotReady"
-          @click="$emit('confirm-publish')"
-        >
-          确认发布
+          {{ livePublishLoading ? '预检中…' : '发布实盘信号' }}
         </button>
       </template>
       <template v-else>
@@ -220,7 +216,6 @@ const props = defineProps({
   hasPublishedLiveSignals: { type: Boolean, default: false },
   livePublishLoading: { type: Boolean, default: false },
   livePublishBlockers: { type: Array, default: () => [] },
-  canConfirmPublish: { type: Boolean, default: true },
   allowPartialPublish: { type: Boolean, default: false },
   canCancelCurrentPlan: { type: Boolean, default: false },
   cancelPlanReadyText: { type: String, default: '' },
@@ -276,7 +271,6 @@ const remainderCashUsageText = computed(() => {
 defineEmits([
   'execute-paper',
   'preview-publish',
-  'confirm-publish',
   'preview-remainder',
   'confirm-remainder',
   'cancel-plan',
