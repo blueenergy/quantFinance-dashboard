@@ -66,29 +66,62 @@
           :value="remainderReason"
           class="reason-input"
           type="text"
-          placeholder="补单原因（可选）"
+          placeholder="补单原因（可选，写入审计日志）"
           @input="$emit('update:remainderReason', $event.target.value)"
         >
-        <label class="partial-toggle">
+        <label
+          class="partial-toggle"
+          title="不勾：有一笔被风控拦下就整批不发；勾上：发通过的，跳过被拦的"
+        >
           <input
-            type="checkbox"
             :checked="allowPartialRemainder"
+            type="checkbox"
             @change="$emit('update:allowPartialRemainder', $event.target.checked)"
           >
           允许部分补单
         </label>
-        <button type="button" :disabled="remainderLoading || !selectedLiveAccountId || selectedLiveAccountNotReady" @click="$emit('preview-remainder')">
-          {{ remainderLoading ? '预检中…' : '缺口预检' }}
+        <button
+          type="button"
+          title="按当前价重算每只票的缺口，只算不发"
+          :disabled="remainderLoading || !selectedLiveAccountId || selectedLiveAccountNotReady"
+          @click="$emit('preview-remainder')"
+        >
+          {{ remainderLoading ? '预检中…' : '补单预检' }}
         </button>
         <button
           type="button"
+          title="真正写入 plan_topup 信号并交给 QMT 执行"
           :disabled="remainderLoading || !selectedLiveAccountId || !canConfirmRemainder || selectedLiveAccountNotReady"
           @click="$emit('confirm-remainder')"
         >
           确认补单
         </button>
+        <span class="ops-hint">预检只算不发；确认补单才真发信号</span>
       </template>
     </div>
+
+    <details v-if="!isPaper && hasPublishedLiveSignals" class="ops-help">
+      <summary>补单的三个操作分别做什么？</summary>
+      <ul>
+        <li>
+          <strong>补单预检</strong>：按当前价逐只重算缺口（计划目标 − 该血缘已持有），
+          受单票预算和可用现金封顶、按整手取整，并跑一遍风控。只读，<strong>不下单</strong>。
+        </li>
+        <li>
+          <strong>允许部分补单</strong>：被风控拦下一部分标的时怎么处理 ——
+          不勾则<strong>全有或全无</strong>；勾上则发通过的、跳过被拦的。
+          现金口径不明或账户级拦截，勾了也会整单拦住。
+        </li>
+        <li>
+          <strong>确认补单</strong>：真正写入 <code>plan_topup</code> 信号交给 QMT 执行，
+          并记录补单原因、操作人和被替换的原委托号。
+        </li>
+        <li>
+          三者都只补原计划<strong>没成交的差额，不重新选股</strong>；
+          该票还有在途委托时会自动跳过，不会重复发。
+        </li>
+      </ul>
+    </details>
 
     <div class="plan-ops-actions cancel-plan-row">
       <button
@@ -338,6 +371,35 @@ function llmRiskStatusText(status) {
   color: #374151;
   font-size: 13px;
   margin: 0;
+}
+
+.ops-hint {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.ops-help {
+  border-top: 1px dashed #cbd5e1;
+  color: #374151;
+  font-size: 12px;
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+.ops-help summary {
+  color: #2563eb;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ops-help ul {
+  line-height: 1.6;
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.ops-help li {
+  margin-bottom: 4px;
 }
 
 .plan-id-row {
