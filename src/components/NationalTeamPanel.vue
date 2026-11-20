@@ -143,30 +143,33 @@
         </div>
       </div>
 
-      <div v-if="ladder" class="ladder-card" :class="'ladder-' + ladder.episode.regime">
+      <div v-if="ladder" class="ladder-card" :class="'ladder-' + (ladder.episode?.regime || 'none')">
         <div class="ladder-header">
           <div class="ladder-title">
             <strong>分批买点</strong>
             <span class="muted">
-              政策底领先市场底 · 历史 {{ ladder.history.episodes }} 段
+              政策底领先市场底 · 历史 {{ ladder.history?.episodes || 6 }} 段
             </span>
           </div>
-          <span class="ladder-badge" :class="'regime-' + ladder.episode.regime">
+          <span v-if="ladderError" class="ladder-stale" :title="ladderError">
+            更新失败，显示上次数据
+          </span>
+          <span class="ladder-badge" :class="'regime-' + (ladder.episode?.regime || 'none')">
             {{ ladderBadge }}
           </span>
         </div>
         <div class="ladder-meta">
-          <template v-if="ladder.episode.start">
+          <template v-if="ladder.episode?.start">
             起点 {{ fmtDate(ladder.episode.start) }}（{{ fmtLevel(ladder.episode.start_close) }}）
             · 第 {{ ladder.episode.days }} 日
-            · HS300 {{ fmtLevel(ladder.index.close) }}（距起点 {{ fmtPct(ladder.episode.drawdown) }}）
+            · HS300 {{ fmtLevel(ladder.index?.close) }}（距起点 {{ fmtPct(ladder.episode.drawdown) }}）
           </template>
           <template v-else>当前没有确认中的增仓段</template>
-          · flow60 {{ fmtPct(ladder.episode.flow60) }}
+          · flow60 {{ fmtPct(ladder.episode?.flow60) }}
         </div>
         <div class="ladder-grid">
           <div
-            v-for="tier in ladder.tiers"
+            v-for="tier in (ladder.tiers || [])"
             :key="tier.id"
             class="ladder-tier"
             :class="'tier-' + tier.status"
@@ -195,13 +198,23 @@
           </div>
         </div>
         <div class="ladder-footer">
-          <span :class="{ 'ladder-warn': ladder.invalidation.active }">
-            失效：{{ ladder.invalidation.rule }}（已连续 {{ ladder.invalidation.negative_days }} 日）
+          <span :class="{ 'ladder-warn': ladder.invalidation?.active }">
+            失效：{{ ladder.invalidation?.rule }}（已连续 {{ ladder.invalidation?.negative_days }} 日）
           </span>
           <span class="muted">
             历史 6 段，频数不是概率；回测无独立 alpha，仅作仓位纪律
           </span>
         </div>
+      </div>
+
+      <div v-else-if="ladderError" class="ladder-card ladder-error-card">
+        <div class="ladder-header">
+          <div class="ladder-title">
+            <strong>分批买点</strong>
+          </div>
+          <button type="button" class="ladder-retry" @click="loadLadder">重试</button>
+        </div>
+        <div class="ladder-meta">加载失败：{{ ladderError }}</div>
       </div>
 
       <div class="history-card">
@@ -886,7 +899,9 @@ async function loadLadder() {
     if (selectedDate.value) params.trade_date = selectedDate.value
     ladder.value = await getNationalTeamEntryLadder(params)
   } catch (exc) {
-    ladder.value = null
+    // Keep the last successful payload: a transient network error (tab wake,
+    // token refresh, navigation) must not remove the whole card. The 60s
+    // timer retries; with no payload at all the error card shows a retry.
     ladderError.value =
       exc?.response?.data?.detail || exc?.message || '分批买点加载失败'
   }
@@ -1365,6 +1380,30 @@ onBeforeUnmount(() => {
 
 .regime-none {
   color: var(--text-secondary);
+}
+
+.ladder-stale {
+  font-size: 11px;
+  color: #b45309;
+}
+
+.ladder-error-card {
+  border-color: #fecaca;
+}
+
+.ladder-retry {
+  padding: 2px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.ladder-retry:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .ladder-meta {

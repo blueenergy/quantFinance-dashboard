@@ -112,7 +112,10 @@ vi.mock('../../utils/echarts/loadEcharts.js', () => ({
 }))
 
 import NationalTeamPanel from '../NationalTeamPanel.vue'
-import { getNationalTeamSnapshot } from '../../api/nationalTeam'
+import {
+  getNationalTeamEntryLadder,
+  getNationalTeamSnapshot,
+} from '../../api/nationalTeam'
 
 if (!globalThis.visualViewport) {
   globalThis.visualViewport = {
@@ -200,6 +203,23 @@ describe('NationalTeamPanel date picker', () => {
     expect(tiers[3].text()).toContain('flow60 < 5%')
     expect(card.text()).toContain('回测无独立 alpha')
 
+    wrapper.unmount()
+  })
+
+  it('keeps the last ladder when a refresh fails', async () => {
+    const wrapper = mount(NationalTeamPanel, {
+      global: { plugins: [buildVuetify()] },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    expect(wrapper.find('.ladder-card').exists()).toBe(true)
+
+    getNationalTeamEntryLadder.mockRejectedValueOnce(new Error('boom'))
+    await wrapper.find('.refresh-btn').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.ladder-card').exists()).toBe(true)
+    expect(wrapper.text()).toContain('更新失败，显示上次数据')
     wrapper.unmount()
   })
 
