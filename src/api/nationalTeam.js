@@ -31,3 +31,11 @@ export function getNationalTeamHistory(params = {}) {
     params,
   })
 }
+
+export function getNationalTeamEntryLadder(params = {}) {
+  return request({
+    url: '/etf/national-team/entry-ladder',
+    method: 'get',
+    params,
+  })
+}

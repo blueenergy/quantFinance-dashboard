@@ -143,6 +143,67 @@
         </div>
       </div>
 
+      <div v-if="ladder" class="ladder-card" :class="'ladder-' + ladder.episode.regime">
+        <div class="ladder-header">
+          <div class="ladder-title">
+            <strong>分批买点</strong>
+            <span class="muted">
+              政策底领先市场底 · 历史 {{ ladder.history.episodes }} 段
+            </span>
+          </div>
+          <span class="ladder-badge" :class="'regime-' + ladder.episode.regime">
+            {{ ladderBadge }}
+          </span>
+        </div>
+        <div class="ladder-meta">
+          <template v-if="ladder.episode.start">
+            起点 {{ fmtDate(ladder.episode.start) }}（{{ fmtLevel(ladder.episode.start_close) }}）
+            · 第 {{ ladder.episode.days }} 日
+            · HS300 {{ fmtLevel(ladder.index.close) }}（距起点 {{ fmtPct(ladder.episode.drawdown) }}）
+          </template>
+          <template v-else>当前没有确认中的增仓段</template>
+          · flow60 {{ fmtPct(ladder.episode.flow60) }}
+        </div>
+        <div class="ladder-grid">
+          <div
+            v-for="tier in ladder.tiers"
+            :key="tier.id"
+            class="ladder-tier"
+            :class="'tier-' + tier.status"
+          >
+            <div class="tier-head">
+              <span class="tier-label">{{ tier.id }} · {{ tier.label }}</span>
+              <span class="tier-status">{{ tier.status_label }}</span>
+            </div>
+            <strong class="tier-price">
+              {{ tier.price != null ? fmtLevel(tier.price) : 'flow60 < 5%' }}
+            </strong>
+            <span v-if="tier.distance_pct != null" class="tier-sub">
+              低于当前 {{ Math.abs(tier.distance_pct).toFixed(2) }}%
+            </span>
+            <span v-else-if="tier.status === 'triggered'" class="tier-sub">已到价</span>
+            <span class="tier-sub">仓位 {{ Math.round(tier.weight * 100) }}%</span>
+            <span class="tier-hist">
+              历史到达 {{ tier.hist_reach }} · 60日 {{ fmtPct(tier.hist_f60) }}
+              <template v-if="tier.hist_f250 != null">
+                · 250日 {{ fmtPct(tier.hist_f250) }}
+              </template>
+              <template v-else>
+                · 120日 {{ fmtPct(tier.hist_f120) }}
+              </template>
+            </span>
+          </div>
+        </div>
+        <div class="ladder-footer">
+          <span :class="{ 'ladder-warn': ladder.invalidation.active }">
+            失效：{{ ladder.invalidation.rule }}（已连续 {{ ladder.invalidation.negative_days }} 日）
+          </span>
+          <span class="muted">
+            历史 6 段，频数不是概率；回测无独立 alpha，仅作仓位纪律
+          </span>
+        </div>
+      </div>
+
       <div class="history-card">
         <div class="history-header">
           <div class="history-title">
@@ -277,6 +338,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   getNationalTeamCurve,
   getNationalTeamDates,
+  getNationalTeamEntryLadder,
   getNationalTeamHistory,
   getNationalTeamSnapshot,
 } from '../api/nationalTeam'
@@ -310,6 +372,8 @@ const dateMenu = ref(false)
 const historyRows = ref([])
 const historyLoading = ref(false)
 const historyError = ref('')
+const ladder = ref(null)
+const ladderError = ref('')
 const chartRef = ref(null)
 const historyChartRef = ref(null)
 let chartInstance = null
@@ -320,10 +384,22 @@ let resizeOb = null
 let historyResizeOb = null
 let refreshTimer = null
 let historyTimer = null
+let ladderTimer = null
 
 const asOfLabel = computed(() => {
   const hm = asOf.value || snapshot.value?.as_of || ''
   return hm ? `${hm.slice(0, 2)}:${hm.slice(2)}` : '最新'
+})
+
+const ladderBadge = computed(() => {
+  const ep = ladder.value?.episode
+  if (!ep) return ''
+  if (!ep.active) return ep.ended ? '增仓已结束' : '无增仓'
+  const h = ladder.value?.history || {}
+  if (ep.regime === 'deep') {
+    return `深回撤 · 历史 ${h.regime_b ?? 3}/${h.episodes ?? 6} 到 -20%`
+  }
+  return `未破 -15% · 历史 ${h.regime_a ?? 3}/${h.episodes ?? 6} 在此上方见底`
 })
 
 const sortedEtfs = computed(() => {
@@ -379,6 +455,11 @@ function fmtRatio(value) {
 function fmtPrice(value) {
   if (value == null || Number.isNaN(Number(value))) return '—'
   return Number(value).toFixed(3)
+}
+
+function fmtLevel(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  return Number(value).toFixed(1)
 }
 
 function fmtTime(hm) {
@@ -798,6 +879,19 @@ function drawHistoryChart() {
   )
 }
 
+async function loadLadder() {
+  ladderError.value = ''
+  try {
+    const params = {}
+    if (selectedDate.value) params.trade_date = selectedDate.value
+    ladder.value = await getNationalTeamEntryLadder(params)
+  } catch (exc) {
+    ladder.value = null
+    ladderError.value =
+      exc?.response?.data?.detail || exc?.message || '分批买点加载失败'
+  }
+}
+
 async function loadHistory() {
   historyLoading.value = true
   historyError.value = ''
@@ -827,6 +921,7 @@ function openHistoryDay(row) {
   selectedDate.value = row.trade_date
   asOf.value = '1500'
   loadSnapshot()
+  loadLadder()
 }
 
 async function loadCurve() {
@@ -864,6 +959,7 @@ async function loadSnapshot() {
 function refresh() {
   loadSnapshot()
   refreshHistory()
+  loadLadder()
 }
 
 function setAsOf(value) {
@@ -898,6 +994,7 @@ function onPickDate(value) {
   if (compact.length !== 8 || compact === selectedDate.value) return
   selectedDate.value = compact
   loadSnapshot()
+  loadLadder()
 }
 
 function pickLatest() {
@@ -905,6 +1002,7 @@ function pickLatest() {
   if (!selectedDate.value) return
   selectedDate.value = ''
   loadSnapshot()
+  loadLadder()
 }
 
 async function loadDates() {
@@ -938,6 +1036,12 @@ function setupTimer() {
   historyTimer = setInterval(() => {
     if (!asOf.value && !selectedDate.value) loadHistory()
   }, 60000)
+  // The ladder only changes once a day (T+1 shares); a minute is plenty and
+  // keeps it out of the 30s snapshot poll.
+  if (ladderTimer) clearInterval(ladderTimer)
+  ladderTimer = setInterval(() => {
+    if (!selectedDate.value) loadLadder()
+  }, 60000)
 }
 
 watch(activeHistoryDate, () => drawHistoryChart())
@@ -945,7 +1049,7 @@ watch(activeHistoryDate, () => drawHistoryChart())
 onMounted(async () => {
   await nextTick()
   await ensureChart()
-  await Promise.all([loadDates(), loadSnapshot(), loadHistory()])
+  await Promise.all([loadDates(), loadSnapshot(), loadHistory(), loadLadder()])
   await nextTick()
   await ensureHistoryChart()
   drawHistoryChart()
@@ -955,6 +1059,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (refreshTimer) clearInterval(refreshTimer)
   if (historyTimer) clearInterval(historyTimer)
+  if (ladderTimer) clearInterval(ladderTimer)
   if (resizeOb) resizeOb.disconnect()
   if (historyResizeOb) historyResizeOb.disconnect()
   if (chartInstance) chartInstance.dispose()
@@ -1214,6 +1319,133 @@ onBeforeUnmount(() => {
 .index-note {
   font-size: 11px;
   color: var(--text-secondary);
+}
+
+.ladder-card {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--card-bg);
+}
+
+.ladder-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ladder-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ladder-badge {
+  padding: 2px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.regime-deep {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.regime-shallow {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.regime-none {
+  color: var(--text-secondary);
+}
+
+.ladder-meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ladder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.ladder-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.tier-triggered {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.tier-pending {
+  background: var(--card-bg);
+}
+
+.tier-unknown {
+  opacity: 0.6;
+}
+
+.tier-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.tier-label {
+  font-weight: 600;
+}
+
+.tier-status {
+  color: var(--text-secondary);
+}
+
+.tier-price {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.tier-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.tier-hist {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.ladder-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ladder-warn {
+  color: #b91c1c;
+  font-weight: 600;
 }
 
 .history-card {
