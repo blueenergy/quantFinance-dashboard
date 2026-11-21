@@ -43,6 +43,9 @@ vi.mock('../../api/nationalTeam', () => ({
       flow20: 55.0,
       flow60: 86.6,
       flow: 1.2,
+      cum_flow: 86.6,
+      sessions: 41,
+      t4_qualified: true,
       drawdown: -11.7,
       regime: 'shallow',
     },
@@ -202,6 +205,8 @@ describe('NationalTeamPanel date picker', () => {
     expect(tiers[0].text()).toContain('触发 2026-10-30')
     expect(tiers[1].text()).toContain('3808')
     expect(tiers[3].text()).toContain('flow60 < 5%')
+    expect(tiers[3].text()).toContain('段内累计')
+    expect(tiers[3].text()).toContain('需 ≥10%')
     expect(card.text()).toContain('回测无独立 alpha')
 
     wrapper.unmount()

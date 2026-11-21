@@ -204,6 +204,9 @@
               触发 {{ fmtDate(tier.trigger_date) }}
             </span>
             <span v-else-if="tier.status === 'triggered'" class="tier-sub">已到价</span>
+            <span v-if="tier.id === 'T4' && ladder.episode?.cum_flow != null" class="tier-sub">
+              段内累计 {{ fmtPct(ladder.episode.cum_flow) }} · 需 ≥10%
+            </span>
             <span class="tier-sub">仓位 {{ Math.round(tier.weight * 100) }}%</span>
             <span class="tier-hist">
               历史到达 {{ tier.hist_reach }} · 60日 {{ fmtPct(tier.hist_f60) }}
