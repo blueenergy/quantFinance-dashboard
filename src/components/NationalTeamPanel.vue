@@ -143,7 +143,11 @@
         </div>
       </div>
 
-      <div v-if="ladder" class="ladder-card" :class="'ladder-' + (ladder.episode?.regime || 'none')">
+      <div
+        v-if="ladder"
+        class="ladder-card"
+        :class="['ladder-' + (ladder.episode?.regime || 'none'), { 'ladder-loading': ladderLoading }]"
+      >
         <div class="ladder-header">
           <div class="ladder-title">
             <strong>分批买点</strong>
@@ -158,11 +162,23 @@
             {{ ladderBadge }}
           </span>
         </div>
+        <div class="ladder-tabs">
+          <button
+            v-for="item in LADDER_INDICES"
+            :key="item.code"
+            type="button"
+            class="ladder-tab"
+            :class="{ active: item.code === ladderIndex }"
+            @click="selectLadderIndex(item.code)"
+          >
+            {{ item.name }}
+          </button>
+        </div>
         <div class="ladder-meta">
           <template v-if="ladder.episode?.start">
             起点 {{ fmtDate(ladder.episode.start) }}（{{ fmtLevel(ladder.episode.start_close) }}）
             · 第 {{ ladder.episode.days }} 日
-            · HS300 {{ fmtLevel(ladder.index?.close) }}（距起点 {{ fmtPct(ladder.episode.drawdown) }}）
+            · {{ ladder.index?.name || '指数' }} {{ fmtLevel(ladder.index?.close) }}（距起点 {{ fmtPct(ladder.episode.drawdown) }}）
           </template>
           <template v-else>当前没有确认中的增仓段</template>
           · flow60 {{ fmtPct(ladder.episode?.flow60) }}
@@ -202,7 +218,7 @@
             失效：{{ ladder.invalidation?.rule }}（已连续 {{ ladder.invalidation?.negative_days }} 日）
           </span>
           <span class="muted">
-            历史 6 段，频数不是概率；回测无独立 alpha，仅作仓位纪律
+            历史 {{ ladder.history?.episodes || 6 }} 段，频数不是概率；回测无独立 alpha，仅作仓位纪律
           </span>
         </div>
       </div>
@@ -387,6 +403,18 @@ const historyLoading = ref(false)
 const historyError = ref('')
 const ladder = ref(null)
 const ladderError = ref('')
+const ladderLoading = ref(false)
+// Design A: one pool-wide accumulation episode, each index anchored to its own
+// close. Keep this order in sync with _LADDER_INDEX_SPECS in quantFinance.
+const LADDER_INDICES = [
+  { code: '000300.SH', name: '沪深300' },
+  { code: '000016.SH', name: '上证50' },
+  { code: '000905.SH', name: '中证500' },
+  { code: '000852.SH', name: '中证1000' },
+  { code: '000688.SH', name: '科创50' },
+  { code: '399006.SZ', name: '创业板' },
+]
+const ladderIndex = ref('000300.SH')
 const chartRef = ref(null)
 const historyChartRef = ref(null)
 let chartInstance = null
@@ -894,17 +922,30 @@ function drawHistoryChart() {
 
 async function loadLadder() {
   ladderError.value = ''
+  const want = ladderIndex.value
+  ladderLoading.value = true
   try {
-    const params = {}
+    const params = { index: want }
     if (selectedDate.value) params.trade_date = selectedDate.value
-    ladder.value = await getNationalTeamEntryLadder(params)
+    const payload = await getNationalTeamEntryLadder(params)
+    // Ignore stale responses after a fast tab switch.
+    if (want === ladderIndex.value) ladder.value = payload
   } catch (exc) {
+    if (want !== ladderIndex.value) return
     // Keep the last successful payload: a transient network error (tab wake,
     // token refresh, navigation) must not remove the whole card. The 60s
     // timer retries; with no payload at all the error card shows a retry.
     ladderError.value =
       exc?.response?.data?.detail || exc?.message || '分批买点加载失败'
+  } finally {
+    if (want === ladderIndex.value) ladderLoading.value = false
   }
+}
+
+function selectLadderIndex(code) {
+  if (!code || code === ladderIndex.value) return
+  ladderIndex.value = code
+  loadLadder()
 }
 
 async function loadHistory() {
@@ -1385,6 +1426,38 @@ onBeforeUnmount(() => {
 .ladder-stale {
   font-size: 11px;
   color: #b45309;
+}
+
+.ladder-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ladder-tab {
+  padding: 2px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.ladder-tab:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.ladder-tab.active {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+  color: #fff;
+}
+
+.ladder-loading {
+  opacity: 0.75;
 }
 
 .ladder-error-card {

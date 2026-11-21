@@ -206,6 +206,33 @@ describe('NationalTeamPanel date picker', () => {
     wrapper.unmount()
   })
 
+  it('switches the ladder anchor through the index tabs', async () => {
+    const wrapper = mount(NationalTeamPanel, {
+      global: { plugins: [buildVuetify()] },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    expect(getNationalTeamEntryLadder).toHaveBeenCalledWith({ index: '000300.SH' })
+    const tabs = wrapper.findAll('.ladder-tab')
+    expect(tabs.map((tab) => tab.text())).toEqual([
+      '沪深300',
+      '上证50',
+      '中证500',
+      '中证1000',
+      '科创50',
+      '创业板',
+    ])
+
+    getNationalTeamEntryLadder.mockClear()
+    await tabs[2].trigger('click')
+    await flushPromises()
+    expect(getNationalTeamEntryLadder).toHaveBeenCalledWith({ index: '000905.SH' })
+    expect(wrapper.findAll('.ladder-tab')[2].classes()).toContain('active')
+
+    wrapper.unmount()
+  })
+
   it('keeps the last ladder when a refresh fails', async () => {
     const wrapper = mount(NationalTeamPanel, {
       global: { plugins: [buildVuetify()] },
