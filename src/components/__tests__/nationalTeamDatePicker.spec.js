@@ -47,7 +47,7 @@ vi.mock('../../api/nationalTeam', () => ({
       regime: 'shallow',
     },
     tiers: [
-      { id: 'T1', label: '-10%', price: 4032.3, weight: 0.25, status: 'triggered', status_label: '已触发', distance_pct: null, hist_reach: '4/6', hist_f60: 7.2, hist_f120: -8.6, hist_post_dd: -13.0 },
+      { id: 'T1', label: '-10%', price: 4032.3, weight: 0.25, status: 'triggered', status_label: '已触发', distance_pct: null, trigger_date: '20261030', trigger_days: 27, hist_reach: '4/6', hist_f60: 7.2, hist_f120: -8.6, hist_post_dd: -13.0 },
       { id: 'T2', label: '-15%', price: 3808.3, weight: 0.25, status: 'pending', status_label: '待触发', distance_pct: -3.7, hist_reach: '3/6', hist_f60: 7.4, hist_f120: -10.9, hist_post_dd: -12.9 },
       { id: 'T3', label: '-20%', price: 3584.2, weight: 0.25, status: 'pending', status_label: '待触发', distance_pct: -9.4, hist_reach: '3/6', hist_f60: 11.1, hist_f120: -4.8, hist_post_dd: -6.2 },
       { id: 'T4', label: '增仓结束', price: null, weight: 0.25, status: 'pending', status_label: '待触发', distance_pct: null, hist_reach: '6/6', hist_f60: 0.4, hist_f120: -3.1, hist_f250: 3.3, hist_post_dd: null, condition: 'flow60 < 5%' },
@@ -199,6 +199,7 @@ describe('NationalTeamPanel date picker', () => {
     expect(tiers).toHaveLength(4)
     expect(tiers[0].text()).toContain('T1')
     expect(tiers[0].text()).toContain('已触发')
+    expect(tiers[0].text()).toContain('触发 2026-10-30')
     expect(tiers[1].text()).toContain('3808')
     expect(tiers[3].text()).toContain('flow60 < 5%')
     expect(card.text()).toContain('回测无独立 alpha')

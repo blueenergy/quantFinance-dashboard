@@ -200,6 +200,9 @@
             <span v-if="tier.distance_pct != null" class="tier-sub">
               低于当前 {{ Math.abs(tier.distance_pct).toFixed(2) }}%
             </span>
+            <span v-else-if="tier.trigger_date" class="tier-sub tier-trigger">
+              触发 {{ fmtDate(tier.trigger_date) }}
+            </span>
             <span v-else-if="tier.status === 'triggered'" class="tier-sub">已到价</span>
             <span class="tier-sub">仓位 {{ Math.round(tier.weight * 100) }}%</span>
             <span class="tier-hist">
@@ -1537,6 +1540,10 @@ onBeforeUnmount(() => {
 .tier-sub {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.tier-trigger {
+  color: #b91c1c;
 }
 
 .tier-hist {
