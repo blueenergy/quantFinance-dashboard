@@ -161,6 +161,9 @@
           <span class="ladder-badge" :class="'regime-' + (ladder.episode?.regime || 'none')">
             {{ ladderBadge }}
           </span>
+          <button type="button" class="ladder-help-toggle" @click="toggleLadderHelp">
+            {{ ladderHelpOpen ? '口径 ▴' : '口径 ▾' }}
+          </button>
         </div>
         <div class="ladder-tabs">
           <button
@@ -175,13 +178,22 @@
           </button>
         </div>
         <div class="ladder-meta">
-          <template v-if="ladder.episode?.start">
-            起点 {{ fmtDate(ladder.episode.start) }}（{{ fmtLevel(ladder.episode.start_close) }}）
-            · 第 {{ ladder.episode.days }} 日
-            · {{ ladder.index?.name || '指数' }} {{ fmtLevel(ladder.index?.close) }}（距起点 {{ fmtPct(ladder.episode.drawdown) }}）
-          </template>
-          <template v-else>当前没有确认中的增仓段</template>
-          · flow60 {{ fmtPct(ladder.episode?.flow60) }}
+          <div>
+            <template v-if="ladder.episode?.start">
+              起点 {{ fmtDate(ladder.episode.start) }}（{{ fmtLevel(ladder.episode.start_close) }}）
+              · 第 {{ ladder.episode.days }} 日
+              · {{ ladder.index?.name || '指数' }} {{ fmtLevel(ladder.index?.close) }}（距起点 {{ fmtPct(ladder.episode.drawdown) }}）
+            </template>
+            <template v-else>当前没有确认中的增仓段</template>
+          </div>
+          <div class="ladder-signal">
+            <span title="flow60：最近 60 个交易日净申购合计占池子规模的比例；≥5% 为增仓中">
+              近60日净申购 {{ fmtPct(ladder.episode?.flow60) }}
+            </span>
+            <template v-if="ladder.episode?.start && ladder.episode?.cum_flow != null">
+              · <span title="起点至今的净申购合计；≥10% 且 ≥15 日才算真增仓">本轮累计 {{ fmtPct(ladder.episode.cum_flow) }}（{{ ladder.episode.days }} 日）</span>
+            </template>
+          </div>
         </div>
         <div class="ladder-grid">
           <div
@@ -217,6 +229,22 @@
                 · 120日 {{ fmtPct(tier.hist_f120) }}
               </template>
             </span>
+          </div>
+        </div>
+        <div v-show="ladderHelpOpen" class="ladder-help">
+          <div>
+            <strong>近60日净申购</strong>（flow60）：最近 60 个交易日净申购合计占池子规模的比例。
+            ≥5% 为增仓中：连续 5 日 ≥5% 确认启动，连续 10 日 &lt;5% 确认结束。
+          </div>
+          <div>
+            <strong>本轮累计</strong>：起点至今的净申购合计。研究要求 ≥10% 且 ≥15 个交易日才算真增仓（T4 资格）；
+            2025-04 那段只有 -0.1%，被挡掉。
+          </div>
+          <div>
+            <strong>第 N 日</strong>：从起点到份额数据最新一天的交易日数；份额 T+1，通常比行情晚一天。
+          </div>
+          <div>
+            <strong>历史到达</strong>：6 段已完成 episode 里到达该档的次数；频数不是概率。
           </div>
         </div>
         <div class="ladder-footer">
@@ -410,6 +438,23 @@ const historyError = ref('')
 const ladder = ref(null)
 const ladderError = ref('')
 const ladderLoading = ref(false)
+const LADDER_HELP_KEY = 'national_team_ladder_help_open'
+function readLadderHelpPref() {
+  try {
+    return localStorage.getItem(LADDER_HELP_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+const ladderHelpOpen = ref(readLadderHelpPref())
+function toggleLadderHelp() {
+  ladderHelpOpen.value = !ladderHelpOpen.value
+  try {
+    localStorage.setItem(LADDER_HELP_KEY, ladderHelpOpen.value ? '1' : '0')
+  } catch {
+    // ignore private mode / quota
+  }
+}
 // Design A: one pool-wide accumulation episode, each index anchored to its own
 // close. Keep this order in sync with _LADDER_INDEX_SPECS in quantFinance.
 const LADDER_INDICES = [
@@ -1489,6 +1534,39 @@ onBeforeUnmount(() => {
   margin-top: 6px;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.ladder-signal {
+  margin-top: 2px;
+}
+
+.ladder-help-toggle {
+  padding: 2px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.ladder-help-toggle:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.ladder-help {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.ladder-help strong {
+  color: var(--text-color);
+  font-weight: 600;
 }
 
 .ladder-grid {

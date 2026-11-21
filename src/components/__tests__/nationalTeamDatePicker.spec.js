@@ -207,7 +207,26 @@ describe('NationalTeamPanel date picker', () => {
     expect(tiers[3].text()).toContain('flow60 < 5%')
     expect(tiers[3].text()).toContain('段内累计')
     expect(tiers[3].text()).toContain('需 ≥10%')
+    expect(card.text()).toContain('近60日净申购')
+    expect(card.text()).toContain('本轮累计')
     expect(card.text()).toContain('回测无独立 alpha')
+
+    wrapper.unmount()
+  })
+
+  it('shows the ladder glossary only after toggling the 口径 button', async () => {
+    localStorage.removeItem('national_team_ladder_help_open')
+    const wrapper = mount(NationalTeamPanel, {
+      global: { plugins: [buildVuetify()] },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.ladder-help').isVisible()).toBe(false)
+    await wrapper.find('.ladder-help-toggle').trigger('click')
+    expect(wrapper.find('.ladder-help').isVisible()).toBe(true)
+    expect(wrapper.find('.ladder-help').text()).toContain('近60日净申购')
+    expect(localStorage.getItem('national_team_ladder_help_open')).toBe('1')
 
     wrapper.unmount()
   })
