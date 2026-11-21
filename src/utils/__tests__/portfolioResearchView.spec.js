@@ -411,6 +411,30 @@ describe('buildEquityChart', () => {
     })
   })
 
+  it('exposes index equity and geometric excess on hover points', () => {
+    const chart = buildEquityChart([
+      { score_date: '2024-01-02', portfolio_return_net: 0.1, index_benchmark_return: 0.05 },
+      { score_date: '2024-02-02', portfolio_return_net: 0.1, index_benchmark_return: 0.05 },
+    ])
+    const last = chart.hoverPoints.at(-1)
+
+    expect(last.stratReturn).toBeCloseTo(0.21, 10)
+    expect(last.idxReturn).toBeCloseTo(0.1025, 10)
+    expect(last.excessGeometric).toBeCloseTo(1.21 / 1.1025 - 1, 10)
+    expect(last.idxY).not.toBeNull()
+  })
+
+  it('omits index hover values when no index return exists', () => {
+    const chart = buildEquityChart([
+      { score_date: '2024-01-02', portfolio_return_net: 0.1 },
+    ])
+    const last = chart.hoverPoints.at(-1)
+
+    expect(last.idxY).toBeNull()
+    expect(last.idxReturn).toBeNull()
+    expect(last.excessGeometric).toBeNull()
+  })
+
   it('paints merged bull/bear bands from period regime labels', () => {
     const chart = buildEquityChart([
       {

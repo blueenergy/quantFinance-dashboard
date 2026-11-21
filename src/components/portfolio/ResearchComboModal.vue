@@ -150,15 +150,31 @@
                 stroke="#fff"
                 stroke-width="2"
               />
+              <circle
+                v-if="chartHover.idxY != null"
+                :cx="chartHover.x"
+                :cy="chartHover.idxY"
+                r="3.5"
+                fill="#94a3b8"
+                stroke="#fff"
+                stroke-width="1.5"
+              />
               <g :transform="`translate(${chartHover.tooltipX} ${chartHover.tooltipY})`">
-                <rect :width="190" :height="chartHover.regimeLabel ? 66 : 48" rx="6" fill="#172033" opacity=".94" />
-                <text x="10" y="19" fill="#fff" font-size="12">{{ chartHover.date }}</text>
-                <text x="10" y="37" fill="#fff" font-size="12">
-                  账户总值：{{ money(chartHover.accountValue) }}
-                </text>
-                <text v-if="chartHover.regimeLabel" x="10" y="55" fill="#cbd5e1" font-size="12">
-                  指数：{{ chartHover.regimeLabel }}
-                </text>
+                <rect
+                  :width="chartHover.tooltipWidth"
+                  :height="chartHover.tooltipHeight"
+                  rx="6"
+                  fill="#172033"
+                  opacity=".94"
+                />
+                <text
+                  v-for="(line, index) in chartHover.lines"
+                  :key="index"
+                  x="10"
+                  :y="19 + index * 18"
+                  :fill="line.color"
+                  font-size="12"
+                >{{ line.text }}</text>
               </g>
             </g>
             <text
@@ -390,6 +406,36 @@ function sortTrades(key) {
   }
 }
 
+const HOVER_LINE_HEIGHT = 18
+const HOVER_TOOLTIP_WIDTH = 200
+
+function hoverValueColor(value) {
+  if (value == null || !Number.isFinite(Number(value))) return '#e2e8f0'
+  const number = Number(value)
+  return number > 0 ? '#f87171' : number < 0 ? '#4ade80' : '#e2e8f0'
+}
+
+function buildChartHoverLines(point) {
+  const lines = [
+    { text: point.date, color: '#fff' },
+    { text: `策略（净）：${pct(point.stratReturn)}`, color: hoverValueColor(point.stratReturn) },
+  ]
+  if (point.idxReturn != null) {
+    lines.push({ text: `指数基准：${pct(point.idxReturn)}`, color: hoverValueColor(point.idxReturn) })
+  }
+  if (point.excessGeometric != null) {
+    lines.push({
+      text: `超额（几何）：${pct(point.excessGeometric)}`,
+      color: hoverValueColor(point.excessGeometric),
+    })
+  }
+  lines.push({ text: `账户总值：${money(point.accountValue)}`, color: '#e2e8f0' })
+  if (point.regimeLabel) {
+    lines.push({ text: `指数状态：${point.regimeLabel}`, color: '#cbd5e1' })
+  }
+  return lines
+}
+
 function handleChartPointerMove(event) {
   const chart = equityChart.value
   if (!chart?.hoverPoints?.length) return
@@ -399,10 +445,14 @@ function handleChartPointerMove(event) {
   const point = chart.hoverPoints.reduce((nearest, candidate) => (
     Math.abs(candidate.x - viewX) < Math.abs(nearest.x - viewX) ? candidate : nearest
   ))
-  const tooltipWidth = 190
-  const tooltipHeight = point.regimeLabel ? 66 : 48
+  const lines = buildChartHoverLines(point)
+  const tooltipWidth = HOVER_TOOLTIP_WIDTH
+  const tooltipHeight = HOVER_LINE_HEIGHT * lines.length + 12
   chartHover.value = {
     ...point,
+    lines,
+    tooltipWidth,
+    tooltipHeight,
     tooltipX: point.x + tooltipWidth + 12 <= chart.w
       ? point.x + 10
       : point.x - tooltipWidth - 10,

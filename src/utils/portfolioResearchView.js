@@ -644,19 +644,31 @@ export function buildEquityChart(periods = [], trades = [], initialCapital = 1_0
   const sourceDateByX = new Map(
     stratCurvePoints.map((point) => [point.x.toFixed(1), point.date]),
   )
-  const hoverPoints = stratCurveSamples.map((point) => {
+  const yToEquity = (y) => (equityRange
+    ? mn + (1 - (y - padT) / plotHeight) * equityRange
+    : mn)
+  const hoverPoints = stratCurveSamples.map((point, index) => {
     const position = domainStart +
       ((point.x - padL) / (w - padL - padR)) * (domainEnd - domainStart)
-    const equity = equityRange
-      ? mn + (1 - (point.y - padT) / plotHeight) * equityRange
-      : mn
+    const equity = yToEquity(point.y)
+    // Both curves share the same x grid, so the index sample at the same
+    // index is already aligned with the hovered strategy point.
+    const idxY = hasIdx ? idxCurveSamples[index]?.y ?? null : null
+    const idxEquity = idxY == null ? null : yToEquity(idxY)
     const band = regimeBands.find((item) => point.x >= item.x && point.x <= item.x + item.width)
     return {
       x: point.x,
       y: point.y,
+      idxY,
       date: sourceDateByX.get(point.x.toFixed(1)) || calendarPositionLabel(position),
       equity,
       accountValue: equity * normalizedCapital,
+      stratReturn: equity - 1,
+      idxReturn: idxEquity == null ? null : idxEquity - 1,
+      // 几何超额：策略净值 ÷ 指数净值 − 1（排排网「超额收益(几何)」口径）。
+      excessGeometric: idxEquity
+        ? equity / idxEquity - 1
+        : null,
       regimeLabel: band?.displayLabel || '',
     }
   })

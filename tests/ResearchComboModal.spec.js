@@ -185,7 +185,10 @@ describe('ResearchComboModal', () => {
       bottom: 300,
     })
     await svg.trigger('mousemove', { clientX: 1080 })
-    expect(wrapper.text()).toContain('指数：牛市')
+    expect(wrapper.text()).toContain('指数状态：牛市')
+    expect(wrapper.text()).toContain('策略（净）：2.00%')
+    expect(wrapper.text()).toContain('指数基准：1.00%')
+    expect(wrapper.text()).toContain('超额（几何）：0.99%')
   })
 
   it('paints bear bands green under A-share convention', () => {
