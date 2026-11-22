@@ -125,6 +125,9 @@
               </select>
             </label>
             <small class="field-hint">显示 live/shadow 与「研究已验收」模型；research = PIT 回填（20d，2016–2026）；shadow = live artifact（2026-11 日频）。同一个 model_id 可能有两套，日期范围不可混用。</small>
+            <small v-if="selectedPredictionSet?.kind === 'research'" class="field-hint">
+              research 是 PIT 回测流，不用于实盘；实盘/paper 使用 shadow/live artifact。
+            </small>
             <div v-if="selectedModel" class="weight-breakdown">
               <strong>{{ selectedModel.model_id }}</strong>
               <span>{{ selectedModel.index_code || '-' }} · {{ selectedPredictionSet ? `${selectedPredictionSet.kind} ${selectedPredictionSet.first_trade_date} → ${selectedPredictionSet.last_trade_date}` : `${selectedModel.first_trade_date} → ${selectedModel.last_trade_date}` }}</span>
@@ -133,6 +136,7 @@
                 研究已验收 · {{ selectedModel.validation?.verdict || 'weak' }}（非 live/shadow）
               </span>
               <span v-if="!modelCoversWindow" class="model-warning">该预测集覆盖区间与当前研究窗口无交集</span>
+              <span v-for="warning in predictionWindowWarnings" :key="warning" class="model-note">{{ warning }}</span>
             </div>
           </div>
           <label v-else class="score-spec-field">
@@ -431,6 +435,25 @@ function modelOverlapsWindow(model) {
 const modelCoversWindow = computed(() => {
   if (selectedPredictionSet.value) return setOverlapsWindow(selectedPredictionSet.value)
   return selectedModel.value ? modelOverlapsWindow(selectedModel.value) : true
+})
+
+const predictionWindowWarnings = computed(() => {
+  const set = selectedPredictionSet.value
+  if (!set?.first_trade_date || !set?.last_trade_date) return []
+  const start = compactDate(props.form.start_date)
+  const end = compactDate(props.form.end_date)
+  const warnings = []
+  if (start && start < String(set.first_trade_date)) {
+    warnings.push(
+      `第一个 ${set.kind} 分数是 ${set.first_trade_date}；start 早出的部分没有模型分数，组合会空仓。`,
+    )
+  }
+  if (end && end > String(set.last_trade_date)) {
+    warnings.push(
+      `最后一个 ${set.kind} 分数是 ${set.last_trade_date}；之后没有新分数，end 晚出的部分不会产生新的选股，只会是空仓/现金。`,
+    )
+  }
+  return warnings
 })
 
 const canSubmit = computed(() => {
@@ -745,6 +768,11 @@ textarea {
 .model-warning {
   color: #b91c1c;
   font-weight: 600;
+}
+
+.model-note {
+  color: #b45309;
+  font-weight: 500;
 }
 
 button {

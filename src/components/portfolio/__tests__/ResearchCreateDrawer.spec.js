@@ -96,4 +96,44 @@ describe('ResearchCreateDrawer model mode', () => {
     expect(wrapper.text()).toContain('研究已验收')
     expect(wrapper.text()).toContain('weak')
   })
+
+  it('warns when end is past the last research prediction', () => {
+    const wrapper = mountDrawer(
+      { end_date: '2026-11-20' },
+      {
+        prediction_sets: [
+          { kind: 'research', first_trade_date: '20160413', last_trade_date: '20260923', date_count: 128 },
+          { kind: 'shadow', first_trade_date: '20261106', last_trade_date: '20261120', date_count: 9 },
+        ],
+      },
+    )
+    expect(wrapper.text()).toContain('最后一个 research 分数是 20260923')
+    expect(submitButton(wrapper).element.disabled).toBe(false)
+  })
+
+  it('warns when start is before the first research prediction', () => {
+    const wrapper = mountDrawer(
+      { start_date: '2015-01-05' },
+      {
+        prediction_sets: [
+          { kind: 'research', first_trade_date: '20160413', last_trade_date: '20260923', date_count: 128 },
+        ],
+      },
+    )
+    expect(wrapper.text()).toContain('第一个 research 分数是 20160413')
+    expect(wrapper.text()).toContain('research 是 PIT 回测流')
+    expect(submitButton(wrapper).element.disabled).toBe(false)
+  })
+
+  it('does not warn when the window is inside the prediction set', () => {
+    const wrapper = mountDrawer(
+      {},
+      {
+        prediction_sets: [
+          { kind: 'research', first_trade_date: '20160413', last_trade_date: '20260923', date_count: 128 },
+        ],
+      },
+    )
+    expect(wrapper.text()).not.toContain('之后没有新分数')
+  })
 })
