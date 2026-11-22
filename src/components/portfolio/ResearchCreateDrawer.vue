@@ -116,15 +116,23 @@
                 </option>
               </select>
             </label>
-            <small class="field-hint">显示 live/shadow 与「研究已验收」模型；原始研究模型仍在模型训练页。研究窗口需与模型预测覆盖区间有交集，否则后端会拒绝。</small>
+            <label v-if="selectedModel">
+              预测集
+              <select :value="form.prediction_kind || 'research'" @change="onPredictionKindChange">
+                <option v-for="set in predictionSetOptions" :key="set.kind" :value="set.kind">
+                  {{ set.kind }} · {{ set.first_trade_date }}→{{ set.last_trade_date }}（{{ set.date_count }} 个预测日）
+                </option>
+              </select>
+            </label>
+            <small class="field-hint">显示 live/shadow 与「研究已验收」模型；research = PIT 回填（20d，2016–2026）；shadow = live artifact（2026-11 日频）。同一个 model_id 可能有两套，日期范围不可混用。</small>
             <div v-if="selectedModel" class="weight-breakdown">
               <strong>{{ selectedModel.model_id }}</strong>
-              <span>{{ selectedModel.index_code || '-' }} · {{ selectedModel.first_trade_date }} → {{ selectedModel.last_trade_date }}</span>
-              <span>{{ selectedModel.date_count }} 个预测日 · {{ selectedModel.prediction_count }} 条预测</span>
+              <span>{{ selectedModel.index_code || '-' }} · {{ selectedPredictionSet ? `${selectedPredictionSet.kind} ${selectedPredictionSet.first_trade_date} → ${selectedPredictionSet.last_trade_date}` : `${selectedModel.first_trade_date} → ${selectedModel.last_trade_date}` }}</span>
+              <span>{{ selectedPredictionSet?.date_count || selectedModel.date_count }} 个预测日 · {{ selectedModel.prediction_count }} 条预测</span>
               <span v-if="selectedModel.validated">
                 研究已验收 · {{ selectedModel.validation?.verdict || 'weak' }}（非 live/shadow）
               </span>
-              <span v-if="!modelCoversWindow" class="model-warning">该模型覆盖区间与当前研究窗口无交集</span>
+              <span v-if="!modelCoversWindow" class="model-warning">该预测集覆盖区间与当前研究窗口无交集</span>
             </div>
           </div>
           <label v-else class="score-spec-field">
@@ -367,8 +375,44 @@ const selectedModel = computed(() => (
   props.modelOptions.find((item) => item.model_id === props.form.model_id) || null
 ))
 
+function modelHasKind(model, kind) {
+  const sets = Array.isArray(model?.prediction_sets) ? model.prediction_sets : []
+  if (sets.length) return sets.some((set) => set.kind === kind)
+  return kind === 'research' ? Boolean(model?.research) : Boolean(model?.shadow)
+}
+
+function modelPredictionSets(model) {
+  const sets = Array.isArray(model?.prediction_sets) ? model.prediction_sets : []
+  if (sets.length) return sets
+  const kinds = []
+  if (model?.research) kinds.push('research')
+  if (model?.shadow) kinds.push('shadow')
+  if (!kinds.length && model) kinds.push('research')
+  return kinds.map((kind) => ({
+    kind,
+    first_trade_date: model.first_trade_date,
+    last_trade_date: model.last_trade_date,
+    date_count: model.date_count,
+    source: model.source,
+  }))
+}
+
+const predictionSetOptions = computed(() => modelPredictionSets(selectedModel.value))
+const selectedPredictionSet = computed(() => (
+  predictionSetOptions.value.find((set) => set.kind === (props.form.prediction_kind || 'research')) || null
+))
+
 function compactDate(value) {
   return String(value || '').replace(/-/g, '').slice(0, 8)
+}
+
+function setOverlapsWindow(set) {
+  const start = compactDate(props.form.start_date)
+  const end = compactDate(props.form.end_date)
+  const first = String(set?.first_trade_date || '')
+  const last = String(set?.last_trade_date || '')
+  if (!start || !end || !first || !last) return true
+  return !(last < start || first > end)
 }
 
 function modelOverlapsWindow(model) {
@@ -380,9 +424,10 @@ function modelOverlapsWindow(model) {
   return !(last < start || first > end)
 }
 
-const modelCoversWindow = computed(() => (
-  selectedModel.value ? modelOverlapsWindow(selectedModel.value) : true
-))
+const modelCoversWindow = computed(() => {
+  if (selectedPredictionSet.value) return setOverlapsWindow(selectedPredictionSet.value)
+  return selectedModel.value ? modelOverlapsWindow(selectedModel.value) : true
+})
 
 const canSubmit = computed(() => {
   if (!props.form.start_date || !props.form.end_date) return false
@@ -392,6 +437,7 @@ const canSubmit = computed(() => {
   }
   if (scoreMode === 'model') {
     if (!String(props.form.model_id || '').trim()) return false
+    if (!selectedPredictionSet.value) return false
     if (!modelCoversWindow.value) return false
   }
   const rebalanceDays = String(props.form.horizon ?? '')
@@ -469,11 +515,19 @@ function onScoreModeChange(event) {
   }
   if (scoreMode === 'model') {
     const currentModel = String(props.form.model_id || '').trim()
-    const covering = props.modelOptions.find((model) => model.research && modelOverlapsWindow(model))
-      || props.modelOptions.find((model) => modelOverlapsWindow(model))
+    const covering = props.modelOptions.find((model) => (
+      modelHasKind(model, 'research')
+      && modelPredictionSets(model).some((set) => set.kind === 'research' && setOverlapsWindow(set))
+    )) || props.modelOptions.find((model) => (
+      modelPredictionSets(model).some((set) => setOverlapsWindow(set))
+    )) || props.modelOptions.find((model) => modelHasKind(model, 'research'))
       || props.modelOptions[0]
+    const modelId = currentModel || covering?.model_id || ''
+    const model = props.modelOptions.find((item) => item.model_id === modelId)
+    const kind = modelHasKind(model, 'research') ? 'research' : modelHasKind(model, 'shadow') ? 'shadow' : 'research'
     Object.assign(patch, {
-      model_id: currentModel || covering?.model_id || '',
+      model_id: modelId,
+      prediction_kind: kind,
       score_column: 'model_score',
       score_columns: ['model_score'],
     })
@@ -482,18 +536,33 @@ function onScoreModeChange(event) {
 }
 
 function onModelChange(event) {
-  patchForm({ model_id: event.target.value })
+  const modelId = event.target.value
+  const model = props.modelOptions.find((item) => item.model_id === modelId)
+  const kind = modelHasKind(model, 'research') ? 'research' : modelHasKind(model, 'shadow') ? 'shadow' : 'research'
+  patchForm({
+    model_id: modelId,
+    prediction_kind: kind,
+    score_column: 'model_score',
+    score_columns: ['model_score'],
+  })
+}
+
+function onPredictionKindChange(event) {
+  patchForm({ prediction_kind: event.target.value })
 }
 
 function modelOptionLabel(model) {
-  const kind = model.shadow ? 'shadow' : model.research ? 'research' : 'model'
+  const sets = modelPredictionSets(model)
+  const kind = sets.length ? sets.map((set) => set.kind).join('+') : 'model'
   const stateLabel = model.validated
     ? ` · 研究已验收(${model.validation?.verdict || 'weak'})`
     : (model.state && model.state !== kind ? ` · ${model.state}` : '')
   const index = model.index_code ? ` · ${model.index_code}` : ''
-  const coverage = model.first_trade_date && model.last_trade_date
-    ? ` · ${model.first_trade_date}→${model.last_trade_date}`
-    : ''
+  const coverage = sets.length
+    ? ' · ' + sets.map((set) => `${set.kind}:${set.first_trade_date}→${set.last_trade_date}`).join(' / ')
+    : (model.first_trade_date && model.last_trade_date
+        ? ` · ${model.first_trade_date}→${model.last_trade_date}`
+        : '')
   return `${model.model_id} · ${kind}${stateLabel}${index}${coverage}`
 }
 

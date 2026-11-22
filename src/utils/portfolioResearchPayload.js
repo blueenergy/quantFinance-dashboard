@@ -160,9 +160,11 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
       throw new Error('请选择一个模型评分')
     }
     // model_id is the source of truth; the backend rejects any rule-score
-    // inputs alongside it and forces this column too.
+    // inputs alongside it and forces this column too. prediction_kind selects
+    // the PIT research backfill or the live-artifact shadow stream.
     payload.model_id = modelId
     payload.score_column = 'model_score'
+    payload.prediction_kind = form.prediction_kind || 'research'
   } else if (scoreMode === 'column' || scoreMode === 'preset') {
     if (!scoreColumns.length) {
       throw new Error(scoreMode === 'preset' ? '请至少选择一个预定义组合' : '请至少选择一个评分维度')

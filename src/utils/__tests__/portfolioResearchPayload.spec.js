@@ -326,8 +326,14 @@ describe('buildPortfolioResearchPayload model mode', () => {
     const payload = buildPortfolioResearchPayload(modelForm)
     expect(payload.model_id).toBe('research-rolling500-hs300')
     expect(payload.score_column).toBe('model_score')
+    expect(payload.prediction_kind).toBe('research')
     expect(payload).not.toHaveProperty('score_specs')
     expect(payload).not.toHaveProperty('growth_cycle_weights')
+  })
+
+  it('passes an explicit shadow prediction kind', () => {
+    const payload = buildPortfolioResearchPayload({ ...modelForm, prediction_kind: 'shadow' })
+    expect(payload.prediction_kind).toBe('shadow')
   })
 
   it('requires a non-empty model id', () => {

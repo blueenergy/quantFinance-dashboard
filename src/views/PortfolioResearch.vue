@@ -58,6 +58,7 @@
               <h3>{{ selectedJob.name || selectedJob.job_id }}</h3>
               <p class="muted">
                 {{ selectedJob.status }} · {{ selectedJob.job_id }}
+                <span v-if="selectedJob.prediction_kind"> · {{ selectedJob.prediction_kind }}</span>
                 <span v-if="selectedJob.rerun_of_job_id"> · rerun of {{ selectedJob.rerun_of_job_id }}</span>
                 <span v-if="jobElapsedLabel(selectedJob)"> · {{ jobElapsedLabel(selectedJob) }}</span>
                 <span v-if="jobProgressStageLabel(selectedJob)"> · {{ jobProgressStageLabel(selectedJob) }}</span>
@@ -439,8 +440,13 @@ async function loadModelOptions() {
     })
     // Research models first so the default pick has a backtestable history;
     // shadow profiles are useful for live observation but often cover 1-2 days.
+    const hasResearch = (model) => (
+      (model.prediction_sets || []).some((set) => set.kind === 'research') || Boolean(model.research)
+    )
     modelOptions.value = [...(response?.data || [])].sort((a, b) => {
-      if (Boolean(a.research) !== Boolean(b.research)) return a.research ? -1 : 1
+      const aResearch = hasResearch(a)
+      const bResearch = hasResearch(b)
+      if (aResearch !== bResearch) return aResearch ? -1 : 1
       return String(b.last_trade_date || '').localeCompare(String(a.last_trade_date || ''))
     })
     // Portfolio research only accepts platform-promoted models. A rerun form

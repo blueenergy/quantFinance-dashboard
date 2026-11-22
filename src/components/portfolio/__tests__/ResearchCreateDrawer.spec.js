@@ -72,7 +72,7 @@ describe('ResearchCreateDrawer model mode', () => {
 
   it('warns and disables submit when the model misses the window', () => {
     const wrapper = mountDrawer({}, { last_trade_date: '20191231' })
-    expect(wrapper.text()).toContain('该模型覆盖区间与当前研究窗口无交集')
+    expect(wrapper.text()).toContain('该预测集覆盖区间与当前研究窗口无交集')
     expect(submitButton(wrapper).element.disabled).toBe(true)
   })
 
