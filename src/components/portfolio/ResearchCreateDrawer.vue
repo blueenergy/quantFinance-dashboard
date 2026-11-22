@@ -384,17 +384,21 @@ function modelHasKind(model, kind) {
 function modelPredictionSets(model) {
   const sets = Array.isArray(model?.prediction_sets) ? model.prediction_sets : []
   if (sets.length) return sets
-  const kinds = []
-  if (model?.research) kinds.push('research')
-  if (model?.shadow) kinds.push('shadow')
-  if (!kinds.length && model) kinds.push('research')
-  return kinds.map((kind) => ({
+  if (!model) return []
+  // A model response without per-kind sets cannot be split; show one legacy
+  // row instead of fabricating research+shadow rows with the model's union.
+  const kind = model.research && !model.shadow
+    ? 'research'
+    : model.shadow && !model.research
+      ? 'shadow'
+      : 'legacy'
+  return [{
     kind,
     first_trade_date: model.first_trade_date,
     last_trade_date: model.last_trade_date,
     date_count: model.date_count,
     source: model.source,
-  }))
+  }]
 }
 
 const predictionSetOptions = computed(() => modelPredictionSets(selectedModel.value))
@@ -438,6 +442,7 @@ const canSubmit = computed(() => {
   if (scoreMode === 'model') {
     if (!String(props.form.model_id || '').trim()) return false
     if (!selectedPredictionSet.value) return false
+    if (selectedPredictionSet.value.kind === 'legacy') return false
     if (!modelCoversWindow.value) return false
   }
   const rebalanceDays = String(props.form.horizon ?? '')
