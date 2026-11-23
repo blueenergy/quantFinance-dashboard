@@ -119,7 +119,7 @@
               <h4>检验证据（最近 {{ detail.tests.length }} 条）</h4>
               <table class="tests">
                 <thead>
-                  <tr><th>类型</th><th>阶段</th><th>判决</th><th>口径</th><th>日期</th><th>指标</th></tr>
+                  <tr><th>类型</th><th>阶段</th><th>判决</th><th>口径</th><th>日期</th><th>指标</th><th>报告</th></tr>
                 </thead>
                 <tbody>
                   <tr v-for="test in detail.tests" :key="test._id">
@@ -132,6 +132,12 @@
                     </td>
                     <td>{{ test.as_of || '-' }}</td>
                     <td>{{ metricText(test) }}</td>
+                    <td>
+                      <button v-if="test.job_id" type="button" class="link-btn" @click="openReport(test.job_id)">
+                        报告
+                      </button>
+                      <span v-else class="muted">-</span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -177,6 +183,16 @@ const statusFilter = ref('')
 const sourceFilter = ref('')
 const search = ref('')
 const testedOnly = ref(false)
+
+function openReport(jobId) {
+  if (!jobId) return
+  try {
+    window.sessionStorage.setItem('factorBacktestJob', jobId)
+  } catch {
+    // storage can be unavailable; the deep link degrades to the tab switch
+  }
+  if (shellActiveTab) shellActiveTab.value = 'factor-backtest'
+}
 
 function goModelFactory() {
   if (selectedId.value) {

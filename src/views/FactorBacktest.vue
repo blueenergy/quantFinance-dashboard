@@ -271,7 +271,20 @@ onMounted(() => {
     narrowQuery.addEventListener('change', onNarrowChange)
   }
   loadJobs()
+  const pendingJob = takeDeepLinkedJob()
+  if (pendingJob) selectJob(pendingJob, { resetResult: true })
 })
+
+/** The factor registry's evidence table links here with this key. */
+function takeDeepLinkedJob() {
+  try {
+    const jobId = window.sessionStorage.getItem('factorBacktestJob') || ''
+    if (jobId) window.sessionStorage.removeItem('factorBacktestJob')
+    return jobId
+  } catch {
+    return ''
+  }
+}
 
 onUnmounted(() => {
   narrowQuery?.removeEventListener('change', onNarrowChange)
