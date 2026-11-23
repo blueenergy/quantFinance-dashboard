@@ -59,6 +59,7 @@
               <p class="muted">
                 {{ selectedJob.status }} · {{ selectedJob.job_id }}
                 <span v-if="selectedJob.prediction_kind"> · {{ selectedJob.prediction_kind }}</span>
+                <span v-if="selectedJob.prediction_set_id"> · {{ selectedJob.prediction_set_id }}</span>
                 <span v-if="selectedJob.rerun_of_job_id"> · rerun of {{ selectedJob.rerun_of_job_id }}</span>
                 <span v-if="jobElapsedLabel(selectedJob)"> · {{ jobElapsedLabel(selectedJob) }}</span>
                 <span v-if="jobProgressStageLabel(selectedJob)"> · {{ jobProgressStageLabel(selectedJob) }}</span>
@@ -441,7 +442,8 @@ async function loadModelOptions() {
     // Research models first so the default pick has a backtestable history;
     // shadow profiles are useful for live observation but often cover 1-2 days.
     const hasResearch = (model) => (
-      (model.prediction_sets || []).some((set) => set.kind === 'research') || Boolean(model.research)
+      (model.prediction_sets || []).some((set) => set.kind === 'research' && set.status !== 'archived')
+      || Boolean(model.research)
     )
     modelOptions.value = [...(response?.data || [])].sort((a, b) => {
       const aResearch = hasResearch(a)

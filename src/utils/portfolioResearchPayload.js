@@ -165,6 +165,7 @@ export function buildPortfolioResearchPayload(formState, { defaultName } = {}) {
     payload.model_id = modelId
     payload.score_column = 'model_score'
     payload.prediction_kind = form.prediction_kind || 'research'
+    if (form.prediction_set_id) payload.prediction_set_id = form.prediction_set_id
   } else if (scoreMode === 'column' || scoreMode === 'preset') {
     if (!scoreColumns.length) {
       throw new Error(scoreMode === 'preset' ? '请至少选择一个预定义组合' : '请至少选择一个评分维度')

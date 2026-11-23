@@ -125,6 +125,46 @@ describe('ResearchCreateDrawer model mode', () => {
     expect(submitButton(wrapper).element.disabled).toBe(false)
   })
 
+  it('shows the selected prediction set id and keeps submit enabled', () => {
+    const wrapper = mountDrawer(
+      { prediction_set_id: 'ps-test' },
+      {
+        prediction_sets: [
+          {
+            prediction_set_id: 'ps-test',
+            kind: 'research',
+            status: 'active',
+            first_trade_date: '20240102',
+            last_trade_date: '20241231',
+            date_count: 20,
+          },
+        ],
+      },
+    )
+    expect(wrapper.text()).toContain('ps-test')
+    expect(submitButton(wrapper).element.disabled).toBe(false)
+  })
+
+  it('disables submit for an archived prediction set', () => {
+    const wrapper = mountDrawer(
+      { prediction_set_id: 'ps-old' },
+      {
+        prediction_sets: [
+          {
+            prediction_set_id: 'ps-old',
+            kind: 'research',
+            status: 'archived',
+            first_trade_date: '20240102',
+            last_trade_date: '20241231',
+            date_count: 20,
+          },
+        ],
+      },
+    )
+    expect(wrapper.text()).toContain('已归档')
+    expect(submitButton(wrapper).element.disabled).toBe(true)
+  })
+
   it('does not warn when the window is inside the prediction set', () => {
     const wrapper = mountDrawer(
       {},

@@ -258,6 +258,27 @@ describe('usePortfolioResearchForm', () => {
     expect(formApi.form.value.max_positions).toBe(20)
   })
 
+  it('hydrates the prediction_set_id when rerunning a model job', () => {
+    const selectedJob = ref({
+      job_id: 'job-model',
+      name: 'Model research',
+      params: {
+        universe_index: 'csi1000',
+        start_date: '20240102',
+        end_date: '20250102',
+        model_id: 'research-csi1000-clean-raw5',
+        prediction_kind: 'research',
+        prediction_set_id: 'ps-research-csi1000-clean-raw5',
+      },
+    })
+    const formApi = createForm({ selectedJob })
+
+    formApi.loadParamsFromSelectedJob()
+
+    expect(formApi.form.value.prediction_set_id).toBe('ps-research-csi1000-clean-raw5')
+    expect(formApi.form.value.prediction_kind).toBe('research')
+  })
+
   it('hydrates dynamic-threshold parameters for reruns', () => {
     const selectedJob = ref({
       job_id: 'job-dynamic',

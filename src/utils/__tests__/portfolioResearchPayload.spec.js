@@ -336,6 +336,19 @@ describe('buildPortfolioResearchPayload model mode', () => {
     expect(payload.prediction_kind).toBe('shadow')
   })
 
+  it('passes prediction_set_id when the form carries one', () => {
+    const payload = buildPortfolioResearchPayload({
+      ...modelForm,
+      prediction_set_id: 'ps-research-rolling500-hs300',
+    })
+    expect(payload.prediction_set_id).toBe('ps-research-rolling500-hs300')
+  })
+
+  it('omits an empty prediction_set_id so the backend can auto-resolve', () => {
+    const payload = buildPortfolioResearchPayload({ ...modelForm, prediction_set_id: '' })
+    expect(payload).not.toHaveProperty('prediction_set_id')
+  })
+
   it('requires a non-empty model id', () => {
     expect(() => buildPortfolioResearchPayload({ ...modelForm, model_id: '   ' }))
       .toThrow('请选择一个模型评分')

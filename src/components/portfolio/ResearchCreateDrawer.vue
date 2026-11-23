@@ -118,9 +118,16 @@
             </label>
             <label v-if="selectedModel">
               预测集
-              <select :value="form.prediction_kind || 'research'" @change="onPredictionKindChange">
-                <option v-for="set in predictionSetOptions" :key="set.kind" :value="set.kind">
+              <select :value="selectedSetValue" @change="onPredictionSetChange">
+                <option
+                  v-for="set in predictionSetOptions"
+                  :key="setOptionValue(set)"
+                  :value="setOptionValue(set)"
+                  :disabled="set.status === 'archived'"
+                >
                   {{ set.kind }} · {{ set.first_trade_date }}→{{ set.last_trade_date }}（{{ set.date_count }} 个预测日）
+                  {{ set.status === 'archived' ? ' · archived' : '' }}
+                  {{ (set.segments || []).length > 1 ? ` · ${set.segments.length} 段` : '' }}
                 </option>
               </select>
             </label>
@@ -130,6 +137,7 @@
             </small>
             <div v-if="selectedModel" class="weight-breakdown">
               <strong>{{ selectedModel.model_id }}</strong>
+              <span v-if="selectedPredictionSet?.prediction_set_id">{{ selectedPredictionSet.prediction_set_id }}</span>
               <span>{{ selectedModel.index_code || '-' }} · {{ selectedPredictionSet ? `${selectedPredictionSet.kind} ${selectedPredictionSet.first_trade_date} → ${selectedPredictionSet.last_trade_date}` : `${selectedModel.first_trade_date} → ${selectedModel.last_trade_date}` }}</span>
               <span>{{ selectedPredictionSet?.date_count || selectedModel.date_count }} 个预测日 · {{ selectedModel.prediction_count }} 条预测</span>
               <span v-if="selectedModel.validated">
@@ -381,7 +389,7 @@ const selectedModel = computed(() => (
 
 function modelHasKind(model, kind) {
   const sets = Array.isArray(model?.prediction_sets) ? model.prediction_sets : []
-  if (sets.length) return sets.some((set) => set.kind === kind)
+  if (sets.length) return sets.some((set) => set.kind === kind && set.status !== 'archived')
   return kind === 'research' ? Boolean(model?.research) : Boolean(model?.shadow)
 }
 
@@ -406,8 +414,20 @@ function modelPredictionSets(model) {
 }
 
 const predictionSetOptions = computed(() => modelPredictionSets(selectedModel.value))
-const selectedPredictionSet = computed(() => (
-  predictionSetOptions.value.find((set) => set.kind === (props.form.prediction_kind || 'research')) || null
+const selectedPredictionSet = computed(() => {
+  const byId = props.form.prediction_set_id
+    ? predictionSetOptions.value.find((set) => set.prediction_set_id === props.form.prediction_set_id)
+    : null
+  if (byId) return byId
+  return predictionSetOptions.value.find((set) => set.kind === (props.form.prediction_kind || 'research')) || null
+})
+
+function setOptionValue(set) {
+  return set?.prediction_set_id || set?.kind || ''
+}
+
+const selectedSetValue = computed(() => (
+  props.form.prediction_set_id || props.form.prediction_kind || 'research'
 ))
 
 function compactDate(value) {
@@ -440,6 +460,7 @@ const modelCoversWindow = computed(() => {
 const predictionWindowWarnings = computed(() => {
   const set = selectedPredictionSet.value
   if (!set?.first_trade_date || !set?.last_trade_date) return []
+  if (set.status === 'archived') return ['该预测集已归档，不能用于新研究。']
   const start = compactDate(props.form.start_date)
   const end = compactDate(props.form.end_date)
   const warnings = []
@@ -466,6 +487,7 @@ const canSubmit = computed(() => {
     if (!String(props.form.model_id || '').trim()) return false
     if (!selectedPredictionSet.value) return false
     if (selectedPredictionSet.value.kind === 'legacy') return false
+    if (selectedPredictionSet.value.status === 'archived') return false
     if (!modelCoversWindow.value) return false
   }
   const rebalanceDays = String(props.form.horizon ?? '')
@@ -545,17 +567,18 @@ function onScoreModeChange(event) {
     const currentModel = String(props.form.model_id || '').trim()
     const covering = props.modelOptions.find((model) => (
       modelHasKind(model, 'research')
-      && modelPredictionSets(model).some((set) => set.kind === 'research' && setOverlapsWindow(set))
+      && modelPredictionSets(model).some((set) => set.kind === 'research' && set.status !== 'archived' && setOverlapsWindow(set))
     )) || props.modelOptions.find((model) => (
-      modelPredictionSets(model).some((set) => setOverlapsWindow(set))
+      modelPredictionSets(model).some((set) => set.status !== 'archived' && setOverlapsWindow(set))
     )) || props.modelOptions.find((model) => modelHasKind(model, 'research'))
       || props.modelOptions[0]
     const modelId = currentModel || covering?.model_id || ''
     const model = props.modelOptions.find((item) => item.model_id === modelId)
-    const kind = modelHasKind(model, 'research') ? 'research' : modelHasKind(model, 'shadow') ? 'shadow' : 'research'
-    Object.assign(patch, {
+    const set = preferredPredictionSet(model)
+    patchForm({
       model_id: modelId,
-      prediction_kind: kind,
+      prediction_kind: set?.kind || 'research',
+      prediction_set_id: set?.prediction_set_id || '',
       score_column: 'model_score',
       score_columns: ['model_score'],
     })
@@ -563,20 +586,34 @@ function onScoreModeChange(event) {
   patchForm(patch)
 }
 
+function preferredPredictionSet(model) {
+  const sets = modelPredictionSets(model)
+  return sets.find((set) => set.kind === 'research' && set.status !== 'archived')
+    || sets.find((set) => set.status !== 'archived')
+    || sets[0]
+    || null
+}
+
 function onModelChange(event) {
   const modelId = event.target.value
   const model = props.modelOptions.find((item) => item.model_id === modelId)
-  const kind = modelHasKind(model, 'research') ? 'research' : modelHasKind(model, 'shadow') ? 'shadow' : 'research'
+  const set = preferredPredictionSet(model)
   patchForm({
     model_id: modelId,
-    prediction_kind: kind,
+    prediction_kind: set?.kind || 'research',
+    prediction_set_id: set?.prediction_set_id || '',
     score_column: 'model_score',
     score_columns: ['model_score'],
   })
 }
 
-function onPredictionKindChange(event) {
-  patchForm({ prediction_kind: event.target.value })
+function onPredictionSetChange(event) {
+  const value = event.target.value
+  const set = predictionSetOptions.value.find((item) => setOptionValue(item) === value) || null
+  patchForm({
+    prediction_set_id: set?.prediction_set_id || '',
+    prediction_kind: set?.kind || 'research',
+  })
 }
 
 function modelOptionLabel(model) {
