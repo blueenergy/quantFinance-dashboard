@@ -14,8 +14,13 @@
         组合
         <select v-model="selectedParamsHash" @change="loadPlans">
           <option value="">全部组合</option>
-          <option v-for="p in portfolios" :key="p.params_hash" :value="p.params_hash">
-            [{{ executionVenueLabel(p.execution_venue) }}]{{ p.paused ? '⏸ ' : ' ' }}{{ portfolioOptionLabel(p) }}
+          <option
+            v-for="p in portfolios"
+            :key="p.params_hash"
+            :value="p.params_hash"
+            :title="portfolioOptionLabel(p)"
+          >
+            [{{ executionVenueLabel(p.execution_venue) }}] {{ portfolioShortLabel(p) }}
           </option>
         </select>
       </label>
@@ -280,7 +285,7 @@ import {
 import { usePlanOps } from '../composables/usePlanOps'
 import { usePortfolioPlanGeneration } from '../composables/usePortfolioPlanGeneration'
 import { usePortfolioPlansWorkbench } from '../composables/usePortfolioPlansWorkbench'
-import { executionVenueLabel, portfolioOptionLabel } from '../utils/portfolioOverviewFormat'
+import { executionVenueLabel, portfolioOptionLabel, portfolioShortLabel } from '../utils/portfolioOverviewFormat'
 import { useReselectPlanItems } from '../composables/useReselectPlanItems'
 import {
   buildPlanReviewRiskSummary,

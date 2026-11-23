@@ -63,6 +63,49 @@ export function portfolioOptionLabel(portfolio) {
   return `${name} · ${params} · ${range}（${portfolio.plan_count}期${account} · #${hash}）`
 }
 
+const MODEL_PREFIX_RE = /^(research|wf|promo|live|sleeve|model)-/
+const MODEL_UNIVERSE_RE = /^(csi1000|csi500|csi2000|hs300|a500|star50)-/
+const MODEL_VERSION_RE = /-(v\d+|\d+d)$/
+const DEFAULT_UNIVERSE = 'csi1000'
+
+const CONSTRUCTION_SHORT = {
+  top_n_buffer: 'buffer',
+  industry_neutral: '行业中性',
+  industry_capped: '行业帽',
+}
+
+/** Strip the noise that every model id shares so a dropdown can show it. */
+export function shortModelName(modelId) {
+  let text = String(modelId || '').trim()
+  if (!text) return ''
+  text = text.replace(MODEL_PREFIX_RE, '')
+  text = text.replace(MODEL_UNIVERSE_RE, '')
+  text = text.replace(MODEL_VERSION_RE, '')
+  return text
+}
+
+/**
+ * Compact combo label for dropdowns: who runs it, top-N, cadence, construction.
+ *
+ * The verbose ``portfolioOptionLabel`` stays available for tooltips — a select
+ * clips long text, so the date range / plan count / account / hash never fit.
+ */
+export function portfolioShortLabel(portfolio) {
+  const who = shortModelName(portfolio.model_id)
+    || portfolio.strategy_name
+    || portfolio.strategy_template_id
+    || '组合'
+  const parts = [who]
+  const universe = String(portfolio.universe_index || '').trim()
+  if (universe && universe !== DEFAULT_UNIVERSE) parts.push(universe)
+  if (portfolio.top_n != null) parts.push(`Top${portfolio.top_n}`)
+  if (portfolio.rebalance_days != null) parts.push(`${portfolio.rebalance_days}d`)
+  const construction = CONSTRUCTION_SHORT[String(portfolio.construction_mode || '')]
+  if (construction) parts.push(construction)
+  if (portfolio.paused) parts.push('⏸暂停')
+  return parts.join(' · ')
+}
+
 export function executionVenueLabel(venue) {
   if (venue === 'live') return '实盘'
   if (venue === 'paper') return '纸面'

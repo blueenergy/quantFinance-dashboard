@@ -139,8 +139,9 @@
               v-for="portfolio in livePortfolios"
               :key="portfolioKey(portfolio)"
               :value="portfolio.latest_plan_id"
+              :title="portfolioOptionLabel(portfolio)"
             >
-              {{ portfolioOptionLabel(portfolio) }}
+              [{{ executionVenueLabel(portfolio.execution_venue) }}] {{ portfolioShortLabel(portfolio) }}
             </option>
           </select>
           <small v-if="!livePortfolios.length" class="field-hint">暂无实盘组合（需有 live 成交 lineage）</small>
@@ -474,7 +475,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import axios from 'axios'
 import request from '../utils/request'
 import { listLivePortfolios } from '../api/portfolioPlans'
-import { portfolioKey, portfolioOptionLabel } from '../utils/portfolioOverviewFormat'
+import { executionVenueLabel, portfolioKey, portfolioOptionLabel, portfolioShortLabel } from '../utils/portfolioOverviewFormat'
 import { getSecuritiesAccounts } from '../api/user'
 import {
   getIntradayT0ExecutionSettings,

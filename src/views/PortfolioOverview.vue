@@ -16,8 +16,9 @@
             v-for="p in portfolios"
             :key="portfolioKey(p)"
             :value="portfolioKey(p)"
+            :title="portfolioOptionLabel(p)"
           >
-            [{{ executionVenueLabel(p.execution_venue) }}] {{ portfolioOptionLabel(p) }}
+            [{{ executionVenueLabel(p.execution_venue) }}] {{ portfolioShortLabel(p) }}
           </option>
         </select>
       </label>
@@ -381,6 +382,7 @@ import {
   planCompletionIncompleteCount,
   portfolioKey,
   portfolioOptionLabel,
+  portfolioShortLabel,
   shouldShowCatchUpPanel,
   shouldShowOverviewCatchUpGrid,
   shouldShowPlanCompletionPanel,
