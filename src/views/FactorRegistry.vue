@@ -129,7 +129,7 @@
                       :key="test._id"
                       :class="{ 'child-row': index > 0 }"
                     >
-                      <td>{{ test.test_type }}</td>
+                      <td :title="test.test_type">{{ typeLabel(test.test_type) }}</td>
                       <td>{{ test.stage }}</td>
                       <td><span class="pill" :class="test.verdict">{{ test.verdict }}</span></td>
                       <td class="protocol">
@@ -192,6 +192,23 @@ import {
 } from '../api/factorRegistry'
 
 const statuses = ['candidate', 'confirmed', 'in_use', 'inconclusive', 'screened', 'no_increment', 'rejected', 'untested']
+
+const TEST_TYPE_LABELS = {
+  ic_screen: 'IC 初筛（重叠）',
+  nonoverlap: '非重叠 t（判决）',
+  quantile: '分位单调性',
+  long_only: 'Long-only 成本',
+  nonoverlap_screen: '非重叠快筛',
+  ic_nonoverlap: '非重叠 IC',
+  delta_ic: '增量 ΔIC',
+  delta_ic_group: '分组 ΔIC',
+  long_only_oos: 'OOS Long-only',
+  long_only_group: '分组 Long-only',
+}
+
+function typeLabel(testType) {
+  return TEST_TYPE_LABELS[testType] || testType
+}
 
 const shellActiveTab = inject('shellActiveTab', null)
 const shellSwitchTab = inject('shellSwitchTab', null)
@@ -307,7 +324,9 @@ function metricText(test) {
       return `IC ${n(m.ic_mean)} t ${n(m.t_stat, 2)}`
     case 'nonoverlap':
     case 'nonoverlap_screen':
-      return `IC ${n(m.ic_mean)} t_non ${n(m.nonoverlap_t, 2)} MDE ${n(m.mde80)}`
+      // Workers store the non-overlap t under t_stat; older vault rows used
+      // nonoverlap_t.
+      return `IC ${n(m.ic_mean)} t_non ${n(m.nonoverlap_t ?? m.t_stat, 2)} MDE ${n(m.mde80)}`
     case 'ic_nonoverlap':
       return `IC ${n(m.ic_mean)} t ${n(m.nonoverlap_t ?? m.nw_t, 2)} MDE ${n(m.mde80)}`
     default:
