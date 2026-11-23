@@ -141,7 +141,7 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import '../assets/styles/factor-backtest.css'
 import { useFactorBacktestDetail } from '../composables/useFactorBacktestDetail'
 import { useFactorBacktestForm } from '../composables/useFactorBacktestForm'
@@ -161,6 +161,8 @@ const FactorCreateDrawer = defineAsyncComponent(
 )
 
 const NARROW_MQ = '(max-width: 800px)'
+
+const shellActiveTab = inject('shellActiveTab', null)
 
 const indexOptions = INDEX_OPTIONS
 const factorSetOptions = FACTOR_SET_OPTIONS
@@ -271,9 +273,21 @@ onMounted(() => {
     narrowQuery.addEventListener('change', onNarrowChange)
   }
   loadJobs()
+  consumeDeepLink()
+  // Tabs are mounted once and toggled with v-show, so a second visit from
+  // the factor registry never reaches onMounted. Watch the shell tab instead.
+  if (shellActiveTab) {
+    watch(shellActiveTab, (tabId) => {
+      if (tabId === 'factor-backtest') consumeDeepLink()
+    })
+  }
+})
+
+/** The factor registry's evidence table links here with this key. */
+function consumeDeepLink() {
   const pendingJob = takeDeepLinkedJob()
   if (pendingJob) selectJob(pendingJob, { resetResult: true })
-})
+}
 
 /** The factor registry's evidence table links here with this key. */
 function takeDeepLinkedJob() {
