@@ -48,8 +48,14 @@
         placeholder="搜索 model_id / family"
         @input="patch({ q: $event.target.value })"
       />
+      <input
+        :value="filters.factor"
+        type="search"
+        placeholder="因子 id，如 fm1.turnover_20d"
+        @input="patch({ factor: $event.target.value })"
+      />
       <button
-        v-if="filters.state || filters.index_code || filters.accepted || filters.q"
+        v-if="filters.state || filters.index_code || filters.accepted || filters.factor || filters.q"
         type="button"
         class="clear-filters"
         @click="clearFilters"
@@ -168,7 +174,7 @@ function patch(values) {
 }
 
 function clearFilters() {
-  emit('update:filters', { state: '', index_code: '', accepted: '', q: '' })
+  emit('update:filters', { state: '', index_code: '', accepted: '', q: '', factor: '' })
 }
 
 function validationLabel(model) {

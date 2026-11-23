@@ -16,11 +16,22 @@ export function useModelRegistry() {
   const detailError = ref('')
   const transitioning = ref(false)
   const transitionError = ref('')
+  function takeInitialFactor() {
+    try {
+      const value = window.sessionStorage.getItem('modelFactoryFactor') || ''
+      if (value) window.sessionStorage.removeItem('modelFactoryFactor')
+      return value
+    } catch {
+      return ''
+    }
+  }
+
   const filters = ref({
     state: '',
     index_code: '',
     accepted: '',
     q: '',
+    factor: takeInitialFactor(),
   })
   const selectedModelId = ref('')
   const selectedModel = ref(null)
@@ -47,6 +58,7 @@ export function useModelRegistry() {
       if (filters.value.state) params.state = filters.value.state
       if (filters.value.index_code) params.index_code = filters.value.index_code
       if (filters.value.accepted !== '') params.accepted = filters.value.accepted === 'true'
+      if (String(filters.value.factor || '').trim()) params.factor = String(filters.value.factor).trim()
       if (String(filters.value.q || '').trim()) params.q = String(filters.value.q).trim()
       const response = await listRegistryModels(params)
       if (seq !== listSeq) return

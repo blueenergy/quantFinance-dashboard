@@ -179,6 +179,13 @@ const search = ref('')
 const testedOnly = ref(false)
 
 function goModelFactory() {
+  if (selectedId.value) {
+    try {
+      window.sessionStorage.setItem('modelFactoryFactor', selectedId.value)
+    } catch {
+      // storage can be unavailable; the filter is a convenience only
+    }
+  }
   if (shellActiveTab) shellActiveTab.value = 'model-training'
 }
 
