@@ -267,7 +267,7 @@ export const tabViewDefinitions = [
     id: 'model-training',
     component: ModelTraining,
     fallbackClass: 'skeleton-table',
-    fallbackText: '模型训练加载中...',
+    fallbackText: '模型工厂加载中...',
   },
   {
     id: 'model-scores',

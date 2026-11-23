@@ -118,6 +118,22 @@
         </div>
       </section>
 
+      <section v-if="model.feature_factors?.length" class="detail-section">
+        <div class="section-title">
+          <h4>因子状态</h4>
+          <span class="muted">{{ model.feature_source || 'unrecorded' }}</span>
+        </div>
+        <div class="recipe-grid">
+          <span v-for="feature in model.feature_factors" :key="`${feature.factor_id}-${feature.name}`">
+            <em>{{ feature.name }}</em>
+            <strong>{{ feature.factor_id ? (model.feature_status?.[feature.factor_id] || '-') : feature.kind }}</strong>
+          </span>
+        </div>
+        <button type="button" class="link-btn" @click="goFactorRegistry">
+          在 📚 因子注册表查看证据
+        </button>
+      </section>
+
       <section class="detail-section">
         <div class="section-title">
           <h4>训练任务</h4>
@@ -223,7 +239,13 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, inject, ref } from 'vue'
+
+const shellActiveTab = inject('shellActiveTab', null)
+
+function goFactorRegistry() {
+  if (shellActiveTab) shellActiveTab.value = 'factor-registry'
+}
 
 const props = defineProps({
   model: { type: Object, default: null },
@@ -721,4 +743,14 @@ function historyFrom(item) {
   gap: 6px;
   color: #9a3412;
   font-size: 12px;
+}
+
+.link-btn {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 12px;
+  cursor: pointer;
 }

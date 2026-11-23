@@ -21,13 +21,7 @@
       </div>
     </section>
 
-    <div class="view-switch">
-      <button type="button" :class="{ active: view === 'factors' }" @click="view = 'factors'">因子</button>
-      <button type="button" :class="{ active: view === 'models' }" @click="openModels">模型候选</button>
-    </div>
-
-    <template v-if="view === 'factors'">
-      <section class="filters card">
+    <section class="filters card">
         <label>
           状态
           <select v-model="statusFilter" @change="loadFactors">
@@ -151,79 +145,42 @@
                   {{ model.model_id }} <small>{{ model.state }}</small>
                 </span>
               </div>
+              <button type="button" class="link-btn" @click="goModelFactory">
+                模型生命周期与验证见 🧠 模型工厂
+              </button>
             </section>
           </template>
           <p v-else class="muted empty">选择左侧因子查看定义、测试证据和模型使用。</p>
         </aside>
       </div>
-    </template>
-
-    <template v-else>
-      <section class="filters card">
-        <label>
-          模型状态
-          <select v-model="modelStateFilter" @change="loadModels">
-            <option value="">全部</option>
-            <option v-for="item in modelStates" :key="item" :value="item">{{ item }}</option>
-          </select>
-        </label>
-        <span class="muted">模型按 state 排序；factor_status 是每个特征在注册表里的状态。</span>
-      </section>
-
-      <section class="card table-card">
-        <table>
-          <thead>
-            <tr><th>模型</th><th>状态</th><th>类型</th><th>特征</th><th>因子状态</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="model in models" :key="model.model_id">
-              <td>
-                <code>{{ model.model_id }}</code>
-                <small v-if="model.display_name">{{ model.display_name }}</small>
-              </td>
-              <td><span class="pill" :class="model.state">{{ model.state }}</span></td>
-              <td>{{ model.model_type || '-' }}</td>
-              <td>
-                <span v-for="f in model.features" :key="`${f.factor_id}-${f.name}`" class="feature-chip">
-                  {{ f.name }}
-                  <small v-if="f.factor_id">· {{ model.factor_status?.[f.factor_id] || '-' }}</small>
-                </span>
-              </td>
-              <td>{{ Object.keys(model.factor_status || {}).length }} 个因子</td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-if="!loading && !models.length" class="muted empty">没有匹配的模型。</p>
-      </section>
-    </template>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, inject, onMounted, ref } from 'vue'
 import {
   getFactorRegistryDetail,
   getFactorRegistrySummary,
   listFactorRegistry,
-  listModelCandidates,
 } from '../api/factorRegistry'
 
 const statuses = ['candidate', 'confirmed', 'in_use', 'inconclusive', 'screened', 'no_increment', 'rejected', 'untested']
-const modelStates = ['live', 'shadow', 'validated', 'research', 'retired', 'rejected']
 
-const view = ref('factors')
+const shellActiveTab = inject('shellActiveTab', null)
 const loading = ref(false)
 const errorMessage = ref('')
 const summary = ref(null)
 const factors = ref([])
 const detail = ref(null)
-const models = ref([])
 const selectedId = ref('')
 const statusFilter = ref('')
 const sourceFilter = ref('')
-const modelStateFilter = ref('')
 const search = ref('')
 const testedOnly = ref(false)
+
+function goModelFactory() {
+  if (shellActiveTab) shellActiveTab.value = 'model-training'
+}
 
 const summaryCards = computed(() => {
   const s = summary.value || {}
@@ -312,29 +269,8 @@ async function selectFactor(factorId) {
   }
 }
 
-async function loadModels() {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const params = { limit: 200 }
-    if (modelStateFilter.value) params.state = modelStateFilter.value
-    const res = await listModelCandidates(params)
-    models.value = res?.rows || []
-  } catch (error) {
-    errorMessage.value = error?.response?.data?.detail || '模型候选加载失败'
-  } finally {
-    loading.value = false
-  }
-}
-
-function openModels() {
-  view.value = 'models'
-  if (!models.value.length) loadModels()
-}
-
 async function refresh() {
   await Promise.all([loadSummary(), loadFactors()])
-  if (view.value === 'models') await loadModels()
 }
 
 onMounted(refresh)
@@ -628,6 +564,16 @@ td .small {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.link-btn {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .model-chip,

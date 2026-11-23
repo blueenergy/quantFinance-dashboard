@@ -78,7 +78,7 @@ export const NAV_TABS = [
   { id: 'factor-backtest', name: '🧬 因子回测', group: 'strategy' },
   { id: 'factor-registry', name: '📚 因子注册表', group: 'strategy' },
   { id: 'portfolio-research', name: '🧩 组合研究', group: 'strategy' },
-  { id: 'model-training', name: '🧠 模型训练', group: 'strategy' },
+  { id: 'model-training', name: '🧠 模型工厂', group: 'strategy' },
 
   // 交易
   { id: 'portfolio-plans', name: '📋 组合交易计划', group: 'trading' },
