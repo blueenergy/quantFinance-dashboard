@@ -116,30 +116,44 @@
             </section>
 
             <section>
-              <h4>检验证据（最近 {{ detail.tests.length }} 条）</h4>
+              <h4>检验证据（{{ detail.tests.length }} 条 / {{ testGroups.length }} 类）</h4>
               <div class="tests-scroll">
               <table class="tests">
                 <thead>
                   <tr><th>类型</th><th>阶段</th><th>判决</th><th>口径</th><th>日期</th><th>指标</th><th>报告</th></tr>
                 </thead>
                 <tbody>
-                  <tr v-for="test in detail.tests" :key="test._id">
-                    <td>{{ test.test_type }}</td>
-                    <td>{{ test.stage }}</td>
-                    <td><span class="pill" :class="test.verdict">{{ test.verdict }}</span></td>
-                    <td class="protocol">
-                      {{ test.protocol?.pool || '-' }} · {{ test.protocol?.window || '-' }} ·
-                      h{{ test.protocol?.horizon ?? '-' }}
-                    </td>
-                    <td>{{ test.as_of || '-' }}</td>
-                    <td>{{ metricText(test) }}</td>
-                    <td>
-                      <button v-if="test.job_id" type="button" class="link-btn" @click="openReport(test.job_id)">
-                        报告
-                      </button>
-                      <span v-else class="muted">-</span>
-                    </td>
-                  </tr>
+                  <template v-for="group in testGroups" :key="group.key">
+                    <tr
+                      v-for="(test, index) in visibleRows(group)"
+                      :key="test._id"
+                      :class="{ 'child-row': index > 0 }"
+                    >
+                      <td>{{ test.test_type }}</td>
+                      <td>{{ test.stage }}</td>
+                      <td><span class="pill" :class="test.verdict">{{ test.verdict }}</span></td>
+                      <td class="protocol">
+                        {{ test.protocol?.pool || '-' }} · {{ test.protocol?.window || '-' }} ·
+                        h{{ test.protocol?.horizon ?? '-' }}
+                      </td>
+                      <td>{{ test.as_of || '-' }}</td>
+                      <td>{{ metricText(test) }}</td>
+                      <td class="report-cell">
+                        <button v-if="test.job_id" type="button" class="link-btn" @click="openReport(test.job_id)">
+                          报告
+                        </button>
+                        <span v-else class="muted">-</span>
+                        <button
+                          v-if="index === 0 && group.rows.length > 1"
+                          type="button"
+                          class="link-btn more-btn"
+                          @click="toggleType(group.key)"
+                        >
+                          {{ expandedTypes[group.key] ? '收起' : `共 ${group.rows.length} 条` }}
+                        </button>
+                      </td>
+                    </tr>
+                  </template>
                 </tbody>
               </table>
               </div>
@@ -229,6 +243,29 @@ const summaryCards = computed(() => {
 
 const sourceOptions = computed(() => Object.keys(summary.value?.sources || {}).sort())
 
+// The ledger is append-only: reruns and protocol variants accumulate one row
+// per (factor, test_type, job). Collapse to the latest row per test_type by
+// default; the count button reveals the full history for that type.
+const expandedTypes = ref({})
+
+const testGroups = computed(() => {
+  const groups = new Map()
+  for (const test of detail.value?.tests || []) {
+    const key = test.test_type || 'unknown'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(test)
+  }
+  return [...groups.entries()].map(([key, rows]) => ({ key, rows }))
+})
+
+function visibleRows(group) {
+  return expandedTypes.value[group.key] ? group.rows : group.rows.slice(0, 1)
+}
+
+function toggleType(key) {
+  expandedTypes.value = { ...expandedTypes.value, [key]: !expandedTypes.value[key] }
+}
+
 const coverageRows = computed(() => {
   const byYear = detail.value?.registry?.coverage?.by_year || {}
   return Object.entries(byYear)
@@ -294,6 +331,7 @@ async function loadFactors() {
 async function selectFactor(factorId) {
   selectedId.value = factorId
   detail.value = null
+  expandedTypes.value = {}
   try {
     const res = await getFactorRegistryDetail(factorId)
     detail.value = res || null
@@ -601,6 +639,20 @@ td .small {
 .tests .link-btn {
   margin-top: 0;
   white-space: nowrap;
+}
+
+.report-cell {
+  white-space: nowrap;
+}
+
+.more-btn {
+  margin-left: 8px;
+  color: #64748b;
+}
+
+.tests tr.child-row td {
+  background: #fbfdff;
+  color: #64748b;
 }
 
 .protocol {
