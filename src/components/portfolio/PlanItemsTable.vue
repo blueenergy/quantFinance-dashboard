@@ -236,13 +236,13 @@
             >
           </td>
           <td class="col-narrow">{{ item.rank ?? '-' }}</td>
-          <td class="col-stock" :title="`${actionBadge(item).label} ${item.name || ''} ${item.symbol || ''}`">
+          <td class="col-stock" :title="`${directionBadge(item).label} ${item.name || ''} ${item.symbol || ''}`">
             <AppLink
               tab="stock-workbench"
               :params="{ symbol: item.symbol }"
               class="stock-workbench-link"
             >
-              <span class="action-tag" :class="actionBadge(item).cls">{{ actionBadge(item).text }}</span>
+              <span class="action-tag" :class="directionBadge(item).cls">{{ directionBadge(item).text }}</span>
               <span class="stock-workbench-link__name" :title="item.symbol || ''">{{ item.name || item.symbol || '-' }}</span>
             </AppLink>
           </td>
@@ -381,6 +381,7 @@ import { useLlmRiskDetail } from '../../composables/useLlmRiskDetail'
 import { buildDeepLinkHref } from '../../utils/appDeepLinks.js'
 import {
   actionBadge,
+  driftActionBadge,
   aiRiskBadge,
   aiRiskTitle,
   blockerText,
@@ -420,6 +421,12 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['toggle-reselect', 'reselect', 'risk-changed'])
+
+// A monitor plan cannot trade, so `action` is always hold/skip; the intended
+// move is in drift_delta_shares.
+function directionBadge(item) {
+  return props.selectedPlanIsMonitorNoTrade ? driftActionBadge(item) : actionBadge(item)
+}
 
 const showOverlay = computed(() => Boolean(props.overlay?.enabled !== false))
 const scoreContext = computed(() => props.overlay?.score_context || {})

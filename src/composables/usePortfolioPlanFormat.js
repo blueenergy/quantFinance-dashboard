@@ -415,6 +415,25 @@ export function driftBadge(item) {
   return { text: `${drift} 待卖`, cls: 'drift-sell' }
 }
 
+/**
+ * Action badge for a plan that cannot trade.
+ *
+ * ``action`` is the *executable* intent: a monitor plan disables trading, so
+ * every row is stamped hold/skip and a target of 0 on a held name reads as
+ * "持有". The intended move lives in ``drift_delta_shares``. Showing that keeps
+ * the 方向 column honest next to the 漂移 column.
+ */
+export function driftActionBadge(item) {
+  const drift = Number(item?.drift_delta_shares ?? 0)
+  const current = Number(item?.current_shares ?? 0)
+  if (!Number.isFinite(drift) || drift === 0) {
+    if (current > 0) return { text: 'H', label: '持有', cls: 'tag-hold' }
+    return { text: '·', label: '跳过', cls: 'tag-skip' }
+  }
+  if (drift > 0) return { text: 'B', label: '拟买入（本计划不执行）', cls: 'tag-buy' }
+  return { text: 'S', label: '拟卖出（本计划不执行）', cls: 'tag-sell' }
+}
+
 export function aiRiskBadge(item) {
   const risk = item?.ai_risk
   const severity = riskDisplaySeverity(risk)
