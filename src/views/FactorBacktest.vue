@@ -49,11 +49,13 @@
               创建 {{ formatJobDateTime(selectedJob.created_at) }}
               <template v-if="selectedJob.worker_id"> · worker {{ selectedJob.worker_id }}</template>
               <template v-if="selectedJob.attempts"> · 第 {{ selectedJob.attempts }} 次尝试</template>
+              <template v-if="isForeignJob"> · 其他账号的任务（只读）</template>
             </p>
           </div>
           <div class="detail-actions">
             <button type="button" class="secondary-btn" @click="openRerunDrawer(selectedJob)">以此参数重跑</button>
             <button
+              v-if="!isForeignJob"
               type="button"
               class="danger-btn"
               :disabled="deleteLoading || isJobBusy"
@@ -143,6 +145,7 @@
 <script setup>
 import { computed, defineAsyncComponent, inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import '../assets/styles/factor-backtest.css'
+import { useAuth } from '../services/auth'
 import { useFactorBacktestDetail } from '../composables/useFactorBacktestDetail'
 import { useFactorBacktestForm } from '../composables/useFactorBacktestForm'
 import { useFactorBacktestJobs } from '../composables/useFactorBacktestJobs'
@@ -163,6 +166,7 @@ const FactorCreateDrawer = defineAsyncComponent(
 const NARROW_MQ = '(max-width: 800px)'
 
 const shellActiveTab = inject('shellActiveTab', null)
+const { user } = useAuth()
 
 const indexOptions = INDEX_OPTIONS
 const factorSetOptions = FACTOR_SET_OPTIONS
@@ -262,6 +266,14 @@ let narrowQuery = null
 function onNarrowChange(event) {
   isNarrow.value = event.matches
 }
+
+// Reports cited by the shared factor ledger are readable but not deletable;
+// the delete endpoint stays owner-scoped.
+const isForeignJob = computed(() => {
+  const uid = user.value?.id
+  const owner = selectedJob.value?.user_id
+  return Boolean(uid && owner && String(owner) !== String(uid))
+})
 
 const stageProgress = computed(() => jobStageProgress(selectedJob.value))
 const elapsedLabel = computed(() => jobElapsedLabel(selectedJob.value, nowMs.value))
