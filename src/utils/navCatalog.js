@@ -76,6 +76,7 @@ export const NAV_TABS = [
   { id: 'strategy-pool', name: '🎯 策略股池', group: 'strategy' },
   { id: 'strategy-lab', name: '🧪 策略实验室', group: 'strategy' },
   { id: 'factor-backtest', name: '🧬 因子回测', group: 'strategy' },
+  { id: 'factor-registry', name: '📚 因子注册表', group: 'strategy' },
   { id: 'portfolio-research', name: '🧩 组合研究', group: 'strategy' },
   { id: 'model-training', name: '🧠 模型训练', group: 'strategy' },
 
