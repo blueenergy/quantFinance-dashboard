@@ -9,6 +9,7 @@ export function useFactorBacktestJobs({
   selectedJob = ref(null),
   report = ref(null),
   refreshSelected = async () => {},
+  keepSelection = () => false,
 } = {}) {
   const jobs = ref([])
   const statusFilter = ref('')
@@ -40,8 +41,10 @@ export function useFactorBacktestJobs({
       jobs.value = res.data || []
       if (selectedJobId.value && jobs.value.some((job) => job.job_id === selectedJobId.value)) {
         selectedJob.value = jobs.value.find((job) => job.job_id === selectedJobId.value)
-      } else if (selectedJobId.value) {
+      } else if (selectedJobId.value && !keepSelection(selectedJob.value)) {
         // A filter change or a delete dropped the selection out of the list.
+        // Reports opened from the shared factor ledger belong to other
+        // accounts, so they never appear here and must survive the refresh.
         selectedJobId.value = ''
         selectedJob.value = null
         report.value = null

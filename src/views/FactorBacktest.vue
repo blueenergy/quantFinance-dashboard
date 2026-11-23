@@ -227,6 +227,9 @@ const {
   selectedJob,
   report,
   refreshSelected: (jobId) => selectJob(jobId),
+  // `job` is null while a deep-linked job fetch is still in flight; do not
+  // clear the selection before it lands. Filter changes always have a job.
+  keepSelection: (job) => !job || isForeignJob.value,
 }))
 
 const {
@@ -296,19 +299,31 @@ onMounted(() => {
 })
 
 /** The factor registry's evidence table links here with this key. */
-function consumeDeepLink() {
-  const pendingJob = takeDeepLinkedJob()
-  if (pendingJob) selectJob(pendingJob, { resetResult: true })
+async function consumeDeepLink() {
+  const pending = takeDeepLinkedJob()
+  if (!pending) return
+  await selectJob(pending.job_id, { resetResult: true })
+  // selectJob's syncSelection picks a default factor/horizon; restore the
+  // ones the evidence row actually points at.
+  if (pending.factor_id) selectFactor(pending.factor_id)
+  if (pending.horizon != null && horizons.value.includes(String(pending.horizon))) {
+    selectHorizon(String(pending.horizon))
+  }
 }
 
 /** The factor registry's evidence table links here with this key. */
 function takeDeepLinkedJob() {
   try {
-    const jobId = window.sessionStorage.getItem('factorBacktestJob') || ''
-    if (jobId) window.sessionStorage.removeItem('factorBacktestJob')
-    return jobId
+    const raw = window.sessionStorage.getItem('factorBacktestJob') || ''
+    if (raw) window.sessionStorage.removeItem('factorBacktestJob')
+    if (!raw) return null
+    if (raw.startsWith('{')) {
+      const parsed = JSON.parse(raw)
+      return parsed?.job_id ? parsed : null
+    }
+    return { job_id: raw } // links written before the payload became JSON
   } catch {
-    return ''
+    return null
   }
 }
 

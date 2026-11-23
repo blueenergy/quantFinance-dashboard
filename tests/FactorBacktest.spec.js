@@ -13,6 +13,7 @@ const api = vi.hoisted(() => ({
 vi.mock('../src/api/factorBacktest', () => api)
 
 import FactorBacktest from '../src/views/FactorBacktest.vue'
+import { authService } from '../src/services/auth'
 
 const RUNNING_JOB = {
   job_id: 'job-1',
@@ -44,6 +45,8 @@ const RUNNING_JOB = {
 describe('FactorBacktest view', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.sessionStorage.clear()
+    authService.user.value = null
     api.listFactorBacktestJobs.mockResolvedValue({ data: [] })
     api.listFactorCatalog.mockResolvedValue({
       data: [{ factor_set: 'alpha8', factors: [{ name: 'alpha1', family: 'K线形态', description: '实体涨跌幅' }] }],
@@ -108,6 +111,50 @@ describe('FactorBacktest view', () => {
     expect(text).toContain('alpha1 · 5d 诊断')
     expect(text).toContain('72,000')
     expect(text).toContain('Point-in-time（当时成分股）')
+    wrapper.unmount()
+  })
+
+  it('opens the job, factor and horizon named by a registry deep link', async () => {
+    // The cited job belongs to system-backfill, so it is absent from this
+    // user's list; the deep-linked selection must survive loadJobs.
+    authService.user.value = { id: 'user-me', username: 'tester' }
+    const completed = {
+      ...RUNNING_JOB,
+      status: 'completed',
+      result_id: 'res-2',
+      user_id: 'system-backfill',
+    }
+    api.listFactorBacktestJobs.mockResolvedValue({ data: [] })
+    api.getFactorBacktestJob.mockResolvedValue({ data: completed })
+    api.getFactorBacktestResults.mockResolvedValue({
+      data: {
+        report: {
+          rows: 72000,
+          distinct_dates: 240,
+          symbols: 300,
+          evaluated_columns: 2,
+          score_date_range: ['20230103', '20231229'],
+          factors: {
+            alpha1: { 5: { ic: { ic_mean: 0.01 }, quantiles: {} }, 10: { ic: { ic_mean: 0.02 }, quantiles: {} } },
+            alpha2: { 5: { ic: { ic_mean: 0.03 }, quantiles: {} }, 10: { ic: { ic_mean: 0.04 }, quantiles: {} } },
+          },
+          screen: { horizon: 5, ranked: [{ factor: 'alpha1', ic_mean: 0.01 }] },
+          source: { point_in_time_universe: true },
+          net_returns: [],
+          factor_meta: [{ name: 'alpha1' }, { name: 'alpha2' }],
+        },
+      },
+    })
+    window.sessionStorage.setItem(
+      'factorBacktestJob',
+      JSON.stringify({ job_id: 'job-1', factor_id: 'alpha2', horizon: 10 }),
+    )
+    const wrapper = mount(FactorBacktest)
+    await flushPromises()
+
+    expect(api.getFactorBacktestJob).toHaveBeenCalledWith('job-1')
+    expect(wrapper.text()).toContain('alpha2 · 10d 诊断')
+    expect(window.sessionStorage.getItem('factorBacktestJob')).toBeNull()
     wrapper.unmount()
   })
 

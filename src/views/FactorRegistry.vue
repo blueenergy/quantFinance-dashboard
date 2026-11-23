@@ -140,7 +140,7 @@
                       <td>{{ metricText(test) }}</td>
                       <td class="report-cell">
                         <div class="report-actions">
-                          <button v-if="test.job_id" type="button" class="link-btn" @click="openReport(test.job_id)">
+                          <button v-if="test.job_id" type="button" class="link-btn" @click="openReport(test)">
                             报告
                           </button>
                           <span v-else class="muted">-</span>
@@ -213,10 +213,15 @@ const sourceFilter = ref('')
 const search = ref('')
 const testedOnly = ref(false)
 
-function openReport(jobId) {
-  if (!jobId) return
+function openReport(test) {
+  if (!test?.job_id) return
+  const payload = {
+    job_id: test.job_id,
+    factor_id: selectedId.value || '',
+    horizon: test.protocol?.horizon ?? null,
+  }
   try {
-    window.sessionStorage.setItem('factorBacktestJob', jobId)
+    window.sessionStorage.setItem('factorBacktestJob', JSON.stringify(payload))
   } catch {
     // storage can be unavailable; the deep link degrades to the tab switch
   }
