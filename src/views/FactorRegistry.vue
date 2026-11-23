@@ -21,6 +21,46 @@
       </div>
     </section>
 
+    <details class="guide card">
+      <summary>🔎 新手导读：这张表怎么读</summary>
+      <div class="guide-body">
+        <section>
+          <h4>状态是什么意思</h4>
+          <dl class="guide-list">
+            <div v-for="item in statusGuide" :key="item.key">
+              <dt><span class="pill" :class="item.key">{{ item.key }}</span></dt>
+              <dd>{{ item.desc }}</dd>
+            </div>
+          </dl>
+        </section>
+        <section>
+          <h4>检验类型在测什么</h4>
+          <dl class="guide-list">
+            <div v-for="item in testTypeGuide" :key="item.key">
+              <dt>{{ item.label }}</dt>
+              <dd>{{ item.desc }}</dd>
+            </div>
+          </dl>
+        </section>
+        <section>
+          <h4>表里那几个数字</h4>
+          <dl class="guide-list">
+            <div v-for="item in metricGuide" :key="item.key">
+              <dt>{{ item.key }}</dt>
+              <dd>{{ item.desc }}</dd>
+            </div>
+          </dl>
+        </section>
+        <section>
+          <h4>覆盖率口径与 A 股注意事项</h4>
+          <p class="muted">{{ coverageNote }}</p>
+          <ul class="guide-notes">
+            <li v-for="note in aShareNotes" :key="note">{{ note }}</li>
+          </ul>
+        </section>
+      </div>
+    </details>
+
     <section class="filters card">
         <label>
           状态
@@ -95,7 +135,36 @@
               <span class="pill" :class="detail.registry.status">{{ detail.registry.status }}</span>
             </p>
             <p v-if="detail.registry.formula" class="formula">{{ detail.registry.formula }}</p>
-            <p v-if="detail.registry.description" class="muted">{{ detail.registry.description }}</p>
+            <p v-if="detail.registry.description && !primer" class="muted">
+              {{ detail.registry.description }}
+            </p>
+
+            <section v-if="primer" class="primer">
+              <h4>
+                这个因子在抓什么
+                <span v-if="primer.scope === 'family'" class="scope-tag">家族级说明</span>
+              </h4>
+              <dl class="primer-list">
+                <div><dt>直觉</dt><dd>{{ primer.intuition }}</dd></div>
+                <div><dt>怎么看</dt><dd>{{ primer.reading }}</dd></div>
+                <div><dt>例子</dt><dd>{{ primer.example }}</dd></div>
+                <div><dt>什么时候会骗人</dt><dd>{{ primer.caveats }}</dd></div>
+              </dl>
+              <p v-if="primer.refs?.length" class="refs">
+                <span class="refs-label">参考：</span>
+                <a
+                  v-for="ref in primer.refs"
+                  :key="ref.url"
+                  :href="ref.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >{{ ref.title }}</a>
+              </p>
+            </section>
+
+            <p v-if="metaRows.length" class="meta-rows">
+              <span v-for="row in metaRows" :key="row.label">{{ row.label }}：{{ row.value }}</span>
+            </p>
             <p v-if="detail.registry.aliases?.length" class="muted">
               aliases: {{ detail.registry.aliases.join(', ') }}
             </p>
@@ -190,8 +259,28 @@ import {
   getFactorRegistrySummary,
   listFactorRegistry,
 } from '../api/factorRegistry'
+import {
+  FACTOR_A_SHARE_NOTES,
+  FACTOR_COVERAGE_NOTE,
+  FACTOR_METRIC_GUIDE,
+  FACTOR_STATUSES,
+  FACTOR_STATUS_GUIDE,
+  FACTOR_TEST_TYPE_GUIDE,
+} from '../constants/factorGuide'
 
-const statuses = ['candidate', 'confirmed', 'in_use', 'inconclusive', 'screened', 'no_increment', 'rejected', 'untested']
+const statuses = FACTOR_STATUSES
+
+const statusGuide = FACTOR_STATUS_GUIDE
+const testTypeGuide = FACTOR_TEST_TYPE_GUIDE
+const metricGuide = FACTOR_METRIC_GUIDE
+const coverageNote = FACTOR_COVERAGE_NOTE
+const aShareNotes = FACTOR_A_SHARE_NOTES
+
+const DIRECTION_LABELS = {
+  higher_is_better: '越大越好',
+  lower_is_better: '越小越好',
+  neutral: '中性（只用于分组或规模度量）',
+}
 
 const TEST_TYPE_LABELS = {
   ic_screen: 'IC 初筛（重叠）',
@@ -269,6 +358,28 @@ const summaryCards = computed(() => {
 })
 
 const sourceOptions = computed(() => Object.keys(summary.value?.sources || {}).sort())
+
+// The primer is written into the registry document by
+// quant-factor-research/tools/sync_factor_primers.py; the API returns the
+// document as-is, so nothing has to be joined here.
+const primer = computed(() => {
+  const value = detail.value?.registry?.primer
+  return value?.intuition ? value : null
+})
+
+const metaRows = computed(() => {
+  const registry = detail.value?.registry || {}
+  const rows = []
+  if (registry.direction) {
+    rows.push({
+      label: '方向',
+      value: DIRECTION_LABELS[registry.direction] || registry.direction,
+    })
+  }
+  if (registry.units) rows.push({ label: '单位', value: registry.units })
+  if (registry.pit_rule) rows.push({ label: '点时规则', value: registry.pit_rule })
+  return rows
+})
 
 // The ledger is append-only: reruns and protocol variants accumulate one row
 // per (factor, test_type, job). Collapse to the latest row per test_type by
@@ -751,6 +862,158 @@ td .small {
   border-radius: 8px;
   background: #fef2f2;
   color: #b91c1c;
+}
+
+.guide {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+}
+
+.guide > summary {
+  cursor: pointer;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+}
+
+.guide > summary::-webkit-details-marker {
+  display: none;
+}
+
+.guide > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: #94a3b8;
+}
+
+.guide[open] > summary::before {
+  content: '▾';
+}
+
+.guide-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.guide-body h4 {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.guide-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.guide-list > div {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.guide-list dt {
+  color: #334155;
+  font-weight: 600;
+}
+
+.guide-list dd {
+  margin: 0;
+  color: #64748b;
+}
+
+.guide-notes {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.primer {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fbfdff;
+}
+
+.primer h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.scope-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.primer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.primer-list > div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.primer-list dt {
+  color: #475569;
+  font-weight: 600;
+}
+
+.primer-list dd {
+  margin: 0;
+  color: #334155;
+}
+
+.refs {
+  margin: 10px 0 0;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.refs-label {
+  color: #94a3b8;
+}
+
+.refs a {
+  display: inline-block;
+  margin: 2px 10px 2px 0;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.refs a:hover {
+  text-decoration: underline;
+}
+
+.meta-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 10px 0 0;
+  color: #64748b;
+  font-size: 11px;
 }
 
 @media (max-width: 1080px) {
