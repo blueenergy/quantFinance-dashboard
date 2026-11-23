@@ -426,9 +426,14 @@ function setOptionValue(set) {
   return set?.prediction_set_id || set?.kind || ''
 }
 
-const selectedSetValue = computed(() => (
-  props.form.prediction_set_id || props.form.prediction_kind || 'research'
-))
+const selectedSetValue = computed(() => {
+  const setId = props.form.prediction_set_id
+  if (setId && predictionSetOptions.value.some((set) => set.prediction_set_id === setId)) {
+    return setId
+  }
+  const set = selectedPredictionSet.value
+  return set?.prediction_set_id || props.form.prediction_kind || 'research'
+})
 
 function compactDate(value) {
   return String(value || '').replace(/-/g, '').slice(0, 8)
