@@ -280,7 +280,7 @@ function metricText(test) {
 
 async function loadSummary() {
   const res = await getFactorRegistrySummary()
-  summary.value = res.data || null
+  summary.value = res || null
 }
 
 async function loadFactors() {
@@ -293,7 +293,7 @@ async function loadFactors() {
     if (search.value) params.q = search.value
     if (testedOnly.value) params.tested = true
     const res = await listFactorRegistry(params)
-    factors.value = res.data?.rows || []
+    factors.value = res?.rows || []
   } catch (error) {
     errorMessage.value = error?.response?.data?.detail || '因子列表加载失败'
   } finally {
@@ -306,7 +306,7 @@ async function selectFactor(factorId) {
   detail.value = null
   try {
     const res = await getFactorRegistryDetail(factorId)
-    detail.value = res.data || null
+    detail.value = res || null
   } catch (error) {
     errorMessage.value = error?.response?.data?.detail || '因子详情加载失败'
   }
@@ -319,7 +319,7 @@ async function loadModels() {
     const params = { limit: 200 }
     if (modelStateFilter.value) params.state = modelStateFilter.value
     const res = await listModelCandidates(params)
-    models.value = res.data?.rows || []
+    models.value = res?.rows || []
   } catch (error) {
     errorMessage.value = error?.response?.data?.detail || '模型候选加载失败'
   } finally {
