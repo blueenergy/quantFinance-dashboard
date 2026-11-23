@@ -243,8 +243,7 @@
               class="stock-workbench-link"
             >
               <span class="action-tag" :class="actionBadge(item).cls">{{ actionBadge(item).text }}</span>
-              <span class="stock-workbench-link__name">{{ item.name || item.symbol || '-' }}</span>
-              <span v-if="item.symbol" class="stock-workbench-link__symbol">{{ item.symbol }}</span>
+              <span class="stock-workbench-link__name" :title="item.symbol || ''">{{ item.name || item.symbol || '-' }}</span>
             </AppLink>
           </td>
           <td class="col-ind" :title="item.industry || ''">{{ item.industry || '-' }}</td>
