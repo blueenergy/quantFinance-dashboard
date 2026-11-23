@@ -17,6 +17,7 @@ import {
   listPortfolioParameterPresets,
   listPortfolioPlanGenerationTasks,
   listPortfolioPlans,
+  listPortfolios,
   listPortfolioStrategies,
   listPortfolioWorkerStatus,
   listTraderHeartbeats,
@@ -49,7 +50,10 @@ export function usePortfolioPlansWorkbench({
   applyDefaultPreset = () => {},
   onBeforeSelect = () => {},
 } = {}) {
-  const selectedStrategyId = ref('')
+  // The plan list filters by lineage (params_hash), not by template: every
+  // lineage shares one template, so a template filter has exactly one option.
+  const selectedParamsHash = ref('')
+  const portfolios = ref([])
   const statusFilter = ref('')
   const showOnlyActionRequired = ref(true)
   const hideMonitorPlans = ref(true)
@@ -164,6 +168,16 @@ export function usePortfolioPlansWorkbench({
     }
   }
 
+  async function loadPortfolios() {
+    try {
+      const res = await listPortfolios()
+      portfolios.value = res.data?.portfolios || []
+    } catch (error) {
+      portfolios.value = []
+      throw error
+    }
+  }
+
   async function loadStrategies() {
     try {
       const res = await listPortfolioStrategies()
@@ -194,7 +208,7 @@ export function usePortfolioPlansWorkbench({
     message.value = ''
     try {
       const params = {}
-      if (selectedStrategyId.value) params.strategy_template_id = selectedStrategyId.value
+      if (selectedParamsHash.value) params.params_hash = selectedParamsHash.value
       if (statusFilter.value) params.status = statusFilter.value
       const res = await listPortfolioPlans(params)
       plans.value = res.data || []
@@ -354,6 +368,7 @@ export function usePortfolioPlansWorkbench({
     const initialResults = await Promise.allSettled([
       loadSecuritiesAccounts(),
       loadStrategies(),
+      loadPortfolios(),
     ])
     reportFirstRejected(initialResults, '部分基础配置加载失败')
     const availableStrategies = strategies.value.filter((strategy) => strategy.status !== 'disabled')
@@ -390,7 +405,7 @@ export function usePortfolioPlansWorkbench({
       currentGenerationTask.value = res.data
       await loadPlanGenerationWatermark()
       await loadGenerationTasks()
-      selectedStrategyId.value = generateForm.value.strategy_template_id
+      if (res.data?.params_hash) selectedParamsHash.value = res.data.params_hash
       statusFilter.value = ''
       message.value = `已提交生成任务 ${res.data?.task_id || ''}`
       startGenerationTaskPolling(res.data?.task_id)
@@ -625,7 +640,8 @@ export function usePortfolioPlansWorkbench({
   })
 
   return {
-    selectedStrategyId,
+    selectedParamsHash,
+    portfolios,
     statusFilter,
     showOnlyActionRequired,
     hideMonitorPlans,
@@ -663,6 +679,7 @@ export function usePortfolioPlansWorkbench({
     generateForm,
     loadPlans,
     loadStrategies,
+    loadPortfolios,
     loadParameterPresets,
     loadGenerationTasks,
     loadWorkerStatus,

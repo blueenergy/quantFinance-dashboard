@@ -47,7 +47,11 @@ export function overviewPanelFromPending(detail) {
 }
 
 export function portfolioOptionLabel(portfolio) {
-  const name = portfolio.strategy_name || portfolio.strategy_template_id || '组合'
+  // strategy_name is derived from the template and collapses every model
+  // lineage into one string ("CSI1000 模型评分 Top20 20日"); model_id is the only
+  // field that separates raw5 from a sleeve or a defensive variant.
+  const base = portfolio.strategy_name || portfolio.strategy_template_id || '组合'
+  const name = portfolio.model_id ? `${base} · ${portfolio.model_id}` : base
   const params = portfolio.param_summary || '参数未记录'
   const range = portfolio.first_base_date && portfolio.last_base_date
     ? `${portfolio.first_base_date}→${portfolio.last_base_date}`

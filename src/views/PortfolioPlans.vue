@@ -11,11 +11,11 @@
 
     <section class="toolbar">
       <label>
-        策略
-        <select v-model="selectedStrategyId" @change="loadPlans">
-          <option value="">全部策略</option>
-          <option v-for="strategy in strategies" :key="strategy.strategy_template_id" :value="strategy.strategy_template_id">
-            {{ strategyOptionLabel(strategy) }}
+        组合
+        <select v-model="selectedParamsHash" @change="loadPlans">
+          <option value="">全部组合</option>
+          <option v-for="p in portfolios" :key="p.params_hash" :value="p.params_hash">
+            [{{ executionVenueLabel(p.execution_venue) }}]{{ p.paused ? '⏸ ' : ' ' }}{{ portfolioOptionLabel(p) }}
           </option>
         </select>
       </label>
@@ -280,6 +280,7 @@ import {
 import { usePlanOps } from '../composables/usePlanOps'
 import { usePortfolioPlanGeneration } from '../composables/usePortfolioPlanGeneration'
 import { usePortfolioPlansWorkbench } from '../composables/usePortfolioPlansWorkbench'
+import { executionVenueLabel, portfolioOptionLabel } from '../utils/portfolioOverviewFormat'
 import { useReselectPlanItems } from '../composables/useReselectPlanItems'
 import {
   buildPlanReviewRiskSummary,
@@ -322,7 +323,8 @@ function applyDefaultPreset() {
 }
 
 const {
-  selectedStrategyId,
+  selectedParamsHash,
+  portfolios,
   statusFilter,
   showOnlyActionRequired,
   hideMonitorPlans,
