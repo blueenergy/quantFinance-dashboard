@@ -506,6 +506,11 @@ export function planParamSummary(plan) {
   if (rebalanceDays) parts.push(`${rebalanceDays}d`)
   const mode = effectiveConstructionMode(plan)
   if (mode) parts.push(mode)
+  // Every lineage shares the `growth_cycle_index_enhanced` template, so the
+  // template name says nothing about what actually picks the stocks. The model
+  // id is the only field on this header that answers that question.
+  const modelId = plan?.params_snapshot?.model_id
+  if (modelId) parts.push(String(modelId))
   if (plan?.params_snapshot?.regime_cash === true || plan?.regime_cash?.enabled) {
     parts.push('非牛空仓')
   }
