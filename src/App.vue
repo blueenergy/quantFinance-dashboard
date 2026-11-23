@@ -193,6 +193,9 @@ const {
 })
 
 provide('shellActiveTab', activeTab)
+// Cross-tab links must go through activateTab: it also registers the tab in
+// mountedTabs, which is what decides whether the view is rendered at all.
+provide('shellSwitchTab', activateTab)
 
 const {
   watchlist,

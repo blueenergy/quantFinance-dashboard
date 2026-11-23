@@ -242,9 +242,13 @@
 import { computed, inject, ref } from 'vue'
 
 const shellActiveTab = inject('shellActiveTab', null)
+const shellSwitchTab = inject('shellSwitchTab', null)
 
 function goFactorRegistry() {
-  if (shellActiveTab) shellActiveTab.value = 'factor-registry'
+  // activateTab also adds the tab to mountedTabs, without which the target
+  // view is never rendered on its first visit.
+  if (shellSwitchTab) shellSwitchTab('factor-registry')
+  else if (shellActiveTab) shellActiveTab.value = 'factor-registry'
 }
 
 const props = defineProps({

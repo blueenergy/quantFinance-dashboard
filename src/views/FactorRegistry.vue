@@ -117,6 +117,7 @@
 
             <section>
               <h4>检验证据（最近 {{ detail.tests.length }} 条）</h4>
+              <div class="tests-scroll">
               <table class="tests">
                 <thead>
                   <tr><th>类型</th><th>阶段</th><th>判决</th><th>口径</th><th>日期</th><th>指标</th><th>报告</th></tr>
@@ -141,6 +142,7 @@
                   </tr>
                 </tbody>
               </table>
+              </div>
               <p v-if="!detail.tests.length" class="muted">还没有测试记录。</p>
             </section>
 
@@ -173,6 +175,14 @@ import {
 const statuses = ['candidate', 'confirmed', 'in_use', 'inconclusive', 'screened', 'no_increment', 'rejected', 'untested']
 
 const shellActiveTab = inject('shellActiveTab', null)
+const shellSwitchTab = inject('shellSwitchTab', null)
+
+/** activateTab registers the tab in mountedTabs; a bare activeTab write
+ *  leaves the target view unmounted (blank content). */
+function switchShellTab(tabId) {
+  if (shellSwitchTab) shellSwitchTab(tabId)
+  else if (shellActiveTab) shellActiveTab.value = tabId
+}
 const loading = ref(false)
 const errorMessage = ref('')
 const summary = ref(null)
@@ -191,7 +201,7 @@ function openReport(jobId) {
   } catch {
     // storage can be unavailable; the deep link degrades to the tab switch
   }
-  if (shellActiveTab) shellActiveTab.value = 'factor-backtest'
+  switchShellTab('factor-backtest')
 }
 
 function goModelFactory() {
@@ -202,7 +212,7 @@ function goModelFactory() {
       // storage can be unavailable; the filter is a convenience only
     }
   }
-  if (shellActiveTab) shellActiveTab.value = 'model-training'
+  switchShellTab('model-training')
 }
 
 const summaryCards = computed(() => {
@@ -520,6 +530,7 @@ td .small {
 }
 
 .detail-card {
+  min-width: 0;
   padding: 16px;
 }
 
@@ -574,8 +585,22 @@ td .small {
   text-align: right;
 }
 
+.tests-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.tests {
+  min-width: 480px;
+}
+
 .tests td {
   font-size: 12px;
+}
+
+.tests .link-btn {
+  margin-top: 0;
+  white-space: nowrap;
 }
 
 .protocol {
