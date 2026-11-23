@@ -139,18 +139,23 @@
                       <td>{{ test.as_of || '-' }}</td>
                       <td>{{ metricText(test) }}</td>
                       <td class="report-cell">
-                        <button v-if="test.job_id" type="button" class="link-btn" @click="openReport(test.job_id)">
-                          报告
-                        </button>
-                        <span v-else class="muted">-</span>
-                        <button
-                          v-if="index === 0 && group.rows.length > 1"
-                          type="button"
-                          class="link-btn more-btn"
-                          @click="toggleType(group.key)"
-                        >
-                          {{ expandedTypes[group.key] ? '收起' : `共 ${group.rows.length} 条` }}
-                        </button>
+                        <div class="report-actions">
+                          <button v-if="test.job_id" type="button" class="link-btn" @click="openReport(test.job_id)">
+                            报告
+                          </button>
+                          <span v-else class="muted">-</span>
+                          <button
+                            v-if="index === 0 && group.rows.length > 1"
+                            type="button"
+                            class="link-btn more-btn"
+                            @click="toggleType(group.key)"
+                          >
+                            {{ expandedTypes[group.key] ? '收起' : `共 ${group.rows.length} 条` }}
+                          </button>
+                        </div>
+                        <small v-if="test.job_name" class="job-name" :title="test.job_name">
+                          {{ test.job_name }}
+                        </small>
                       </td>
                     </tr>
                   </template>
@@ -645,9 +650,24 @@ td .small {
   white-space: nowrap;
 }
 
+.report-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .more-btn {
-  margin-left: 8px;
   color: #64748b;
+}
+
+.job-name {
+  display: block;
+  max-width: 160px;
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tests tr.child-row td {
