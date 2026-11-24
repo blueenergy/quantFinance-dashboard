@@ -39,11 +39,3 @@ export function getNationalTeamEntryLadder(params = {}) {
     params,
   })
 }
-
-export function getNationalTeamExposure(params = {}) {
-  return request({
-    url: '/etf/national-team/exposure',
-    method: 'get',
-    params,
-  })
-}

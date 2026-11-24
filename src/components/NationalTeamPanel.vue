@@ -143,58 +143,6 @@
         </div>
       </div>
 
-      <div v-if="exposure" class="exposure-card">
-        <div class="exposure-header">
-          <div class="exposure-title">
-            <strong>国家队敞口方向</strong>
-            <span class="muted">
-              池内 {{ exposure.pool_size }} 只合计份额 · 截至 {{ fmtShortDate(exposure.as_of) }}
-            </span>
-          </div>
-          <span
-            class="phase-chip"
-            :class="'phase-' + (exposure.summary?.phase || 'unknown')"
-          >
-            {{ EXPOSURE_PHASE_LABELS[exposure.summary?.phase] || '未知' }}
-          </span>
-        </div>
-        <div class="exposure-metrics">
-          <div class="exposure-metric">
-            <span class="metric-label">合计份额</span>
-            <strong class="metric-value">{{ fmtYiFen(exposure.summary?.shares_yi) }}</strong>
-            <span class="metric-sub">推算国家队 {{ fmtYiFen(exposure.summary?.est_national_yi) }}</span>
-          </div>
-          <div class="exposure-metric">
-            <span class="metric-label">20 日变化</span>
-            <strong class="metric-value" :class="valueClass(exposure.summary?.chg_20d)">
-              {{ fmtPct(exposure.summary?.chg_20d) }}
-            </strong>
-            <span class="metric-sub">5 日 {{ fmtPct(exposure.summary?.chg_5d) }}</span>
-          </div>
-          <div class="exposure-metric">
-            <span class="metric-label">1 年分位</span>
-            <strong class="metric-value">{{ exposure.summary?.pctile_1y ?? '—' }}%</strong>
-            <span class="metric-sub">
-              区间 {{ exposure.start }} 起 {{ exposure.coverage_days }} 日
-            </span>
-          </div>
-          <div class="exposure-metric">
-            <span class="metric-label">区间峰值 / 谷值</span>
-            <strong class="metric-value">{{ fmtYiFen(exposure.peaks?.max_shares_yi) }}</strong>
-            <span class="metric-sub">
-              谷 {{ fmtYiFen(exposure.peaks?.min_shares_yi) }}
-              ({{ fmtShortDate(exposure.peaks?.min_date) }})
-            </span>
-          </div>
-        </div>
-        <div ref="exposureChartRef" class="exposure-canvas"></div>
-        <div class="exposure-note">{{ exposure.note }}</div>
-      </div>
-      <div v-else-if="exposureError" class="exposure-card exposure-failed">
-        {{ exposureError }}
-      </div>
-      <div v-else-if="exposureLoading" class="exposure-card exposure-failed">敞口方向加载中…</div>
-
       <div
         v-if="ladder"
         class="ladder-card"
@@ -454,7 +402,6 @@ import {
   getNationalTeamCurve,
   getNationalTeamDates,
   getNationalTeamEntryLadder,
-  getNationalTeamExposure,
   getNationalTeamHistory,
   getNationalTeamSnapshot,
 } from '../api/nationalTeam'
@@ -491,9 +438,6 @@ const historyError = ref('')
 const ladder = ref(null)
 const ladderError = ref('')
 const ladderLoading = ref(false)
-const exposure = ref(null)
-const exposureError = ref('')
-const exposureLoading = ref(false)
 const LADDER_HELP_KEY = 'national_team_ladder_help_open'
 function readLadderHelpPref() {
   try {
@@ -524,15 +468,12 @@ const LADDER_INDICES = [
 const ladderIndex = ref('000300.SH')
 const chartRef = ref(null)
 const historyChartRef = ref(null)
-const exposureChartRef = ref(null)
 let chartInstance = null
 let historyChartInstance = null
-let exposureChartInstance = null
 let historyChartRows = []
 let echartsLib = null
 let resizeOb = null
 let historyResizeOb = null
-let exposureResizeOb = null
 let refreshTimer = null
 let historyTimer = null
 let ladderTimer = null
@@ -590,13 +531,6 @@ function fmtYi(value) {
   if (value == null || Number.isNaN(Number(value))) return '—'
   const yi = Number(value) / 1e8
   return `${yi >= 100 ? yi.toFixed(0) : yi.toFixed(1)} 亿`
-}
-
-// 份额口径：后端已返回「亿份」，这里只补单位，避免 ×1e8 再 ÷1e8 的来回换算。
-function fmtYiFen(value) {
-  if (value == null || Number.isNaN(Number(value))) return '—'
-  const yi = Number(value)
-  return `${yi >= 100 ? yi.toFixed(0) : yi.toFixed(1)} 亿份`
 }
 
 function fmtPct(value) {
@@ -1065,109 +999,6 @@ function selectLadderIndex(code) {
   loadLadder()
 }
 
-const EXPOSURE_PHASE_LABELS = {
-  bottom_refill: '底部回补',
-  inflow: '持续流入',
-  top_exit: '高位撤离',
-  outflow: '持续流出',
-  flat: '平稳',
-  unknown: '未知',
-}
-
-async function loadExposure() {
-  exposureLoading.value = true
-  exposureError.value = ''
-  try {
-    const payload = await getNationalTeamExposure({ days: 750 })
-    exposure.value = payload
-    await nextTick()
-    await ensureExposureChart()
-    drawExposureChart()
-  } catch (exc) {
-    exposureError.value =
-      exc?.response?.data?.detail || exc?.message || '敞口方向加载失败'
-  } finally {
-    exposureLoading.value = false
-  }
-}
-
-async function ensureExposureChart() {
-  if (!exposureChartRef.value) return null
-  if (!echartsLib) echartsLib = await loadEcharts()
-  if (!exposureChartInstance) {
-    exposureChartInstance = echartsLib.init(exposureChartRef.value)
-    if (exposureResizeOb) exposureResizeOb.disconnect()
-    exposureResizeOb = new ResizeObserver(() => {
-      if (exposureChartInstance) exposureChartInstance.resize()
-    })
-    exposureResizeOb.observe(exposureChartRef.value)
-  }
-  return exposureChartInstance
-}
-
-function drawExposureChart() {
-  if (!exposureChartInstance || !exposure.value?.series?.length) return
-  const rows = exposure.value.series
-  exposureChartInstance.setOption(
-    {
-      animation: false,
-      grid: { left: 52, right: 52, top: 24, bottom: 28 },
-      tooltip: {
-        trigger: 'axis',
-        formatter: (items) => {
-          const row = rows[items?.[0]?.dataIndex]
-          if (!row) return ''
-          const parts = [`<b>${row.trade_date}</b>`]
-          parts.push(`合计份额 ${fmtYiFen(row.shares_yi)}`)
-          if (row.est_national_yi != null) {
-            parts.push(`推算国家队 ${fmtYiFen(row.est_national_yi)}`)
-          }
-          parts.push(`20 日 ${fmtPct(row.chg_20d)}`)
-          if (row.pctile_1y != null) parts.push(`1 年分位 ${row.pctile_1y}%`)
-          return parts.join('<br/>')
-        },
-      },
-      xAxis: {
-        type: 'category',
-        data: rows.map((r) => r.trade_date),
-        axisLabel: { formatter: (v) => `${String(v).slice(4, 6)}/${String(v).slice(6, 8)}` },
-      },
-      yAxis: [
-        {
-          type: 'value',
-          name: '亿份',
-          axisLabel: { formatter: (v) => `${Math.round(v)}` },
-        },
-        {
-          type: 'value',
-          name: '20日%',
-          axisLabel: { formatter: (v) => `${v}` },
-          splitLine: { show: false },
-        },
-      ],
-      series: [
-        {
-          name: '合计份额',
-          type: 'line',
-          showSymbol: false,
-          data: rows.map((r) => r.shares_yi),
-          lineStyle: { width: 1.6 },
-          areaStyle: { opacity: 0.12 },
-        },
-        {
-          name: '20日变化',
-          type: 'line',
-          yAxisIndex: 1,
-          showSymbol: false,
-          data: rows.map((r) => r.chg_20d),
-          lineStyle: { width: 1, type: 'dashed' },
-        },
-      ],
-    },
-    true,
-  )
-}
-
 async function loadHistory() {
   historyLoading.value = true
   historyError.value = ''
@@ -1329,8 +1160,6 @@ onMounted(async () => {
   await nextTick()
   await ensureHistoryChart()
   drawHistoryChart()
-  // 敞口是慢变量（日频），单独加载，不阻塞主视图
-  loadExposure()
   setupTimer()
 })
 
@@ -1340,13 +1169,10 @@ onBeforeUnmount(() => {
   if (ladderTimer) clearInterval(ladderTimer)
   if (resizeOb) resizeOb.disconnect()
   if (historyResizeOb) historyResizeOb.disconnect()
-  if (exposureResizeOb) exposureResizeOb.disconnect()
   if (chartInstance) chartInstance.dispose()
   if (historyChartInstance) historyChartInstance.dispose()
-  if (exposureChartInstance) exposureChartInstance.dispose()
   chartInstance = null
   historyChartInstance = null
-  exposureChartInstance = null
 })
 </script>
 
@@ -1600,117 +1426,6 @@ onBeforeUnmount(() => {
 .index-note {
   font-size: 11px;
   color: var(--text-secondary);
-}
-
-.exposure-card {
-  margin-bottom: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  background: var(--card-bg);
-}
-
-.exposure-failed {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.exposure-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.exposure-title {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.exposure-title .muted {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.phase-chip {
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  border: 1px solid transparent;
-}
-
-.phase-chip.phase-bottom_refill {
-  background: rgba(34, 197, 94, 0.12);
-  border-color: rgba(34, 197, 94, 0.4);
-  color: #15803d;
-}
-
-.phase-chip.phase-inflow {
-  background: rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.4);
-  color: #1d4ed8;
-}
-
-.phase-chip.phase-top_exit {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #b91c1c;
-}
-
-.phase-chip.phase-outflow {
-  background: rgba(249, 115, 22, 0.12);
-  border-color: rgba(249, 115, 22, 0.4);
-  color: #c2410c;
-}
-
-.phase-chip.phase-flat,
-.phase-chip.phase-unknown {
-  background: rgba(100, 116, 139, 0.1);
-  border-color: rgba(100, 116, 139, 0.3);
-  color: var(--text-secondary);
-}
-
-.exposure-metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.exposure-metric {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.metric-label {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.metric-value {
-  font-size: 17px;
-  font-variant-numeric: tabular-nums;
-}
-
-.metric-sub {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.exposure-canvas {
-  width: 100%;
-  height: 190px;
-}
-
-.exposure-note {
-  font-size: 11px;
-  color: var(--text-secondary);
-  line-height: 1.5;
 }
 
 .ladder-card {
