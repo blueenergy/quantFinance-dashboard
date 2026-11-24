@@ -193,17 +193,21 @@
             </div>
             <div v-if="penError" class="xiv-error-bar mb-3">{{ penError }}</div>
             <div v-if="penLoading && !penData" class="stat-empty">加载中…</div>
-            <template v-else>
-              <div v-if="!penSeries.length" class="stat-empty">
-                暂无数据：需先同步 index_daily_basic 的 float_mv 与 ETF 份额。
-              </div>
-              <div
-                v-show="penSeries.length"
-                ref="penetrationRef"
-                class="stat-chart"
-                :class="penShowIndex ? 'stat-chart-tall' : 'stat-chart-wide'"
-              ></div>
-            </template>
+            <div
+              v-if="!penSeries.length && !(penLoading && !penData)"
+              class="stat-empty"
+            >
+              暂无数据：需先同步 index_daily_basic 的 float_mv 与 ETF 份额。
+            </div>
+            <!-- 图表容器不能放进 v-if/v-else 分支：首次加载时 penLoading 变 true
+                 会卸载整个分支，ref 变 null，首屏就渲染不出来。
+                 切到别的指数再切回来能显示，正是因为那时 penData 已存在、分支不再卸载。 -->
+            <div
+              v-show="penSeries.length"
+              ref="penetrationRef"
+              class="stat-chart"
+              :class="penShowIndex ? 'stat-chart-tall' : 'stat-chart-wide'"
+            ></div>
           </article>
         </v-col>
       </v-row>
@@ -214,6 +218,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getEtfPenetration, getMarketStatsOverview } from '../api/marketStats.js'
+import { loadEcharts } from '../utils/echarts/loadEcharts.js'
 
 const rangeOptions = [
   { label: '3月', days: 60 },
@@ -349,7 +354,7 @@ function chartDates(rows) {
 
 async function ensureEcharts() {
   if (!echartsMod) {
-    echartsMod = await import('echarts')
+    echartsMod = await loadEcharts()
   }
   return echartsMod
 }
@@ -654,9 +659,12 @@ function penetrationOption({ dates, values, indexValues, rows, showIndex, indexN
 }
 
 async function renderPenetration() {
-  if (!penSeries.value.length || !penetrationRef.value) return
+  // 顺序要紧：先让 DOM 落地再查 ref。守卫写在 nextTick 之前会在首次加载时
+  // 因为 ref 尚未挂上而直接 return，图表永远不创建。
+  if (!penSeries.value.length) return
   await ensureEcharts()
   await nextTick()
+  if (!penetrationRef.value) return
   if (!penetrationChart) penetrationChart = bindChart(penetrationRef.value)
   penetrationChart?.setOption(
     penetrationOption({
