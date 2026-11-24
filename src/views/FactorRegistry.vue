@@ -162,6 +162,16 @@
               </p>
             </section>
 
+            <details v-if="primer?.detail?.length" class="deep-dive">
+              <summary>📖 深度解读：口径、角色、实测结论与误用</summary>
+              <div class="deep-dive-body">
+                <section v-for="section in primer.detail" :key="section.heading">
+                  <h5>{{ section.heading }}</h5>
+                  <p>{{ section.body }}</p>
+                </section>
+              </div>
+            </details>
+
             <p v-if="metaRows.length" class="meta-rows">
               <span v-for="row in metaRows" :key="row.label">{{ row.label }}：{{ row.value }}</span>
             </p>
@@ -1014,6 +1024,57 @@ td .small {
   margin: 10px 0 0;
   color: #64748b;
   font-size: 11px;
+}
+
+.deep-dive {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.deep-dive > summary {
+  cursor: pointer;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  list-style: none;
+}
+
+.deep-dive > summary::-webkit-details-marker {
+  display: none;
+}
+
+.deep-dive > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: #94a3b8;
+}
+
+.deep-dive[open] > summary::before {
+  content: '▾';
+}
+
+.deep-dive-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.deep-dive-body h5 {
+  margin: 0 0 4px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.deep-dive-body p {
+  margin: 0;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.75;
 }
 
 @media (max-width: 1080px) {
