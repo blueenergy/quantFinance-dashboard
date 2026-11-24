@@ -167,7 +167,15 @@
               <div class="deep-dive-body">
                 <section v-for="section in primer.detail" :key="section.heading">
                   <h5>{{ section.heading }}</h5>
-                  <p>{{ section.body }}</p>
+                  <p>
+                    <template
+                      v-for="(segment, index) in parseInlineMarkup(section.body)"
+                      :key="index"
+                    ><strong v-if="segment.strong">{{ segment.text }}</strong><code
+                      v-else-if="segment.code"
+                      class="inline-code"
+                    >{{ segment.text }}</code><template v-else>{{ segment.text }}</template></template>
+                  </p>
                 </section>
               </div>
             </details>
@@ -276,6 +284,7 @@ import {
   FACTOR_STATUSES,
   FACTOR_STATUS_GUIDE,
   FACTOR_TEST_TYPE_GUIDE,
+  parseInlineMarkup,
 } from '../constants/factorGuide'
 
 const statuses = FACTOR_STATUSES
@@ -1075,6 +1084,14 @@ td .small {
   color: #334155;
   font-size: 12px;
   line-height: 1.75;
+}
+
+.inline-code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
 }
 
 @media (max-width: 1080px) {

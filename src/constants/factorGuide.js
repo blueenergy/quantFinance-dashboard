@@ -71,3 +71,35 @@ export const FACTOR_A_SHARE_NOTES = [
   '停牌：期间价格不变但无法交易，涨跌幅类因子会被稀释。',
   '财报点时：财务因子只能用公告日之前已披露的版本，否则就是未来函数。',
 ]
+
+/**
+ * Split a primer body into inline segments for `**bold**` and `` `code` ``.
+ *
+ * The primer text is written in the code repo, so it is trusted, but it is
+ * still rendered as text nodes rather than with v-html — a reader must never
+ * be able to turn a note into markup.
+ *
+ * @returns {Array<{text: string, strong: boolean, code: boolean}>}
+ */
+export function parseInlineMarkup(text) {
+  const source = String(text ?? '')
+  const segments = []
+  const pattern = /\*\*([^*]+)\*\*|`([^`]+)`/g
+  let cursor = 0
+  let match
+  while ((match = pattern.exec(source)) !== null) {
+    if (match.index > cursor) {
+      segments.push({ text: source.slice(cursor, match.index), strong: false, code: false })
+    }
+    if (match[1] !== undefined) {
+      segments.push({ text: match[1], strong: true, code: false })
+    } else {
+      segments.push({ text: match[2], strong: false, code: true })
+    }
+    cursor = match.index + match[0].length
+  }
+  if (cursor < source.length) {
+    segments.push({ text: source.slice(cursor), strong: false, code: false })
+  }
+  return segments
+}
