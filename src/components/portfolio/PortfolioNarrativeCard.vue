@@ -19,7 +19,14 @@
 
     <p v-if="refs.length" class="narr-line narr-refs">
       <span class="narr-label">依据</span>
-      <span v-for="r in refs" :key="r" class="narr-ref">{{ r }}</span>
+      <a
+        v-for="(r, i) in refs"
+        :key="r"
+        class="narr-ref"
+        :href="refHref(r, i)"
+        :title="refTitle(r, i)"
+        rel="noopener"
+      >{{ r }}</a>
     </p>
   </section>
 </template>
@@ -44,6 +51,35 @@ const refs = computed(() => {
   const list = props.narrative?.refs
   return Array.isArray(list) ? list.filter(Boolean) : []
 })
+
+// Each ref is an llm-wiki note name. `ref_paths` carries the vault-relative
+// path of the same note (index-aligned with `refs`), so the link can open the
+// note in Obsidian instead of showing a bare slug.
+const VAULT_NAME = 'llm-wiki'
+
+const refPaths = computed(() => {
+  const list = props.narrative?.ref_paths
+  return Array.isArray(list) ? list : []
+})
+
+function encodeVaultPath(path) {
+  return String(path).split('/').map(encodeURIComponent).join('/')
+}
+
+function refHref(ref, index) {
+  const path = refPaths.value[index]
+  if (path) {
+    return `obsidian://open?vault=${VAULT_NAME}&file=${encodeVaultPath(path)}`
+  }
+  return `obsidian://search?vault=${VAULT_NAME}&query=${encodeURIComponent(ref)}`
+}
+
+function refTitle(ref, index) {
+  const path = refPaths.value[index]
+  return path
+    ? `${path}（点击在 Obsidian 打开）`
+    : `${ref}（在 ${VAULT_NAME} vault 中搜索）`
+}
 </script>
 
 <style scoped>
@@ -121,5 +157,12 @@ const refs = computed(() => {
   font-size: 11px;
   margin-right: 6px;
   padding: 1px 5px;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.narr-ref:hover {
+  background: #e0e7ff;
 }
 </style>
