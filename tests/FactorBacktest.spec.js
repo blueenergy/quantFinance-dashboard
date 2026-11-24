@@ -147,13 +147,15 @@ describe('FactorBacktest view', () => {
     })
     window.sessionStorage.setItem(
       'factorBacktestJob',
-      JSON.stringify({ job_id: 'job-1', factor_id: 'alpha2', horizon: 10 }),
+      JSON.stringify({ job_id: 'job-1', factor_id: 'alpha2', horizon: 10, test_type: 'ic_screen' }),
     )
     const wrapper = mount(FactorBacktest)
     await flushPromises()
 
     expect(api.getFactorBacktestJob).toHaveBeenCalledWith('job-1')
     expect(wrapper.text()).toContain('alpha2 · 10d 诊断')
+    // ic_screen targets the overlapping t column, which is hidden by default.
+    expect(wrapper.findAll('th').map((th) => th.text())).toContain('t(重叠)')
     expect(window.sessionStorage.getItem('factorBacktestJob')).toBeNull()
     wrapper.unmount()
   })

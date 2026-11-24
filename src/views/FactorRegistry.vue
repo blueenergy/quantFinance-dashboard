@@ -207,6 +207,12 @@
 
             <section>
               <h4>检验证据（{{ detail.tests.length }} 条 / {{ testGroups.length }} 类）</h4>
+              <dl class="test-legend">
+                <div v-for="item in evidenceGuide" :key="item.key">
+                  <dt>{{ item.label }}</dt>
+                  <dd>{{ item.desc }}</dd>
+                </div>
+              </dl>
               <div class="tests-scroll">
               <table class="tests">
                 <thead>
@@ -295,6 +301,10 @@ const statuses = FACTOR_STATUSES
 
 const statusGuide = FACTOR_STATUS_GUIDE
 const testTypeGuide = FACTOR_TEST_TYPE_GUIDE
+// The four checks a worker job writes per factor; shown as a legend right
+// above the evidence table so the reader does not have to open the top guide.
+const EVIDENCE_TYPES = ['ic_screen', 'nonoverlap', 'quantile', 'long_only']
+const evidenceGuide = FACTOR_TEST_TYPE_GUIDE.filter((item) => EVIDENCE_TYPES.includes(item.key))
 const metricGuide = FACTOR_METRIC_GUIDE
 const coverageNote = FACTOR_COVERAGE_NOTE
 const aShareNotes = FACTOR_A_SHARE_NOTES
@@ -353,6 +363,7 @@ function openReport(test) {
     job_id: test.job_id,
     factor_id: selectedId.value || '',
     horizon: test.protocol?.horizon ?? null,
+    test_type: test.test_type || '',
   }
   try {
     window.sessionStorage.setItem('factorBacktestJob', JSON.stringify(payload))
@@ -789,6 +800,35 @@ td .small {
 
 .coverage-pct {
   text-align: right;
+}
+
+.test-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid #e6eaf0;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.test-legend > div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.test-legend dt {
+  color: #334155;
+  font-weight: 600;
+}
+
+.test-legend dd {
+  margin: 0;
+  color: #64748b;
 }
 
 .tests-scroll {

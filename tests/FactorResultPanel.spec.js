@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import FactorResultPanel from '../src/components/factor/FactorResultPanel.vue'
 import {
@@ -128,5 +129,32 @@ describe('FactorResultPanel', () => {
   it('says so when the horizon has no diagnostics rather than rendering an empty table', () => {
     const wrapper = mountPanel({ icRows: [], selectedFactor: '' })
     expect(wrapper.text()).toContain('该 horizon 没有可用的因子诊断')
+  })
+
+  it('hides the screening statistics until the toggle is used', async () => {
+    const wrapper = mountPanel()
+    // Only the IC ranking table; the collapsed full-screen table always
+    // carries the overlapping column.
+    const headers = () => wrapper.findAll('.ic-block th').map((th) => th.text())
+    expect(headers()).not.toContain('t(重叠)')
+    expect(headers()).toContain('t(非重叠)')
+
+    await wrapper.find('.toggle-btn').trigger('click')
+    expect(headers()).toContain('t(重叠)')
+    expect(wrapper.text()).toContain('隐藏筛选统计')
+  })
+
+  it('reveals and marks the column an evidence deep link points at', async () => {
+    const wrapper = mountPanel({ highlightTarget: { type: 'nonoverlap', nonce: 1 } })
+    await nextTick()
+    const hit = wrapper.findAll('.ic-block th').filter((th) => th.classes().includes('col-hit'))
+    expect(hit.map((th) => th.text())).toEqual(['t(非重叠)', 'MDE80'])
+    expect(wrapper.find('.ic-block').classes()).toContain('block-hit')
+
+    const overlap = mountPanel({ highlightTarget: { type: 'ic_screen', nonce: 2 } })
+    await nextTick()
+    // ic_screen needs the hidden column shown before it can be highlighted.
+    const overlapHit = overlap.findAll('.ic-block th').filter((th) => th.classes().includes('col-hit'))
+    expect(overlapHit.map((th) => th.text())).toEqual(['t(重叠)'])
   })
 })

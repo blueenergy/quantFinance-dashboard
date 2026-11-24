@@ -18,17 +18,22 @@
 
     <div class="panel-head">
       <h4>因子 IC 排行</h4>
-      <div class="horizon-tabs">
-        <button
-          v-for="horizon in horizons"
-          :key="horizon"
-          type="button"
-          class="horizon-tab"
-          :class="{ active: String(selectedHorizon) === String(horizon) }"
-          @click="$emit('select-horizon', horizon)"
-        >
-          {{ horizon }}d
+      <div class="panel-actions">
+        <button type="button" class="toggle-btn" @click="showScreenStats = !showScreenStats">
+          {{ showScreenStats ? '隐藏筛选统计' : '显示筛选统计' }}
         </button>
+        <div class="horizon-tabs">
+          <button
+            v-for="horizon in horizons"
+            :key="horizon"
+            type="button"
+            class="horizon-tab"
+            :class="{ active: String(selectedHorizon) === String(horizon) }"
+            @click="$emit('select-horizon', horizon)"
+          >
+            {{ horizon }}d
+          </button>
+        </div>
       </div>
     </div>
 
@@ -37,20 +42,26 @@
       MDE80 是该口径下 80% 功效能分辨的最小 |IC|。
     </p>
     <p v-if="!icRows.length" class="muted">该 horizon 没有可用的因子诊断。</p>
-    <div v-else class="table-scroll">
+    <div
+      v-else
+      ref="icSection"
+      class="ic-block"
+      :class="{ 'block-hit': activeHit === 'overlap' || activeHit === 'nonoverlap' }"
+    >
+      <div class="table-scroll">
       <table>
         <thead>
           <tr>
             <th>因子</th>
             <th>IC 均值</th>
-            <th>IC IR</th>
-            <th>t(重叠)</th>
-            <th>t(非重叠)</th>
-            <th>MDE80</th>
-            <th>IC 正比例</th>
+            <th v-if="showScreenStats">IC IR</th>
+            <th v-if="showScreenStats" :class="{ 'col-hit': activeHit === 'overlap' }">t(重叠)</th>
+            <th :class="{ 'col-hit': activeHit === 'nonoverlap' }">t(非重叠)</th>
+            <th :class="{ 'col-hit': activeHit === 'nonoverlap' }">MDE80</th>
+            <th v-if="showScreenStats">IC 正比例</th>
             <th>首尾分位差</th>
             <th>单调</th>
-            <th>日截面数</th>
+            <th v-if="showScreenStats">日截面数</th>
             <th>独立截面数</th>
           </tr>
         </thead>
@@ -64,18 +75,19 @@
           >
             <td class="factor-cell">{{ row.factor }}</td>
             <td :class="signClass(row.ic_mean)">{{ num(row.ic_mean, 4) }}</td>
-            <td :class="signClass(row.ic_ir)">{{ num(row.ic_ir, 3) }}</td>
-            <td>{{ num(row.t_stat, 2) }}</td>
-            <td>{{ num(row.t_nonoverlap, 2) }}</td>
-            <td>{{ num(row.mde80, 3) }}</td>
-            <td>{{ pct(row.positive_ratio) }}</td>
+            <td v-if="showScreenStats" :class="signClass(row.ic_ir)">{{ num(row.ic_ir, 3) }}</td>
+            <td v-if="showScreenStats" :class="{ 'col-hit': activeHit === 'overlap' }">{{ num(row.t_stat, 2) }}</td>
+            <td :class="{ 'col-hit': activeHit === 'nonoverlap' }">{{ num(row.t_nonoverlap, 2) }}</td>
+            <td :class="{ 'col-hit': activeHit === 'nonoverlap' }">{{ num(row.mde80, 3) }}</td>
+            <td v-if="showScreenStats">{{ pct(row.positive_ratio) }}</td>
             <td :class="signClass(row.spread)">{{ pct(row.spread) }}</td>
             <td>{{ row.monotonic ? '是' : '否' }}</td>
-            <td>{{ num(row.observations, 0) }}</td>
+            <td v-if="showScreenStats">{{ num(row.observations, 0) }}</td>
             <td>{{ num(row.nonoverlap_observations, 0) }}</td>
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
 
     <template v-if="selectedFactor">
@@ -87,8 +99,14 @@
       </div>
       <p v-if="factorMeta?.expression" class="expression">{{ factorMeta.expression }}</p>
 
-      <div v-if="quantileBars.length" class="quantile-block">
+      <div
+        v-if="quantileBars.length"
+        ref="quantileSection"
+        class="quantile-block"
+        :class="{ 'block-hit': activeHit === 'quantile' }"
+      >
         <p class="block-title">分位组平均收益（{{ selectedHorizon }}d，1 为因子值最低组）</p>
+        <p class="muted">看单调和秩相关；首尾差大但中间乱序，多半是尾部驱动。</p>
         <div v-for="bar in quantileBars" :key="bar.quantile" class="quantile-row">
           <span class="quantile-label">Q{{ bar.quantile }}</span>
           <span class="quantile-track">
@@ -131,11 +149,18 @@
         </table>
       </div>
 
-      <div v-if="netReturnRows.length" class="table-scroll">
+      <div
+        v-if="netReturnRows.length"
+        ref="netSection"
+        class="net-block"
+        :class="{ 'block-hit': activeHit === 'long_only' }"
+      >
         <p class="block-title">
           成本调整后 TopK 收益（单边滑点 {{ num(costAssumptions?.slippage_bps_one_way, 1) }} bps，
           每次调仓成本 {{ pct(costAssumptions?.round_trip_rate) }}）
         </p>
+        <p class="muted">净 = 扣一次往返成本；年化 = 每期净收益 × 252/h，不复利。</p>
+        <div class="table-scroll">
         <table>
           <thead>
             <tr>
@@ -162,6 +187,7 @@
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
     </template>
 
@@ -202,7 +228,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { findFactorMeta, num, pct, signClass } from '../../utils/factorBacktestView'
 
 const props = defineProps({
@@ -219,6 +245,9 @@ const props = defineProps({
   yearlyIcRows: { type: Array, default: () => [] },
   netReturnRows: { type: Array, default: () => [] },
   screenRows: { type: Array, default: () => [] },
+  // { type, nonce }: set by the factor registry's evidence deep link so the
+  // report opens on the section and column that produced the evidence row.
+  highlightTarget: { type: Object, default: null },
 })
 
 defineEmits(['select-factor', 'select-horizon'])
@@ -226,6 +255,52 @@ defineEmits(['select-factor', 'select-horizon'])
 const factorMeta = computed(() => findFactorMeta(props.report, props.selectedFactor))
 const costAssumptions = computed(() => props.report?.cost_assumptions || null)
 const screenHorizon = computed(() => props.report?.screen?.horizon ?? '-')
+
+const showScreenStats = ref(false)
+const activeHit = ref('')
+const icSection = ref(null)
+const quantileSection = ref(null)
+const netSection = ref(null)
+let hitTimer = null
+
+const HIGHLIGHT_BLOCKS = {
+  ic_screen: 'overlap',
+  nonoverlap: 'nonoverlap',
+  quantile: 'quantile',
+  long_only: 'long_only',
+}
+
+function applyHighlight(testType) {
+  const hit = HIGHLIGHT_BLOCKS[testType]
+  if (!hit) return
+  // The overlapping t column is hidden by default; a link that targets it
+  // must reveal the screening statistics first.
+  if (hit === 'overlap') showScreenStats.value = true
+  activeHit.value = hit
+  clearTimeout(hitTimer)
+  hitTimer = setTimeout(() => {
+    activeHit.value = ''
+  }, 3000)
+  nextTick(() => {
+    const target = hit === 'quantile'
+      ? quantileSection.value
+      : hit === 'long_only' ? netSection.value : icSection.value
+    target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  })
+}
+
+watch(
+  () => props.highlightTarget,
+  (value) => {
+    if (value?.type) applyHighlight(value.type)
+  },
+)
+
+onMounted(() => {
+  if (props.highlightTarget?.type) applyHighlight(props.highlightTarget.type)
+})
+
+onBeforeUnmount(() => clearTimeout(hitTimer))
 </script>
 
 <style scoped>
@@ -302,10 +377,50 @@ const screenHorizon = computed(() => props.report?.screen?.horizon ?? '-')
   overflow-wrap: anywhere;
 }
 
+.panel-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .horizon-tabs {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.toggle-btn {
+  padding: 4px 10px;
+  border: 1px solid #d9e1ec;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.toggle-btn:hover {
+  border-color: #94a3b8;
+}
+
+.ic-block,
+.net-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Deep-linked evidence flashes the section it came from for a few seconds. */
+.block-hit {
+  outline: 2px solid #93c5fd;
+  outline-offset: 6px;
+  border-radius: 10px;
+}
+
+.col-hit {
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
 }
 
 .horizon-tab {

@@ -111,6 +111,7 @@
             :yearly-ic-rows="yearlyIcRows"
             :net-return-rows="netReturnRows"
             :screen-rows="screenRows"
+            :highlight-target="reportHighlight"
             @select-factor="selectFactor"
             @select-horizon="selectHorizon"
           />
@@ -167,6 +168,7 @@ const NARROW_MQ = '(max-width: 800px)'
 
 const shellActiveTab = inject('shellActiveTab', null)
 const { user } = useAuth()
+const reportHighlight = ref(null)
 
 const indexOptions = INDEX_OPTIONS
 const factorSetOptions = FACTOR_SET_OPTIONS
@@ -308,6 +310,9 @@ async function consumeDeepLink() {
   if (pending.factor_id) selectFactor(pending.factor_id)
   if (pending.horizon != null && horizons.value.includes(String(pending.horizon))) {
     selectHorizon(String(pending.horizon))
+  }
+  if (pending.test_type) {
+    reportHighlight.value = { type: pending.test_type, nonce: Date.now() }
   }
 }
 
