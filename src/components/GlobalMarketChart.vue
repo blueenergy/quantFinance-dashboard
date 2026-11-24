@@ -8,6 +8,7 @@
         :class="{ active: tf === b.value }"
         @click="setTf(b.value)"
       >{{ b.label }}</button>
+      <span v-if="formingNote" class="gmc-live-note">{{ formingNote }}</span>
     </div>
     <div v-if="loading" class="gmc-loading">加载中…</div>
     <div v-else-if="error" class="gmc-error">{{ error }}</div>
@@ -17,7 +18,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import request from '../utils/request'
 
 const props = defineProps({
@@ -35,16 +36,25 @@ const tf = ref('1d')
 const loading = ref(false)
 const error = ref(null)
 const records = ref([])
+const formingDate = ref('')
 const chartRef = ref(null)
 const containerRef = ref(null)
 
 let chartInstance = null
 let resizeObs = null
 
+// 未收盘的那根：日线库只存已收盘交易日，盘中这根来自实时行情
+const formingNote = computed(() => {
+  if (!formingDate.value) return ''
+  const d = String(formingDate.value).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')
+  return `${d} 未收盘`
+})
+
 async function loadData() {
   if (!props.symbol) return
   loading.value = true
   error.value = null
+  formingDate.value = ''
   try {
     const res = await request({
       method: 'get',
@@ -54,6 +64,7 @@ async function loadData() {
     // request.js interceptor returns response.data directly
     if (res?.success) {
       records.value = (res.data || []).slice().reverse() // ascending for echarts
+      formingDate.value = res.forming_trade_date || ''
     } else {
       error.value = res?.error || '获取数据失败'
     }
@@ -83,10 +94,27 @@ function renderChart() {
     }
 
     const dates = records.value.map(r => r.trade_date)
-    const ohlcv = records.value.map(r => [r.open, r.close, r.low, r.high])
+    // 未收盘的那根画成空心，一眼能和已收盘的 K 线分开
+    const ohlcv = records.value.map(r => {
+      const item = { value: [r.open, r.close, r.low, r.high] }
+      if (formingDate.value && r.trade_date === formingDate.value) {
+        item.itemStyle = {
+          color: 'transparent',
+          color0: 'transparent',
+          borderColor: '#ef232a',
+          borderColor0: '#14b143',
+          borderWidth: 2,
+        }
+      }
+      return item
+    })
     const volumes = records.value.map((r, i) => {
       const up = r.close >= r.open
-      return { value: r.volume, itemStyle: { color: up ? '#ef232a' : '#14b143' } }
+      const forming = formingDate.value && r.trade_date === formingDate.value
+      return {
+        value: r.volume,
+        itemStyle: { color: up ? '#ef232a' : '#14b143', opacity: forming ? 0.55 : 1 },
+      }
     })
 
     const hasVolume = records.value.some(r => r.volume > 0)
@@ -106,6 +134,7 @@ function renderChart() {
           // Use dataIndex to read directly from our records array — no ambiguity
           const r = records.value[k.dataIndex]
           if (!r) return ''
+          const isForming = !!(formingDate.value && r.trade_date === formingDate.value)
           const date = String(r.trade_date).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')
           const fmt = n => (n == null ? '-' : Number(n).toFixed(2))
           const prev = k.dataIndex > 0 ? records.value[k.dataIndex - 1] : null
@@ -114,6 +143,7 @@ function renderChart() {
           const pctColor = pct == null ? '#aaa' : (pct >= 0 ? '#ef232a' : '#14b143')
           let html = `<div style="font-size:11px;line-height:1.8">`
           html += `<b>${date}</b>`
+          if (isForming) html += ` <span style="color:#e8a33d">未收盘</span>`
           if (pctStr) html += ` <span style="color:${pctColor};font-weight:bold">${pctStr}</span>`
           html += `<br/>开 <b>${fmt(r.open)}</b> &nbsp; 收 <b>${fmt(r.close)}</b><br/>`
           html += `高 <b>${fmt(r.high)}</b> &nbsp; 低 <b>${fmt(r.low)}</b>`
@@ -244,6 +274,13 @@ watch(() => props.symbol, () => {
 }
 .tf-btn:hover { background: #3a3a3a; color: #ddd; }
 .tf-btn.active { background: #4a4aaa; border-color: #6666cc; color: #fff; }
+.gmc-live-note {
+  margin-left: auto;
+  align-self: center;
+  font-size: 11px;
+  color: #e8a33d;
+  white-space: nowrap;
+}
 .gmc-chart {
   flex: 1;
   min-height: 360px;
