@@ -37,6 +37,8 @@
         @resume-lineage="resumeLineageAction"
       />
 
+      <PortfolioNarrativeCard :narrative="selectedPortfolioDisplay.narrative" />
+
       <PortfolioReconcileBanner
         v-if="holdingsOutOfSync || manualPositions.length"
         :reconcile-data="reconcileData"
@@ -345,6 +347,7 @@
 <script setup>
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import PortfolioIdentityCard from '../components/portfolio/PortfolioIdentityCard.vue'
+import PortfolioNarrativeCard from '../components/portfolio/PortfolioNarrativeCard.vue'
 import CurrentPeriodStatus from '../components/portfolio/CurrentPeriodStatus.vue'
 import CatchUpPanel from '../components/portfolio/CatchUpPanel.vue'
 import PlanCompletionPanel from '../components/portfolio/PlanCompletionPanel.vue'
