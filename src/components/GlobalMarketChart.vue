@@ -94,10 +94,12 @@ function renderChart() {
     }
 
     const dates = records.value.map(r => r.trade_date)
-    // 未收盘的那根画成空心，一眼能和已收盘的 K 线分开
-    const ohlcv = records.value.map(r => {
+    // 未收盘的那根永远是最后一根（日线是当天那根，周/月线是含它的当周/当月），
+    // 画成空心，一眼能和已收盘的 K 线分开
+    const formingIdx = formingDate.value ? records.value.length - 1 : -1
+    const ohlcv = records.value.map((r, i) => {
       const item = { value: [r.open, r.close, r.low, r.high] }
-      if (formingDate.value && r.trade_date === formingDate.value) {
+      if (i === formingIdx) {
         item.itemStyle = {
           color: 'transparent',
           color0: 'transparent',
@@ -110,10 +112,9 @@ function renderChart() {
     })
     const volumes = records.value.map((r, i) => {
       const up = r.close >= r.open
-      const forming = formingDate.value && r.trade_date === formingDate.value
       return {
         value: r.volume,
-        itemStyle: { color: up ? '#ef232a' : '#14b143', opacity: forming ? 0.55 : 1 },
+        itemStyle: { color: up ? '#ef232a' : '#14b143', opacity: i === formingIdx ? 0.55 : 1 },
       }
     })
 
@@ -134,7 +135,7 @@ function renderChart() {
           // Use dataIndex to read directly from our records array — no ambiguity
           const r = records.value[k.dataIndex]
           if (!r) return ''
-          const isForming = !!(formingDate.value && r.trade_date === formingDate.value)
+          const isForming = k.dataIndex === formingIdx
           const date = String(r.trade_date).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')
           const fmt = n => (n == null ? '-' : Number(n).toFixed(2))
           const prev = k.dataIndex > 0 ? records.value[k.dataIndex - 1] : null
