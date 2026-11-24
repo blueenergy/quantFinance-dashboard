@@ -97,26 +97,37 @@ function renderChart() {
     // 未收盘的那根永远是最后一根（日线是当天那根，周/月线是含它的当周/当月），
     // 画成空心，一眼能和已收盘的 K 线分开
     const formingIdx = formingDate.value ? records.value.length - 1 : -1
+    // 着色口径 = 收盘 vs 前一交易日收盘，与 tooltip 的涨跌幅保持一致。
+    // 跳空日两种口径会背离：11/23 纳指高开低走（open > close，蜡烛是阴线），
+    // 但相对前收涨 6.5% —— 按阴阳画成绿色会和 tooltip 的 +6.5% 自相矛盾。
+    const isUp = (r, i) => {
+      const prev = i > 0 ? records.value[i - 1] : null
+      return prev && prev.close > 0 ? r.close >= prev.close : r.close >= r.open
+    }
     const ohlcv = records.value.map((r, i) => {
-      const item = { value: [r.open, r.close, r.low, r.high] }
+      const color = isUp(r, i) ? '#ef232a' : '#14b143'
+      // color 与 color0 同色：ECharts 按阴阳在两者间取值，同色才能让
+      // 「高开低走但仍高于前收」的蜡烛显示上涨色
+      const itemStyle = {
+        color,
+        color0: color,
+        borderColor: color,
+        borderColor0: color,
+      }
       if (i === formingIdx) {
-        item.itemStyle = {
-          color: 'transparent',
-          color0: 'transparent',
-          borderColor: '#ef232a',
-          borderColor0: '#14b143',
-          borderWidth: 2,
-        }
+        itemStyle.color = 'transparent'
+        itemStyle.color0 = 'transparent'
+        itemStyle.borderWidth = 2
       }
-      return item
+      return { value: [r.open, r.close, r.low, r.high], itemStyle }
     })
-    const volumes = records.value.map((r, i) => {
-      const up = r.close >= r.open
-      return {
-        value: r.volume,
-        itemStyle: { color: up ? '#ef232a' : '#14b143', opacity: i === formingIdx ? 0.55 : 1 },
-      }
-    })
+    const volumes = records.value.map((r, i) => ({
+      value: r.volume,
+      itemStyle: {
+        color: isUp(r, i) ? '#ef232a' : '#14b143',
+        opacity: i === formingIdx ? 0.55 : 1,
+      },
+    }))
 
     const hasVolume = records.value.some(r => r.volume > 0)
 
