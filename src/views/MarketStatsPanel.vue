@@ -141,8 +141,26 @@
               <div class="stat-latest">
                 <strong>{{ fmtPct(penLatest?.ratio_pct) }}</strong>
                 <span>份额截至 {{ fmtDate(penLatest?.trade_date) }}</span>
+                <span
+                  v-if="penSummary?.phase"
+                  class="phase-chip"
+                  :class="'phase-' + penSummary.phase"
+                >
+                  {{ penSummary.phase_label }}
+                </span>
               </div>
             </header>
+            <div v-if="penSummary" class="pen-metrics">
+              <span>20 日 <b :class="deltaClass(penSummary.chg_20d)">{{ fmtPct(penSummary.chg_20d) }}</b></span>
+              <span>5 日 <b :class="deltaClass(penSummary.chg_5d)">{{ fmtPct(penSummary.chg_5d) }}</b></span>
+              <span>1 年分位 <b>{{ penSummary.pctile_1y ?? '—' }}%</b></span>
+              <span>
+                全样本分位 <b>{{ penSummary.pctile_all ?? '—' }}%</b>
+              </span>
+              <span class="pen-metrics-note">
+                阶段按 1 年分位判定；两个分位差距大时，当前位置相对长期仍有空间或已透支
+              </span>
+            </div>
             <div class="pen-toolbar">
               <span class="mrp-caption">
                 {{ penPoolLabel }}
@@ -280,6 +298,7 @@ const peCaption = computed(() => {
 
 const penSeries = computed(() => penData.value?.series || [])
 const penLatest = computed(() => penData.value?.latest || null)
+const penSummary = computed(() => penData.value?.summary || null)
 const penCoverage = computed(() => penData.value?.coverage || null)
 const penetrationIndices = computed(() => penData.value?.available_indices || [])
 const penPoolLabel = computed(() => {
@@ -931,6 +950,68 @@ onBeforeUnmount(() => {
   color: #b42318;
 }
 .stat-latest.is-down strong {
+  color: #027a48;
+}
+
+/* 阶段 chip：与国家队动向页保持同一套配色，两处读的是同一套判据 */
+.phase-chip {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.phase-chip.phase-bottom_refill {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #15803d;
+}
+.phase-chip.phase-inflow {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #1d4ed8;
+}
+.phase-chip.phase-top_exit {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #b91c1c;
+}
+.phase-chip.phase-outflow {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.4);
+  color: #c2410c;
+}
+.phase-chip.phase-flat,
+.phase-chip.phase-unknown {
+  background: rgba(100, 116, 139, 0.1);
+  border-color: rgba(100, 116, 139, 0.3);
+  color: #667085;
+}
+
+.pen-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: baseline;
+  margin: 6px 0 2px;
+  font-size: 12px;
+  color: #667085;
+}
+.pen-metrics b {
+  font-weight: 600;
+  color: #172033;
+}
+.pen-metrics-note {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: #98a2b3;
+}
+.pen-metrics b.is-up {
+  color: #b42318;
+}
+.pen-metrics b.is-down {
   color: #027a48;
 }
 .stat-empty {
