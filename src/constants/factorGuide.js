@@ -61,6 +61,10 @@ export const FACTOR_METRIC_GUIDE = [
   { key: 'ΔIC', desc: '增量检验的 IC 提升量。检验「加进去有没有用」用这个。' },
 ]
 
+export const FACTOR_DIRECTION_NOTE =
+  '「方向」是因子定义时的教科书假设，不是在本系统股票池上实测出来的方向。'
+  + '动量与换手在 csi1000 上实测为反向，具体以有深度解读的因子正文为准。'
+
 export const FACTOR_COVERAGE_NOTE =
   '覆盖率是因子面板 (date, symbol) 行的非空比例，不是可交易池的占比——停牌、'
   + '未上市、财报未披露都会算成缺失。'

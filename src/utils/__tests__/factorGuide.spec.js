@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   FACTOR_A_SHARE_NOTES,
   FACTOR_COVERAGE_NOTE,
+  FACTOR_DIRECTION_NOTE,
   FACTOR_METRIC_GUIDE,
   FACTOR_STATUSES,
   FACTOR_STATUS_GUIDE,
@@ -20,6 +21,7 @@ describe('factor guide', () => {
       expect(item.desc.trim().length).toBeGreaterThan(0)
     }
     expect(FACTOR_COVERAGE_NOTE.trim().length).toBeGreaterThan(0)
+    expect(FACTOR_DIRECTION_NOTE.trim().length).toBeGreaterThan(0)
     expect(FACTOR_A_SHARE_NOTES.length).toBeGreaterThan(0)
     for (const note of FACTOR_A_SHARE_NOTES) expect(note.trim().length).toBeGreaterThan(0)
   })

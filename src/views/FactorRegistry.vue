@@ -183,6 +183,9 @@
             <p v-if="metaRows.length" class="meta-rows">
               <span v-for="row in metaRows" :key="row.label">{{ row.label }}：{{ row.value }}</span>
             </p>
+            <p v-if="detail.registry.direction" class="muted direction-note">
+              {{ directionNote }}
+            </p>
             <p v-if="detail.registry.aliases?.length" class="muted">
               aliases: {{ detail.registry.aliases.join(', ') }}
             </p>
@@ -280,6 +283,7 @@ import {
 import {
   FACTOR_A_SHARE_NOTES,
   FACTOR_COVERAGE_NOTE,
+  FACTOR_DIRECTION_NOTE,
   FACTOR_METRIC_GUIDE,
   FACTOR_STATUSES,
   FACTOR_STATUS_GUIDE,
@@ -294,10 +298,15 @@ const testTypeGuide = FACTOR_TEST_TYPE_GUIDE
 const metricGuide = FACTOR_METRIC_GUIDE
 const coverageNote = FACTOR_COVERAGE_NOTE
 const aShareNotes = FACTOR_A_SHARE_NOTES
+const directionNote = FACTOR_DIRECTION_NOTE
 
+// ``direction`` records the textbook prior from the factor definition, not the
+// direction measured on our universe. momentum and turnover are declared
+// higher_is_better while csi1000 measures them as reversal, so the label says
+// which of the two this is.
 const DIRECTION_LABELS = {
-  higher_is_better: '越大越好',
-  lower_is_better: '越小越好',
+  higher_is_better: '越大越好（定义口径，非实测）',
+  lower_is_better: '越小越好（定义口径，非实测）',
   neutral: '中性（只用于分组或规模度量）',
 }
 
@@ -1084,6 +1093,12 @@ td .small {
   color: #334155;
   font-size: 12px;
   line-height: 1.75;
+}
+
+.direction-note {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
 }
 
 .inline-code {
