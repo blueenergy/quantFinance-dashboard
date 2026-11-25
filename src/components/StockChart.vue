@@ -45,8 +45,8 @@
     <div class="chart-toolbar">
       <div class="toolbar-group">
         <div class="interval-selector">
-          <button 
-            v-for="opt in intervalOptions" 
+          <button
+            v-for="opt in intervalOptions"
             :key="opt.value"
             :class="['interval-btn', { active: kType === opt.value }]"
             @click="kType = opt.value"
@@ -54,6 +54,23 @@
             {{ opt.label }}
           </button>
         </div>
+      </div>
+
+      <div class="toolbar-group" v-if="showFibToolbar">
+        <button
+          type="button"
+          class="interval-btn"
+          :class="{ active: fibEnabled }"
+          :title="fibEnabled ? '隐藏斐波那契回撤位' : '显示斐波那契回撤位'"
+          @click="toggleFib"
+        >斐波那契</button>
+        <template v-if="fibEnabled">
+          <input type="date" v-model="fibStart" @change="persistFibAnchors" class="theme-input" :min="fibDateMin" :max="fibDateMax" />
+          <span class="sep">至</span>
+          <input type="date" v-model="fibEnd" @change="persistFibAnchors" class="theme-input" :min="fibDateMin" :max="fibDateMax" />
+          <button type="button" class="interval-btn window-btn" @click="resetFibAnchors">自动</button>
+          <span class="fib-info">{{ fibInfo }}</span>
+        </template>
       </div>
 
       <div class="toolbar-group" v-if="showDateRange">
@@ -132,6 +149,7 @@ import {
 } from '../utils/chartVisibleWindow.js'
 import { loadEcharts } from '../utils/echarts/loadEcharts.js'
 import { buildIntradayLineOption } from '../utils/echarts/intradayLineOption.js'
+import { buildFibMarkLineData, buildFibOverlay, formatAnchorDate, toDateInput } from '../utils/echarts/fibonacci.js'
 import {
   barChangePctForSeries,
   changePct,
@@ -211,6 +229,73 @@ const showAdjustToolbar = computed(
   () => !isOneDayMinute.value && !isIntradayLine.value && !isIntradayGs.value,
 )
 const showGsToolbar = computed(() => !isOneDayMinute.value && !isIntradayLine.value)
+
+// ---- 斐波那契回撤位（日/周/月 K 生效）----
+const fibEnabled = ref(readStoredFibEnabled())
+const fibStart = ref('')
+const fibEnd = ref('')
+const showFibToolbar = computed(
+  () => !isOneDayMinute.value && !isIntradayLine.value && !isIntradayGs.value,
+)
+const fibTfKey = computed(() => (kType.value === 'month' ? '1m' : kType.value === 'week' ? '1w' : '1d'))
+const fibRows = computed(() => [...activeKlineRows()]
+  .sort((a, b) => barOrderKey(a).localeCompare(barOrderKey(b))))
+const fibStorageKey = computed(() => `kline-fib-anchors:${props.symbol || 'default'}:${fibTfKey.value}`)
+const fibOverlay = computed(() => buildFibOverlay(fibRows.value, {
+  startDate: fibStart.value,
+  endDate: fibEnd.value,
+}))
+const fibInfo = computed(() => {
+  const overlay = fibOverlay.value
+  if (!overlay) return ''
+  const suffix = overlay.auto ? ' · 自动' : ''
+  return `${overlay.low.toFixed(2)} (${formatAnchorDate(overlay.startDate)}) → ${overlay.high.toFixed(2)} (${formatAnchorDate(overlay.endDate)})${suffix}`
+})
+const fibDateMin = computed(() => toDateInput(fibRows.value[0]?.trade_date))
+const fibDateMax = computed(() => toDateInput(fibRows.value[fibRows.value.length - 1]?.trade_date))
+
+function readStoredFibEnabled() {
+  try {
+    return localStorage.getItem('kline-fib-on') === '1'
+  } catch {
+    return false
+  }
+}
+
+function loadFibAnchors() {
+  try {
+    const raw = localStorage.getItem(fibStorageKey.value)
+    const parsed = raw ? JSON.parse(raw) : null
+    fibStart.value = typeof parsed?.start === 'string' ? parsed.start : ''
+    fibEnd.value = typeof parsed?.end === 'string' ? parsed.end : ''
+  } catch {
+    fibStart.value = ''
+    fibEnd.value = ''
+  }
+}
+
+function persistFibAnchors() {
+  try {
+    localStorage.setItem(fibStorageKey.value, JSON.stringify({ start: fibStart.value, end: fibEnd.value }))
+  } catch {
+    // ignore quota / private-mode failures
+  }
+}
+
+function resetFibAnchors() {
+  fibStart.value = ''
+  fibEnd.value = ''
+  persistFibAnchors()
+}
+
+function toggleFib() {
+  fibEnabled.value = !fibEnabled.value
+  try {
+    localStorage.setItem('kline-fib-on', fibEnabled.value ? '1' : '0')
+  } catch {
+    // ignore quota / private-mode failures
+  }
+}
 const showDailyPaging = computed(() => kType.value === 'day')
 const kTypeLabel = computed(() => {
   if (kType.value === '30m') return '30分钟'
@@ -744,6 +829,12 @@ function renderDaily() {
       itemStyle: candlestickItemStyle(),
     }
   ]
+  const fibMarkLines = fibEnabled.value && fibOverlay.value?.levels?.length
+    ? buildFibMarkLineData(fibOverlay.value.levels)
+    : []
+  if (fibMarkLines.length) {
+    option.series[0].markLine = { symbol: 'none', silent: true, data: fibMarkLines }
+  }
   if (gsSeries.length) {
     option.series.push(...gsSeries)
     option.yAxis = padKlinePriceAxis(option.yAxis)
@@ -1178,6 +1269,8 @@ watch(() => props.priceAdjust, () => {
   if (isPeriodKline.value) fetchPeriodKline()
 })
 watch(() => decisionGsEnabled.value, () => drawChart())
+watch([fibEnabled, fibStart, fibEnd], () => drawChart())
+watch(fibStorageKey, () => loadFibAnchors(), { immediate: true })
 
 watch(() => props.symbol, (sym, prev) => {
   if (sym === prev || prev === undefined) return
@@ -1345,6 +1438,7 @@ const goBack = () => emit('go-back', { strategy: props.strategyFrom, preset: pro
 
 .theme-input { border: 1px solid; padding: 3px 6px; border-radius: 3px; font-size: 12px; outline: none; transition: border-color 0.2s; }
 .theme-input:focus { border-color: #0366d6; }
+.fib-info { color: #38bdf8; font-size: 12px; font-variant-numeric: tabular-nums; }
 
 .nav-controls { display: flex; gap: 4px; flex-shrink: 0; margin-left: auto; }
 .btn-nav, .btn-action { border: 1px solid; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; font-weight: 500; transition: background 0.2s; }

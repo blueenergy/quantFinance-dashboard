@@ -143,6 +143,38 @@ export function buildFibLevels (low, high, ratios = FIB_RATIOS) {
   ]
 }
 
+/**
+ * 把 levels 转成 ECharts markLine.data。
+ * 三处 K 线（StockKLineChart / StockChart / KLineComparison）共用同一套样式。
+ */
+export function buildFibMarkLineData (levels, { digits = 2 } = {}) {
+  return (Array.isArray(levels) ? levels : [])
+    .map((level) => {
+      const price = Number(level?.price)
+      if (!Number.isFinite(price)) return null
+      const ratio = Number(level?.ratio) || 0
+      const anchor = Boolean(level?.isAnchor)
+      return {
+        yAxis: price,
+        silent: true,
+        label: {
+          show: true,
+          position: 'insideEndTop',
+          formatter: `${(ratio * 100).toFixed(1)}%  ${price.toFixed(digits)}`,
+          color: anchor ? '#94a3b8' : '#38bdf8',
+          fontSize: 10,
+        },
+        lineStyle: {
+          color: anchor ? '#94a3b8' : '#38bdf8',
+          type: anchor ? 'solid' : 'dashed',
+          width: 1,
+          opacity: anchor ? 0.5 : 0.85,
+        },
+      }
+    })
+    .filter(Boolean)
+}
+
 /** 在 rows 中找离指定日期最近的交易日索引；找不到返回 -1 */
 export function findNearestRowIndex (rows, dateStr) {
   const target = compactYmd(dateStr)

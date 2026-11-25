@@ -1,3 +1,5 @@
+import { buildFibMarkLineData } from './fibonacci.js'
+
 /**
  * 申万行业指数 K 线 ECharts option（K + 均线 + 可选涨跌幅% + 量/额 副图）。
  * 与 ETF 前复权三格图数据字段不同，故单独成模块；后续可在更底层抽象复用「多 grid 同步缩放」模式。
@@ -486,29 +488,7 @@ function buildSeries (ctx) {
       lineStyle: { color: '#fbbf24', type: 'dashed', width: 1 }
     })
   }
-  for (const level of fibLevels) {
-    const price = Number(level?.price)
-    if (!Number.isFinite(price)) continue
-    const ratio = Number(level?.ratio) || 0
-    const anchor = Boolean(level?.isAnchor)
-    markLineData.push({
-      yAxis: price,
-      silent: true,
-      label: {
-        show: true,
-        position: 'insideEndTop',
-        formatter: `${(ratio * 100).toFixed(1)}%  ${formatKlinePriceLabel(price)}`,
-        color: anchor ? '#94a3b8' : '#38bdf8',
-        fontSize: 10
-      },
-      lineStyle: {
-        color: anchor ? '#94a3b8' : '#38bdf8',
-        type: anchor ? 'solid' : 'dashed',
-        width: 1,
-        opacity: anchor ? 0.5 : 0.85
-      }
-    })
-  }
+  markLineData.push(...buildFibMarkLineData(fibLevels))
   if (markLineData.length) {
     candle.markLine = { symbol: 'none', silent: true, data: markLineData }
   }

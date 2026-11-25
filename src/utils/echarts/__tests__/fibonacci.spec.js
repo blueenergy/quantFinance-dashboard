@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildFibLevels,
+  buildFibMarkLineData,
   buildFibOverlay,
   compactYmd,
   findLastSwing,
@@ -59,6 +60,15 @@ describe('fibonacci', () => {
     expect(half.price).toBeCloseTo(150, 6)
     const fib236 = levels.find((level) => level.ratio === 0.236)
     expect(fib236.price).toBeCloseTo(176.4, 6)
+  })
+
+  it('builds markLine data with ratio and price labels', () => {
+    const lines = buildFibMarkLineData(buildFibLevels(100, 200))
+    expect(lines).toHaveLength(7)
+    expect(lines[1].label.formatter).toBe('23.6%  176.40')
+    expect(lines[1].lineStyle.type).toBe('dashed')
+    expect(lines[0].lineStyle.type).toBe('solid')
+    expect(buildFibMarkLineData([{ ratio: 0.5, price: NaN }])).toEqual([])
   })
 
   it('rejects invalid anchors', () => {

@@ -76,7 +76,7 @@
         >{{ opt.label }}</button>
         <span class="qr-label qr-label--gap">斐波那契:</span>
         <button
-          @click="fibEnabled = !fibEnabled"
+          @click="toggleFib"
           class="btn-base btn-sm"
           :class="fibEnabled ? 'btn-gradient-blue' : 'btn-gradient-orange'"
         >{{ fibEnabled ? '开' : '关' }}</button>
@@ -114,7 +114,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import request from '../utils/request'
-import { buildFibOverlay, formatAnchorDate, toDateInput } from '../utils/echarts/fibonacci'
+import { buildFibMarkLineData, buildFibOverlay, formatAnchorDate, toDateInput } from '../utils/echarts/fibonacci'
 
 let echarts
 
@@ -286,6 +286,14 @@ function resetFibAnchors() {
   fibStart.value = ''
   fibEnd.value = ''
   persistFibAnchors()
+}
+
+function toggleFib() {
+  fibEnabled.value = !fibEnabled.value
+  // 斐波那契只画在 K 线视图；打开时自动切过去，避免“开了没反应”
+  if (fibEnabled.value && chartMode.value !== 'candlestick') {
+    chartMode.value = 'candlestick'
+  }
 }
 
 watch(fibStorageKey, () => loadFibAnchors(), { immediate: true })
@@ -549,27 +557,9 @@ function renderCandlestick() {
     },
   ]
   const overlay = fibEnabled.value ? fibOverlay.value : null
-  if (overlay?.levels?.length) {
-    series[0].markLine = {
-      symbol: 'none',
-      silent: true,
-      data: overlay.levels.map((level) => ({
-        yAxis: level.price,
-        label: {
-          show: true,
-          position: 'insideEndTop',
-          formatter: `${(level.ratio * 100).toFixed(1)}%  ${level.price.toFixed(2)}`,
-          color: level.isAnchor ? '#94a3b8' : '#38bdf8',
-          fontSize: 10,
-        },
-        lineStyle: {
-          color: level.isAnchor ? '#94a3b8' : '#38bdf8',
-          type: level.isAnchor ? 'solid' : 'dashed',
-          width: 1,
-          opacity: level.isAnchor ? 0.5 : 0.85,
-        },
-      })),
-    }
+  const fibMarkLines = overlay?.levels?.length ? buildFibMarkLineData(overlay.levels) : []
+  if (fibMarkLines.length) {
+    series[0].markLine = { symbol: 'none', silent: true, data: fibMarkLines }
   }
   if (hasBData) {
     series.push({
