@@ -199,7 +199,11 @@
           >
             <v-tab value="indices">🇺🇸 核心指数</v-tab>
             <v-tab value="china">🇨🇳 中国资产</v-tab>
+            <v-tab value="hk_asia">🇭🇰 港股亚洲</v-tab>
             <v-tab value="tech">🤖 科技巨头</v-tab>
+            <v-tab value="semis">🔬 半导体</v-tab>
+            <v-tab value="ai_theme">🧠 AI主题</v-tab>
+            <v-tab value="ai_software">☁️ AI软件</v-tab>
             <v-tab value="commodities">🪙 商品外汇</v-tab>
             <v-tab value="other">📉 债券加密</v-tab>
           </v-tabs>
@@ -278,7 +282,21 @@
               </div>
             </v-window-item>
 
-            <!-- 3. 科技巨头 -->
+            <!-- 3. 港股/亚洲隔夜 —— 对 A 股开盘传导最直接的一组 -->
+            <v-window-item value="hk_asia">
+              <div class="market-indices">
+                <div class="market-item" v-for="(symbol, index) in ['^HSI', 'HSTECH.HK', '^HSCE', '^KS11', '^TWII']" :key="index"
+                     :class="getChangeClass(getMarketItem(displayMarketData.hk_asia, symbol)?.change_pct)"
+                     :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.hk_asia, symbol))">
+                  <span class="m-name">{{ getMarketItem(displayMarketData.hk_asia, symbol)?.name || symbol }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.hk_asia, symbol)?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.hk_asia, symbol)?.change_pct) }}</span>
+                  <button v-if="hasKline(symbol)" class="kline-btn" @click.stop="openChart(symbol, getMarketItem(displayMarketData.hk_asia, symbol)?.name || symbol)" title="查看K线">📈</button>
+                </div>
+              </div>
+            </v-window-item>
+
+            <!-- 4. 科技巨头 -->
             <v-window-item value="tech">
               <div class="market-indices">
                 <div class="market-item" v-for="(symbol, index) in ['NVDA', 'TSLA', 'AAPL', 'MSFT', 'GOOG', 'META', 'AMZN', 'AMD', 'INTC']" :key="index"
@@ -291,7 +309,49 @@
               </div>
             </v-window-item>
 
-            <!-- 4. 商品外汇 -->
+            <!-- 5. 半导体链 —— A 股半导体/算力的隔夜锚点 -->
+            <v-window-item value="semis">
+              <div class="market-indices">
+                <div class="market-item" v-for="(symbol, index) in ['TSM', 'ASML', 'MU', 'AVGO', 'ARM']" :key="index"
+                     :class="getChangeClass(getMarketItem(displayMarketData.semis_leaders, symbol)?.change_pct)"
+                     :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.semis_leaders, symbol))">
+                  <span class="m-name">{{ getMarketItem(displayMarketData.semis_leaders, symbol)?.name || symbol }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.semis_leaders, symbol)?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.semis_leaders, symbol)?.change_pct) }}</span>
+                  <button v-if="hasKline(symbol)" class="kline-btn" @click.stop="openChart(symbol, getMarketItem(displayMarketData.semis_leaders, symbol)?.name || symbol)" title="查看K线">📈</button>
+                </div>
+              </div>
+            </v-window-item>
+
+            <!-- 6. AI 主题 -->
+            <v-window-item value="ai_theme">
+              <div class="market-indices">
+                <div class="market-item" v-for="(symbol, index) in ['ANT', 'AIQ', 'CHAT', 'BOTZ', 'ARKW']" :key="index"
+                     :class="getChangeClass(getMarketItem(displayMarketData.ai_theme, symbol)?.change_pct)"
+                     :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.ai_theme, symbol))">
+                  <span class="m-name">{{ getMarketItem(displayMarketData.ai_theme, symbol)?.name || symbol }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.ai_theme, symbol)?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.ai_theme, symbol)?.change_pct) }}</span>
+                  <button v-if="hasKline(symbol)" class="kline-btn" @click.stop="openChart(symbol, getMarketItem(displayMarketData.ai_theme, symbol)?.name || symbol)" title="查看K线">📈</button>
+                </div>
+              </div>
+            </v-window-item>
+
+            <!-- 7. AI 软件/算力 -->
+            <v-window-item value="ai_software">
+              <div class="market-indices">
+                <div class="market-item" v-for="(symbol, index) in ['ORCL', 'CRM', 'PLTR', 'NOW', 'SNOW']" :key="index"
+                     :class="getChangeClass(getMarketItem(displayMarketData.ai_software, symbol)?.change_pct)"
+                     :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.ai_software, symbol))">
+                  <span class="m-name">{{ getMarketItem(displayMarketData.ai_software, symbol)?.name || symbol }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.ai_software, symbol)?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.ai_software, symbol)?.change_pct) }}</span>
+                  <button v-if="hasKline(symbol)" class="kline-btn" @click.stop="openChart(symbol, getMarketItem(displayMarketData.ai_software, symbol)?.name || symbol)" title="查看K线">📈</button>
+                </div>
+              </div>
+            </v-window-item>
+
+            <!-- 8. 商品外汇 -->
             <v-window-item value="commodities">
               <div class="market-indices">
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.commodities, 'GC=F')?.change_pct)">
@@ -312,6 +372,12 @@
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.commodities, 'CL=F')?.change_pct) }}</span>
                   <button v-if="hasKline('CL=F')" class="kline-btn" @click.stop="openChart('CL=F', 'WTI原油')" title="查看K线">📈</button>
                 </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.commodities, 'BZ=F')?.change_pct)">
+                  <span class="m-name">布伦特原油</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.commodities, 'BZ=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.commodities, 'BZ=F')?.change_pct) }}</span>
+                  <button v-if="hasKline('BZ=F')" class="kline-btn" @click.stop="openChart('BZ=F', '布伦特原油')" title="查看K线">📈</button>
+                </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.forex, 'USDCNH=X')?.change_pct)">
                   <span class="m-name">离岸人民币</span>
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.forex, 'USDCNH=X')?.price) }}</span>
@@ -324,10 +390,16 @@
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.forex, 'DX-Y.NYB')?.change_pct) }}</span>
                   <button v-if="hasKline('DX-Y.NYB')" class="kline-btn" @click.stop="openChart('DX-Y.NYB', '美元指数')" title="查看K线">📈</button>
                 </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.forex, 'USDJPY=X')?.change_pct)">
+                  <span class="m-name">美元/日元</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.forex, 'USDJPY=X')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.forex, 'USDJPY=X')?.change_pct) }}</span>
+                  <button v-if="hasKline('USDJPY=X')" class="kline-btn" @click.stop="openChart('USDJPY=X', '美元/日元')" title="查看K线">📈</button>
+                </div>
               </div>
             </v-window-item>
             
-            <!-- 5. 债券加密 -->
+            <!-- 9. 债券加密 -->
             <v-window-item value="other">
                <div class="market-indices">
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.bonds, '^TNX')?.change_pct)">
