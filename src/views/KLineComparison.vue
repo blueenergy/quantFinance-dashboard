@@ -66,6 +66,27 @@
         <span class="qr-label">视图:</span>
         <button @click="chartMode = 'normalized'" :disabled="chartMode === 'normalized'" class="btn-base btn-sm btn-gradient-blue">走势对比</button>
         <button @click="chartMode = 'candlestick'" :disabled="chartMode === 'candlestick'" class="btn-base btn-sm btn-gradient-teal">标的A K线</button>
+        <span class="qr-label qr-label--gap">周期:</span>
+        <button
+          v-for="opt in TF_OPTIONS"
+          :key="opt.value"
+          @click="tf = opt.value"
+          :disabled="tf === opt.value"
+          class="btn-base btn-sm btn-gradient-orange"
+        >{{ opt.label }}</button>
+        <span class="qr-label qr-label--gap">斐波那契:</span>
+        <button
+          @click="fibEnabled = !fibEnabled"
+          class="btn-base btn-sm"
+          :class="fibEnabled ? 'btn-gradient-blue' : 'btn-gradient-orange'"
+        >{{ fibEnabled ? '开' : '关' }}</button>
+        <template v-if="fibEnabled">
+          <input type="date" v-model="fibStart" :min="fibDateMin" :max="fibDateMax" @change="persistFibAnchors" />
+          <span>~</span>
+          <input type="date" v-model="fibEnd" :min="fibDateMin" :max="fibDateMax" @change="persistFibAnchors" />
+          <button @click="resetFibAnchors" class="btn-base btn-sm btn-gradient-orange">自动</button>
+          <span v-if="fibInfo" class="fib-info">{{ fibInfo }}</span>
+        </template>
       </div>
     </div>
 
@@ -93,6 +114,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import request from '../utils/request'
+import { buildFibOverlay, formatAnchorDate, toDateInput } from '../utils/echarts/fibonacci'
 
 let echarts
 
@@ -160,8 +182,120 @@ const watchlistPickB = ref('')
 const chartRef = ref(null)
 let chartInstance = null
 
+const TF_OPTIONS = [
+  { value: '1d', label: '日' },
+  { value: '1w', label: '周' },
+  { value: '1m', label: '月' },
+]
+const tf = ref('1d')
+const fibEnabled = ref(readStoredFibEnabled())
+const fibStart = ref('')
+const fibEnd = ref('')
+
 // Computed
 const hasData = computed(() => seriesA.value.length > 0 || seriesB.value.length > 0)
+
+function readStoredFibEnabled() {
+  try {
+    return localStorage.getItem('kline-fib-on') === '1'
+  } catch {
+    return false
+  }
+}
+
+function compactDate(value) {
+  return String(value || '').replace(/\D/g, '').slice(0, 8)
+}
+
+function weekKey(ymd) {
+  const date = new Date(Date.UTC(
+    Number(ymd.slice(0, 4)),
+    Number(ymd.slice(4, 6)) - 1,
+    Number(ymd.slice(6, 8)),
+  ))
+  const day = date.getUTCDay() || 7
+  date.setUTCDate(date.getUTCDate() - day + 1)
+  return date.toISOString().slice(0, 10)
+}
+
+function resampleBars(rows, period) {
+  if (period === '1d') return rows
+  const groups = new Map()
+  for (const row of rows) {
+    const date = compactDate(row.trade_date)
+    if (date.length !== 8) continue
+    const key = period === '1w' ? weekKey(date) : date.slice(0, 6)
+    const open = Number(row.open)
+    const high = Number(row.high)
+    const low = Number(row.low)
+    const close = Number(row.close)
+    if (![open, high, low, close].every(Number.isFinite)) continue
+    const current = groups.get(key)
+    if (!current) {
+      groups.set(key, { trade_date: date, open, high, low, close })
+      continue
+    }
+    current.trade_date = date
+    current.high = Math.max(current.high, high)
+    current.low = Math.min(current.low, low)
+    current.close = close
+  }
+  return [...groups.values()]
+}
+
+const barsA = computed(() => resampleBars(seriesA.value, tf.value))
+
+const fibOverlay = computed(() => buildFibOverlay(barsA.value, {
+  startDate: fibStart.value,
+  endDate: fibEnd.value,
+}))
+
+const fibInfo = computed(() => {
+  const overlay = fibOverlay.value
+  if (!overlay) return ''
+  const suffix = overlay.auto ? ' · 自动' : ''
+  return `${overlay.low.toFixed(2)} (${formatAnchorDate(overlay.startDate)}) → ${overlay.high.toFixed(2)} (${formatAnchorDate(overlay.endDate)})${suffix}`
+})
+
+const fibDateMin = computed(() => toDateInput(barsA.value[0]?.trade_date))
+const fibDateMax = computed(() => toDateInput(barsA.value[barsA.value.length - 1]?.trade_date))
+
+const fibStorageKey = computed(() => `kline-fib-anchors:${sym.value.A || 'default'}:${tf.value}`)
+
+function loadFibAnchors() {
+  try {
+    const raw = localStorage.getItem(fibStorageKey.value)
+    const parsed = raw ? JSON.parse(raw) : null
+    fibStart.value = typeof parsed?.start === 'string' ? parsed.start : ''
+    fibEnd.value = typeof parsed?.end === 'string' ? parsed.end : ''
+  } catch {
+    fibStart.value = ''
+    fibEnd.value = ''
+  }
+}
+
+function persistFibAnchors() {
+  try {
+    localStorage.setItem(fibStorageKey.value, JSON.stringify({ start: fibStart.value, end: fibEnd.value }))
+  } catch {
+    // ignore quota / private-mode failures
+  }
+}
+
+function resetFibAnchors() {
+  fibStart.value = ''
+  fibEnd.value = ''
+  persistFibAnchors()
+}
+
+watch(fibStorageKey, () => loadFibAnchors(), { immediate: true })
+watch(fibEnabled, (on) => {
+  try {
+    localStorage.setItem('kline-fib-on', on ? '1' : '0')
+  } catch {
+    // ignore quota / private-mode failures
+  }
+})
 
 function symLabel(slot) {
   const s = sym.value[slot]
@@ -389,7 +523,7 @@ function renderNormalized() {
 
 function renderCandlestick() {
   if (!seriesA.value.length) { chartInstance.clear(); return }
-  const data = seriesA.value
+  const data = barsA.value
   const dates = data.map(r => formatDate(r.trade_date))
   const candleData = data.map(r => [r.open, r.close, r.low, r.high])
 
@@ -414,6 +548,29 @@ function renderCandlestick() {
       },
     },
   ]
+  const overlay = fibEnabled.value ? fibOverlay.value : null
+  if (overlay?.levels?.length) {
+    series[0].markLine = {
+      symbol: 'none',
+      silent: true,
+      data: overlay.levels.map((level) => ({
+        yAxis: level.price,
+        label: {
+          show: true,
+          position: 'insideEndTop',
+          formatter: `${(level.ratio * 100).toFixed(1)}%  ${level.price.toFixed(2)}`,
+          color: level.isAnchor ? '#94a3b8' : '#38bdf8',
+          fontSize: 10,
+        },
+        lineStyle: {
+          color: level.isAnchor ? '#94a3b8' : '#38bdf8',
+          type: level.isAnchor ? 'solid' : 'dashed',
+          width: 1,
+          opacity: level.isAnchor ? 0.5 : 0.85,
+        },
+      })),
+    }
+  }
   if (hasBData) {
     series.push({
       name: `${labelB}(参考)`,
@@ -451,7 +608,7 @@ function renderCandlestick() {
 
 function handleResize() { chartInstance?.resize() }
 
-watch(chartMode, () => renderChart())
+watch([chartMode, tf, fibEnabled, fibStart, fibEnd], () => renderChart())
 
 async function loadPresetNamesFromApi() {
   try {
@@ -492,8 +649,11 @@ onBeforeUnmount(() => {
 .wl-sel { padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; max-width: 160px; }
 .date-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .date-row input[type="date"] { padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; }
-.mode-row { display: flex; align-items: center; gap: 8px; }
+.mode-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .qr-label { font-size: 13px; color: #666; }
+.qr-label--gap { margin-left: 12px; }
+.mode-row input[type="date"] { padding: 3px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
+.fib-info { font-size: 12px; color: #0284c7; font-variant-numeric: tabular-nums; }
 .stats-bar { display: flex; gap: 20px; padding: 8px 12px; background: #f8fafc; border-radius: 6px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
 .stat { font-size: 13px; font-weight: 600; }
 .stat.up { color: #e53935; }

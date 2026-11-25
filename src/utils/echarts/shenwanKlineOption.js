@@ -140,7 +140,8 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
       yAmt,
       markers,
       fmtAxis,
-      markLineDate: _meta?.markLineDate
+      markLineDate: _meta?.markLineDate,
+      fibLevels: _meta?.fib?.levels || []
     }),
     tooltip: buildShenwanTooltip(data, { fmtAxis, formatNum2, toNumOrNull, formatVolShow, formatAmount, formatMvWan })
   }
@@ -446,7 +447,8 @@ function buildSeries (ctx) {
     yAmt,
     markers,
     fmtAxis,
-    markLineDate
+    markLineDate,
+    fibLevels = []
   } = ctx
   const markPointData = buildMarkerPoints(markers, fmtAxis)
   const candle = {
@@ -476,13 +478,39 @@ function buildSeries (ctx) {
     }
   }
   const axisDate = markLineDate ? fmtAxis(markLineDate) : ''
+  const markLineData = []
   if (axisDate) {
-    candle.markLine = {
-      symbol: 'none',
+    markLineData.push({
+      xAxis: axisDate,
       label: { formatter: '信号日', color: '#fbbf24', fontSize: 11 },
-      lineStyle: { color: '#fbbf24', type: 'dashed', width: 1 },
-      data: [{ xAxis: axisDate }]
-    }
+      lineStyle: { color: '#fbbf24', type: 'dashed', width: 1 }
+    })
+  }
+  for (const level of fibLevels) {
+    const price = Number(level?.price)
+    if (!Number.isFinite(price)) continue
+    const ratio = Number(level?.ratio) || 0
+    const anchor = Boolean(level?.isAnchor)
+    markLineData.push({
+      yAxis: price,
+      silent: true,
+      label: {
+        show: true,
+        position: 'insideEndTop',
+        formatter: `${(ratio * 100).toFixed(1)}%  ${formatKlinePriceLabel(price)}`,
+        color: anchor ? '#94a3b8' : '#38bdf8',
+        fontSize: 10
+      },
+      lineStyle: {
+        color: anchor ? '#94a3b8' : '#38bdf8',
+        type: anchor ? 'solid' : 'dashed',
+        width: 1,
+        opacity: anchor ? 0.5 : 0.85
+      }
+    })
+  }
+  if (markLineData.length) {
+    candle.markLine = { symbol: 'none', silent: true, data: markLineData }
   }
   const s = [candle]
   if (showMa !== false) {
