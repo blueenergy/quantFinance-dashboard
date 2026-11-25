@@ -202,8 +202,8 @@
             <v-tab value="hk_asia">🇭🇰 港股亚洲</v-tab>
             <v-tab value="tech">🤖 科技巨头</v-tab>
             <v-tab value="semis">🔬 半导体</v-tab>
-            <v-tab value="ai_theme">🧠 AI主题</v-tab>
-            <v-tab value="ai_software">☁️ AI软件</v-tab>
+            <v-tab value="thematic_tech">🧠 主题科技</v-tab>
+            <v-tab value="enterprise_software">☁️ 企业软件</v-tab>
             <v-tab value="commodities">🪙 商品外汇</v-tab>
             <v-tab value="other">📉 债券加密</v-tab>
           </v-tabs>
@@ -323,32 +323,38 @@
               </div>
             </v-window-item>
 
-            <!-- 6. AI 主题 -->
-            <v-window-item value="ai_theme">
+            <!-- 6. 主题科技（只有 ANT 是 AI 原生公司，其余是主题 ETF） -->
+            <v-window-item value="thematic_tech">
               <div class="market-indices">
                 <div class="market-item" v-for="(symbol, index) in ['ANT', 'AIQ', 'CHAT', 'BOTZ', 'ARKW']" :key="index"
-                     :class="getChangeClass(getMarketItem(displayMarketData.ai_theme, symbol)?.change_pct)"
-                     :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.ai_theme, symbol))">
-                  <span class="m-name">{{ getMarketItem(displayMarketData.ai_theme, symbol)?.name || symbol }}</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.ai_theme, symbol)?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.ai_theme, symbol)?.change_pct) }}</span>
-                  <button v-if="hasKline(symbol)" class="kline-btn" @click.stop="openChart(symbol, getMarketItem(displayMarketData.ai_theme, symbol)?.name || symbol)" title="查看K线">📈</button>
+                     :class="getChangeClass(getMarketItem(displayMarketData.thematic_tech, symbol)?.change_pct)"
+                     :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.thematic_tech, symbol))">
+                  <span class="m-name">{{ getMarketItem(displayMarketData.thematic_tech, symbol)?.name || symbol }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.thematic_tech, symbol)?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.thematic_tech, symbol)?.change_pct) }}</span>
+                  <button v-if="hasKline(symbol)" class="kline-btn" @click.stop="openChart(symbol, getMarketItem(displayMarketData.thematic_tech, symbol)?.name || symbol)" title="查看K线">📈</button>
                 </div>
               </div>
+              <p class="dashboard-footnote" style="margin-top:6px">
+                情绪背景：经检验（n=500），这一组控制 QQQ 后对 A 股次日无增量解释力，不代表板块方向。
+              </p>
             </v-window-item>
 
-            <!-- 7. AI 软件/算力 -->
-            <v-window-item value="ai_software">
+            <!-- 7. 企业软件（有 AI 产品线的软件/云公司，非 AI 原生） -->
+            <v-window-item value="enterprise_software">
               <div class="market-indices">
                 <div class="market-item" v-for="(symbol, index) in ['ORCL', 'CRM', 'PLTR', 'NOW', 'SNOW']" :key="index"
-                     :class="getChangeClass(getMarketItem(displayMarketData.ai_software, symbol)?.change_pct)"
-                     :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.ai_software, symbol))">
-                  <span class="m-name">{{ getMarketItem(displayMarketData.ai_software, symbol)?.name || symbol }}</span>
-                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.ai_software, symbol)?.price) }}</span>
-                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.ai_software, symbol)?.change_pct) }}</span>
-                  <button v-if="hasKline(symbol)" class="kline-btn" @click.stop="openChart(symbol, getMarketItem(displayMarketData.ai_software, symbol)?.name || symbol)" title="查看K线">📈</button>
+                     :class="getChangeClass(getMarketItem(displayMarketData.enterprise_software, symbol)?.change_pct)"
+                     :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.enterprise_software, symbol))">
+                  <span class="m-name">{{ getMarketItem(displayMarketData.enterprise_software, symbol)?.name || symbol }}</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.enterprise_software, symbol)?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.enterprise_software, symbol)?.change_pct) }}</span>
+                  <button v-if="hasKline(symbol)" class="kline-btn" @click.stop="openChart(symbol, getMarketItem(displayMarketData.enterprise_software, symbol)?.name || symbol)" title="查看K线">📈</button>
                 </div>
               </div>
+              <p class="dashboard-footnote" style="margin-top:6px">
+                企业软件公司（非 AI 原生）：AI 是其产品线之一，不是主业。
+              </p>
             </v-window-item>
 
             <!-- 8. 商品外汇 -->
