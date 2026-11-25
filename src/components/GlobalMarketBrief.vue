@@ -285,7 +285,7 @@
             <!-- 3. 港股/亚洲隔夜 —— 对 A 股开盘传导最直接的一组 -->
             <v-window-item value="hk_asia">
               <div class="market-indices">
-                <div class="market-item" v-for="(symbol, index) in ['^HSI', 'HSTECH.HK', '^HSCE', '^KS11', '^TWII']" :key="index"
+                <div class="market-item" v-for="(symbol, index) in ['^HSI', 'HSTECH.HK', '^HSCE', '^KS11', '^TWII', '^N225']" :key="index"
                      :class="getChangeClass(getMarketItem(displayMarketData.hk_asia, symbol)?.change_pct)"
                      :title="buildQuoteSourceTooltip(getMarketItem(displayMarketData.hk_asia, symbol))">
                   <span class="m-name">{{ getMarketItem(displayMarketData.hk_asia, symbol)?.name || symbol }}</span>
@@ -377,6 +377,12 @@
                   <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.commodities, 'BZ=F')?.price) }}</span>
                   <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.commodities, 'BZ=F')?.change_pct) }}</span>
                   <button v-if="hasKline('BZ=F')" class="kline-btn" @click.stop="openChart('BZ=F', '布伦特原油')" title="查看K线">📈</button>
+                </div>
+                <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.commodities, 'HG=F')?.change_pct)">
+                  <span class="m-name">铜</span>
+                  <span class="m-price">{{ formatNumber(getMarketItem(displayMarketData.commodities, 'HG=F')?.price) }}</span>
+                  <span class="m-change">{{ formatPercent(getMarketItem(displayMarketData.commodities, 'HG=F')?.change_pct) }}</span>
+                  <button v-if="hasKline('HG=F')" class="kline-btn" @click.stop="openChart('HG=F', '铜')" title="查看K线">📈</button>
                 </div>
                 <div class="market-item" :class="getChangeClass(getMarketItem(displayMarketData.forex, 'USDCNH=X')?.change_pct)">
                   <span class="m-name">离岸人民币</span>
