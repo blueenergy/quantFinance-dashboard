@@ -21,6 +21,15 @@
         >
           <button
             type="button"
+            class="kline-measure-btn"
+            :class="{ on: measureMode }"
+            :title="measureMode ? '退出区间统计' : '拖拽选择区间'"
+            @click.stop="toggleMeasure"
+          >
+            区间
+          </button>
+          <button
+            type="button"
             class="kline-fib-btn"
             :class="{ on: fibEnabled }"
             :title="fibEnabled ? '隐藏斐波那契回撤位' : '显示斐波那契回撤位'"
@@ -40,6 +49,20 @@
             <span class="kline-fib-info">{{ fibInfo }}</span>
             <button type="button" class="kline-fib-reset" @click.stop="resetFibAnchor">自动</button>
           </div>
+          <div v-if="measureMode && measureStats" class="kline-range-stats">
+            <div class="kline-range-stats__head">
+              {{ formatRangeDate(measureStats.startDate) }} → {{ formatRangeDate(measureStats.endDate) }} · {{ measureStats.bars }} 根
+            </div>
+            <div>收盘 {{ formatNum2(measureStats.startClose) }} → {{ formatNum2(measureStats.endClose) }}</div>
+            <div :class="measureStats.change >= 0 ? 'range-up' : 'range-dn'">
+              涨跌 {{ measureStats.change >= 0 ? '+' : '' }}{{ formatNum2(measureStats.change) }}
+              （{{ formatRangePct(measureStats.pct) }}）
+            </div>
+            <div>最高 {{ formatNum2(measureStats.high) }} · 最低 {{ formatNum2(measureStats.low) }} · 振幅 {{ formatRangePct(measureStats.amplitude) }}</div>
+            <div v-if="measureStats.volume != null">量 {{ formatVolShow(measureStats.volume) }}</div>
+            <div v-if="measureStats.amount != null">额 {{ formatAmountByUnit(measureStats.amount) }}</div>
+          </div>
+          <div v-else-if="measureMode" class="kline-range-hint">在图上拖拽选择区间</div>
           <button
             type="button"
             class="kline-fullscreen-btn"
@@ -62,6 +85,7 @@ import { useDetailFullscreen } from '../composables/useDetailFullscreen'
 import { waitForChartDom } from '../utils/chartDom'
 import { buildShenwanKlineOption, collectDecisionGsMarkers } from '../utils/echarts/shenwanKlineOption'
 import { buildFibOverlay, formatAnchorDate, toDateInput } from '../utils/echarts/fibonacci'
+import { computeRangeStats } from '../utils/echarts/rangeStats'
 import { loadEcharts } from '../utils/echarts/loadEcharts'
 
 const props = defineProps({
@@ -117,6 +141,8 @@ const FIB_ON_KEY = 'kline-fib-on'
 const fibEnabled = ref(readStoredFibEnabled())
 const fibStartInput = ref('')
 const fibEndInput = ref('')
+const measureMode = ref(false)
+const measureStats = ref(null)
 
 const sortedRows = computed(() => [...props.records]
   .sort((a, b) => String(a.trade_date || '').localeCompare(String(b.trade_date || ''))))
@@ -194,6 +220,38 @@ function toggleFib() {
   }
 }
 
+function toggleMeasure() {
+  measureMode.value = !measureMode.value
+  measureStats.value = null
+  nextTick(() => {
+    void renderChart()
+  })
+}
+
+function onBrushSelected(params) {
+  if (!measureMode.value) return
+  const areas = params?.batch?.[0]?.areas || []
+  const range = areas[0]?.coordRange
+  if (!Array.isArray(range) || range.length < 2) {
+    measureStats.value = null
+    return
+  }
+  measureStats.value = computeRangeStats(sortedRows.value, range[0], range[1])
+}
+
+function formatRangeDate(value) {
+  const s = String(value || '')
+  if (s.length === 8 && /^\d+$/.test(s)) {
+    return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+  }
+  return s.slice(0, 10)
+}
+
+function formatRangePct(value) {
+  if (!Number.isFinite(value)) return '-'
+  return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%`
+}
+
 onMounted(async () => {
   await nextTick()
   await renderChart()
@@ -247,6 +305,7 @@ async function ensureChart() {
     if (!ready || !chartRef.value) return null
     chartTone = props.tone
     chart = echarts.init(chartRef.value, props.tone === 'on-light' ? undefined : 'dark')
+    chart.on('brushSelected', onBrushSelected)
   }
   return chart
 }
@@ -254,6 +313,8 @@ async function ensureChart() {
 async function renderChart() {
   const instance = await ensureChart()
   if (!instance) return
+  // 全量重建会清掉 brush 选区，统计面板跟着重置
+  if (measureMode.value) measureStats.value = null
   if (!props.records.length) {
     instance.clear()
     return
@@ -285,9 +346,17 @@ async function renderChart() {
       tone: props.tone,
       ...(props.chartMeta || {}),
       fib: fibEnabled.value ? fibOverlay.value : null,
+      measureMode: measureMode.value,
     }),
     true,
   )
+  if (measureMode.value) {
+    instance.dispatchAction({
+      type: 'takeGlobalCursor',
+      key: 'brush',
+      brushOption: { brushType: 'lineX', brushMode: 'single' },
+    })
+  }
   instance.resize()
 }
 
@@ -428,10 +497,49 @@ function formatMvWan(value) {
   color: #0f172a;
 }
 
+.kline-measure-btn {
+  position: absolute;
+  top: 8px;
+  right: 136px;
+  z-index: 5;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  color: #e2e8f0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 6px 10px;
+}
+
+.kline-measure-btn:hover {
+  background: rgba(30, 41, 59, 0.92);
+  color: #fff;
+}
+
+.kline-measure-btn.on {
+  background: rgba(56, 189, 248, 0.24);
+  border-color: rgba(56, 189, 248, 0.72);
+  color: #7dd3fc;
+}
+
+.stock-kline-chart--on-light .kline-measure-btn {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.stock-kline-chart--on-light .kline-measure-btn.on {
+  background: rgba(14, 165, 233, 0.12);
+  border-color: #38bdf8;
+  color: #0284c7;
+}
+
 .kline-fib-btn {
   position: absolute;
   top: 8px;
-  right: 76px;
+  right: 60px;
   z-index: 5;
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid rgba(148, 163, 184, 0.28);
@@ -471,7 +579,7 @@ function formatMvWan(value) {
   position: absolute;
   top: 8px;
   left: 8px;
-  right: 150px;
+  right: 190px;
   z-index: 5;
   display: flex;
   flex-wrap: wrap;
@@ -540,6 +648,64 @@ function formatMvWan(value) {
 .stock-kline-chart--on-light .kline-fib-reset {
   border-color: #cbd5e1;
   color: #475569;
+}
+
+.kline-range-stats {
+  position: absolute;
+  bottom: 34px;
+  left: 8px;
+  z-index: 6;
+  min-width: 210px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.86);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #cbd5e1;
+  font-size: 11px;
+  line-height: 1.55;
+  pointer-events: none;
+}
+
+.kline-range-stats__head {
+  color: #7dd3fc;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.kline-range-stats .range-up {
+  color: #ef5350;
+}
+
+.kline-range-stats .range-dn {
+  color: #26a69a;
+}
+
+.kline-range-hint {
+  position: absolute;
+  bottom: 34px;
+  left: 8px;
+  z-index: 6;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #94a3b8;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.stock-kline-chart--on-light .kline-range-stats {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #7dd3fc;
+  color: #334155;
+}
+
+.stock-kline-chart--on-light .kline-range-stats__head {
+  color: #0284c7;
+}
+
+.stock-kline-chart--on-light .kline-range-hint {
+  background: rgba(255, 255, 255, 0.9);
+  color: #64748b;
 }
 
 .stock-kline-chart__empty {

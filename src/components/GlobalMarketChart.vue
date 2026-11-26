@@ -10,6 +10,12 @@
       >{{ b.label }}</button>
       <button
         class="tf-btn"
+        :class="{ active: measureMode }"
+        title="拖拽选择区间"
+        @click="toggleMeasure"
+      >区间</button>
+      <button
+        class="tf-btn"
         :class="{ active: fibEnabled }"
         title="斐波那契回撤位"
         @click="toggleFib"
@@ -20,6 +26,19 @@
     <div v-else-if="error" class="gmc-error">{{ error }}</div>
     <div v-else-if="!records.length" class="gmc-empty">暂无数据</div>
     <div ref="chartRef" class="gmc-chart" />
+    <div v-if="measureMode && measureStats" class="gmc-range-stats">
+      <div class="gmc-range-stats__head">
+        {{ fmtRangeDate(measureStats.startDate) }} → {{ fmtRangeDate(measureStats.endDate) }} · {{ measureStats.bars }} 根
+      </div>
+      <div>收盘 {{ fmtNum(measureStats.startClose) }} → {{ fmtNum(measureStats.endClose) }}</div>
+      <div :class="measureStats.change >= 0 ? 'range-up' : 'range-dn'">
+        涨跌 {{ measureStats.change >= 0 ? '+' : '' }}{{ fmtNum(measureStats.change) }}
+        （{{ fmtPct(measureStats.pct) }}）
+      </div>
+      <div>最高 {{ fmtNum(measureStats.high) }} · 最低 {{ fmtNum(measureStats.low) }} · 振幅 {{ fmtPct(measureStats.amplitude) }}</div>
+      <div v-if="measureStats.volume != null">量 {{ fmtVol(measureStats.volume) }}</div>
+    </div>
+    <div v-else-if="measureMode" class="gmc-range-hint">在图上拖拽选择区间</div>
   </div>
 </template>
 
@@ -27,6 +46,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import request from '../utils/request'
 import { buildFibMarkLineData, buildFibOverlay } from '../utils/echarts/fibonacci'
+import { computeRangeStats } from '../utils/echarts/rangeStats'
 
 const FIB_ON_KEY = 'global-chart-fib-on'
 
@@ -60,6 +80,8 @@ let chartInstance = null
 let resizeObs = null
 
 const fibEnabled = ref(readStoredFibOn())
+const measureMode = ref(false)
+const measureStats = ref(null)
 
 function readStoredFibOn() {
   try {
@@ -76,6 +98,47 @@ function toggleFib() {
   } catch {
     // ignore quota / private-mode failures
   }
+}
+
+function toggleMeasure() {
+  measureMode.value = !measureMode.value
+  measureStats.value = null
+  nextTick(() => renderChart())
+}
+
+function onBrushSelected(params) {
+  if (!measureMode.value) return
+  const areas = params?.batch?.[0]?.areas || []
+  const range = areas[0]?.coordRange
+  if (!Array.isArray(range) || range.length < 2) {
+    measureStats.value = null
+    return
+  }
+  measureStats.value = computeRangeStats(records.value, range[0], range[1])
+}
+
+function fmtNum(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n.toFixed(2) : '-'
+}
+
+function fmtPct(value) {
+  if (!Number.isFinite(value)) return '-'
+  return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%`
+}
+
+function fmtRangeDate(value) {
+  const s = String(value || '')
+  if (s.length === 8 && /^\d+$/.test(s)) {
+    return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+  }
+  return s.slice(0, 10)
+}
+
+function fmtVol(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  return n >= 1e8 ? `${(n / 1e8).toFixed(2)}亿股` : `${(n / 1e4).toFixed(2)}万股`
 }
 
 function movingAverage(values, windowSize) {
@@ -112,6 +175,7 @@ async function loadData() {
   loading.value = true
   error.value = null
   formingDate.value = ''
+  measureStats.value = null
   try {
     const res = await request({
       method: 'get',
@@ -148,6 +212,7 @@ function renderChart() {
   import('echarts').then(echarts => {
     if (!chartInstance) {
       chartInstance = echarts.init(chartRef.value, null, { renderer: 'canvas' })
+      chartInstance.on('brushSelected', onBrushSelected)
     }
 
     const dates = records.value.map(r => r.trade_date)
@@ -272,8 +337,22 @@ function renderChart() {
         : [{ type: 'value', gridIndex: 0, scale: true, splitNumber: 5,
              axisLabel: { color: '#888', fontSize: 10 }, axisLine: { show: false },
              splitLine: { lineStyle: { color: '#2a2a2a' } } }],
+      ...(measureMode.value ? {
+        brush: {
+          xAxisIndex: 'all',
+          brushType: 'lineX',
+          brushMode: 'single',
+          throttleType: 'debounce',
+          throttleDelay: 120,
+          brushStyle: {
+            color: 'rgba(56,189,248,0.12)',
+            borderColor: 'rgba(56,189,248,0.75)',
+            borderWidth: 1,
+          },
+        },
+      } : {}),
       dataZoom: [
-        { type: 'inside', xAxisIndex: hasVolume ? [0, 1] : [0], start: 60, end: 100 },
+        { type: 'inside', xAxisIndex: hasVolume ? [0, 1] : [0], start: 60, end: 100, moveOnMouseMove: !measureMode.value },
         { type: 'slider', xAxisIndex: hasVolume ? [0, 1] : [0], start: 60, end: 100,
           bottom: 8, height: 20,
           fillerColor: 'rgba(80,80,180,0.2)', borderColor: '#333',
@@ -319,6 +398,13 @@ function renderChart() {
     }
 
     chartInstance.setOption(option, true)
+    if (measureMode.value) {
+      chartInstance.dispatchAction({
+        type: 'takeGlobalCursor',
+        key: 'brush',
+        brushOption: { brushType: 'lineX', brushMode: 'single' },
+      })
+    }
   })
 }
 
@@ -362,6 +448,50 @@ watch(fibEnabled, () => renderChart())
   background: #1a1a1a;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+.gmc-range-stats {
+  position: absolute;
+  left: 12px;
+  bottom: 40px;
+  z-index: 5;
+  min-width: 210px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: rgba(20, 20, 20, 0.92);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #ccc;
+  font-size: 11px;
+  line-height: 1.55;
+  pointer-events: none;
+}
+
+.gmc-range-stats__head {
+  color: #7dd3fc;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.gmc-range-stats .range-up {
+  color: #ef232a;
+}
+
+.gmc-range-stats .range-dn {
+  color: #14b143;
+}
+
+.gmc-range-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 40px;
+  z-index: 5;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: rgba(20, 20, 20, 0.85);
+  color: #888;
+  font-size: 11px;
+  pointer-events: none;
 }
 .gmc-toolbar {
   display: flex;

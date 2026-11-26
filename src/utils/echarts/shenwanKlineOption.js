@@ -97,6 +97,7 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
 
   const hasSub = hasVol || hasAmt
   const subBoth = hasVol && hasAmt
+  const measureMode = Boolean(_meta?.measureMode)
 
   const gxy = buildGridsXAxesYAxes({ times, hasPct, hasVol, hasAmt, hasSub, subBoth })
   const yVol = hasSub && hasVol ? (hasPct ? 2 : 1) : 0
@@ -115,10 +116,26 @@ export function buildShenwanKlineOption (data, formatters, _meta = {}) {
     yAxis: gxy.yAxis,
     dataZoom: hasSub
       ? [
-          { type: 'inside', xAxisIndex: gxy.xZoomIdx },
+          { type: 'inside', xAxisIndex: gxy.xZoomIdx, moveOnMouseMove: !measureMode },
           { type: 'slider', xAxisIndex: gxy.xZoomIdx, height: 20, bottom: 4, borderColor: palette().sliderBorder, textStyle: { color: palette().name } }
         ]
-      : [{ type: 'inside' }, { type: 'slider', height: 18, bottom: 6, borderColor: palette().sliderBorder, textStyle: { color: palette().name } }],
+      : [{ type: 'inside', moveOnMouseMove: !measureMode }, { type: 'slider', height: 18, bottom: 6, borderColor: palette().sliderBorder, textStyle: { color: palette().name } }],
+    ...(measureMode
+      ? {
+          brush: {
+            xAxisIndex: 'all',
+            brushType: 'lineX',
+            brushMode: 'single',
+            throttleType: 'debounce',
+            throttleDelay: 120,
+            brushStyle: {
+              color: 'rgba(56,189,248,0.12)',
+              borderColor: 'rgba(56,189,248,0.75)',
+              borderWidth: 1
+            }
+          }
+        }
+      : {}),
     series: buildSeries({
       ohlc,
       maFast,
