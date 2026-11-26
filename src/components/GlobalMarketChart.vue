@@ -8,6 +8,12 @@
         :class="{ active: tf === b.value }"
         @click="setTf(b.value)"
       >{{ b.label }}</button>
+      <button
+        class="tf-btn"
+        :class="{ active: fibEnabled }"
+        title="斐波那契回撤位"
+        @click="toggleFib"
+      >斐波那契</button>
       <span v-if="formingNote" class="gmc-live-note">{{ formingNote }}</span>
     </div>
     <div v-if="loading" class="gmc-loading">加载中…</div>
@@ -20,6 +26,16 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import request from '../utils/request'
+import { buildFibMarkLineData, buildFibOverlay } from '../utils/echarts/fibonacci'
+
+const FIB_ON_KEY = 'global-chart-fib-on'
+
+// 均线口径按周期换算成相近的时间跨度（全球历史通常只有 2 年）
+const MA_PERIODS = {
+  '1d': { fast: 50, slow: 200 },
+  '1w': { fast: 10, slow: 30 },
+  '1m': { fast: 6, slow: 12 },
+}
 
 const props = defineProps({
   symbol: { type: String, required: true },
@@ -42,6 +58,47 @@ const containerRef = ref(null)
 
 let chartInstance = null
 let resizeObs = null
+
+const fibEnabled = ref(readStoredFibOn())
+
+function readStoredFibOn() {
+  try {
+    return localStorage.getItem(FIB_ON_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function toggleFib() {
+  fibEnabled.value = !fibEnabled.value
+  try {
+    localStorage.setItem(FIB_ON_KEY, fibEnabled.value ? '1' : '0')
+  } catch {
+    // ignore quota / private-mode failures
+  }
+}
+
+function movingAverage(values, windowSize) {
+  const out = []
+  let sum = 0
+  let count = 0
+  for (let i = 0; i < values.length; i += 1) {
+    const value = values[i]
+    if (Number.isFinite(value)) {
+      sum += value
+      count += 1
+    }
+    if (i >= windowSize) {
+      const dropped = values[i - windowSize]
+      if (Number.isFinite(dropped)) {
+        sum -= dropped
+        count -= 1
+      }
+    }
+    out.push(i >= windowSize - 1 && count === windowSize ? Number((sum / windowSize).toFixed(4)) : null)
+  }
+  return out
+}
 
 // 未收盘的那根：日线库只存已收盘交易日，盘中这根来自实时行情
 const formingNote = computed(() => {
@@ -131,6 +188,28 @@ function renderChart() {
 
     const hasVolume = records.value.some(r => r.volume > 0)
 
+    const closes = records.value.map((r) => Number(r.close))
+    const maPeriods = MA_PERIODS[tf.value] || MA_PERIODS['1d']
+    const maSeries = [
+      { period: maPeriods.fast, color: '#facc15' },
+      { period: maPeriods.slow, color: '#a855f7' },
+    ].map(({ period, color }) => ({
+      name: `MA${period}`,
+      type: 'line',
+      data: movingAverage(closes, period),
+      xAxisIndex: 0,
+      yAxisIndex: 0,
+      symbol: 'none',
+      showSymbol: false,
+      connectNulls: false,
+      itemStyle: { color },
+      lineStyle: { width: 1.2, color },
+      emphasis: { focus: 'none' },
+      z: 3,
+    }))
+    const overlay = fibEnabled.value ? buildFibOverlay(records.value) : null
+    const fibMarkLines = overlay?.levels?.length ? buildFibMarkLineData(overlay.levels) : []
+
     const option = {
       backgroundColor: '#1a1a1a',
       animation: false,
@@ -201,6 +280,16 @@ function renderChart() {
           handleStyle: { color: '#5555cc' },
           textStyle: { color: '#888', fontSize: 10 } },
       ],
+      legend: {
+        data: maSeries.map((s) => s.name),
+        top: 4,
+        right: 10,
+        itemWidth: 14,
+        itemHeight: 3,
+        itemGap: 10,
+        icon: 'roundRect',
+        textStyle: { color: '#999', fontSize: 10 },
+      },
       series: [
         {
           type: 'candlestick',
@@ -213,7 +302,11 @@ function renderChart() {
             borderColor: '#ef232a',  // up border
             borderColor0: '#14b143', // down border
           },
+          ...(fibMarkLines.length
+            ? { markLine: { symbol: 'none', silent: true, data: fibMarkLines } }
+            : {}),
         },
+        ...maSeries,
         ...(hasVolume ? [{
           name: 'vol',
           type: 'bar',
@@ -258,6 +351,8 @@ watch(() => props.symbol, () => {
   tf.value = '1d'
   loadData()
 })
+
+watch(fibEnabled, () => renderChart())
 </script>
 
 <style scoped>
