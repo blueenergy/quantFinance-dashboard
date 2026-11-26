@@ -1,5 +1,7 @@
 <template>
-  <div ref="containerRef" class="gmc-wrapper">
+  <div class="gmc-anchor">
+    <Teleport to="body" :disabled="!maximized">
+      <div ref="containerRef" class="gmc-wrapper" :class="{ 'gmc-wrapper--fullscreen': maximized }">
     <div class="gmc-toolbar">
       <button
         v-for="b in TF_BUTTONS"
@@ -20,7 +22,14 @@
         title="斐波那契回撤位"
         @click="toggleFib"
       >斐波那契</button>
-      <span v-if="formingNote" class="gmc-live-note">{{ formingNote }}</span>
+      <span class="gmc-toolbar-right">
+        <span v-if="formingNote" class="gmc-live-note">{{ formingNote }}</span>
+        <button
+          class="tf-btn"
+          :title="maximized ? '退出全屏' : '全屏查看 K 线'"
+          @click="toggleDetailFullscreen"
+        >{{ maximized ? '退出全屏' : '全屏' }}</button>
+      </span>
     </div>
     <div v-if="loading" class="gmc-loading">加载中…</div>
     <div v-else-if="error" class="gmc-error">{{ error }}</div>
@@ -38,7 +47,9 @@
       <div>最高 {{ fmtNum(measureStats.high) }} · 最低 {{ fmtNum(measureStats.low) }} · 振幅 {{ fmtPct(measureStats.amplitude) }}</div>
       <div v-if="measureStats.volume != null">量 {{ fmtVol(measureStats.volume) }}</div>
     </div>
-    <div v-else-if="measureMode" class="gmc-range-hint">在图上拖拽选择区间</div>
+      <div v-else-if="measureMode" class="gmc-range-hint">在图上拖拽选择区间</div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -47,6 +58,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import request from '../utils/request'
 import { buildFibMarkLineData, buildFibOverlay } from '../utils/echarts/fibonacci'
 import { computeRangeStats } from '../utils/echarts/rangeStats'
+import { useDetailFullscreen } from '../composables/useDetailFullscreen'
 
 const FIB_ON_KEY = 'global-chart-fib-on'
 
@@ -61,6 +73,8 @@ const props = defineProps({
   symbol: { type: String, required: true },
   name:   { type: String, default: '' },
 })
+
+const { detailMaximized: maximized, toggleDetailFullscreen } = useDetailFullscreen()
 
 const TF_BUTTONS = [
   { value: '1d', label: '日K' },
@@ -442,6 +456,10 @@ watch(fibEnabled, () => renderChart())
 </script>
 
 <style scoped>
+.gmc-anchor {
+  display: contents;
+}
+
 .gmc-wrapper {
   width: 100%;
   height: 460px;
@@ -449,6 +467,15 @@ watch(fibEnabled, () => renderChart())
   display: flex;
   flex-direction: column;
   position: relative;
+}
+
+.gmc-wrapper--fullscreen {
+  background: #111;
+  height: 100vh;
+  inset: 0;
+  position: fixed;
+  width: 100vw;
+  z-index: 3000;
 }
 
 .gmc-range-stats {
@@ -511,8 +538,14 @@ watch(fibEnabled, () => renderChart())
 }
 .tf-btn:hover { background: #3a3a3a; color: #ddd; }
 .tf-btn.active { background: #4a4aaa; border-color: #6666cc; color: #fff; }
-.gmc-live-note {
+.gmc-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-left: auto;
+}
+
+.gmc-live-note {
   align-self: center;
   font-size: 11px;
   color: #e8a33d;
