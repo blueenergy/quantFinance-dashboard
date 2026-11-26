@@ -1010,15 +1010,20 @@ function formatEquitySnapshotLabel(row) {
 
 // 加载账户概览
 async function loadOverview() {
+  const accountId = selectedAccountId.value
   try {
     // 如果是观察模式，使用模拟计算
     if (isObservationMode.value) {
-      overview.value = await calculateSimulatedOverview()
+      const simulated = await calculateSimulatedOverview()
+      if (accountId !== selectedAccountId.value) return
+      overview.value = simulated
       return
     }
-    
+
     // 真实账户：从后端获取
-    const data = await getTraderAccount(selectedAccountId.value)
+    const data = await getTraderAccount(accountId)
+    // 期间又切了账户：丢弃这次结果，避免把旧账户的概览写回去
+    if (accountId !== selectedAccountId.value) return
     overview.value = data || {
       total_assets: 0,
       available_cash: 0,
@@ -1028,6 +1033,7 @@ async function loadOverview() {
     }
   } catch (error) {
     console.error('获取账户概览失败:', error)
+    if (accountId !== selectedAccountId.value) return
     overview.value = {
       total_assets: 0,
       available_cash: 0,
@@ -1040,21 +1046,27 @@ async function loadOverview() {
 
 // 加载持仓数据
 async function loadPositions() {
+  const accountId = selectedAccountId.value
   try {
     // 如果是观察模式，使用模拟计算
     if (isObservationMode.value) {
-      positions.value = await calculateSimulatedPositions()
+      const simulated = await calculateSimulatedPositions()
+      if (accountId !== selectedAccountId.value) return
+      positions.value = simulated
       return
     }
-    
+
     // 真实账户：从后端获取
-    const data = await getTraderPositions(selectedAccountId.value)
+    const data = await getTraderPositions(accountId)
+    // 期间又切了账户：丢弃这次结果，否则持仓表会停在上一个账户
+    if (accountId !== selectedAccountId.value) return
     positions.value = Array.isArray(data) ? data.map(item => ({
       ...item,
       raw: item
     })) : []
   } catch (error) {
     console.error('获取持仓数据失败:', error)
+    if (accountId !== selectedAccountId.value) return
     positions.value = []
   }
 }
@@ -1069,30 +1081,37 @@ async function loadTraderHeartbeats() {
 }
 
 async function loadAccountEquity() {
-  if (isObservationMode.value || !selectedAccountId.value) {
+  const accountId = selectedAccountId.value
+  if (isObservationMode.value || !accountId) {
     accountEquity.value = []
     return
   }
   try {
-    accountEquity.value = await getTraderAccountEquity(selectedAccountId.value, { include_live: true })
+    const rows = await getTraderAccountEquity(accountId, { include_live: true })
+    if (accountId !== selectedAccountId.value) return
+    accountEquity.value = rows
   } catch (error) {
     console.error('获取账户资金曲线失败:', error)
+    if (accountId !== selectedAccountId.value) return
     accountEquity.value = []
   }
 }
 
 async function loadCashFlows() {
-  if (isObservationMode.value || !selectedAccountId.value) {
+  const accountId = selectedAccountId.value
+  if (isObservationMode.value || !accountId) {
     cashFlows.value = []
     return
   }
   try {
-    const rows = await getTraderCashFlows(selectedAccountId.value)
+    const rows = await getTraderCashFlows(accountId)
+    if (accountId !== selectedAccountId.value) return
     cashFlows.value = [...rows].sort(
       (a, b) => String(b.date || '').localeCompare(String(a.date || '')),
     )
   } catch (error) {
     console.error('获取出入金记录失败:', error)
+    if (accountId !== selectedAccountId.value) return
     cashFlows.value = []
   }
 }
@@ -1274,7 +1293,13 @@ async function loadSecuritiesAccounts() {
 }
 
 // 账户切换事件
-function onAccountChange() {
+// 用事件参数而不是直接读 ref：v-model 的赋值与这个监听器在同一次
+// update:model-value 里执行，顺序不由模板保证；读 ref 可能拿到旧账户，
+// 于是概览换了、持仓还是上一个账户的。
+function onAccountChange(nextAccountId) {
+  if (nextAccountId !== undefined && nextAccountId !== null && nextAccountId !== selectedAccountId.value) {
+    selectedAccountId.value = nextAccountId
+  }
   console.log('切换到账户:', selectedAccountId.value)
   refreshData()
 }
