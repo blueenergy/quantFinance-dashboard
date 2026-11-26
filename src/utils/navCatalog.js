@@ -55,6 +55,7 @@ export const NAV_TABS = [
   { id: 'stock-workbench', name: '🔬 个股工作台', group: 'stock' },
   { id: 'history', name: '🔍 个股深度分析', group: 'stock' },
   { id: 'kline-comparison', name: '📈 走势对比', group: 'stock' },
+  { id: 'index-kline', name: '📊 指数K线', group: 'stock' },
   { id: 'futures-kline', name: '📉 期货K线', group: 'stock' },
   { id: 'etf', name: '💰 ETF淘金', group: 'stock' },
   { id: 'earnings-hunter', name: '🎯 财报猎手', group: 'stock' },

@@ -68,6 +68,7 @@ const DailyGoldPicksPanel = defineAsyncComponent(() => import('../components/Dai
 const SectorConceptAnalysis = defineAsyncComponent(() => import('../components/SectorConceptAnalysis.vue'))
 const HotStockAnalysis = defineAsyncComponent(() => import('../components/HotStockAnalysis.vue'))
 const KLineComparison = defineAsyncComponent(() => import('../views/KLineComparison.vue'))
+const IndexKline = defineAsyncComponent(() => import('../views/IndexKline.vue'))
 const FuturesKline = defineAsyncComponent(() => import('../views/FuturesKline.vue'))
 const EarningsHunter = defineAsyncComponent(() => import('../views/EarningsHunter.vue'))
 const ShenwanIndustryIndex = defineAsyncComponent(() => import('../views/ShenwanIndustryIndex.vue'))
@@ -400,6 +401,12 @@ export const tabViewDefinitions = [
     component: KLineComparison,
     fallbackClass: 'skeleton-chart',
     fallbackText: '走势对比加载中...',
+  },
+  {
+    id: 'index-kline',
+    component: IndexKline,
+    fallbackClass: 'skeleton-chart',
+    fallbackText: '指数K线加载中...',
   },
   {
     id: 'futures-kline',

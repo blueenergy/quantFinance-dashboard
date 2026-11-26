@@ -115,6 +115,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import request from '../utils/request'
 import { buildFibMarkLineData, buildFibOverlay, formatAnchorDate, toDateInput } from '../utils/echarts/fibonacci'
+import { resampleBars } from '../utils/klineResample'
 
 let echarts
 
@@ -201,46 +202,6 @@ function readStoredFibEnabled() {
   } catch {
     return false
   }
-}
-
-function compactDate(value) {
-  return String(value || '').replace(/\D/g, '').slice(0, 8)
-}
-
-function weekKey(ymd) {
-  const date = new Date(Date.UTC(
-    Number(ymd.slice(0, 4)),
-    Number(ymd.slice(4, 6)) - 1,
-    Number(ymd.slice(6, 8)),
-  ))
-  const day = date.getUTCDay() || 7
-  date.setUTCDate(date.getUTCDate() - day + 1)
-  return date.toISOString().slice(0, 10)
-}
-
-function resampleBars(rows, period) {
-  if (period === '1d') return rows
-  const groups = new Map()
-  for (const row of rows) {
-    const date = compactDate(row.trade_date)
-    if (date.length !== 8) continue
-    const key = period === '1w' ? weekKey(date) : date.slice(0, 6)
-    const open = Number(row.open)
-    const high = Number(row.high)
-    const low = Number(row.low)
-    const close = Number(row.close)
-    if (![open, high, low, close].every(Number.isFinite)) continue
-    const current = groups.get(key)
-    if (!current) {
-      groups.set(key, { trade_date: date, open, high, low, close })
-      continue
-    }
-    current.trade_date = date
-    current.high = Math.max(current.high, high)
-    current.low = Math.min(current.low, low)
-    current.close = close
-  }
-  return [...groups.values()]
 }
 
 const barsA = computed(() => resampleBars(seriesA.value, tf.value))
