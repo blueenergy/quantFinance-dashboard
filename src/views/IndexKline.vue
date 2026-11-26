@@ -3,7 +3,7 @@
     <h3 class="page-title">📊 指数 K 线</h3>
 
     <div class="index-layout">
-      <aside class="index-sidebar">
+      <aside class="index-sidebar" :style="{ maxHeight: `${chartHeight}px` }">
         <section v-for="group in INDEX_GROUPS" :key="group.label" class="index-group">
           <h5>{{ group.label }}</h5>
           <button
@@ -46,6 +46,7 @@
           v-else-if="bars.length"
           :records="bars"
           :tf="tf"
+          :height="chartHeight"
           tone="on-light"
           :chart-meta="{ showDecisionGs: false, showMa: true }"
         />
@@ -56,7 +57,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import request from '../utils/request'
 import StockKLineChart from '../components/StockKLineChart.vue'
 import { resampleBars } from '../utils/klineResample'
@@ -109,6 +110,13 @@ const rows = ref([])
 const loading = ref(false)
 const error = ref('')
 
+const viewportHeight = ref(typeof window === 'undefined' ? 900 : window.innerHeight)
+const chartHeight = computed(() => Math.max(520, Math.min(900, viewportHeight.value - 240)))
+
+function onViewportResize() {
+  viewportHeight.value = window.innerHeight
+}
+
 const activeName = computed(() => ALL_ITEMS.find((item) => item.code === activeCode.value)?.name || '')
 const bars = computed(() => resampleBars(rows.value, tf.value))
 const scopeLabel = computed(() => {
@@ -158,7 +166,12 @@ watch(tf, (value) => {
 })
 
 onMounted(() => {
+  window.addEventListener('resize', onViewportResize)
   void fetchIndex()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onViewportResize)
 })
 </script>
 

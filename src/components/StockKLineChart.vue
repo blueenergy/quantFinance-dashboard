@@ -48,7 +48,7 @@
           >
             {{ maximized ? '退出全屏' : '全屏' }}
           </button>
-          <div ref="chartRef" class="stock-kline-chart__canvas"></div>
+          <div ref="chartRef" class="stock-kline-chart__canvas" :style="canvasStyle"></div>
           <div v-if="!records.length" class="stock-kline-chart__empty">暂无 K 线数据</div>
         </div>
       </div>
@@ -86,10 +86,24 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
+  /**
+   * 图表高度：数字 = px，字符串按 CSS 长度处理（如 'calc(100vh - 240px)'）。
+   * 全屏时忽略，始终铺满。
+   */
+  height: {
+    type: [Number, String],
+    default: 380,
+  },
 })
 
 const toneClass = computed(() => `stock-kline-chart--${props.tone}`)
 const { detailMaximized: maximized, toggleDetailFullscreen, exitDetailFullscreen } = useDetailFullscreen()
+
+const canvasStyle = computed(() => {
+  if (maximized.value) return {}
+  const height = props.height
+  return { height: typeof height === 'number' ? `${height}px` : String(height) }
+})
 
 const containerRef = ref(null)
 const chartRef = ref(null)
