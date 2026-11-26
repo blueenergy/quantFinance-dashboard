@@ -241,7 +241,7 @@ function renderChart() {
       return prev && prev.close > 0 ? r.close >= prev.close : r.close >= r.open
     }
     const ohlcv = records.value.map((r, i) => {
-      const color = isUp(r, i) ? '#ef232a' : '#14b143'
+      const color = isUp(r, i) ? '#ef5350' : '#26a69a'
       // color 与 color0 同色：ECharts 按阴阳在两者间取值，同色才能让
       // 「高开低走但仍高于前收」的蜡烛显示上涨色
       const itemStyle = {
@@ -260,7 +260,7 @@ function renderChart() {
     const volumes = records.value.map((r, i) => ({
       value: r.volume,
       itemStyle: {
-        color: isUp(r, i) ? '#ef232a' : '#14b143',
+        color: isUp(r, i) ? '#ef5350' : '#26a69a',
         opacity: i === formingIdx ? 0.55 : 1,
       },
     }))
@@ -290,14 +290,14 @@ function renderChart() {
     const fibMarkLines = overlay?.levels?.length ? buildFibMarkLineData(overlay.levels) : []
 
     const option = {
-      backgroundColor: '#1a1a1a',
+      backgroundColor: '#ffffff',
       animation: false,
       tooltip: {
         trigger: 'axis',
-        axisPointer: { type: 'cross', crossStyle: { color: '#555' } },
-        backgroundColor: '#2a2a2a',
-        borderColor: '#444',
-        textStyle: { color: '#ddd', fontSize: 12 },
+        axisPointer: { type: 'cross', crossStyle: { color: '#94a3b8' } },
+        backgroundColor: '#ffffff',
+        borderColor: '#e2e8f0',
+        textStyle: { color: '#1e293b', fontSize: 12 },
         formatter(params) {
           const k = params.find(p => p.seriesType === 'candlestick')
           if (!k) return ''
@@ -310,10 +310,10 @@ function renderChart() {
           const prev = k.dataIndex > 0 ? records.value[k.dataIndex - 1] : null
           const pct = (prev && prev.close > 0) ? ((r.close - prev.close) / prev.close * 100) : null
           const pctStr = pct == null ? '' : (pct >= 0 ? `+${pct.toFixed(2)}%` : `${pct.toFixed(2)}%`)
-          const pctColor = pct == null ? '#aaa' : (pct >= 0 ? '#ef232a' : '#14b143')
+          const pctColor = pct == null ? '#64748b' : (pct >= 0 ? '#ef5350' : '#26a69a')
           let html = `<div style="font-size:11px;line-height:1.8">`
           html += `<b>${date}</b>`
-          if (isForming) html += ` <span style="color:#e8a33d">未收盘</span>`
+          if (isForming) html += ` <span style="color:#b45309">未收盘</span>`
           if (pctStr) html += ` <span style="color:${pctColor};font-weight:bold">${pctStr}</span>`
           html += `<br/>开 <b>${fmt(r.open)}</b> &nbsp; 收 <b>${fmt(r.close)}</b><br/>`
           html += `高 <b>${fmt(r.high)}</b> &nbsp; 低 <b>${fmt(r.low)}</b>`
@@ -330,27 +330,27 @@ function renderChart() {
       xAxis: hasVolume
         ? [
             { type: 'category', data: dates, gridIndex: 0, scale: true,
-              axisLabel: { color: '#888', fontSize: 10 }, axisLine: { lineStyle: { color: '#444' } },
+              axisLabel: { color: '#475569', fontSize: 10 }, axisLine: { lineStyle: { color: '#cbd5e1' } },
               splitLine: { show: false }, axisTick: { show: false } },
             { type: 'category', data: dates, gridIndex: 1, scale: true,
-              axisLabel: { show: false }, axisLine: { lineStyle: { color: '#444' } },
+              axisLabel: { show: false }, axisLine: { lineStyle: { color: '#cbd5e1' } },
               splitLine: { show: false }, axisTick: { show: false } },
           ]
         : [{ type: 'category', data: dates, gridIndex: 0, scale: true,
-             axisLabel: { color: '#888', fontSize: 10 }, axisLine: { lineStyle: { color: '#444' } },
+             axisLabel: { color: '#475569', fontSize: 10 }, axisLine: { lineStyle: { color: '#cbd5e1' } },
              splitLine: { show: false }, axisTick: { show: false } }],
       yAxis: hasVolume
         ? [
             { type: 'value', gridIndex: 0, scale: true, splitNumber: 5,
-              axisLabel: { color: '#888', fontSize: 10 }, axisLine: { show: false },
-              splitLine: { lineStyle: { color: '#2a2a2a' } } },
+              axisLabel: { color: '#475569', fontSize: 10 }, axisLine: { show: false },
+              splitLine: { lineStyle: { color: '#e2e8f0' } } },
             { type: 'value', gridIndex: 1, scale: true, splitNumber: 3,
-              axisLabel: { color: '#888', fontSize: 10 }, axisLine: { show: false },
-              splitLine: { lineStyle: { color: '#2a2a2a' } } },
+              axisLabel: { color: '#475569', fontSize: 10 }, axisLine: { show: false },
+              splitLine: { lineStyle: { color: '#e2e8f0' } } },
           ]
         : [{ type: 'value', gridIndex: 0, scale: true, splitNumber: 5,
-             axisLabel: { color: '#888', fontSize: 10 }, axisLine: { show: false },
-             splitLine: { lineStyle: { color: '#2a2a2a' } } }],
+             axisLabel: { color: '#475569', fontSize: 10 }, axisLine: { show: false },
+             splitLine: { lineStyle: { color: '#e2e8f0' } } }],
       ...(measureMode.value ? {
         brush: {
           xAxisIndex: 'all',
@@ -369,9 +369,9 @@ function renderChart() {
         { type: 'inside', xAxisIndex: hasVolume ? [0, 1] : [0], start: 60, end: 100, moveOnMouseMove: !measureMode.value },
         { type: 'slider', xAxisIndex: hasVolume ? [0, 1] : [0], start: 60, end: 100,
           bottom: 8, height: 20,
-          fillerColor: 'rgba(80,80,180,0.2)', borderColor: '#333',
-          handleStyle: { color: '#5555cc' },
-          textStyle: { color: '#888', fontSize: 10 } },
+          fillerColor: 'rgba(37,99,235,0.12)', borderColor: '#cbd5e1',
+          handleStyle: { color: '#93c5fd' },
+          textStyle: { color: '#64748b', fontSize: 10 } },
       ],
       legend: {
         data: maSeries.map((s) => s.name),
@@ -381,7 +381,7 @@ function renderChart() {
         itemHeight: 3,
         itemGap: 10,
         icon: 'roundRect',
-        textStyle: { color: '#999', fontSize: 10 },
+        textStyle: { color: '#64748b', fontSize: 10 },
       },
       series: [
         {
@@ -390,10 +390,10 @@ function renderChart() {
           xAxisIndex: 0,
           yAxisIndex: 0,
           itemStyle: {
-            color: '#ef232a',        // up candle body fill
-            color0: '#14b143',       // down candle body fill
-            borderColor: '#ef232a',  // up border
-            borderColor0: '#14b143', // down border
+            color: '#ef5350',        // up candle body fill
+            color0: '#26a69a',       // down candle body fill
+            borderColor: '#ef5350',  // up border
+            borderColor0: '#26a69a', // down border
           },
           ...(fibMarkLines.length
             ? { markLine: { symbol: 'none', silent: true, data: fibMarkLines } }
@@ -463,14 +463,14 @@ watch(fibEnabled, () => renderChart())
 .gmc-wrapper {
   width: 100%;
   height: 460px;
-  background: #1a1a1a;
+  background: #fff;
   display: flex;
   flex-direction: column;
   position: relative;
 }
 
 .gmc-wrapper--fullscreen {
-  background: #111;
+  background: #fff;
   height: 100vh;
   inset: 0;
   position: fixed;
@@ -486,26 +486,26 @@ watch(fibEnabled, () => renderChart())
   min-width: 210px;
   padding: 7px 9px;
   border-radius: 8px;
-  background: rgba(20, 20, 20, 0.92);
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  color: #ccc;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  color: #334155;
   font-size: 11px;
   line-height: 1.55;
   pointer-events: none;
 }
 
 .gmc-range-stats__head {
-  color: #7dd3fc;
+  color: #0284c7;
   font-weight: 600;
   margin-bottom: 2px;
 }
 
 .gmc-range-stats .range-up {
-  color: #ef232a;
+  color: #ef5350;
 }
 
 .gmc-range-stats .range-dn {
-  color: #14b143;
+  color: #26a69a;
 }
 
 .gmc-range-hint {
@@ -515,8 +515,8 @@ watch(fibEnabled, () => renderChart())
   z-index: 5;
   padding: 5px 9px;
   border-radius: 6px;
-  background: rgba(20, 20, 20, 0.85);
-  color: #888;
+  background: rgba(255, 255, 255, 0.92);
+  color: #64748b;
   font-size: 11px;
   pointer-events: none;
 }
@@ -527,17 +527,17 @@ watch(fibEnabled, () => renderChart())
   flex-shrink: 0;
 }
 .tf-btn {
-  background: #2a2a2a;
-  border: 1px solid #444;
-  color: #aaa;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
   border-radius: 3px;
   padding: 2px 10px;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.15s;
 }
-.tf-btn:hover { background: #3a3a3a; color: #ddd; }
-.tf-btn.active { background: #4a4aaa; border-color: #6666cc; color: #fff; }
+.tf-btn:hover { background: #f1f5f9; color: #0f172a; }
+.tf-btn.active { background: #2563eb; border-color: #2563eb; color: #fff; }
 .gmc-toolbar-right {
   display: flex;
   align-items: center;
@@ -548,7 +548,7 @@ watch(fibEnabled, () => renderChart())
 .gmc-live-note {
   align-self: center;
   font-size: 11px;
-  color: #e8a33d;
+  color: #b45309;
   white-space: nowrap;
 }
 .gmc-chart {
@@ -562,8 +562,8 @@ watch(fibEnabled, () => renderChart())
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #888;
+  color: #64748b;
   font-size: 13px;
 }
-.gmc-error { color: #e66; }
+.gmc-error { color: #c62828; }
 </style>

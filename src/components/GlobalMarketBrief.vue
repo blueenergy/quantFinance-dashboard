@@ -558,8 +558,8 @@
 
     <!-- K线弹窗 -->
     <v-dialog v-model="chartDialog" max-width="900">
-      <v-card style="background:#1a1a1a; height:520px; display:flex; flex-direction:column;">
-        <v-card-title style="color:#fff; padding:8px 16px; font-size:14px; display:flex; align-items:center; flex-shrink:0;">
+      <v-card style="height:520px; display:flex; flex-direction:column;">
+        <v-card-title style="padding:8px 16px; font-size:14px; display:flex; align-items:center; flex-shrink:0;">
           {{ chartName }} K线
           <v-spacer />
           <v-btn icon size="small" @click="chartDialog=false" variant="text" color="grey">✕</v-btn>
