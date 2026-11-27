@@ -109,6 +109,81 @@
         <div v-if="!hasIntraday" class="mv-empty">暂无盘中数据。</div>
       </section>
 
+      <!-- 历史同类 -->
+      <section class="mv-section">
+        <div class="mv-sec-head">
+          <h2>历史同类</h2>
+          <p class="mv-caption">
+            放量之后 20 个交易日的表现，2010 年至今。「独立段」= 连续放量合并后的段数，比次数更接近真实样本量。
+          </p>
+          <div class="mv-index-toggle">
+            <button
+              v-for="item in outlookIndices"
+              :key="item.key"
+              type="button"
+              class="range-btn"
+              :class="{ active: outlookIndex === item.key }"
+              @click="setOutlookIndex(item.key)"
+            >
+              {{ item.name }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!outlook" class="mv-empty">{{ outlookLoading ? '历史统计计算中…' : '暂无历史统计。' }}</div>
+        <template v-else>
+          <p class="mv-outlook-current">
+            当前 <b>{{ fmtRatio(outlook.current?.ratio) }}</b> 放量 · 距近一年高点
+            <b>{{ fmtPct(outlook.current?.drawdown == null ? null : outlook.current.drawdown * 100) }}</b>
+            <span class="mv-outlook-meta">样本截至 {{ fmtDate(outlook.as_of) }}，基准（全样本 20 日均值）{{ fmtPct(outlook.baseline?.mean, 2) }}</span>
+          </p>
+
+          <div class="mv-table-wrap">
+            <table class="mv-table">
+              <caption>放量档（不加任何条件）</caption>
+              <thead>
+                <tr><th>阈值</th><th>次数</th><th>独立段</th><th>20日均值</th><th>胜率</th><th>相对基准</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in outlook.ratio_ladder || []" :key="'r' + row.threshold">
+                  <td>&gt;{{ row.threshold.toFixed(1) }}×</td>
+                  <td>{{ row.n }}</td>
+                  <td>{{ row.episodes }}</td>
+                  <td>{{ fmtPct(row.mean, 2) }}</td>
+                  <td>{{ row.win_rate == null ? '—' : row.win_rate.toFixed(1) + '%' }}</td>
+                  <td>{{ row.excess == null ? '—' : (row.excess > 0 ? '+' : '') + row.excess.toFixed(2) + 'pp' }}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <table v-if="(outlook.drawdown_ladder || []).length" class="mv-table">
+              <caption>再叠加「当前回撤深度」条件</caption>
+              <thead>
+                <tr><th>回撤</th><th>次数</th><th>独立段</th><th>20日均值</th><th>胜率</th><th>90% 区间</th><th>2018 年后</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in outlook.drawdown_ladder" :key="'d' + row.threshold">
+                  <td>&gt;{{ Math.abs(row.threshold * 100).toFixed(0) }}%</td>
+                  <td>{{ row.n }}</td>
+                  <td>{{ row.episodes }}</td>
+                  <td>{{ fmtPct(row.mean, 2) }}</td>
+                  <td>{{ row.win_rate == null ? '—' : row.win_rate.toFixed(1) + '%' }}</td>
+                  <td>{{ row.bootstrap_ci ? `[${row.bootstrap_ci[0].toFixed(1)}, ${row.bootstrap_ci[1].toFixed(1)}]pp` : '—' }}</td>
+                  <td :class="{ 'mv-thin': (row.post2018?.n ?? 0) < 20 }">
+                    {{ row.post2018 ? `${row.post2018.n} 次` : '—' }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="mv-warn">
+            ⚠ 深回撤档的证据集中在 2012 / 2015–2016 / 2018 几段熊市底部，最近几年几乎没有可比样本。
+            行内「2018 年后」样本数低于 20 的，不要当成概率使用。
+          </p>
+        </template>
+      </section>
+
       <!-- 日频构成 -->
       <section class="mv-section">
         <div class="mv-sec-head">
@@ -170,7 +245,11 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getMarketTurnover, getMarketTurnoverIntraday } from '../api/marketStats.js'
+import {
+  getMarketTurnover,
+  getMarketTurnoverIntraday,
+  getMarketTurnoverOutlook,
+} from '../api/marketStats.js'
 import { loadEcharts } from '../utils/echarts/loadEcharts.js'
 
 const rangeOptions = [
@@ -205,6 +284,9 @@ const ETF_COLORS = { equity: '#6250d6', bond: '#e34948', money: '#008300' }
 
 const days = ref(120)
 const sessionDate = ref('')
+const outlook = ref(null)
+const outlookIndex = ref('csi1000')
+const outlookLoading = ref(false)
 const loading = ref(false)
 const errorMsg = ref('')
 const daily = ref(null)
@@ -240,6 +322,17 @@ function fmtDate(value) {
   return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`
 }
 
+function fmtRatio(value) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  return `${Number(value).toFixed(2)}×`
+}
+
+function fmtPct(value, digits = 1) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  const num = Number(value)
+  return `${num > 0 ? '+' : ''}${num.toFixed(digits)}%`
+}
+
 function fmtShortDate(value) {
   if (!value || value.length !== 8) return value || ''
   return `${value.slice(4, 6)}/${value.slice(6, 8)}`
@@ -261,6 +354,11 @@ const heroLabel = computed(() => (liveNow.value ? '实时量能倍数' : '当日
 const isFinal = computed(() => Boolean(intraday.value?.is_final))
 
 const availableDates = computed(() => intraday.value?.available_dates || [])
+const outlookIndices = computed(() => outlook.value?.available_indices || [
+  { key: 'csi1000', name: '中证1000' },
+  { key: 'gem', name: '创业板指' },
+  { key: 'hs300', name: '沪深300' },
+])
 
 const intradayTitle = computed(() => {
   const session = intraday.value?.session_date
@@ -686,6 +784,23 @@ async function loadIntraday() {
   }
 }
 
+async function loadOutlook() {
+  outlookLoading.value = true
+  try {
+    outlook.value = await getMarketTurnoverOutlook({ index: outlookIndex.value })
+  } catch (err) {
+    errorMsg.value = `历史同类加载失败：${err.message || err}`
+  } finally {
+    outlookLoading.value = false
+  }
+}
+
+async function setOutlookIndex(key) {
+  if (outlookIndex.value === key) return
+  outlookIndex.value = key
+  await loadOutlook()
+}
+
 async function onSessionChange() {
   await loadIntraday()
   renderIntraday()
@@ -694,7 +809,7 @@ async function onSessionChange() {
 async function refreshAll() {
   loading.value = true
   errorMsg.value = ''
-  await Promise.all([loadDaily(), loadIntraday()])
+  await Promise.all([loadDaily(), loadIntraday(), loadOutlook()])
   await ensureEcharts()
   renderAll()
   loading.value = false
@@ -1117,6 +1232,70 @@ onBeforeUnmount(() => {
   height: 112px;
 }
 
+.mv-index-toggle {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.mv-outlook-current {
+  margin: 6px 0 10px;
+  font-size: 13px;
+  color: #475467;
+}
+.mv-outlook-current b {
+  color: #111;
+  font-variant-numeric: tabular-nums;
+}
+.mv-outlook-meta {
+  margin-left: 10px;
+  color: #98a2b3;
+  font-size: 12px;
+}
+.mv-table-wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+.mv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.mv-table caption {
+  text-align: left;
+  color: #667085;
+  font-size: 12px;
+  padding-bottom: 4px;
+}
+.mv-table th,
+.mv-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #f2f4f7;
+  text-align: right;
+  white-space: nowrap;
+}
+.mv-table th:first-child,
+.mv-table td:first-child {
+  text-align: left;
+}
+.mv-table th {
+  color: #98a2b3;
+  font-weight: 500;
+}
+.mv-thin {
+  color: #b54708;
+}
+.mv-warn {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  background: #fffaeb;
+  border: 1px solid #fec84b;
+  border-radius: 6px;
+  color: #b54708;
+  font-size: 12px;
+  line-height: 1.6;
+}
 .mv-foot {
   margin: 28px 0 0;
   padding-top: 16px;

@@ -28,6 +28,14 @@ export async function getMarketTurnoverIntraday({ days = 60, window = 20, date }
   })
 }
 
+export async function getMarketTurnoverOutlook({ index = 'csi1000' } = {}) {
+  return requestOrNull({
+    url: '/market-stats/turnover-outlook',
+    method: 'get',
+    params: { index },
+  })
+}
+
 export async function getEtfPenetration({ index = 'hs300', days = 2500 } = {}) {
   return requestOrNull({
     url: '/market-stats/etf-penetration',
