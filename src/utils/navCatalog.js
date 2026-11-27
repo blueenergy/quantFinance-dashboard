@@ -36,6 +36,7 @@ export const NAV_TABS = [
   { id: 'market-risk', name: '🚨 风险预警', group: 'overview' },
   { id: 'market-regime', name: '📡 广度估值', group: 'overview' },
   { id: 'market-stats', name: '📉 市场统计', group: 'overview' },
+  { id: 'market-volume', name: '🌊 量能水位', group: 'overview' },
 
   // 盘面
   { id: 'limit-up-ladder', name: '📊 连板天梯', group: 'market' },

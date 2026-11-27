@@ -60,6 +60,7 @@ const MarketTrendPanorama = defineAsyncComponent(() => import('../views/MarketTr
 const MarketIntradayStrength = defineAsyncComponent(() => import('../views/MarketIntradayStrength.vue'))
 const NationalTeamView = defineAsyncComponent(() => import('../views/NationalTeamView.vue'))
 const MarketStatsPanel = defineAsyncComponent(() => import('../views/MarketStatsPanel.vue'))
+const MarketVolumePanel = defineAsyncComponent(() => import('../views/MarketVolumePanel.vue'))
 const ChinaMacroPanel = defineAsyncComponent(() => import('../views/ChinaMacroPanel.vue'))
 const UsRatesPanel = defineAsyncComponent(() => import('../views/UsRatesPanel.vue'))
 const XInfluencerVoicesPanel = defineAsyncComponent(() => import('../views/XInfluencerVoicesPanel.vue'))
@@ -329,6 +330,12 @@ export const tabViewDefinitions = [
     component: MarketStatsPanel,
     fallbackClass: 'skeleton-chart',
     fallbackText: '市场统计加载中...',
+  },
+  {
+    id: 'market-volume',
+    component: MarketVolumePanel,
+    fallbackClass: 'skeleton-chart',
+    fallbackText: '量能水位加载中...',
   },
   {
     id: 'market-trend',
