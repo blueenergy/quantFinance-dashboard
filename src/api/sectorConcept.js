@@ -65,3 +65,32 @@ export async function pollSectorConceptTask(taskId, onProgress, intervalMs = 200
 
     return { status: 'timeout', error: '分析超时，请稍后查看结果' };
 }
+
+/**
+ * Get the hot-topic tree (branch -> theme -> catalyst event).
+ * @param {string} mode - "auto" | "intraday" | "eod"
+ * @param {string} date - Trade date YYYYMMDD (optional)
+ */
+export async function getHotTopicTree(mode = 'auto', date = null) {
+    const params = { mode }
+    if (date) params.date = date
+    return request({
+        url: '/sector-concept/tree',
+        method: 'get',
+        params,
+    })
+}
+
+/**
+ * List the snapshots stored for a trade date (intraday time points + close draft).
+ * @param {string} date - Trade date YYYYMMDD (optional)
+ */
+export async function getHotTopicTreeSnapshots(date = null) {
+    const params = {}
+    if (date) params.date = date
+    return request({
+        url: '/sector-concept/tree/snapshots',
+        method: 'get',
+        params,
+    })
+}

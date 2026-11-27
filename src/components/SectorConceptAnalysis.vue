@@ -1,7 +1,19 @@
 <template>
   <div class="sector-page">
+    <!-- View switch -->
+    <div class="d-flex align-center ga-3 mb-3">
+      <span class="text-subtitle-1 font-weight-bold">📈 概念板块分析</span>
+      <v-chip-group v-model="viewMode" mandatory selected-class="text-primary" density="compact">
+        <v-chip size="small" variant="outlined" value="card">AI 卡片</v-chip>
+        <v-chip size="small" variant="outlined" value="tree">热度树</v-chip>
+      </v-chip-group>
+    </div>
+
+    <!-- Hot topic tree view -->
+    <HotTopicTree v-if="viewMode === 'tree'" :date="selectedDate" />
+
     <!-- Trigger Card -->
-    <v-card class="sector-trigger mb-4" variant="outlined">
+    <v-card v-if="viewMode === 'card'" class="sector-trigger mb-4" variant="outlined">
       <v-card-text class="d-flex align-center justify-space-between flex-wrap ga-2">
         <div class="d-flex align-center ga-3">
           <span class="text-subtitle-1 font-weight-bold">📈 概念板块分析</span>
@@ -30,7 +42,7 @@
     </v-card>
 
     <!-- Loading -->
-    <v-card v-if="loading" class="mb-4" variant="outlined">
+    <v-card v-if="viewMode === 'card' && loading" class="mb-4" variant="outlined">
       <v-card-text class="text-center py-8">
         <v-progress-circular indeterminate color="primary" size="48" />
         <p class="text-caption mt-4" style="color:var(--text-muted)">{{ statusText }}</p>
@@ -38,12 +50,12 @@
     </v-card>
 
     <!-- Error -->
-    <v-alert v-if="error && !loading" type="error" variant="tonal" class="mb-4" closable @click:close="error = ''">
+    <v-alert v-if="viewMode === 'card' && error && !loading" type="error" variant="tonal" class="mb-4" closable @click:close="error = ''">
       {{ error }}
     </v-alert>
 
     <!-- Analysis Result -->
-    <div v-if="analysis && !loading">
+    <div v-if="viewMode === 'card' && analysis && !loading">
       <!-- Date + Source Badge -->
       <div class="d-flex align-center ga-2 mb-4">
         <v-chip color="primary" variant="tonal" size="small">📅 {{ formatDate(tradeDate) }}</v-chip>
@@ -198,7 +210,7 @@
     </div>
 
     <!-- No data yet -->
-    <v-alert v-if="!analysis && !loading && !error && initialized" type="info" variant="tonal">
+    <v-alert v-if="viewMode === 'card' && !analysis && !loading && !error && initialized" type="info" variant="tonal">
       暂无分析数据，请点击"开始分析"触发板块分析。
     </v-alert>
   </div>
@@ -211,7 +223,9 @@ import {
   getLatestSectorConcept,
   pollSectorConceptTask
 } from '../api/sectorConcept'
+import HotTopicTree from './HotTopicTree.vue'
 
+const viewMode = ref('card')
 const sourceIndex = ref('0')
 const source = computed(() => sourceIndex.value === '0' ? 'dc' : 'ths')
 const selectedDate = ref(new Date().toISOString().split('T')[0])
