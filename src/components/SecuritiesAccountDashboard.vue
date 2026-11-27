@@ -232,7 +232,7 @@
                   <span>{{ hoveredEquityPoint.is_intraday ? '较昨收总资产（含出入金）' : '较上一日总资产（含出入金）' }}</span>
                   <strong
                     v-if="hoveredEquityPoint.change !== null"
-                    :class="hoveredEquityPoint.change >= 0 ? 'is-up' : 'is-down'"
+                    :class="pnlClass(hoveredEquityPoint.change)"
                   >
                     {{ formatSignedCurrency(hoveredEquityPoint.change) }}<template v-if="hoveredEquityPoint.change_ratio !== null">（{{ formatSignedPercent(hoveredEquityPoint.change_ratio * 100) }}）</template>
                   </strong>
@@ -240,7 +240,7 @@
                 </div>
                 <div v-if="hasDailyPnl(hoveredEquityPoint)" class="equity-tooltip-row">
                   <span>当日交易盈亏</span>
-                  <strong :class="hoveredEquityPoint.daily_pnl >= 0 ? 'is-up' : 'is-down'">
+                  <strong :class="pnlClass(hoveredEquityPoint.daily_pnl)">
                     {{ formatSignedCurrency(hoveredEquityPoint.daily_pnl) }}<template v-if="hoveredEquityPoint.daily_pnl_ratio != null">（{{ formatSignedPercent(hoveredEquityPoint.daily_pnl_ratio * 100) }}）</template>
                   </strong>
                 </div>
@@ -279,23 +279,38 @@
 
     <!-- 持仓表 -->
     <v-card class="mb-4">
-      <v-card-title>持仓详情</v-card-title>
+      <v-card-title class="d-flex flex-wrap align-center justify-space-between ga-2">
+        <span>持仓详情</span>
+        <div v-if="enrichedPositions.length" class="position-summary">
+          <span class="position-summary-label">合计浮盈</span>
+          <strong :class="pnlClass(totalUnrealizedPnl)">{{ formatSignedCurrencyOrDash(totalUnrealizedPnl) }}</strong>
+          <span class="position-summary-label">盈亏分布</span>
+          <span class="position-summary-counts">
+            <span class="is-up">{{ pnlCounts.up }} 盈</span>
+            <span class="is-down">{{ pnlCounts.down }} 亏</span>
+            <span v-if="pnlCounts.flat" class="is-flat">{{ pnlCounts.flat }} 平</span>
+          </span>
+        </div>
+      </v-card-title>
       <v-card-text>
-        <v-data-table 
-          :items="enrichedPositions" 
-          :headers="positionHeaders" 
-          class="elevation-1"
+        <v-data-table
+          :items="enrichedPositions"
+          :headers="positionHeaders"
+          class="elevation-1 position-table"
           :sort-by="[{ key: 'market_value', order: 'desc' }]"
+          :row-props="positionRowProps"
         >
           <template #item.profit_loss_ratio="{ item }">
-            <span :class="item.raw.profit_loss_ratio >= 0 ? 'red--text' : 'green--text'">
-              {{ formatPercent(item.raw.profit_loss_ratio) }}
+            <span v-if="hasPnl(item.raw.profit_loss_ratio)" :class="pnlClass(item.raw.profit_loss_ratio)">
+              {{ formatSignedPercent(item.raw.profit_loss_ratio) }}
             </span>
+            <span v-else class="is-flat">—</span>
           </template>
           <template #item.profit_loss="{ item }">
-            <span :class="item.raw.profit_loss >= 0 ? 'red--text' : 'green--text'">
-              {{ formatCurrency(item.raw.profit_loss) }}
+            <span v-if="hasPnl(item.raw.profit_loss)" :class="pnlClass(item.raw.profit_loss)">
+              {{ formatSignedCurrency(item.raw.profit_loss) }}
             </span>
+            <span v-else class="is-flat">—</span>
           </template>
           <template #item.market_value="{ item }">
             {{ formatCurrency(item.raw.market_value) }}
@@ -307,13 +322,10 @@
             {{ formatPositionPrice(item.raw.current_price, item.raw) }}
           </template>
           <template #item.daily_pnl_ratio="{ item }">
-            <span
-              v-if="item.raw.daily_pnl_ratio !== null && item.raw.daily_pnl_ratio !== undefined"
-              :class="item.raw.daily_pnl_ratio > 0 ? 'red--text' : item.raw.daily_pnl_ratio < 0 ? 'green--text' : ''"
-            >
+            <span v-if="hasPnl(item.raw.daily_pnl_ratio)" :class="pnlClass(item.raw.daily_pnl_ratio)">
               {{ formatSignedPercent(item.raw.daily_pnl_ratio) }}
             </span>
-            <span v-else>—</span>
+            <span v-else class="is-flat">—</span>
           </template>
           <template #item.quantity="{ item }">
             {{ item.raw.quantity || 0 }}
@@ -894,11 +906,43 @@ const enrichedPositions = computed(() => {
       raw: {
         ...pos,
         cost_price: pos.avg_cost || pos.cost_price,
-        profit_loss: pos.unrealized_pnl || 0,
-        profit_loss_ratio: pos.unrealized_pnl_pct || 0
+        // 真实账户用后端算好的 unrealized_pnl，观察模式用本地模拟的 profit_loss；
+        // 两者都缺时留 null，模板显示 "—" 而不是 0，避免"缺数据"被当成"持平/微利"。
+        profit_loss: pos.unrealized_pnl ?? pos.profit_loss ?? null,
+        profit_loss_ratio: pos.unrealized_pnl_pct ?? pos.profit_loss_ratio ?? null
       }
     };
   });
+})
+
+// 行左侧色条：按浮盈正负给每行打标记（红=浮盈，绿=浮亏，灰=持平）
+// Vuetify 的 row-props 是单对象传参 { item, index, internalItem }，不是位置参数。
+const positionRowProps = ({ item }) => {
+  const tone = pnlTone(item?.raw?.profit_loss)
+  return { class: tone ? `pnl-row-${tone}` : '' }
+}
+
+// 当前账户的合计浮盈（无持仓或全无数据时为 null）
+const totalUnrealizedPnl = computed(() => {
+  let sum = 0
+  let hasData = false
+  for (const position of enrichedPositions.value) {
+    const value = position?.raw?.profit_loss
+    if (!hasPnl(value)) continue
+    sum += Number(value)
+    hasData = true
+  }
+  return hasData ? sum : null
+})
+
+// 盈亏只数分布
+const pnlCounts = computed(() => {
+  const counts = { up: 0, down: 0, flat: 0 }
+  for (const position of enrichedPositions.value) {
+    const tone = pnlTone(position?.raw?.profit_loss)
+    if (tone) counts[tone] += 1
+  }
+  return counts
 })
 
 // 格式化货币
@@ -941,7 +985,8 @@ function formatSignedCurrency(value) {
   const number = Number(value)
   if (!Number.isFinite(number)) return 'N/A'
   const formatted = formatCurrency(Math.abs(number))
-  return `${number >= 0 ? '+' : '-'}${formatted}`
+  const sign = number > 0 ? '+' : number < 0 ? '-' : ''
+  return `${sign}${formatted}`
 }
 
 function formatSignedCurrencyOrDash(value) {
@@ -955,11 +1000,25 @@ function hasDailyPnl(point) {
     && Number.isFinite(Number(point.daily_pnl))
 }
 
+// 盈亏值是否存在且可解析（null / undefined / '' / NaN 都算"无数据"）
+function hasPnl(value) {
+  if (value === null || value === undefined || value === '') return false
+  return Number.isFinite(Number(value))
+}
+
 // A-share convention: red = up/gain, green = down/loss.
-function pnlClass(value) {
+// tone: 'up' | 'down' | 'flat' | ''（'' 表示无数据，不着色）
+function pnlTone(value) {
+  if (!hasPnl(value)) return ''
   const number = Number(value)
-  if (!Number.isFinite(number) || number === 0) return ''
-  return number > 0 ? 'is-up' : 'is-down'
+  if (number > 0) return 'up'
+  if (number < 0) return 'down'
+  return 'flat'
+}
+
+function pnlClass(value) {
+  const tone = pnlTone(value)
+  return tone ? `is-${tone}` : ''
 }
 
 function formatDuration(seconds) {
@@ -982,7 +1041,7 @@ function formatPercent(value) {
 function formatSignedPercent(value) {
   const number = Number(value)
   if (!Number.isFinite(number)) return 'N/A'
-  return `${number >= 0 ? '+' : ''}${number.toFixed(2)}%`
+  return `${number > 0 ? '+' : ''}${number.toFixed(2)}%`
 }
 
 // 资金曲线日期：20261106 -> 2026-11-06
@@ -1616,16 +1675,50 @@ async function openHistoryDialog(position) {
 .equity-tooltip-row span {
   opacity: 0.7;
 }
-.equity-summary strong.is-up {
+/* A-share convention: red = gain, green = loss.
+   Same palette as the rest of the app (FundCopyworkBoard / stock-workbench.css). */
+.is-up {
   color: #dc2626;
 }
-.equity-summary strong.is-down {
+.is-down {
   color: #15803d;
 }
+.is-flat {
+  color: rgba(var(--v-theme-on-surface), 0.55);
+}
+/* Tooltip sits on a dark background, so it needs the lighter variants. */
 .equity-tooltip-row strong.is-up {
   color: #f87171;
 }
 .equity-tooltip-row strong.is-down {
   color: #4ade80;
+}
+
+/* 持仓表表头：合计浮盈 + 盈亏只数 */
+.position-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.position-summary-label {
+  color: rgba(var(--v-theme-on-surface), 0.55);
+  font-size: 12px;
+}
+.position-summary-counts {
+  display: inline-flex;
+  gap: 10px;
+  font-size: 12px;
+}
+
+/* 持仓表：行左侧 3px 色条标记盈亏（inset 阴影，不占列宽） */
+.position-table :deep(tr.pnl-row-up > td:first-child) {
+  box-shadow: inset 3px 0 0 #dc2626;
+}
+.position-table :deep(tr.pnl-row-down > td:first-child) {
+  box-shadow: inset 3px 0 0 #15803d;
+}
+.position-table :deep(tr.pnl-row-flat > td:first-child) {
+  box-shadow: inset 3px 0 0 rgba(var(--v-theme-on-surface), 0.25);
 }
 </style>
